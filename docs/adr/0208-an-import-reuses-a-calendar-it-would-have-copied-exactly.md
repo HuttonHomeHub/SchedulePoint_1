@@ -1,12 +1,14 @@
 # ADR-0208: An import reuses a calendar it would have copied exactly
 
-- **Status:** Accepted. M1 (D1 to D4, D6) shipped 2026-10-26 and M2 (D5) with it.
+- **Status:** Accepted. M1 (D1 to D4, D6) shipped 2026-10-26 and M2 (D5) with it. D7 added 2026-11-01
+  for `docs/TECH_DEBT.md` #554.
 - **Date:** 2026-10-26
 - **Deciders:** Product owner (spec approved 2026-10-26 with every default, Q1 to Q4)
 - **Amends:** ADR-0053 §5 (the "an import never REUSES a calendar" paragraph, and its CQ-4 sentence for
   calendars)
 - **Spec:** [`docs/specs/import-calendar-tidy/`](../specs/import-calendar-tidy/): `feature-spec.md` §4
-  (this ADR's outline) and `implementation-plan.md`
+  (this ADR's outline) and `implementation-plan.md`. D7:
+  [`docs/specs/import-reused-resource-calendar/`](../specs/import-reused-resource-calendar/)
 
 ## Context
 
@@ -91,6 +93,30 @@ same working week, exceptions and hours per day, so a copy would differ only in 
   The proof is an e2e comparing persisted dates of a reused import against a fresh-copy import of the same
   file.
 
+- **D7. A calendar only matched resources would hold is not created** (added 2026-11-01,
+  `docs/TECH_DEBT.md` #554). Resource matches are decided before calendars, by one pure matcher
+  (`apps/api/src/modules/interchange/resource-match.ts`) shared by the dry-run and the commit. A source
+  calendar is left out when no activity names it, it is not the plan's default, at least one source
+  resource holds it, and every source resource holding it is matched: by library code, by a
+  `REUSE_EXISTING` answer, or to an earlier row of the same file. The mapper's resource-tier approximation
+  for it (`resourceTierFinding`) is replaced, where it sat, by one approximation saying the calendar was
+  not created and whether the calendars the matched resources keep are the file's (`calendarIdentityKey`)
+  or the file gives them a different working week. A matched resource's calendar is never written, and a
+  library crew whose calendar differs from the file's is used as it is (product owner, 2026-11-01).
+  Leaving out takes precedence over D1 reuse, since nothing would bind either. No new finding kind (the
+  #541 argument). `interchange.imported` gains `calendarsSkipped`, as do both log lines. The decision
+  lives in `packages/interchange/src/library-match.ts` because ADR-0053 §5 puts the tier decision and its
+  sentence in the pure package; the API finds the mapper's finding through `isResourceTierFinding`
+  (kind, entity, reason and the clamped source reference, so it survives `boundReport`), never by text.
+  The commit's lock prediction still runs on the full graph, so it may lock a candidate for a calendar
+  that is then left out: a superset of locks, which ADR-0208 R2 already accepts. The library read the
+  matcher needs moves ahead of calendar resolution inside the transaction, and the dry-run reads the
+  library once for both the matches and the collision questions. Parity: nothing references a left-out
+  calendar, and a reference that survived would fail the whole import at `resolveCalendarId` (422
+  `INCONSISTENT_GRAPH`), never silently. Not in scope: copies earlier imports already left behind (no
+  clean-up), and a crew calendar an activity also uses, which stays in the shared library
+  (`docs/TECH_DEBT.md` #567).
+
 ## Alternatives considered
 
 - **Offer to remove an import's unused calendars when its plan is deleted.** Needs a provenance column
@@ -112,9 +138,10 @@ same working week, exceptions and hours per day, so a copy would differ only in 
 - Revisions that reuse a calendar share it. Editing that calendar changes every one of their dates, and
   stamps each plan "edited since calculated". That is what sharing a calendar already means within a
   project; the report names every reuse (Q2).
-- A reused resource still gets a copy of its calendar when the file's differs: the resource is matched by
-  code and keeps its own calendar, and the file's non-identical `ORG` calendar is created bound to nothing
-  (`docs/TECH_DEBT.md` #554; pinned by an e2e).
+- A reused resource keeps its own calendar and the file's copy of it is not created (D7, closing
+  `docs/TECH_DEBT.md` #554). The dry-run shown before a name collision is answered still previews the
+  calendar as created, because an unanswered collision is previewed as an insert; the commit, which has
+  the answer, decides, and the collision copy already says that reuse drops the file's calendar.
 - A hand-authored calendar whose exceptions are one multi-day range never matches a file that lists single
   days. That is conservative by design.
 - `docs/API.md` (interchange) is rewritten; ADR-0053 §5 points here.
@@ -176,10 +203,21 @@ id belongs to another organisation` red. The in-use count runs under the calenda
 to a ticked calendar between the list and the confirm is a 409 and not a dangling reference; the
 deterministic form of that test is the 409 above, and no timing race was attempted.
 
+**D7 (2026-11-01), red-first, one mutation each, applied and reverted** (the run results are recorded in
+the pull request that landed it):
+
+| Mutation                                                                                        | Expected red                                                                                   |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| (a) a matched holder prevents leaving out (`matchedHolders.length > 0` in the package function) | `creates no copy of a reused resource’s calendar …`                                            |
+| (b) `resourceOnlyCalendarKeys` ignores the activities' calendars                                | `creates the calendar when an activity also uses it (E6)`: 422 `INCONSISTENT_GRAPH`            |
+| (c) `describeMatchedResources` counts an inserted row as matched                                | `leaves the calendar out for a REUSE_EXISTING answer and keeps it for CREATE_COPY`             |
+| (d) `isResourceTierFinding` always false, so the mapper's sentence is not removed               | the report assertions, and the package's swap tests                                            |
+| (e) the commit decides from a read taken before its transaction instead of inside it            | `inserts the crew and creates its calendar when the library crew is gone by commit time (E13)` |
+
 ## References
 
 - Spec and plan: [`docs/specs/import-calendar-tidy/`](../specs/import-calendar-tidy/)
 - ADR-0053 §5 (amended), ADR-0050 (pipeline and report), ADR-0068 (hours per day), ADR-0172 (soft-delete
   stance on every read), ADR-0195 (the archived-filter masking observation), ADR-0201, ADR-0081, ADR-0088
   D1, ADR-0105
-- `docs/TECH_DEBT.md` #540 (closed), #554 (a reused resource's non-identical calendar)
+- `docs/TECH_DEBT.md` #540 (closed), #554 (a reused resource's non-identical calendar; closed by D7)

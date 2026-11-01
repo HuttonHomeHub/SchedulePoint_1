@@ -287,6 +287,109 @@ function tieredCalendarXer(planName = 'Tiered', clndrData = standardClndrData())
   ].join('\n');
 }
 
+/** One crew (RSRC row) in {@link crewXer}; `calendar` is a calendar id the file defines, or null for none. */
+interface CrewXerCrew {
+  id: string;
+  name: string;
+  code: string | null;
+  calendar: string | null;
+}
+
+/**
+ * A crew-bearing XER whose parts vary one at a time, for the ADR-0208 D7 matrix (a calendar only matched
+ * resources hold is not created). `C1` "Site 6-Day" is the project calendar both tasks use unless
+ * `secondTaskCalendar` / `planCalendar` say otherwise; `C3` "Crew Shift" and the optional `C4` "Night
+ * Shift" are `CA_Rsrc` calendars crews hold. The default crew is {@link tieredCalendarXer}'s own
+ * (`Site Crew`, code `CREW-A`, holding `C3`), so a second file with only `crewData` changed is the #554
+ * case.
+ */
+function crewXer(
+  options: {
+    planName?: string;
+    siteData?: string;
+    crewData?: string;
+    nightData?: string;
+    crews?: CrewXerCrew[];
+    secondTaskCalendar?: string;
+    planCalendar?: string;
+  } = {},
+): string {
+  const row = (...fields: string[]): string => `%R\t${fields.join('\t')}`;
+  const crews = options.crews ?? [{ id: 'RA', name: 'Site Crew', code: 'CREW-A', calendar: 'C3' }];
+  return [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    row(
+      'P1',
+      options.planName ?? 'Crewed',
+      '2026-01-05 00:00',
+      '2026-01-04 00:00',
+      options.planCalendar ?? 'C1',
+    ),
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tclndr_type\tdefault_flag\tday_hr_cnt\tclndr_data',
+    row('C1', 'Site 6-Day', 'CA_Project', 'Y', '8', options.siteData ?? standardClndrData()),
+    row('C3', 'Crew Shift', 'CA_Rsrc', 'N', '8', options.crewData ?? standardClndrData()),
+    ...(options.nightData === undefined
+      ? []
+      : [row('C4', 'Night Shift', 'CA_Rsrc', 'N', '8', options.nightData)]),
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    row('T1', 'P1', 'C1', 'A100', 'Mobilise', 'TT_Task', '40'),
+    row('T2', 'P1', options.secondTaskCalendar ?? 'C1', 'A110', 'Design', 'TT_Task', '40'),
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_name\trsrc_short_name\trsrc_type\tclndr_id',
+    ...crews.map((crew) =>
+      row(crew.id, crew.name, crew.code ?? '', 'RT_Labor', crew.calendar ?? ''),
+    ),
+    '%T\tTASKRSRC',
+    '%F\ttaskrsrc_id\ttask_id\trsrc_id\ttarget_qty\tdriving_flag',
+    ...crews.slice(0, 1).map((crew) => row('X1', 'T1', crew.id, '40', 'N')),
+    '%E',
+  ].join('\n');
+}
+
+/**
+ * The MSPDI equivalent of {@link crewXer}'s default: one crew with a `<Code>` holding its own calendar.
+ * MSPDI goes through the same mapper, so a code match must leave out the crew's calendar the same way
+ * (spec F16 was read, not run, until this fixture).
+ */
+function crewMspdi(planName: string, crewSaturdayWorks: boolean): string {
+  const weekDays = (saturdayWorks: boolean): string =>
+    [1, 2, 3, 4, 5, 6, 7]
+      .map((dayType) => {
+        const working = dayType >= 2 && dayType <= 6 ? true : dayType === 7 && saturdayWorks;
+        const times = working
+          ? '<WorkingTimes><WorkingTime><FromTime>08:00:00</FromTime><ToTime>16:00:00</ToTime></WorkingTime></WorkingTimes>'
+          : '';
+        return `<WeekDay><DayType>${dayType}</DayType><DayWorking>${working ? 1 : 0}</DayWorking>${times}</WeekDay>`;
+      })
+      .join('');
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Project xmlns="http://schemas.microsoft.com/project">',
+    '<UID>P1</UID>',
+    `<Name>${planName}</Name>`,
+    '<SaveVersion>14</SaveVersion>',
+    '<CurrentDate>2026-01-05T00:00:00</CurrentDate>',
+    '<CalendarUID>1</CalendarUID>',
+    '<Calendars>',
+    `<Calendar><UID>1</UID><Name>Site 6-Day</Name><WeekDays>${weekDays(false)}</WeekDays></Calendar>`,
+    `<Calendar><UID>3</UID><Name>Crew Shift</Name><WeekDays>${weekDays(crewSaturdayWorks)}</WeekDays></Calendar>`,
+    '</Calendars>',
+    '<Tasks>',
+    '<Task><UID>1</UID><Name>Mobilise</Name><Duration>PT40H0M0S</Duration></Task>',
+    '<Task><UID>2</UID><Name>Design</Name><Duration>PT40H0M0S</Duration></Task>',
+    '</Tasks>',
+    '<Resources>',
+    '<Resource><UID>1</UID><Name>Site Crew</Name><Type>1</Type><Code>CREW-A</Code><CalendarUID>3</CalendarUID></Resource>',
+    '</Resources>',
+    '<Assignments></Assignments>',
+    '</Project>',
+  ].join('');
+}
+
 /**
  * A large but well-formed XER for the commit timing test (ADR-0050 B3): `nTasks` activities on a chain
  * (T1→T2→…) plus `nSkip` extra Ti→Ti+2 edges — all unique and acyclic — so the batched commit is
@@ -2128,7 +2231,44 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       expect(plan.calendarId).not.toBe(original.calendarId);
     });
 
-    it('reuses an identical shared-library calendar for a resource, per tier', async () => {
+    // ---- ADR-0208 D7: a calendar only matched resources hold is not created (#554) ----------------------
+
+    /** The calendar findings in a report's `approximations`, about the calendar the detail names. */
+    const approximationsAbout = (
+      report: unknown,
+      calendarName: string,
+    ): { detail: string; reason: string; sourceRef: string | null }[] =>
+      (
+        report as {
+          approximations: {
+            entity: string;
+            detail: string;
+            reason: string;
+            sourceRef: string | null;
+          }[];
+        }
+      ).approximations.filter(
+        (f) => f.entity === 'calendar' && f.detail.includes(`“${calendarName}”`),
+      );
+    const TIER_SENTENCE = 'was created in the shared organisation library';
+    const crewShiftCopies = (orgId: string) =>
+      prisma.calendar.count({
+        where: {
+          organizationId: orgId,
+          name: { startsWith: 'Crew Shift (imported' },
+          deletedAt: null,
+        },
+      });
+    const auditAfterOf = async (planId: string): Promise<Record<string, unknown>> =>
+      (
+        (
+          await prisma.auditEvent.findFirstOrThrow({
+            where: { action: 'interchange.imported', subjectId: planId },
+          })
+        ).changes as { after: Record<string, unknown> }
+      ).after;
+
+    it('leaves out the file’s identical copy of a library crew’s calendar and still reuses the others, per tier', async () => {
       const { actor } = await adminWithOrg();
       const projectId = await makeProject(actor);
       await importFile(actor, projectId, tieredCalendarXer());
@@ -2145,25 +2285,267 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
           where: { name: { startsWith: 'Site 6-Day' }, deletedAt: null },
         }),
       ).toBe(1);
+      // `Crew Shift` is no longer "matched to the existing calendar": it is not created at all, because
+      // the only resource holding it matched the library crew. The other two are reused as before.
       expect(
         calendarRepairs(again.body.data.report.repairs)
           .map((f) => f.detail)
           .sort(),
       ).toEqual([
-        'calendar “Crew Shift” was matched to the existing calendar “Crew Shift”',
         'calendar “Enterprise 5-Day” was matched to the existing calendar “Enterprise 5-Day”',
         'calendar “Site 6-Day” was matched to the existing calendar “Site 6-Day”',
       ]);
+      const crewShift = approximationsAbout(again.body.data.report, 'Crew Shift');
+      expect(crewShift).toHaveLength(1);
+      expect(crewShift[0]?.detail).toBe(
+        'calendar “Crew Shift” was not created: the only resources in the file that use it ' +
+          '(“Site Crew”) matched existing resources, which keep their own calendars',
+      );
+      expect(crewShift[0]?.reason).toBe(
+        'the calendar each of them already has is the same as the file’s, so nothing was lost',
+      );
     });
 
-    it('leaves a non-identical resource calendar as an unbound shared copy (docs/TECH_DEBT.md #554)', async () => {
+    it('still reuses an identical shared-library calendar when a NEW crew holds it (ADR-0208 at the org tier)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+      const original = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-A' },
+      });
+
+      const second = await importFile(
+        actor,
+        projectId,
+        crewXer({
+          planName: 'Crewed Again',
+          crews: [
+            { id: 'RA', name: 'Site Crew', code: 'CREW-A', calendar: 'C3' },
+            { id: 'RB', name: 'Night Crew', code: 'CREW-B', calendar: 'C3' },
+          ],
+        }),
+      );
+
+      // CREW-A matched and CREW-B was inserted, and both hold C3: an inserted holder keeps it in the
+      // graph (E8), and it is identical to the library's, so it is REUSED rather than copied (E10).
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, name: { startsWith: 'Crew Shift' }, deletedAt: null },
+        }),
+      ).toBe(1);
+      const night = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-B' },
+      });
+      expect(night.calendarId).toBe(original.calendarId);
+      expect(approximationsAbout(second.body.data.report, 'Crew Shift')).toHaveLength(1);
+      expect(approximationsAbout(second.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        TIER_SENTENCE,
+      );
+      expect(calendarRepairs(second.body.data.report.repairs).map((f) => f.detail)).toContain(
+        'calendar “Crew Shift” was matched to the existing calendar “Crew Shift”',
+      );
+    });
+
+    it('creates no copy of a reused resource’s calendar, in the dry-run or the commit (docs/TECH_DEBT.md #554)', async () => {
       const { actor, orgId } = await adminWithOrg();
       const projectId = await makeProject(actor);
       await importFile(actor, projectId, tieredCalendarXer());
+      const crewBefore = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-A' },
+      });
+      const revision = tieredCalendarXer('Tiered Again', SIX_DAY());
 
-      // The resource is reused by code and keeps its own calendar, so the file's differing copy of
-      // that calendar is created in the shared library and bound to nothing.
-      await importFile(actor, projectId, tieredCalendarXer('Tiered Again', SIX_DAY()));
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(revision, 'utf8'), 'rev.xer')
+        .expect(200);
+      const committed = await importFile(actor, projectId, revision);
+
+      // The reviewed report and the persisted one carry the same single sentence for the calendar,
+      // saying the hours differ, and neither still carries the mapper's tier sentence for it.
+      for (const report of [dry.body.data, committed.body.data.report]) {
+        const found = approximationsAbout(report, 'Crew Shift');
+        expect(found).toHaveLength(1);
+        expect(found[0]?.detail).toContain('was not created');
+        expect(found[0]?.detail).not.toContain(TIER_SENTENCE);
+        expect(found[0]?.reason).toBe(
+          'the file gives “Site Crew” a different working week, so its work is scheduled on the ' +
+            'calendar the library already holds; an import never changes an existing resource’s calendar',
+        );
+      }
+
+      // The headline: nothing was added to the shared library for the crew.
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, name: 'Crew Shift', deletedAt: null },
+        }),
+      ).toBe(1);
+
+      // Parity: every binding and every date is what it was when the copy was created and unused.
+      const crewAfter = await prisma.resource.findUniqueOrThrow({ where: { id: crewBefore.id } });
+      expect(crewAfter.calendarId).toBe(crewBefore.calendarId);
+      expect(crewAfter.version).toBe(crewBefore.version);
+      const plan = await prisma.plan.findUniqueOrThrow({
+        where: { id: committed.body.data.planId },
+      });
+      expect(plan.calendarId).not.toBeNull();
+      const activities = await prisma.activity.findMany({ where: { planId: plan.id } });
+      expect(activities).toHaveLength(2);
+      expect(activities.every((a) => a.calendarId !== null)).toBe(true);
+      expect(activities.every((a) => a.earlyStart !== null && a.earlyFinish !== null)).toBe(true);
+
+      // Counted on the provenance row (the allow-list in audit-redactor).
+      expect(await auditAfterOf(plan.id)).toMatchObject({ calendarsSkipped: 1 });
+    });
+
+    it('leaves the calendar out for a REUSE_EXISTING answer and keeps it for CREATE_COPY (E2, E3, E12)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+      const differing = (planName: string) =>
+        crewXer({
+          planName,
+          crewData: SIX_DAY(),
+          crews: [{ id: 'RA', name: 'Site Crew', code: 'CREW-Z', calendar: 'C3' }],
+        });
+
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(differing('Reuse'), 'utf8'), 'rev.xer')
+        .expect(200);
+      const collisions = dry.body.data.resourceCollisions as { resourceKey: string }[];
+      expect(collisions).toHaveLength(1);
+      // E12: an unanswered collision is previewed as an insert, so the preview still shows the calendar
+      // as created. The commit, which has the answer, decides.
+      expect(approximationsAbout(dry.body.data, 'Crew Shift')[0]?.detail).toContain(TIER_SENTENCE);
+
+      const reuse = await importFile(actor, projectId, differing('Reuse'), {
+        resourceResolutions: JSON.stringify({ [collisions[0]!.resourceKey]: 'REUSE_EXISTING' }),
+      });
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      expect(approximationsAbout(reuse.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        'was not created',
+      );
+
+      const copy = await importFile(actor, projectId, differing('Copy'), {
+        resourceResolutions: JSON.stringify({ [collisions[0]!.resourceKey]: 'CREATE_COPY' }),
+      });
+      // The copy is a new crew and holds the file's calendar, so the calendar is created and bound.
+      expect(await crewShiftCopies(orgId)).toBe(1);
+      const created = await prisma.resource.findFirstOrThrow({
+        where: {
+          organizationId: orgId,
+          code: 'CREW-Z',
+          name: { startsWith: 'Site Crew (imported' },
+        },
+        include: { calendar: true },
+      });
+      expect(created.calendar?.name).toMatch(/^Crew Shift \(imported /);
+      const finding = approximationsAbout(copy.body.data.report, 'Crew Shift');
+      expect(finding).toHaveLength(1);
+      expect(finding[0]?.detail).toContain(TIER_SENTENCE);
+      expect(await auditAfterOf(copy.body.data.planId)).toMatchObject({ calendarsSkipped: 0 });
+    });
+
+    it('leaves the calendar out for an ARCHIVED library crew, which is matched and unarchived (E4)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+      await prisma.resource.updateMany({
+        where: { organizationId: orgId, code: 'CREW-A' },
+        data: { archivedAt: new Date() },
+      });
+
+      const second = await importFile(
+        actor,
+        projectId,
+        crewXer({ planName: 'Again', crewData: SIX_DAY() }),
+      );
+
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      expect(
+        (
+          await prisma.resource.findFirstOrThrow({
+            where: { organizationId: orgId, code: 'CREW-A' },
+          })
+        ).archivedAt,
+      ).toBeNull();
+      expect(approximationsAbout(second.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        'was not created',
+      );
+    });
+
+    it('creates the calendar when an activity also uses it (E6)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+
+      const second = await importFile(
+        actor,
+        projectId,
+        crewXer({ planName: 'Again', crewData: SIX_DAY(), secondTaskCalendar: 'C3' }),
+      );
+
+      // Created at the tier the mapper chose (ORG), and bound to the activity that uses it.
+      const copy = await prisma.calendar.findFirstOrThrow({
+        where: {
+          organizationId: orgId,
+          name: { startsWith: 'Crew Shift (imported' },
+          deletedAt: null,
+        },
+      });
+      expect(copy.scope).toBe('ORG');
+      const design = await prisma.activity.findFirstOrThrow({
+        where: { planId: second.body.data.planId, code: 'A110' },
+      });
+      expect(design.calendarId).toBe(copy.id);
+      expect(approximationsAbout(second.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        TIER_SENTENCE,
+      );
+    });
+
+    it('creates the calendar when it is the plan’s default (E7)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+
+      const second = await importFile(
+        actor,
+        projectId,
+        crewXer({ planName: 'Again', crewData: SIX_DAY(), planCalendar: 'C3' }),
+      );
+
+      const plan = await prisma.plan.findUniqueOrThrow({
+        where: { id: second.body.data.planId },
+      });
+      const bound = await prisma.calendar.findUniqueOrThrow({
+        where: { id: plan.calendarId as string },
+      });
+      expect(bound.name).toMatch(/^Crew Shift \(imported /);
+      expect(await crewShiftCopies(orgId)).toBe(1);
+    });
+
+    it('creates the calendar for an inserted holder and binds only that one (E8)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+      const original = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-A' },
+      });
+
+      await importFile(
+        actor,
+        projectId,
+        crewXer({
+          planName: 'Again',
+          crewData: SIX_DAY(),
+          crews: [
+            { id: 'RA', name: 'Site Crew', code: 'CREW-A', calendar: 'C3' },
+            { id: 'RB', name: 'Night Crew', code: 'CREW-B', calendar: 'C3' },
+          ],
+        }),
+      );
 
       const copy = await prisma.calendar.findFirstOrThrow({
         where: {
@@ -2172,8 +2554,195 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
           deletedAt: null,
         },
       });
-      expect(await prisma.resource.count({ where: { calendarId: copy.id } })).toBe(0);
-      expect(await prisma.activity.count({ where: { calendarId: copy.id } })).toBe(0);
+      const night = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-B' },
+      });
+      expect(night.calendarId).toBe(copy.id);
+      // The matched crew keeps the calendar it had; the import never rebinds a library row.
+      const kept = await prisma.resource.findUniqueOrThrow({ where: { id: original.id } });
+      expect(kept.calendarId).toBe(original.calendarId);
+    });
+
+    it('treats a second row with the same code as the first, so only the first’s calendar is created (E5)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+
+      const res = await importFile(
+        actor,
+        projectId,
+        crewXer({
+          nightData: SIX_DAY(),
+          crews: [
+            { id: 'RA', name: 'Site Crew', code: 'CREW-A', calendar: 'C3' },
+            { id: 'RB', name: 'Night Crew', code: 'CREW-A', calendar: 'C4' },
+          ],
+        }),
+      );
+
+      // The first row is inserted and holds `Crew Shift`; the second matched it and held a different,
+      // unshared calendar, which therefore has no use.
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, name: 'Crew Shift', deletedAt: null },
+        }),
+      ).toBe(1);
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, name: { startsWith: 'Night Shift' }, deletedAt: null },
+        }),
+      ).toBe(0);
+      const night = approximationsAbout(res.body.data.report, 'Night Shift');
+      expect(night).toHaveLength(1);
+      expect(night[0]?.detail).toContain('was not created');
+      expect(night[0]?.reason).toContain('different working week');
+      expect(approximationsAbout(res.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        TIER_SENTENCE,
+      );
+    });
+
+    it('says the working week differs when the matched library crew has no calendar at all (E15)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(
+        actor,
+        projectId,
+        crewXer({ crews: [{ id: 'RA', name: 'Site Crew', code: 'CREW-A', calendar: null }] }),
+      );
+
+      const second = await importFile(actor, projectId, crewXer({ planName: 'Again' }));
+
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      const found = approximationsAbout(second.body.data.report, 'Crew Shift');
+      expect(found[0]?.detail).toContain('was not created');
+      expect(found[0]?.reason).toContain('a different working week');
+    });
+
+    it('inserts the crew and creates its calendar when the library crew is gone by commit time (E13)', async () => {
+      // The dry-run is a preview; the commit decides under its locks, from its own read. Parked on a
+      // reused calendar's advisory lock, i.e. AFTER the commit's prediction and BEFORE its transaction
+      // reads the library, the library crew is deleted.
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, crewXer());
+      const siteCalendarId = (
+        await prisma.plan.findUniqueOrThrow({ where: { id: first.body.data.planId } })
+      ).calendarId as string;
+      const revision = crewXer({ planName: 'Again', crewData: SIX_DAY() });
+
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(revision, 'utf8'), 'rev.xer')
+        .expect(200);
+      expect(approximationsAbout(dry.body.data, 'Crew Shift')[0]?.detail).toContain(
+        'was not created',
+      );
+
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let held!: () => void;
+      const parked = new Promise<void>((resolve) => (held = resolve));
+      const holder = prisma.$transaction(
+        async (tx) => {
+          await acquireCalendarWriteLock(tx, siteCalendarId);
+          held();
+          await gate;
+        },
+        { timeout: 60_000, maxWait: 10_000 },
+      );
+      await parked;
+      let status: Promise<{ status: number; body: { data: { planId: string } } }> | undefined;
+      try {
+        status = actor.agent
+          .post(commitUrl(projectId))
+          .attach('file', Buffer.from(revision, 'utf8'), 'rev.xer')
+          .then((res) => res);
+        const deadline = Date.now() + 10_000;
+        for (;;) {
+          const waiting = await prisma.$queryRaw<{ n: number }[]>`
+            SELECT count(*)::int AS n FROM pg_stat_activity
+            WHERE datname = current_database() AND wait_event = 'advisory'
+              AND query ILIKE '%pg_advisory_xact_lock%'`;
+          if ((waiting[0]?.n ?? 0) > 0) break;
+          if (Date.now() > deadline) throw new Error('the commit never waited on the lock');
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        await prisma.resource.updateMany({
+          where: { organizationId: orgId, code: 'CREW-A' },
+          data: { deletedAt: new Date() },
+        });
+      } finally {
+        release();
+        await holder;
+      }
+
+      const res = await status;
+      expect(res.status).toBe(201);
+      const crew = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-A', deletedAt: null },
+        include: { calendar: true },
+      });
+      expect(crew.calendar?.name).toMatch(/^Crew Shift \(imported /);
+      expect(await crewShiftCopies(orgId)).toBe(1);
+    });
+
+    it('leaves out a code-matched MSPDI crew’s calendar the same way (E16)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewMspdi('Rev A', false));
+      expect(
+        await prisma.calendar.count({
+          where: { organizationId: orgId, name: 'Crew Shift', scope: 'ORG', deletedAt: null },
+        }),
+      ).toBe(1);
+
+      const second = await importFile(actor, projectId, crewMspdi('Rev B', true));
+
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      const found = approximationsAbout(second.body.data.report, 'Crew Shift');
+      expect(found).toHaveLength(1);
+      expect(found[0]?.detail).toContain('was not created');
+      expect(found[0]?.reason).toContain('different working week');
+    });
+
+    it('never created a left-out calendar, so a failed recalculation deletes none of the library’s', async () => {
+      const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+      const schedule = app.get(ScheduleService, { strict: false });
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      await importFile(actor, projectId, crewXer());
+      const before = await prisma.calendar.findMany({
+        where: { organizationId: orgId, deletedAt: null },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+
+      vi.spyOn(schedule, 'recalculate').mockRejectedValue(new Error('recalculation failed'));
+      await actor.agent
+        .post(commitUrl(projectId))
+        .attach(
+          'file',
+          Buffer.from(
+            crewXer({ planName: 'Again', siteData: SIX_DAY(), crewData: SIX_DAY() }),
+            'utf8',
+          ),
+          'rev.xer',
+        )
+        .expect(500);
+
+      // Compensation deletes exactly what was created; the crew's calendar, which the failed import
+      // left out and therefore never created, is still bound to the crew it belongs to.
+      expect(await prisma.plan.count({ where: { projectId, name: 'Again' } })).toBe(0);
+      const after = await prisma.calendar.findMany({
+        where: { organizationId: orgId, deletedAt: null },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      expect(after).toEqual(before);
+      const crew = await prisma.resource.findFirstOrThrow({
+        where: { organizationId: orgId, code: 'CREW-A', deletedAt: null },
+        include: { calendar: true },
+      });
+      expect(crew.calendar?.name).toBe('Crew Shift');
     });
 
     it('creates the second of two identical source calendars as a copy when one candidate exists', async () => {

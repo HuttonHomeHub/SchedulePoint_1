@@ -352,7 +352,9 @@ calendar's tier and reports it, so the persisting layer only obeys. `CanonicalCa
 import nor emitted on export** — and `ImportCalendar` gained the domain's own `scope`. Three rules,
 in precedence order:
 
-1. **A calendar an imported resource holds → forced `ORG`**, whatever the source called it. A resource
+1. **A calendar an imported resource holds → forced `ORG`**, whatever the source called it (unless only
+   resources the import matches to the library hold it, in which case it is not created at all,
+   ADR-0208 D7). A resource
    is org-global, so §2's guard hard-rejects a project calendar on one (422
    `RESOURCE_REQUIRES_ORG_CALENDAR`); a project-scoped resource calendar would fail the commit outright.
    The commit **re-asserts** this and fails the transaction rather than writing the row (the import must

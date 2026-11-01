@@ -1,7 +1,7 @@
 # Implementation Plan: An import does not create a calendar that only a reused resource would hold
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 use the library crew as it is and say in the report that the file's hours differ; Q3 no clean-up of copies earlier imports left (a bulk tool gets its own spec if wanted). Q2 was taken by the session as the recommended default: a crew calendar also used by activities stays in the shared library (today's behaviour), with a follow-up row.
+- **Status:** Accepted — shipped ([ADR-0208](../../adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md) D7). Approved by the product owner, 2026-11-01, every recommended answer: Q1 use the library crew as it is and say in the report that the file's hours differ; Q3 no clean-up of copies earlier imports left (a bulk tool gets its own spec if wanted). Q2 was taken by the session as the recommended default: a crew calendar also used by activities stays in the shared library (today's behaviour), with a follow-up row.
 - **Owner:** product owner (James Ewbank); built by the **builder** agent, reviewed as listed per task
 
 ## Breakdown

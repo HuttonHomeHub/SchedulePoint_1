@@ -11,6 +11,7 @@ import { openHealthCheck } from '../e2e-support/toolbar';
 import {
   calendarXerFile,
   codesXerFile,
+  crewXerFile,
   layoutXerFile,
   notesXerFile,
   onboard,
@@ -567,4 +568,51 @@ test('a re-imported revision reuses its unchanged calendar', async ({ page }) =>
     1,
   );
   await expect(calendars.getByRole('button', { name: /\(imported/ })).toHaveCount(0);
+});
+
+/**
+ * **A re-imported revision with a library crew leaves no copy of its calendar** (ADR-0208 D7,
+ * `docs/specs/import-reused-resource-calendar/`, `docs/TECH_DEBT.md` #554).
+ *
+ * The first revision creates the crew "Site Crew" and its calendar "Crew Shift" in the shared
+ * organisation library. The second revision carries the same crew (matched by code) with a different
+ * working week for it. The review report's Approximations section says, BEFORE anything is committed,
+ * that the calendar was not created, naming it; after **Confirm import** the organisation's Calendars
+ * screen still holds the one "Crew Shift" and no `(imported …)` copy. Before D7 each re-import left
+ * another copy there, bound to nothing.
+ */
+test('a re-imported revision with a library crew leaves no copy of its calendar', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewProject(page);
+  const projectUrl = page.url();
+
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const first = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await first.getByLabel('Schedule file (.xer or .xml)').setInputFiles(crewXerFile('Rev A', false));
+  await expect(first.getByRole('button', { name: 'Confirm import' })).toBeEnabled();
+  await first.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  await page.goto(projectUrl);
+  await page.getByRole('button', { name: 'Import from file…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import schedule from file' });
+  await dialog.getByLabel('Schedule file (.xer or .xml)').setInputFiles(crewXerFile('Rev B', true));
+
+  const approximations = dialog.getByRole('region', { name: /^Approximations/ });
+  await expect(approximations).toContainText('was not created');
+  await expect(approximations).toContainText('Crew Shift');
+  await expect(approximations).toContainText('a different working week');
+  await expect(approximations).not.toContainText('was created in the shared organisation library');
+
+  await dialog.getByRole('button', { name: 'Confirm import' }).click();
+  await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
+
+  // The shared library holds the crew's one calendar, and nothing the second import added to it.
+  await page.goto(`/orgs/${orgSlug}/calendars`);
+  await expect(page.getByLabel('Search calendars')).toBeVisible();
+  await expect(page.getByRole('cell', { name: /^Crew Shift/ })).toHaveCount(1);
+  await expect(page.getByText(/Crew Shift \(imported/)).toHaveCount(0);
 });

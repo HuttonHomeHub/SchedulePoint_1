@@ -176,6 +176,51 @@ export function calendarXerFile(projectName: string): {
 }
 
 /**
+ * A crew-bearing XER (ADR-0208 D7): the project calendar "Site 6-Day" both tasks use, and a `CA_Rsrc`
+ * calendar "Crew Shift" held only by the crew "Site Crew" (code `CREW-A`). `crewSaturdayWorks` is the one
+ * thing a second revision changes, so the crew the library already holds matches by code while the file's
+ * own calendar for it differs. Mirrors the API suite's `crewXer()` (`apps/api/test/interchange.e2e-spec.ts`).
+ */
+export function crewXerFile(
+  projectName: string,
+  crewSaturdayWorks: boolean,
+): { name: string; mimeType: string; buffer: Buffer } {
+  const workDay = (day: number): string => `(0||${day}()( (0||0(s|08:00|f|16:00)) ))`;
+  const restDay = (day: number): string => `(0||${day}()())`;
+  const week = (saturdayWorks: boolean): string => {
+    const days = [
+      restDay(1),
+      ...[2, 3, 4, 5, 6].map(workDay),
+      saturdayWorks ? workDay(7) : restDay(7),
+    ].join('');
+    return `(0||CalendarData()( (0||DaysOfWeek()( ${days} )) (0||Exceptions()( (0||d|46023()()) )) ))`;
+  };
+  const text = [
+    'ERMHDR\t18.8\t2026-01-01\tProject\tadmin\tdb\tdbname\tProjectMgmt\tUSD',
+    '%T\tPROJECT',
+    '%F\tproj_id\tproj_short_name\tlast_recalc_date\tplan_start_date\tclndr_id',
+    `%R\tP1\t${projectName}\t2026-01-05 00:00\t2026-01-04 00:00\tC1`,
+    '%T\tCALENDAR',
+    '%F\tclndr_id\tclndr_name\tclndr_type\tdefault_flag\tday_hr_cnt\tclndr_data',
+    `%R\tC1\tSite 6-Day\tCA_Project\tY\t8\t${week(false)}`,
+    `%R\tC3\tCrew Shift\tCA_Rsrc\tN\t8\t${week(crewSaturdayWorks)}`,
+    '%T\tTASK',
+    '%F\ttask_id\tproj_id\tclndr_id\ttask_code\ttask_name\ttask_type\ttarget_drtn_hr_cnt',
+    '%R\tT1\tP1\tC1\tA1000\tMobilise\tTT_Task\t40',
+    '%R\tT2\tP1\tC1\tA1010\tDesign\tTT_Task\t80',
+    '%T\tRSRC',
+    '%F\trsrc_id\trsrc_name\trsrc_short_name\trsrc_type\tclndr_id',
+    '%R\tRA\tSite Crew\tCREW-A\tRT_Labor\tC3',
+    '%E',
+  ].join('\n');
+  return {
+    name: `${projectName}.xer`,
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(text, 'utf8'),
+  };
+}
+
+/**
  * {@link validXer} plus one `TASKMEMO` on A1000 "Mobilise": the HTML P6 writes for a remark, with a
  * `<script>` element in it. The import must bring it in as the plain text "Pour level 3" (the markup is
  * removed, the script dropped with its content), count one note, and say formatting was removed. The

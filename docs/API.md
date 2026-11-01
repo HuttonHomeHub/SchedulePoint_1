@@ -1190,7 +1190,7 @@ when there are none**), and the commit takes an answer per resource in the optio
 form field — a JSON object keyed by `resourceKey`:
 
 - **`REUSE_EXISTING`** — bind the imported assignments to the library row already there. The file's own rate
-  and calendar for that resource are **not** imported.
+  and calendar for that resource are **not** imported, and the calendar is **not created** (below).
 - **`CREATE_COPY`** — create a separate resource, renamed `"<name> (imported <date>)"`, so the file's own
   rate and calendar survive.
 
@@ -1202,6 +1202,23 @@ same crew, and duplicating one splits its demand across two rows that each look 
 a different route on purpose (ADR-0208): an import **reuses** an existing calendar only when a copy would
 differ in nothing but its name, and otherwise creates its own, suffixed and reported. Nothing is asked,
 because an identical calendar changes no date and a non-identical one is never bound.
+
+**A calendar only matched resources would hold is not created** (ADR-0208 D7). The dry-run and the commit
+decide which source resources match the library (a library `code`, a `REUSE_EXISTING` answer, or an earlier
+row of the same file) **before** they resolve calendars. A source calendar is left out when it is not the
+plan's default, no activity names it, at least one resource holds it, and every resource holding it is
+matched: those resources keep the calendar they already have, and an import never writes a matched
+resource's calendar. The mapper's `calendar “<name>” was created in the shared organisation library …`
+approximation for it is replaced, in the same `approximations` array, by `calendar “<name>” was not
+created: the only resources in the file that use it (“<A>”, “<B>” and N more) matched existing resources,
+which keep their own calendars`. Its `reason` says either that the calendar each of them already has is the
+same as the file's, or that the file gives them a different working week and their work is scheduled on the
+calendar the library already holds. No new finding kind or field. `interchange.imported`'s `after`
+carries `calendarsSkipped`. A calendar an activity or the plan also uses, or an **inserted** resource holds,
+is created (or reused) exactly as before. The dry-run previews an unanswered name collision as an insert, so
+before the collision is answered it still shows the calendar as created; the commit, which has the answer,
+decides under its own locks and its report is the exact one. Copies earlier imports left in the library are
+not touched.
 
 **Imported calendars land in the target project, not the shared library** (ADR-0053 §5). An import
 creates each calendar at **`PROJECT`** scope pinned to the target project — so a fresh import adds
@@ -1216,7 +1233,8 @@ row, when that calendar is active, **unarchived**, in the same tier (and in the 
 and is identical in hours per day, weekly shifts and active exceptions (dates, windows and labels). The
 exact name is preferred, then the oldest variant, and one existing calendar serves one calendar of the
 file. The report's `repairs` says `calendar “<source>” was matched to the existing calendar “<existing>”`
-in the dry-run and in the commit, and the `interchange.imported` audit row carries `calendarsReused`. A
+in the dry-run and in the commit, and the `interchange.imported` audit row carries `calendarsReused` (and
+`calendarsSkipped`, above). A
 name the tier holds that is **not** identical (or is archived) is created afresh as
 `"<name> (imported YYYY-MM-DD)"` and reported as `was created as` — **never reused by name alone**,
 because two calendars sharing a name can have different working weeks. The commit decides again under its own locks, so it can differ from the dry-run when a calendar
