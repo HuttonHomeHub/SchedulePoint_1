@@ -84,6 +84,33 @@ export async function acknowledgeViewportNotice(target: Page | BrowserContext): 
   }, VIEWPORT_NOTICE_ACK_KEY);
 }
 
+/**
+ * ## The one-time touch tip, and why a touching journey acknowledges it (`docs/specs/long-press-hint/`)
+ *
+ * The first `pointerType: 'touch'` press in a plan puts a strip in the foot row, which costs the
+ * canvas or the Gantt a line of height. A journey that **measures geometry and then delivers touch
+ * input** (a drag from a box read before the first tap, a hit-test, a foot-row height) would see
+ * the layout move under it, so it asks for the strip to be already dismissed — it writes the same
+ * storage key the app reads, before any page script runs. The remedy is this, never a widened
+ * tolerance.
+ *
+ * **It is a function and not a fixture default** because 71 spec files import `@playwright/test`
+ * directly, and because the tip's own journey (`e2e-toolbar/touch-gestures.spec.ts`) must meet it:
+ * a default that acknowledged it would let that journey pass against a product that showed nothing.
+ */
+export async function acknowledgeTouchHint(target: Page | BrowserContext): Promise<void> {
+  await target.addInitScript(() => {
+    try {
+      window.localStorage.setItem(
+        'schedulepoint-hints',
+        JSON.stringify({ 'touch-gestures': true }),
+      );
+    } catch {
+      // A context with storage blocked fails open in the app too: the tip may show, never hide.
+    }
+  });
+}
+
 /** The window `ThrottlerGuard` counts in (`RATE_LIMIT_TTL`'s default). */
 const THROTTLE_WINDOW_MS = 60_000;
 

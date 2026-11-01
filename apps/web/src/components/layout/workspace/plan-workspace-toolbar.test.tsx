@@ -652,6 +652,52 @@ describe('the placement-migration notice (one-planning-surface M-I)', () => {
 });
 
 /**
+ * **The touch tip reaches the dock in both views, or it reaches nobody** (`docs/specs/long-press-hint/`
+ * M2). The host builds the strip, `TsldPanel` decides whether the diagram's dock shows it, and the
+ * Gantt's own chain places it — the same three-party seam as the migration notice above.
+ */
+describe('the touch-gesture tip', () => {
+  const press = (pointerType: string) => {
+    const event = new Event('pointerdown', { bubbles: true });
+    Object.defineProperty(event, 'pointerType', { value: pointerType });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.removeItem('schedulepoint-hints');
+  });
+
+  it('is passed to the diagram only after a finger has pressed, not a mouse', async () => {
+    renderScreen();
+    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
+    expect(h.tsldProps.current?.touchGestureHint).toBeNull();
+
+    press('mouse');
+    expect(h.tsldProps.current?.touchGestureHint).toBeNull();
+
+    press('touch');
+    expect(h.tsldProps.current?.touchGestureHint).not.toBeNull();
+  });
+
+  it('shows in the Gantt dock after a finger, and Dismiss removes it for good', () => {
+    h.search = { view: 'gantt' };
+    renderScreen();
+    expect(screen.queryByRole('button', { name: 'Touch gestures' })).not.toBeInTheDocument();
+
+    press('touch');
+    expect(screen.getByRole('button', { name: 'Touch gestures' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss this tip' }));
+    expect(screen.queryByRole('button', { name: 'Touch gestures' })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('schedulepoint-hints') ?? '{}')).toMatchObject({
+      'touch-gestures': true,
+    });
+  });
+});
+
+/**
  * **The Late overlay is announced by the host, in the Gantt as well as the diagram** (#417).
  *
  * The hook that speaks it is unit-tested on its own; this is the seam the unit suite cannot see —

@@ -20,6 +20,7 @@ import { ResourceStripPanel } from './resource-strip-panel';
 import { revealTakesFocus } from './reveal-focus';
 import { docksToClose, focusDockTrigger, type RightDock } from './right-docks';
 import { GANTT_SWIMLANES_FAILED_NOTE, SwimlanesFailedRegion } from './swimlanes-failed-notice';
+import { TouchGestureHint } from './touch-gesture-hint';
 import {
   CANVAS_MIN_HEIGHT,
   DOCK_MIN_HEIGHT,
@@ -35,6 +36,7 @@ import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { useRightDockSize } from './use-right-dock-size';
 import { useShortBodySwap } from './use-short-body-swap';
+import { useTouchGestureHint } from './use-touch-gesture-hint';
 import { CanvasLoading } from './workspace-skeleton';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
@@ -1269,6 +1271,16 @@ export function ToolbarPlanWorkspace({
         }}
       />
     ) : null;
+  // The one-time touch tip (`docs/specs/long-press-hint/`). Built here for the migration notice's
+  // reason: it renders in BOTH views' docks. Dismissal is per device, not per plan or account.
+  const touchHint = useTouchGestureHint();
+  const touchGestureHint = touchHint.due ? (
+    <TouchGestureHint
+      onOpenGestures={showShortcuts}
+      onDismiss={touchHint.dismiss}
+      restoreFocus={focusPlanSurface}
+    />
+  ) : null;
   // What an edit's automatic overlap resolution did (NetPoint-layout M3, ADR-0153). Built here, not
   // in the canvas, for the migration notice's reason: it renders in BOTH views' docks, and a table
   // or Gantt edit can resolve an overlap as readily as a canvas drag. Focus goes to the plan
@@ -1597,6 +1609,7 @@ export function ToolbarPlanWorkspace({
       }
       hasRevisionPair={hasRevisionPair}
       placementMigrationNotice={placementMigrationNotice}
+      touchGestureHint={touchGestureHint}
       layoutResolvedNotice={layoutResolvedNotice}
       historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
@@ -2085,7 +2098,10 @@ export function ToolbarPlanWorkspace({
               of facts one strip on the diagram and two on the Gantt (component review). The
               undo/redo result is the newest of the three — it describes the step just taken, and
               replaces the overlap notice it would otherwise contradict (`resolveDockStrip`). */}
-          {historyResultNotice?.node ?? layoutResolvedNotice ?? placementMigrationNotice}
+          {historyResultNotice?.node ??
+            layoutResolvedNotice ??
+            placementMigrationNotice ??
+            touchGestureHint}
         </CanvasDock>
       </>
     ) : (

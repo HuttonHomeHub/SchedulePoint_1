@@ -12,6 +12,7 @@ const base: DockStripInput = {
   mode: 'select',
   authoringFlowEnabled: true,
   hasPlacementMigrationNotice: false,
+  hasTouchGestureHint: false,
   hasArrangeOffer: false,
   hasLayoutResolvedNotice: false,
   historyResult: 'failure',

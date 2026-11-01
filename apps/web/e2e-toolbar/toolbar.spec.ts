@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { holdRead } from '../e2e-support/hold-read';
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
@@ -240,6 +240,9 @@ test('every control in the View popover is pointer-reachable at a short viewport
  */
 test('icon-only deck glyphs name themselves to pointer, keyboard and touch', async ({ page }) => {
   test.setTimeout(180_000);
+  // This test presses a glyph with a touch pointer on purpose: the tip is not its subject, and its
+  // strip must not be able to sit over the glyph the positive control then clicks.
+  await acknowledgeTouchHint(page);
   await onboard(page, Date.now() + 13);
   await openNewPlan(page);
   await startEditing(page);

@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { showActivities } from '../e2e/workspace';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   ensurePen,
@@ -39,6 +39,7 @@ test.describe('A divider is pressed to type a size', () => {
     browserRef = browser;
     const context = await browser.newContext({ viewport: SURFACE });
     await acknowledgeViewportNotice(context);
+    await acknowledgeTouchHint(context);
     const page = await context.newPage();
     const orgSlug = await onboard(page, Date.now() + 29);
     await createHierarchy(page);
@@ -64,6 +65,7 @@ test.describe('A divider is pressed to type a size', () => {
       hasTouch: coarse,
     });
     await acknowledgeViewportNotice(context);
+    await acknowledgeTouchHint(context);
     const page = await context.newPage();
     await page.goto(planUrl);
     await expect(page.getByRole('separator', { name: 'Resize Project Explorer' })).toBeVisible({

@@ -18,6 +18,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     mode: 'select',
     authoringFlowEnabled: true,
     hasPlacementMigrationNotice: false,
+    hasTouchGestureHint: false,
     hasArrangeOffer: false,
     hasLayoutResolvedNotice: false,
     historyResult: null,
@@ -209,6 +210,34 @@ describe('resolveDockStrip', () => {
       expect(resolveDockStrip(input({ historyResult: 'success', activityCount: 0 }))).toBe(
         'history',
       );
+    });
+  });
+
+  /**
+   * The touch tip is the lowest rung of all, so every case names what it LOST to or BEAT, and the
+   * pairwise table walks every other claimant rather than a hand-picked few.
+   */
+  describe('the touch-gesture tip', () => {
+    it('shows alone on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input({ hasTouchGestureHint: true }))).toBe('touch-hint');
+    });
+
+    const others: [string, Partial<DockStripInput>, string][] = [
+      ['a conflict', { hasConflict: true }, 'conflict'],
+      ['an armed tool', { modeStatement: ARMED }, 'mode'],
+      ['an undo success', { historyResult: 'success' }, 'history'],
+      ['an undo failure', { historyResult: 'failure' }, 'history'],
+      ['a layout-resolved notice', { hasLayoutResolvedNotice: true }, 'layout-resolved'],
+      ['the empty-plan notice', { activityCount: 0 }, 'empty'],
+      ['the Arrange offer', { hasArrangeOffer: true }, 'arrange-offer'],
+      ['the migration notice', { hasPlacementMigrationNotice: true }, 'placement-migration'],
+    ];
+    it.each(others)('loses to %s', (_name, overrides, expected) => {
+      expect(resolveDockStrip(input({ hasTouchGestureHint: true, ...overrides }))).toBe(expected);
+    });
+
+    it('is absent when no finger has pressed the workspace', () => {
+      expect(resolveDockStrip(input({ hasTouchGestureHint: false }))).toBeNull();
     });
   });
 });

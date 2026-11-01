@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
 import {
@@ -492,6 +492,7 @@ test('under a coarse pointer there are no edges, and the typed field is a 44 px 
   // `hasTouch` must be given to the context that builds THIS page, never via `test.use()`
   // (`e2e-workspace-fit/command-surface.spec.ts`'s coarse fixture records why).
   const page = await browser.newPage({ viewport: { width: 1646, height: 1097 }, hasTouch: true });
+  await acknowledgeTouchHint(page);
   try {
     await ganttPlan(page);
     const pointer = await page.evaluate(() =>
@@ -522,6 +523,7 @@ test('a finger drag of the Grid width divider follows the finger to the end', as
   // A context of its own with `hasTouch` (see the coarse case above), driven with CDP touch events
   // because `touch-action` is only consulted for a real touch gesture (TECH_DEBT #439).
   const page = await browser.newPage({ viewport: { width: 1646, height: 1097 }, hasTouch: true });
+  await acknowledgeTouchHint(page);
   try {
     await ganttPlan(page);
     const pointer = await page.evaluate(() =>

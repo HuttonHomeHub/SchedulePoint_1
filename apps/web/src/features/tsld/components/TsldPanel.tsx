@@ -385,6 +385,13 @@ export interface TsldPanelProps {
    */
   placementMigrationNotice?: React.ReactNode | null | undefined;
   /**
+   * The one-time touch-gesture tip (`docs/specs/long-press-hint/`), already rendered by the host —
+   * `null`/absent until a finger has pressed the workspace, and again once the reader dismisses it.
+   * A node for the migration notice's reason: the host owns the storage and the focus hand-back.
+   * It is the dock's lowest rung of all — see `resolveDockStrip`.
+   */
+  touchGestureHint?: React.ReactNode | null | undefined;
+  /**
    * What an edit's automatic overlap resolution did (NetPoint-layout M3), built by the host because
    * the undo step and its lifetime belong to the workspace model. Null when there is nothing to say.
    */
@@ -703,6 +710,7 @@ export function TsldPanel({
   onLink,
   onUndoLastEdit,
   placementMigrationNotice,
+  touchGestureHint,
   layoutResolvedNotice,
   historyResultNotice,
   recalcHold,
@@ -1912,6 +1920,7 @@ export function TsldPanel({
     mode,
     authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
     hasPlacementMigrationNotice: placementMigrationNotice != null,
+    hasTouchGestureHint: touchGestureHint != null,
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
     historyResult: historyResultNotice?.kind ?? null,
@@ -3641,6 +3650,9 @@ export function TsldPanel({
             the only dock strip that is DISMISSIBLE and does not return, which is what makes losing
             every contest affordable: it waits. */}
         {dockStrip === 'placement-migration' ? placementMigrationNotice : null}
+
+        {/* The one-time touch tip: the dock's lowest rung, below the migration notice. */}
+        {dockStrip === 'touch-hint' ? touchGestureHint : null}
       </CanvasDock>
 
       {/* **The diagram's surface scope** (ADR-0097 Landing E). Inside it every semantic token name
