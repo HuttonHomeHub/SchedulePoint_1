@@ -1,5 +1,16 @@
 # @repo/web
 
+## 0.200.7
+
+### Patch Changes
+
+- [#1234](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1234) [`d9ed1bc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d9ed1bc668d948a62afd4fab3ae8bd84bb9a8929) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram's legend and the resource panel now carry a marker that the image export's checks read, so a change to either on screen can no longer leave the exported picture behind unnoticed. Nothing looks different.
+
+- [#1236](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1236) [`83aa709`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/83aa709806a1800d9f499b2c090aab32c5d1efbb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Moving an activity to another WBS group from the activity editor, or dissolving a summary, now keeps each moved bar in a stable lane in its new swimlane when the plan's swimlanes come from the WBS, instead of leaving the lane to be re-derived by a later recalculation.
+
+- [#1233](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1233) [`db9397e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/db9397e35c371cd142f96c6f34a877b1390e8afc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A shaded radio card keeps its reason sentence at full contrast (only the title is dimmed), and a
+  combobox's list is named differently from the button that opens it.
+
 ## 0.200.6
 
 ### Patch Changes
