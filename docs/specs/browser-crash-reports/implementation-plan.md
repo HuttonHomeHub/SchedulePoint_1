@@ -116,7 +116,7 @@ as soon as the label exists. M1-T3 extends it.
 - **Complexity:** M
 - **Dependencies:** M1-T1
 - **Risks:** an over-eager quoted-span rule deletes useful property names → fixtures pin `reading
-  'startAt'` surviving. An under-eager one leaks a value → fixtures pin `JSON.parse` snippets,
+'startAt'` surviving. An under-eager one leaks a value → fixtures pin `JSON.parse` snippets,
   Zod-style received values, an email, a UUID, a URL with `?token=`, and a 6-digit number being
   redacted.
 - **Testing:** unit tests for each cleaner rule (red-first, one fixture per rule). API e2e: 401
@@ -199,8 +199,8 @@ the row. M2 is proved by unit tests and one API-level e2e that posts what the re
 ##### M2-T2 — Wire both call sites
 
 - **Description:** `defaultOnCatch` in `createRouter` (`router.tsx:695-727`) passes `boundary:
-  'route'` and the deepest match's `routeId`. `AppErrorBoundary.componentDidCatch` passes `boundary:
-  'app'`. Remove the TODO at `error-boundary.tsx:26` and keep the `console.error` (developers still
+'route'` and the deepest match's `routeId`. `AppErrorBoundary.componentDidCatch` passes `boundary:
+'app'`. Remove the TODO at `error-boundary.tsx:26` and keep the `console.error` (developers still
   want it locally).
 - **Complexity:** S
 - **Dependencies:** M2-T1, M0-T1 (the test it extends)
@@ -298,15 +298,15 @@ means `pnpm prepush` was **run**, plus `scripts/e2e-local.sh api` for every `app
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                 | Likelihood | Impact | Mitigation                                                                                                    |
-| --------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------- |
-| A third-party error message embeds a plan value the cleaner misses                 | low        | med    | Rules plus hostile fixtures; no identity stored, so the row cannot be linked to a person; 30-day expiry. Stated in the ADR as residual. |
-| Stacks are minified and so hard to read                                            | high       | low    | Source maps already ship (`vite.config.ts:79`). A developer resolves frames against that release's `.map`. Server-side symbolication is out of scope. |
-| The router changes how `defaultOnCatch` behaves on a bump                          | low        | high   | M0 test + `check:claims` registration.                                                                        |
-| The journey's crash trigger is brittle (depends on a response shape)               | med        | low    | M0-T1 chooses it by reading. If it breaks, the journey fails loudly rather than passing.                       |
-| Signed-out and guest crashes stay unseen                                           | certain    | low–med | Stated (Q1). The anonymous variant is an additive follow-up on the CSP precedent.                                 |
-| Chunk-load failures after a deploy are not counted                                 | certain    | low    | Deliberate: they are not defects (ADR-0047). The skip rule is unit-tested so it stays deliberate.                  |
-| The audit table grows by one more `staff.panel_read` per console load              | certain    | low    | Same order as today (6 → 7 per load); the `refresh-page-reads` pins move with it.                               |
+| Risk / assumption                                                     | Likelihood | Impact  | Mitigation                                                                                                                                            |
+| --------------------------------------------------------------------- | ---------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A third-party error message embeds a plan value the cleaner misses    | low        | med     | Rules plus hostile fixtures; no identity stored, so the row cannot be linked to a person; 30-day expiry. Stated in the ADR as residual.               |
+| Stacks are minified and so hard to read                               | high       | low     | Source maps already ship (`vite.config.ts:79`). A developer resolves frames against that release's `.map`. Server-side symbolication is out of scope. |
+| The router changes how `defaultOnCatch` behaves on a bump             | low        | high    | M0 test + `check:claims` registration.                                                                                                                |
+| The journey's crash trigger is brittle (depends on a response shape)  | med        | low     | M0-T1 chooses it by reading. If it breaks, the journey fails loudly rather than passing.                                                              |
+| Signed-out and guest crashes stay unseen                              | certain    | low–med | Stated (Q1). The anonymous variant is an additive follow-up on the CSP precedent.                                                                     |
+| Chunk-load failures after a deploy are not counted                    | certain    | low     | Deliberate: they are not defects (ADR-0047). The skip rule is unit-tested so it stays deliberate.                                                     |
+| The audit table grows by one more `staff.panel_read` per console load | certain    | low     | Same order as today (6 → 7 per load); the `refresh-page-reads` pins move with it.                                                                     |
 
 ## Critical questions for the owner
 

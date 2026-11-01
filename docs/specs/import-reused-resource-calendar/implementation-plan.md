@@ -192,7 +192,7 @@ library crew leaves no copy of its calendar"_ (T2.4).
 
 - **Description:** `apps/web/e2e-interchange/interchange.spec.ts`, new test _"a re-imported revision with
   a library crew leaves no copy of its calendar"_, beside `a re-imported revision reuses its unchanged
-  calendar` (`:538-570`): import a crew-bearing `.xer`, import a second revision whose crew calendar
+calendar` (`:538-570`): import a crew-bearing `.xer`, import a second revision whose crew calendar
   differs, assert the **Approximations** region contains `was not created` and `Crew Shift`, confirm, open
   the organisation Calendars screen and assert no row matching `Crew Shift (imported`.
 - **Complexity:** S
@@ -258,12 +258,12 @@ build, CI, changelog, version impact). "Tests" means `pnpm prepush` and `scripts
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| ----------------- | ---------- | ------ | ---------- |
-| R1. A calendar something references is left out | low | high (wrong dates) | Cannot happen silently: `resolveCalendarId` fails the import (`interchange.service.ts:1818-1831`); mutation (b); E6–E8 |
-| R2. Dry-run and commit disagree because the library changed in between | low | low | One matcher, one package function; the commit is authoritative (E13, E14). The planner sees only the dry-run (spec F9), which is ADR-0208's existing limit too |
-| R3. The prediction locks a candidate for a calendar later left out | med | low | `FOR SHARE` on one calendar for one transaction, the cost ADR-0208 R2 accepted; backend-performance review |
-| R4. The tier-finding predicate misses a clamped finding | low | med (report says both things) | Builder and predicate share a module; unit test through `boundReport` with a long name |
-| R5. MSPDI behaviour assumed from reading | med | low | T2.3's MSPDI e2e (E16) |
-| R6. The dry-run preview before a collision is answered shows the calendar as created (E12) | certain | low | The collision copy already says reuse drops the calendar; option G if asked |
-| A1. No schema change is needed | high | — | If review asks for an index or column: stop, database-architect |
+| Risk / assumption                                                                          | Likelihood | Impact                        | Mitigation                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------ | ---------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1. A calendar something references is left out                                            | low        | high (wrong dates)            | Cannot happen silently: `resolveCalendarId` fails the import (`interchange.service.ts:1818-1831`); mutation (b); E6–E8                                         |
+| R2. Dry-run and commit disagree because the library changed in between                     | low        | low                           | One matcher, one package function; the commit is authoritative (E13, E14). The planner sees only the dry-run (spec F9), which is ADR-0208's existing limit too |
+| R3. The prediction locks a candidate for a calendar later left out                         | med        | low                           | `FOR SHARE` on one calendar for one transaction, the cost ADR-0208 R2 accepted; backend-performance review                                                     |
+| R4. The tier-finding predicate misses a clamped finding                                    | low        | med (report says both things) | Builder and predicate share a module; unit test through `boundReport` with a long name                                                                         |
+| R5. MSPDI behaviour assumed from reading                                                   | med        | low                           | T2.3's MSPDI e2e (E16)                                                                                                                                         |
+| R6. The dry-run preview before a collision is answered shows the calendar as created (E12) | certain    | low                           | The collision copy already says reuse drops the calendar; option G if asked                                                                                    |
+| A1. No schema change is needed                                                             | high       | —                             | If review asks for an index or column: stop, database-architect                                                                                                |

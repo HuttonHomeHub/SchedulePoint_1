@@ -1638,6 +1638,46 @@
         "apps/api/src/common/auth/email-verification.service.ts",
         "docs/specs/verify-email-confirm/spec.md"
       ]
+    },
+    {
+      "ref": "Match.js:33",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Match.js",
+      "lines": "33",
+      "anchor": "const routeErrorComponent = route.options.errorComponent ?? router.options.defaultErrorComponent;",
+      "citedBy": ["docs/specs/browser-crash-reports/spec.md"]
+    },
+    {
+      "ref": "Match.js:33-34",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Match.js",
+      "lines": "33-34",
+      "anchor": "const routeOnCatch = route.options.onCatch ?? router.options.defaultOnCatch;",
+      "citedBy": ["docs/specs/browser-crash-reports/implementation-plan.md"]
+    },
+    {
+      "ref": "Match.js:34",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Match.js",
+      "lines": "34",
+      "anchor": "const routeOnCatch = route.options.onCatch ?? router.options.defaultOnCatch;",
+      "citedBy": ["docs/specs/browser-crash-reports/spec.md"]
+    },
+    {
+      "ref": "Match.js:56-59",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Match.js",
+      "lines": "56-59",
+      "anchor": "error.routeId ??= match.routeId;",
+      "citedBy": ["docs/specs/browser-crash-reports/spec.md"]
+    },
+    {
+      "ref": "nMatch.js:52-64",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Match.js",
+      "lines": "52-64",
+      "anchor": "if (routeErrorComponent) content = /* @__PURE__ */ jsx(CatchBoundary, {",
+      "citedBy": ["docs/specs/browser-crash-reports/spec.md"]
     }
   ]
 }

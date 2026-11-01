@@ -123,7 +123,7 @@ flowchart LR
   - nothing is attached when already seen;
   - unmount removes the listener;
   - the press is not `defaultPrevented`.
-  Strip unit tests: the accessible names, no `role`, dismiss calls both callbacks in order.
+    Strip unit tests: the accessible names, no `role`, dismiss calls both callbacks in order.
 - **Development steps:**
   1. Write the hook and its tests.
   2. Write the strip and its tests.
@@ -210,12 +210,12 @@ Each task's PR must satisfy the Feature Completion Criteria in [`docs/PROCESS.md
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                                                     | Likelihood | Impact | Mitigation                                                                                                     |
-| --------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| An existing touch journey changes outcome because a strip appears                                                     | med        | med    | M2-T1 census of the five files; `acknowledgeTouchHint` per `describe`; no widened tolerances                     |
-| The strip costs the diagram a foot-row line at 1024 × 600                                                             | med        | low    | lowest rung, dismissible, never returns; height recorded by the journey (ADR-0142)                              |
-| A Touch row names a gesture that does not exist (e.g. a canvas gesture)                                                | low        | med    | evidence comment per row; M1-T1 step 1 reads the canvas handlers first                                          |
-| The tip shows to someone who already knew the gesture                                                                  | med        | low    | one dismissal; detecting it needs a `useTooltip` change (ADR-0111), declined                                     |
-| Trigger keyed on the media query would miss the cover-on Surface                                                       | —          | —      | designed out: keyed on `pointerType` (ADR-0177 D1)                                                              |
-| The owner is asked to verify on a device                                                                               | —          | —      | designed out: every behaviour keys on an event Playwright sets exactly                                          |
-| `localStorage` blocked                                                                                                  | low        | low    | fail-open (`use-first-use-hint.ts:28-30`); the tip may reappear, never fails to show                              |
+| Risk / assumption                                                       | Likelihood | Impact | Mitigation                                                                                   |
+| ----------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------- |
+| An existing touch journey changes outcome because a strip appears       | med        | med    | M2-T1 census of the five files; `acknowledgeTouchHint` per `describe`; no widened tolerances |
+| The strip costs the diagram a foot-row line at 1024 × 600               | med        | low    | lowest rung, dismissible, never returns; height recorded by the journey (ADR-0142)           |
+| A Touch row names a gesture that does not exist (e.g. a canvas gesture) | low        | med    | evidence comment per row; M1-T1 step 1 reads the canvas handlers first                       |
+| The tip shows to someone who already knew the gesture                   | med        | low    | one dismissal; detecting it needs a `useTooltip` change (ADR-0111), declined                 |
+| Trigger keyed on the media query would miss the cover-on Surface        | —          | —      | designed out: keyed on `pointerType` (ADR-0177 D1)                                           |
+| The owner is asked to verify on a device                                | —          | —      | designed out: every behaviour keys on an event Playwright sets exactly                       |
+| `localStorage` blocked                                                  | low        | low    | fail-open (`use-first-use-hint.ts:28-30`); the tip may reappear, never fails to show         |
