@@ -11,8 +11,7 @@ import { RetentionStatusStore } from '../../common/operational/retention-status.
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VersionService } from '../../version/version.service';
-import { referenceOf } from '../crash-reports/crash-report-body';
-import { CRASH_REPORT_CAP } from '../crash-reports/crash-report.service';
+import { CRASH_REPORT_CAP, referenceOf } from '../crash-reports/crash-report-body';
 
 import type { CrashReportRowDto, CrashReportsMetaDto } from './dto/staff-crash-reports.dto';
 import type { CspReportRowDto } from './dto/staff-csp-reports.dto';

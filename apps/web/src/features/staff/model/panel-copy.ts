@@ -126,8 +126,8 @@ export const CRASHES = {
   showing: (shown: number, total: number): string =>
     `Showing the ${String(shown)} most recent of ${total.toLocaleString('en')}.`,
   noScreen: 'No screen',
-  reference: (code: string): string => `Reference ${code}`,
-  stack: (code: string): string => `Stack for ${code}`,
+  stackToggle: 'Stack',
+  stackToggleName: (errorName: string, code: string): string => `Stack for ${errorName}, ${code}`,
   stackHeading: 'Stack',
   componentStackHeading: 'Component stack',
   noStack: 'No stack was reported.',

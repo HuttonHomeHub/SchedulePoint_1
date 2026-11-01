@@ -6,14 +6,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 import {
   browserOf,
+  CRASH_REPORT_CAP,
   dedupeHashOf,
   normaliseCrashReport,
   referenceOf,
   type NormalisedCrashReport,
 } from './crash-report-body';
-
-/** At most this many distinct crashes are stored (spec §2 "Edge cases"). Repeats still count. */
-export const CRASH_REPORT_CAP = 1_000;
 
 /** `crash_report.cap_reached` is logged at most this often per process, so a flood is one line. */
 const CAP_LOG_INTERVAL_MS = 60 * 60 * 1000;

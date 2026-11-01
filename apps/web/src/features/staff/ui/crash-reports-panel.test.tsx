@@ -105,7 +105,7 @@ describe('CrashReportsPanel', () => {
     );
     mount();
 
-    const button = await screen.findByRole('button', { name: 'Stack for ABCDEF' });
+    const button = await screen.findByRole('button', { name: 'Stack for TypeError, ABCDEF' });
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText(/onerror/)).toBeNull();
 
@@ -123,7 +123,7 @@ describe('CrashReportsPanel', () => {
     apiFetchEnvelope.mockReturnValue(answer([crash({ stack: null, componentStack: null })]));
     mount();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Stack for ABCDEF' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stack for TypeError, ABCDEF' }));
 
     expect(screen.getByText('No stack was reported.')).toBeInTheDocument();
   });
@@ -152,6 +152,37 @@ describe('CrashReportsPanel', () => {
     ).toContain('staff-crashes-cap');
     // And the count of what is shown against what is held, so 50 rows are not mistaken for all.
     expect(screen.getByText('Showing the 1 most recent of 1,000.')).toBeInTheDocument();
+  });
+
+  it('says how many of the held crashes the 50 rows are', async () => {
+    const rows = Array.from({ length: 50 }, (_, n) =>
+      crash({ id: `c${String(n)}`, reference: `R${String(n)}` }),
+    );
+    apiFetchEnvelope.mockReturnValue(answer(rows, { total: 73 }));
+    mount();
+
+    expect(await screen.findByText('Showing the 50 most recent of 73.')).toBeInTheDocument();
+  });
+
+  it('opens a stack as a full-width row under its crash, by keyboard, and closes it again', async () => {
+    apiFetchEnvelope.mockReturnValue(answer([crash()]));
+    mount();
+
+    const button = await screen.findByRole('button', { name: 'Stack for TypeError, ABCDEF' });
+    button.focus();
+    fireEvent.keyDown(button, { key: 'Enter' });
+    fireEvent.click(button);
+
+    const detail = document.getElementById(button.getAttribute('aria-controls') ?? 'none');
+    expect(detail).not.toBeNull();
+    expect(detail?.closest('td')).toHaveAttribute('colspan');
+    expect(within(detail as HTMLElement).getByText(/plan-abc/).className).toContain(
+      'text-foreground',
+    );
+
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/plan-abc/)).toBeNull();
   });
 
   it('does not say it when the cap is not reached', async () => {

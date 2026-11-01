@@ -2136,6 +2136,25 @@ test('a screen crash reaches the staff console with the reference the planner sa
   await expect(line, 'the person is told, and only once the report arrived').toBeVisible();
   const reference = (await line.locator('span').textContent())?.trim() ?? '';
   expect(reference, 'the reference is six upper-case hex characters').toMatch(/^[0-9A-F]{6}$/);
+  // A second, hostile-looking crash: an unbroken 300-character message and the longest path the
+  // server's cleaner admits (199 characters, no break opportunity), posted by the planner's own
+  // session as the browser would. It is what the full-width stack row has to hold at 1024 x 600.
+  const longToken = 'W'.repeat(300);
+  const longStack = `at f (/assets/${'a'.repeat(180)}.jsx:1:2)`;
+  const seeded = await planner.request.post('/api/v1/crash-reports', {
+    data: {
+      name: 'RangeError',
+      message: longToken,
+      stack: longStack,
+      routeId: '/_authed/orgs/$orgSlug/calendars',
+      boundary: 'route',
+      webVersion: `0.0.${String(stamp % 100000)}`,
+    },
+    headers: { Origin: 'http://localhost:5173' },
+  });
+  const longReference = ((await seeded.json()) as { data: { reference: string | null } }).data
+    .reference;
+  expect(longReference, 'the long-token crash was stored').toMatch(/^[0-9A-F]{6}$/);
   await plannerContext.close();
 
   // ------------------------------------------------------------------ Staff find it
@@ -2172,9 +2191,28 @@ test('a screen crash reaches the staff console with the reference the planner sa
   await crashRow.getByRole('link', { name: 'Screen crashes' }).click();
   await expect(section).toBeFocused();
 
-  // The stack opens on request, as text.
-  await row.getByRole('button', { name: `Stack for ${reference}` }).click();
-  await expect(row.locator('pre').first()).toBeVisible();
+  // The stack opens on request, as text, by keyboard: focus the toggle and press Enter.
+  const toggle = row.getByRole('button', { name: `Stack for TypeError, ${reference}` });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.focus();
+  await staff.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const detail = section.locator(`#${(await toggle.getAttribute('aria-controls')) ?? 'none'}`);
+  await expect(detail.locator('pre').first()).toBeVisible();
+
+  // The long-token crash, at the layout floor (ADR-0179): its stack opens inside the table and the
+  // page does not gain a horizontal scrollbar.
+  await staff.setViewportSize({ width: 1024, height: 600 });
+  const longToggle = section.getByRole('button', {
+    name: `Stack for RangeError, ${longReference ?? ''}`,
+  });
+  await longToggle.focus();
+  await staff.keyboard.press('Enter');
+  await expect(longToggle).toHaveAttribute('aria-expanded', 'true');
+  expect(
+    await staff.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    'no page-level horizontal scroll with a long unbroken token open',
+  ).toBe(true);
 
   const results = await new AxeBuilder({ page: staff })
     .include('#staff-section-crashes')

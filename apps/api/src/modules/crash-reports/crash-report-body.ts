@@ -122,6 +122,9 @@ export function dedupeHashOf(report: NormalisedCrashReport, browser: BrowserFami
     .digest('hex');
 }
 
+/** At most this many distinct crashes are stored (spec §2 "Edge cases"). Repeats still count. */
+export const CRASH_REPORT_CAP = 1_000;
+
 /** The display reference: the hash's first six characters, upper-cased. Not unique by contract. */
 export function referenceOf(dedupeHash: string): string {
   return dedupeHash.slice(0, 6).toUpperCase();

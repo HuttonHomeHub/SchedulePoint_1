@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiCookieAuth,
+  ApiExtraModels,
   ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -18,6 +19,7 @@ import {
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -231,7 +233,19 @@ export class StaffController {
       'no longer being recorded until old ones expire. Every field is already cleaned; the row ' +
       'names no person.',
   })
-  @ApiOkResponse({ type: [CrashReportRowDto] })
+  @ApiExtraModels(CrashReportRowDto, CrashReportsMetaDto)
+  @ApiOkResponse({
+    // The `{ data, meta }` envelope spelled out: `type: [Row]` documents the array and drops `meta`,
+    // which carries the cap flag and the seven-day count the console reads.
+    schema: {
+      type: 'object',
+      required: ['data', 'meta'],
+      properties: {
+        data: { type: 'array', items: { $ref: getSchemaPath(CrashReportRowDto) } },
+        meta: { $ref: getSchemaPath(CrashReportsMetaDto) },
+      },
+    },
+  })
   async crashReports(
     @CurrentStaff() staff: StaffPrincipal,
     @RequestContext() context: RequestContext,

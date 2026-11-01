@@ -693,7 +693,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     await signUp(agent, MEMBER_EMAIL).expect(200);
     await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
 
-    for (const path of ['/installation', '/accounts', '/activity']) {
+    for (const path of ['/installation', '/accounts', '/activity', '/crash-reports']) {
       await agent.get(`/api/v1/staff${path}`).set('Origin', ORIGIN).expect(404);
     }
   });
@@ -795,6 +795,8 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
       });
 
       await member.get('/api/v1/staff/crash-reports').set('Origin', ORIGIN).expect(404);
+      // The 401 is the global AuthenticationGuard's answer to any anonymous request, not a
+      // staff-boundary decision: the staff guard never runs. Pinned so a change to either shows.
       await request(server()).get('/api/v1/staff/crash-reports').expect(401);
     });
   });
