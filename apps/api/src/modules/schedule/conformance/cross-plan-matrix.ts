@@ -28,14 +28,20 @@ export type MatrixLocalType = 'TASK' | 'FINISH_MILESTONE' | 'START_MILESTONE';
 export type MatrixRemoteType = 'TASK' | 'FINISH_MILESTONE';
 
 /**
- * The three calendars of the matrix. Both plans, and every activity in them, run on the cell's one
- * calendar: the matrix varies the calendar, not a mix of them (plan M0-T1 "calendar" axis).
+ * The matrix's calendars. In the 1,728-cell matrix both plans, and every activity in them, run on the
+ * cell's one calendar of the first three (`MATRIX_CALENDARS`): that matrix varies the calendar, not a
+ * mix of them (plan M0-T1 "calendar" axis). `weekend` joins only the mixed-calendar axis
+ * (`MIXED_CALENDAR_PAIRS`), because a weekend calendar on both plans would be the weekday case shifted
+ * and prove nothing the first three do not (`docs/TECH_DEBT.md` #555).
  *
  * - `twentyFourHour`: every minute of every day works.
  * - `standard`: full days (00:00–24:00), Monday to Friday. The organisation stock calendar (E16).
  * - `eightHour`: Monday to Friday, 08:00–16:00, so hours-per-day is 480 (FC-4).
+ * - `weekend`: Saturday and Sunday only, 07:00–19:00, so hours-per-day is 720; the calendar of the
+ *   #539 fixture's weekend task. A date on it that is a Saturday or Sunday is a day with no working
+ *   time on every weekday calendar.
  */
-export type MatrixCalendarName = 'twentyFourHour' | 'standard' | 'eightHour';
+export type MatrixCalendarName = 'twentyFourHour' | 'standard' | 'eightHour' | 'weekend';
 
 /** The lag calendar a link is measured on (Prisma's `LagCalendarSource`). */
 export type MatrixLagCalendar =
@@ -60,10 +66,29 @@ export const MATRIX_LOCAL_TYPES: readonly MatrixLocalType[] = [
   'START_MILESTONE',
 ];
 export const MATRIX_REMOTE_TYPES: readonly MatrixRemoteType[] = ['TASK', 'FINISH_MILESTONE'];
+/** The one-calendar axis: its size (1,728 cells) is the committed prediction's, so `weekend` is not here. */
 export const MATRIX_CALENDARS: readonly MatrixCalendarName[] = [
   'twentyFourHour',
   'standard',
   'eightHour',
+];
+
+/**
+ * The mixed-calendar axis: upstream and downstream plans on different calendars, both ways round.
+ * Standard and eight-hour (#385 M0's findings), then each weekday calendar against the weekend one
+ * (#555): a remote finish milestone dated Saturday or Sunday read on a Monday-to-Friday plan, and a
+ * weekday one read on a weekend plan.
+ */
+export const MIXED_CALENDAR_PAIRS: readonly {
+  upstream: MatrixCalendarName;
+  downstream: MatrixCalendarName;
+}[] = [
+  { upstream: 'standard', downstream: 'eightHour' },
+  { upstream: 'eightHour', downstream: 'standard' },
+  { upstream: 'standard', downstream: 'weekend' },
+  { upstream: 'weekend', downstream: 'standard' },
+  { upstream: 'eightHour', downstream: 'weekend' },
+  { upstream: 'weekend', downstream: 'eightHour' },
 ];
 export const MATRIX_LAGS: readonly number[] = [-2, 0, 2];
 export const MATRIX_LAG_CALENDARS: readonly MatrixLagCalendar[] = [
@@ -80,6 +105,7 @@ export const MATRIX_CALENDAR_SHAPES: Readonly<
   twentyFourHour: { workingWeekdays: [0, 1, 2, 3, 4, 5, 6], open: 0, close: 1440 },
   standard: { workingWeekdays: [0, 1, 2, 3, 4], open: 0, close: 1440 },
   eightHour: { workingWeekdays: [0, 1, 2, 3, 4], open: 480, close: 960 },
+  weekend: { workingWeekdays: [5, 6], open: 420, close: 1140 },
 };
 
 /**

@@ -4,6 +4,7 @@ import {
   cellName,
   enumerateMatrix,
   MATRIX_LAGS,
+  MIXED_CALENDAR_PAIRS,
   MATRIX_LAG_CALENDARS,
   type CrossPlanMatrixCell,
   type MatrixCalendarName,
@@ -31,7 +32,7 @@ import { runTwin, type TwinCalendars } from './cross-plan-twin';
  * **Two axes.** The original matrix puts both plans on one calendar, so its `PREDECESSOR`,
  * `SUCCESSOR` and `PROJECT_DEFAULT` columns name the same calendar and cannot tell the lag-calendar
  * rule from a wrong one. The mixed-calendar axis (added from M0's findings) puts the two plans on
- * Standard and eight-hour calendars, both ways round, for every lag calendar and both directions;
+ * Standard, eight-hour and weekend calendars (#555), every pair both ways round, for every lag calendar and both directions;
  * the in-plan twin names its lag calendar by hand, independently of the product's rule, so that is
  * what lets M2 claim spec D5 and CQ-2.
  */
@@ -87,10 +88,7 @@ describe('#385 FC-1: a cross-plan link equals the same link inside one plan (one
  * The mixed-calendar axis. The original matrix's cell list is reused with its calendar field fixed
  * to one value (so each shape appears once) and the two plans' calendars supplied separately.
  */
-const MIXED_PAIRS: readonly TwinCalendars[] = [
-  { upstream: 'standard', downstream: 'eightHour' },
-  { upstream: 'eightHour', downstream: 'standard' },
-];
+const MIXED_PAIRS: readonly TwinCalendars[] = MIXED_CALENDAR_PAIRS;
 
 function mixedCells(): CrossPlanMatrixCell[] {
   return enumerateMatrix().filter((c) => c.calendar === 'standard');
@@ -135,7 +133,16 @@ describe('#385 FC-1 mixed-calendar axis: plans on different calendars (spec D5, 
 });
 
 /** The calendars the mixed axis uses, pinned so a change to them is a reviewed change. */
-it('the mixed axis pairs Standard with eight-hour, both ways round', () => {
+it('the mixed axis pairs Standard with eight-hour, and each with the weekend calendar, both ways round', () => {
   const names = new Set<MatrixCalendarName>(MIXED_PAIRS.flatMap((p) => [p.upstream, p.downstream]));
-  expect([...names].sort()).toEqual(['eightHour', 'standard']);
+  expect([...names].sort()).toEqual(['eightHour', 'standard', 'weekend']);
+  const pairs = MIXED_PAIRS.map((p) => `${p.upstream}>${p.downstream}`).sort();
+  expect(pairs).toEqual([
+    'eightHour>standard',
+    'eightHour>weekend',
+    'standard>eightHour',
+    'standard>weekend',
+    'weekend>eightHour',
+    'weekend>standard',
+  ]);
 });
