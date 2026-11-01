@@ -1653,7 +1653,10 @@
       "path": "dist/esm/Match.js",
       "lines": "33-34",
       "anchor": "const routeOnCatch = route.options.onCatch ?? router.options.defaultOnCatch;",
-      "citedBy": ["docs/specs/browser-crash-reports/implementation-plan.md"]
+      "citedBy": [
+        "docs/specs/browser-crash-reports/implementation-plan.md",
+        "apps/web/src/app/route-catch.test.tsx"
+      ]
     },
     {
       "ref": "Match.js:34",
@@ -1677,7 +1680,10 @@
       "path": "dist/esm/Match.js",
       "lines": "52-64",
       "anchor": "if (routeErrorComponent) content = /* @__PURE__ */ jsx(CatchBoundary, {",
-      "citedBy": ["docs/specs/browser-crash-reports/spec.md"]
+      "citedBy": [
+        "docs/specs/browser-crash-reports/spec.md",
+        "apps/web/src/app/route-catch.test.tsx"
+      ]
     }
   ]
 }
