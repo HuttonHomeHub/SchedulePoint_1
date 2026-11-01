@@ -1,11 +1,15 @@
 import type { ResourceCollision, ResourceCollisionResolution } from '@repo/interchange';
 
-/** A library resource that could match one of the file's; `archivedAt` rides along for the unarchive. */
+/**
+ * A library resource that could match one of the file's; `archivedAt` rides along for the unarchive,
+ * and `calendarId` for the decision to leave out the file's copy of that calendar (ADR-0208 D7).
+ */
 export interface LibraryResource {
   readonly id: string;
   readonly code: string | null;
   readonly name: string;
   readonly archivedAt: Date | null;
+  readonly calendarId: string | null;
 }
 
 /** What the matcher reads of a source resource. */

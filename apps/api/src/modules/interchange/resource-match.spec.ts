@@ -17,7 +17,7 @@ const lib = (
   name: string,
   code: string | null = null,
   archivedAt: Date | null = null,
-): LibraryResource => ({ id, name, code, archivedAt });
+): LibraryResource => ({ id, name, code, archivedAt, calendarId: null });
 
 const match = (
   resources: SourceResource[],

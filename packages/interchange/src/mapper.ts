@@ -18,7 +18,7 @@ import type {
   ImportSwimlane,
   ImportWorkWindow,
 } from './import-graph.js';
-import type { ReportFinding } from './report.js';
+import { clampFinding, type ReportFinding } from './report.js';
 
 /**
  * The **canonical → SchedulePoint import-graph mapper** (ADR-0050, Task 1.3 step 2). A pure vocabulary
@@ -57,6 +57,41 @@ function shiftToWindow(shift: CanonicalShift): ImportWorkWindow {
 }
 
 /**
+ * The approximation the mapper writes for a calendar an imported resource holds (rule 1 below).
+ * Exported as a builder beside {@link isResourceTierFinding} so the one place that must find this
+ * finding again (`leaveOutCalendarsOnlyMatchedResourcesHold`, ADR-0208 D7) shares its definition and
+ * never matches on the sentence's text.
+ */
+export function resourceTierFinding(
+  calendar: Pick<CanonicalCalendar, 'id' | 'name'>,
+): ReportFinding {
+  return {
+    kind: 'approximation',
+    entity: 'calendar',
+    sourceRef: calendar.id,
+    detail: `calendar “${calendar.name}” was created in the shared organisation library (organisation scope) because an imported resource uses it`,
+    reason:
+      'a resource is organisation-global, so it can only hold an organisation calendar (ADR-0053 §2)',
+  };
+}
+
+/**
+ * Whether `finding` is {@link resourceTierFinding} for the calendar keyed `calendarKey`, even after
+ * `boundReport` has clamped it. It compares the fields that identify the finding (kind, entity, reason
+ * and the clamped source reference) and not the detail, which carries the calendar's name and is the
+ * field a clamp is most likely to have altered.
+ */
+export function isResourceTierFinding(finding: ReportFinding, calendarKey: string): boolean {
+  const expected = clampFinding(resourceTierFinding({ id: calendarKey, name: '' }));
+  return (
+    finding.kind === expected.kind &&
+    finding.entity === expected.entity &&
+    finding.sourceRef === expected.sourceRef &&
+    finding.reason === expected.reason
+  );
+}
+
+/**
  * Decide the **tier** one imported calendar lands at (ADR-0053 §5) and say why, in one place.
  *
  * The driving force: before this rule, every imported calendar was created in the shared **organisation**
@@ -84,14 +119,7 @@ function resolveCalendarScope(
   findings: ReportFinding[],
 ): ImportCalendarScope {
   if (heldByResource) {
-    findings.push({
-      kind: 'approximation',
-      entity: 'calendar',
-      sourceRef: calendar.id,
-      detail: `calendar “${calendar.name}” was created in the shared organisation library (organisation scope) because an imported resource uses it`,
-      reason:
-        'a resource is organisation-global, so it can only hold an organisation calendar (ADR-0053 §2)',
-    });
+    findings.push(resourceTierFinding(calendar));
     return 'ORG';
   }
 
