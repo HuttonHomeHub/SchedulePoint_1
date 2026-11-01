@@ -122,6 +122,19 @@ describe('ActivityBottomPanel Codes…', () => {
     expect(onOpenCodes).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * ADR-0114: a header group that cannot shrink is never asked to wrap, so a row that wraps around
+   * it cannot help once the group alone is wider than the row. At text-only 200 % in 1024 × 600 its
+   * three buttons were 3 px wider than the panel and the section scrolled sideways. The group wraps
+   * itself instead, and may shrink to the row's width.
+   */
+  it('lets the header button group shrink and wrap, so it can never widen the panel', () => {
+    render(<ActivityBottomPanel model={panelModel()} onCollapse={NOOP} onOpenCodes={() => {}} />);
+    const group = screen.getByRole('button', { name: 'Codes…' }).parentElement;
+    expect(group).toHaveClass('min-w-0', 'flex-wrap');
+    expect(group).not.toHaveClass('shrink-0');
+  });
+
   it('is absent when the host offers no way to open it', () => {
     render(<ActivityBottomPanel model={panelModel()} onCollapse={NOOP} />);
     expect(screen.queryByRole('button', { name: 'Codes…' })).not.toBeInTheDocument();
