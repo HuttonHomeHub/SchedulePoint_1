@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-01 — Browser crash reports shipped (ADR-0211), and what building it corrected
+
+A signed-in screen crash now reaches staff: the router's default boundary and `AppErrorBoundary` both
+call `reportCrash`, the server cleans and deduplicates into `crash_reports`, and the console shows it
+as **Screen crashes** with the reference the planner was shown. Closes #551.
+
+- **The problem statement was half wrong, as the spec's section 0 recorded.** `AppErrorBoundary`
+  almost never fires, because the router wraps every match in its own boundary
+  (`defaultErrorComponent`), so hooking only the boundary the TODO named would have closed #551 on
+  paper and left it open. `FRONTEND_QUALITY.md` and `FRONTEND_ARCHITECTURE.md` still said no route had
+  an error component; both are corrected.
+- **A full table must not read as a quiet one.** The owner's answer to Q2 (the top line says "Needs
+  attention" while any crash was reported in the last 7 days) left one hole: at the 1,000-row cap a
+  new kind of crash is dropped, so the list can look steady while new problems go unseen. The panel
+  says so in words ("Not recording new kinds of crash") and `meta.capReached` carries it. The top line
+  is deliberately not changed by the cap: that was the owner's rule to make.
+- **The staff module declares no raw SQL** (`staff-boundary.structural.spec.ts`), so the 7-day and
+  total counts are two Prisma `count`s rather than the two scalar subqueries `docs/DATABASE.md`
+  suggested. Same two index probes; the rule held.
+- **A page load is now seven audited reads** (it was six), and a Refresh adds seven rows to a table
+  that refuses `DELETE`. The pins moved with it (`STAFF_PAGE_READS`, the controller's throttle
+  arithmetic: ten handlers, 300 a minute).
+- **`isChunkLoadFailure` moved to `lib/`** so the reporter no longer imports from `app/` (the M2
+  performance review).
+
 ## 2026-10-31 — P6 activity codes M7: ADR-0210 filed, and the reconciliation pass at the epic boundary
 
 **What was decided.** The product owner confirmed ADR-0210's outline as written (fourteen decisions and the

@@ -244,7 +244,10 @@ remaining ADR-0072 items are tracked in [`TECH_DEBT.md`](TECH_DEBT.md).
 - Minimise collected PII; never log secrets, tokens, or PII (redaction in the
   logger — see [`OBSERVABILITY.md`](OBSERVABILITY.md)). The application stores
   little personal data: an account's name and email, and authorship attribution
-  on the rows a user creates.
+  on the rows a user creates. A browser crash report holds none by design
+  (ADR-0211): the server cleans the message and stack, keeps no user,
+  organisation, address, full URL or correlation id, and clears the row 30 days
+  after it was last seen.
 - **The organisation export exists; erasure does not.**
   [ADR-0085](adr/0085-privacy-operations.md) says what shape both must take, and
   [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md) built the

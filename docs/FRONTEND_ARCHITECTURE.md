@@ -253,12 +253,12 @@ flowchart TD
   B -->|Route load/guard| I[Router errorComponent]
 ```
 
-- **Error boundaries** wrap the app root and each route segment; they show a
-  friendly fallback with a retry. (**Reporting is not wired** — there is no
-  telemetry facade; see [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).) Today
-  only the app root is wrapped, in `app/providers.tsx`; per-route
-  `errorComponent`s are the standard but are not yet in place. See
-  [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).
+- **Error boundaries** wrap the app root (`AppErrorBoundary`, in
+  `app/providers.tsx`) and, through the router's `defaultErrorComponent`, every
+  route match; they show a friendly fallback with a retry. **Both report the
+  crash** (`lib/crash-report.ts`, ADR-0211): a signed-in screen crash is posted to
+  the API and staff read it on the console; the fallback shows a reference once
+  the report arrived. See [`FRONTEND_QUALITY.md`](FRONTEND_QUALITY.md).
 - **Query errors** render inline (empty/error states) with a retry; mutation
   errors surface on the control that raised them — there is no toaster (see
   `DESIGN_SYSTEM.md`). 4xx are treated as expected domain outcomes and

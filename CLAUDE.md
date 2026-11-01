@@ -613,7 +613,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0208** _(Accepted; amends ADR-0053 §5)_ — An import reuses a calendar it would have copied exactly → [`0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`](docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)
 - **ADR-0209** _(Accepted; amends ADR-0050's notes mapping row)_ — An imported note is the importer's, and a SchedulePoint note travels as text under its own topic → [`0209-an-imported-note-is-the-importers.md`](docs/adr/0209-an-imported-note-is-the-importers.md)
 - **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
-- **ADR-0211** _(Proposed; Accepted when the staff panel ships)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
+- **ADR-0211** _(Accepted)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

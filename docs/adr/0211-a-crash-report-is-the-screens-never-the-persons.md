@@ -1,8 +1,7 @@
 # ADR-0211: A crash report is the screen's, never the person's
 
-- **Status:** Proposed. Becomes Accepted at the epic's last milestone (M3), when staff can read what is
-  collected; until then the sink exists and nobody can read it. M1 (the table, the sink, the sweep) has
-  landed on its branch; M2 (the reporter in the browser) and M3 (the staff panel) have not.
+- **Status:** Accepted. The sink (M1), the reporter and the reference line (M2) and the staff
+  panel, the summary check and the journey (M3) have all landed; staff can read what is collected.
 - **Date:** 2026-11-01
 - **Deciders:** Product owner (spec questions Q1 to Q4, 2026-11-01: signed-in people only; "Needs attention"
   for 7 days; a reference line only when the report arrived; only errors that break the screen).

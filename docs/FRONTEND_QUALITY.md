@@ -173,22 +173,26 @@ Targets (align with `CLAUDE.md` §15; re-baseline with real data):
 
 - `AppErrorBoundary` (`components/error-boundary.tsx`) wraps the **app root** in
   `app/providers.tsx` — the last-resort fallback.
-- **Per-route boundaries are the standard but are not yet in place**: no route
-  declares an `errorComponent`, so a render fault in one screen still blanks the
-  app. Add one when touching a route that can realistically throw.
-- Fallbacks are friendly, on-brand, and offer a retry / route home. They report
-  to telemetry with context (route, user-safe error id) — never a raw stack to
-  the user.
+- **Every route is covered by the router's `defaultErrorComponent`**
+  (`RouteErrorScreen`, `app/router.tsx`), so a render fault in one screen shows
+  the fallback inside the shell and the rest of the app keeps working.
+  `AppErrorBoundary` is only reached by a fault outside every route match.
+- Fallbacks are friendly, on-brand, and offer a retry / route home. A crash is
+  reported (see Telemetry below) and the fallback shows the person a short
+  reference only once the report arrived — never a raw stack to the user.
 - Data errors are handled by TanStack Query states, not boundaries; boundaries
   catch render/runtime faults (see error handling in
   [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)).
 
-## Telemetry — _not yet built_
+## Telemetry — crash reports only
 
-There is **no telemetry**: no provider, and no facade (`lib/telemetry.ts` does
-not exist, despite having been referenced here and in
-[`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)). Nothing reports an
-error-boundary catch anywhere. The standard for when it lands:
+The one thing the browser reports is **a screen crash** (ADR-0211): both
+boundaries call `reportCrash` (`lib/crash-report.ts`), which posts a cleaned
+report to `POST /api/v1/crash-reports` for a signed-in person, and staff read it
+on the console. There is still **no general telemetry**: no provider, and no
+`lib/telemetry.ts` facade (it was referenced here and in
+[`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md) and never written). The
+standard for anything beyond crashes, when it lands:
 
 - A thin **telemetry facade** wrapping whatever backend we choose, so product
   code depends on our API, not a vendor SDK.

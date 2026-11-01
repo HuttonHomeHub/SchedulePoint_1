@@ -1,7 +1,7 @@
 # Implementation Plan: Browser crash reports
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 signed-in people only; Q2 the console's top line says "Needs attention" while any crash was reported in the last 7 days; Q3 the fallback says "This problem has been reported. Reference: …" only when the report arrived; Q4 only errors that break the screen.
+- **Status:** Accepted — shipped (ADR-0211). Approved by the product owner, 2026-11-01, every recommended answer: Q1 signed-in people only; Q2 the console's top line says "Needs attention" while any crash was reported in the last 7 days; Q3 the fallback says "This problem has been reported. Reference: …" only when the report arrived; Q4 only errors that break the screen.
 - **Owner:** web + api (builder agent; reviewers listed per task)
 
 Nothing in this plan asks the product owner to test, measure or check anything on their server or
