@@ -13,6 +13,7 @@ import { RouteErrorScreen } from '@/app/route-error-screen';
 import { AppErrorBoundary } from '@/components/error-boundary';
 import { CalendarsTable } from '@/features/calendars';
 import { ApiFetchError } from '@/lib/api/client';
+import { reportCrash, resetCrashReportState, setCrashReportSessionProbe } from '@/lib/crash-report';
 
 /**
  * Which boundary catches what (`docs/specs/browser-crash-reports/`, M0-T1).
@@ -179,6 +180,109 @@ describe('which boundary catches what', () => {
       expect(caught).toBeInstanceOf(TypeError);
       expect(caught).not.toBeInstanceOf(ApiFetchError);
       expect(appBoundaryReached).not.toHaveBeenCalled();
+    });
+  });
+
+  // M2-T2: the real reporter on the real catch points, with only `fetch` mocked.
+  describe('the reporter wired to both catch points', () => {
+    const fetchMock = vi.fn();
+    const reply = (reference: string) => () =>
+      Promise.resolve(new Response(JSON.stringify({ data: { reference } })));
+
+    beforeEach(() => {
+      sessionStorage.clear();
+      resetCrashReportState();
+      setCrashReportSessionProbe(() => true);
+      fetchMock.mockReset();
+      fetchMock.mockImplementation(reply('7F3A9C'));
+      vi.stubGlobal('fetch', fetchMock);
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('a route fault is reported once with its route pattern and shows the reference', async () => {
+      const root = createRootRoute();
+      const page = createRoute({
+        getParentRoute: () => root,
+        path: '/orgs/$orgSlug/things',
+        component: () => {
+          throw new Error('render fault');
+        },
+      });
+      const router = createRouter({
+        routeTree: root.addChildren([page]),
+        history: createMemoryHistory({ initialEntries: ['/orgs/acme-secret/things'] }),
+        defaultErrorComponent: RouteErrorScreen,
+        defaultOnCatch: (error, errorInfo) => {
+          reportCrash({
+            error,
+            boundary: 'route',
+            routeId: router.state.matches.at(-1)?.routeId,
+            componentStack: errorInfo?.componentStack,
+          });
+        },
+      });
+      render(<RouterProvider router={router} />);
+
+      expect(await screen.findByText(/Reference:/)).toHaveTextContent(
+        'This problem has been reported. Reference: 7F3A9C.',
+      );
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as {
+        routeId: string;
+        boundary: string;
+      };
+      expect(body.boundary).toBe('route');
+      expect(body.routeId).toBe('/orgs/$orgSlug/things');
+      expect(JSON.stringify(body)).not.toContain('acme-secret');
+    });
+
+    it('an ApiFetchError from a loader is not reported and no reference line appears', async () => {
+      const router = makeRouter({
+        loader: () => {
+          throw new ApiFetchError(500, { code: 'INTERNAL', message: 'server fault' });
+        },
+        onCatch: (error) => {
+          reportCrash({ error, boundary: 'route' });
+        },
+      });
+      render(<RouterProvider router={router} />);
+      await screen.findByRole('button', { name: 'Try again' });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Reference:/)).not.toBeInTheDocument();
+    });
+
+    it('the app boundary reports with boundary "app" and shows the reference', async () => {
+      const Outside = (): React.JSX.Element => {
+        throw new Error('outside the router');
+      };
+      render(
+        <AppErrorBoundary>
+          <Outside />
+        </AppErrorBoundary>,
+      );
+      expect(await screen.findByText(/Reference:/)).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as {
+        boundary: string;
+      };
+      expect(body.boundary).toBe('app');
+      expect(body).not.toHaveProperty('routeId');
+    });
+
+    it('the app boundary shows no reference line when the report did not arrive', async () => {
+      fetchMock.mockImplementation(() => Promise.reject(new Error('offline')));
+      const Outside = (): React.JSX.Element => {
+        throw new Error('outside the router');
+      };
+      render(
+        <AppErrorBoundary>
+          <Outside />
+        </AppErrorBoundary>,
+      );
+      expect(await screen.findByRole('button', { name: 'Reload' })).toBeInTheDocument();
+      expect(screen.queryByText(/reported/)).not.toBeInTheDocument();
     });
   });
 });

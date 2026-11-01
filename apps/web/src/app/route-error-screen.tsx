@@ -2,6 +2,7 @@ import type { ErrorComponentProps } from '@tanstack/react-router';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 
+import { CrashReferenceLine } from '@/components/crash-reference-line';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -101,6 +102,7 @@ export function RouteErrorScreen({ error, reset }: ErrorComponentProps): React.J
               ? 'Part of this page could not be downloaded. The app may have been updated, or the connection dropped. Trying again reloads the page to fetch the latest version.'
               : 'We couldn\u2019t load this page. It may have been a temporary problem.'}
         </p>
+        <CrashReferenceLine />
         <Button
           onClick={() => {
             if (chunkFailure) {
