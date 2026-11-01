@@ -301,7 +301,7 @@ against `docs/API.md` at M1.
 ```mermaid
 flowchart LR
   subgraph Browser
-    R[Route match CatchBoundary\nMatch.js:52-64] -- onCatch --> RC[lib/crash-report.ts\nreportCrash]
+    R["Route match CatchBoundary<br/>(Match.js:52-64)"] -- onCatch --> RC[lib/crash-report.ts\nreportCrash]
     A[AppErrorBoundary\ncomponentDidCatch] --> RC
     RC -- "fetch keepalive\n+ session cookie" --> P
     S[/staff console/] --> G
