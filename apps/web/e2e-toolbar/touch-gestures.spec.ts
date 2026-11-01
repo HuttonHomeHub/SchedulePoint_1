@@ -9,9 +9,8 @@ import { onboard, openNewPlan, startEditing } from './support';
  *
  * The sheet is opened from the **account menu**, not with `?`: the seam between the entry point and
  * the surface is what a unit suite cannot see (ADR-0081). The diagram lists the two gestures that
- * work everywhere; the Gantt adds its row gesture, and — only where editing is live — tap-then-drag
- * and double-tap. The diagram canvas lists none, because nothing in it behaves differently for a
- * finger (spec §2.5).
+ * work everywhere; the Gantt adds its row gesture and, only where editing is live, tap-then-drag.
+ * The diagram canvas lists none, because nothing in it behaves differently for a finger (spec §2.5).
  */
 test('the help sheet lists the touch gestures, in the diagram and in the Gantt', async ({
   page,
@@ -22,23 +21,37 @@ test('the help sheet lists the touch gestures, in the diagram and in the Gantt',
   await onboard(page, stamp);
   await openNewPlan(page);
 
+  const accountChip = page.getByRole('button', { name: /Account:/ });
   const openSheet = async (name: string) => {
-    await page.getByRole('button', { name: /Account:/ }).click();
-    await page.getByRole('menuitem', { name: 'Diagram shortcuts and gestures' }).click();
+    await accountChip.click();
+    await page.getByRole('menuitem', { name: 'Shortcuts and gestures' }).click();
     const sheet = page.getByRole('dialog', { name });
     await expect(sheet).toBeVisible();
     return sheet;
   };
+  // The dialog and every list inside it: a wrapped phrase must not widen any of them.
+  const noSidewaysScroll = async (sheet: ReturnType<typeof page.getByRole>) => {
+    const widths = await sheet.evaluate((el) =>
+      [el, ...Array.from(el.querySelectorAll('dl'))].map((n) => n.scrollWidth - n.clientWidth),
+    );
+    expect(widths.length).toBeGreaterThan(1);
+    for (const w of widths) expect(w).toBeLessThanOrEqual(0);
+  };
+  const touchTerms = (sheet: ReturnType<typeof page.getByRole>) =>
+    sheet
+      .getByRole('heading', { name: 'Touch' })
+      .locator('xpath=following-sibling::dl[1]')
+      .locator('dt');
 
   // ---------------------------------------------------------------- the diagram, read-only
   const diagramSheet = await openSheet('Diagram shortcuts and gestures');
   await expect(diagramSheet.getByRole('heading', { name: 'Touch' })).toBeVisible();
-  await expect(diagramSheet.getByText('Press and hold a button')).toBeVisible();
-  await expect(diagramSheet.getByText('Press and hold an Explorer row')).toBeVisible();
+  await expect(touchTerms(diagramSheet)).toHaveText([
+    'Press and hold an icon button',
+    'Press and hold an Explorer row',
+  ]);
   await expect(diagramSheet.getByText('Tap a bar, then drag it')).toBeHidden();
-
-  const overflow = await diagramSheet.evaluate((el) => el.scrollWidth - el.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
+  await noSidewaysScroll(diagramSheet);
 
   const results = await new AxeBuilder({ page })
     .include('dialog[open]')
@@ -48,6 +61,7 @@ test('the help sheet lists the touch gestures, in the diagram and in the Gantt',
 
   await page.keyboard.press('Escape');
   await expect(diagramSheet).toBeHidden();
+  await expect(accountChip).toBeFocused();
 
   // ---------------------------------------------------------------- the Gantt, with the pen
   await startEditing(page);
@@ -58,19 +72,21 @@ test('the help sheet lists the touch gestures, in the diagram and in the Gantt',
   );
 
   const ganttSheet = await openSheet('Gantt shortcuts and gestures');
-  await expect(ganttSheet.getByRole('heading', { name: 'Touch' })).toBeVisible();
-  await expect(ganttSheet.getByText('Press and hold a button')).toBeVisible();
-  await expect(ganttSheet.getByText('Press and hold an Explorer row')).toBeVisible();
-  await expect(ganttSheet.getByText('Press and hold a row', { exact: true })).toBeVisible();
-  await expect(ganttSheet.getByText('Tap a bar, then drag it')).toBeVisible();
-  await expect(ganttSheet.getByText('Double-tap a cell')).toBeVisible();
-
-  const ganttOverflow = await ganttSheet.evaluate((el) => el.scrollWidth - el.clientWidth);
-  expect(ganttOverflow).toBeLessThanOrEqual(0);
+  await expect(touchTerms(ganttSheet)).toHaveText([
+    'Press and hold an icon button',
+    'Press and hold an Explorer row',
+    'Press and hold a row or bar',
+    'Tap a bar, then drag it',
+  ]);
+  await noSidewaysScroll(ganttSheet);
 
   const ganttResults = await new AxeBuilder({ page })
     .include('dialog[open]')
     .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
     .analyze();
   expect(ganttResults.violations).toEqual([]);
+
+  await page.keyboard.press('Escape');
+  await expect(ganttSheet).toBeHidden();
+  await expect(accountChip).toBeFocused();
 });

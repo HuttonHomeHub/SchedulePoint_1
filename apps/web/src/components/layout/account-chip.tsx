@@ -168,11 +168,15 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             Absent — not shaded — when nothing has registered one. Outside a plan there is no diagram
             to describe shortcuts for, so the action does not apply to the object (ADR-0082's
             discriminator); a shaded item here would be a refusal with no state the reader could act
-            on. */}
+            on.
+
+            **The label is neutral because the chip cannot know the view.** The sheet it opens is
+            titled "Diagram shortcuts and gestures" or "Gantt shortcuts and gestures" by the view on
+            screen, and the plan-unaware header (ADR-0029) is not told which. */}
         {openShortcuts ? (
           <MenuItem onSelect={openShortcuts}>
             <Keyboard aria-hidden="true" className="size-4" />
-            Diagram shortcuts and gestures
+            Shortcuts and gestures
           </MenuItem>
         ) : null}
         <div className="border-border my-1 border-t" />

@@ -92,7 +92,7 @@ describe('the Touch section (long-press-hint M1)', () => {
   it('lists the two gestures that work in both views, in the diagram', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} />);
     expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
-    expect(screen.getByText('Press and hold a button')).toBeInTheDocument();
+    expect(screen.getByText('Press and hold an icon button')).toBeInTheDocument();
     expect(screen.getByText('Press and hold an Explorer row')).toBeInTheDocument();
     // The canvas has no finger-specific behaviour, so the sheet must not claim one.
     expect(screen.queryByText('Tap a bar, then drag it')).not.toBeInTheDocument();
@@ -103,19 +103,18 @@ describe('the Touch section (long-press-hint M1)', () => {
       <PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />,
     );
     expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
-    expect(screen.getByText('Press and hold a row')).toBeInTheDocument();
+    expect(screen.getByText('Press and hold a row or bar')).toBeInTheDocument();
     expect(screen.getByText('Tap a bar, then drag it')).toBeInTheDocument();
-    expect(screen.getByText('Double-tap a cell')).toBeInTheDocument();
     rerender(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} view="gantt" />);
     expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
-    expect(screen.getByText('Press and hold a row')).toBeInTheDocument();
+    expect(screen.getByText('Press and hold a row or bar')).toBeInTheDocument();
     expect(screen.queryByText('Tap a bar, then drag it')).not.toBeInTheDocument();
     expect(screen.queryByText('Double-tap a cell')).not.toBeInTheDocument();
   });
 
   it('sets a gesture phrase as wrapping text, not as a monospaced no-wrap key', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled />);
-    const gesture = screen.getByText('Press and hold a button');
+    const gesture = screen.getByText('Press and hold an icon button');
     expect(gesture).not.toHaveClass('font-mono');
     expect(gesture).not.toHaveClass('whitespace-nowrap');
     expect(screen.getByText('Enter', { selector: 'dt' })).toHaveClass('font-mono');

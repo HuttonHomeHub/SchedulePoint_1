@@ -205,7 +205,7 @@ describe('TsldPanel keyboard accessibility (M5 read)', () => {
     expect(setShowHelpSpy).toHaveBeenCalledWith(true);
 
     setShowHelpSpy.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Diagram shortcuts and gestures' }));
     expect(setShowHelpSpy).toHaveBeenCalledWith(true);
   });
 
