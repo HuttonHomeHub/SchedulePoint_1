@@ -1140,7 +1140,7 @@
       "path": "dist/esm/utils.js",
       "lines": "147-150",
       "anchor": "error.message.startsWith(\"Importing a module script failed\")",
-      "citedBy": ["apps/web/src/app/route-error-screen.tsx"]
+      "citedBy": ["apps/web/src/lib/chunk-load-failure.ts"]
     },
     {
       "ref": "lazyRouteComponent.js:28-31",

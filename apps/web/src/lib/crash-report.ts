@@ -1,6 +1,6 @@
-import { isChunkLoadFailure } from '@/app/route-error-screen';
 import { API_BASE_URL, APP_VERSION } from '@/config/env';
 import { ApiFetchError } from '@/lib/api/client';
+import { isChunkLoadFailure } from '@/lib/chunk-load-failure';
 import { setCrashReference } from '@/lib/crash-reference';
 
 /**
