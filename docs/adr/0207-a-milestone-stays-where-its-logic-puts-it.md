@@ -88,8 +88,10 @@ plan the previous image touched.
 - **Baselines show the correction as variance** on affected milestones and their neighbours: frozen
   dates are never rewritten (ADR-0155 decision 7, ADR-0125/0126) and a baseline records no rule version
   (Q3 A). The changelog says so.
-- The cross-plan twin is plain `it` in every one of its 1,728 cells; a weekend calendar is not in the
-  twin, so the row's own fixture is not split across plans anywhere (`docs/TECH_DEBT.md` #555).
+- The cross-plan twin is plain `it` in every one of its 1,728 cells. _(2026-11-01, #555: the twin's
+  mixed-calendar axis now includes a weekend calendar, and the row's own fixture is split across plans
+  in `cross-plan-milestone-fixture.spec.ts`. Six of its twenty cases differ from one plan and are
+  `it.fails` under #565; the original wording said the fixture was split nowhere.)_
 - The frozen levelling hashes, the legacy levelling copy, one redundant-link counterexample and one
   hand-derived cross-plan golden were replaced, each diffed against the parent commit first.
 - A plan restored from the recycle bin keeps its old `schedule_computed_at`, so it is pending at the
