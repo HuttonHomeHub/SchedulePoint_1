@@ -2885,10 +2885,14 @@ last_seen_at, id LIMIT 1000)`: a forward range that already yields rows in order
 
   Q-c's `total` and `capReached` are a `count(*)` over a table the cap bounds. **Q-b gets no index**:
   it is one unique-key probe plus a bounded count. A counter row or a trigger-maintained total would
-  add a second write to every report to save a sub-millisecond scan. **Unmeasured on this table**:
-  it was authored without a database. The figures it leans on are `csp_reports`' (0.16–0.25 ms for a
-  first page at 5,000 rows, `n_tup_hot_upd = 0` on spaced repeats). M1-T2's review records
-  `EXPLAIN (ANALYZE, BUFFERS)` for Q-b to Q-f at 1,000 rows.
+  add a second write to every report to save a sub-millisecond scan. **Measured 2026-11-01**
+  (`apps/api/test/measure/crash-reports-upsert.measure.ts`, M1-T2): the real upsert, under
+  `EXPLAIN (ANALYZE, BUFFERS)`, takes **0.2–0.43 ms** at 0, 999 and 1,000 rows, for a new and an existing
+  hash, with the cap check's shared hit count constant at 64, so its cost does not grow with the table. Over
+  1,000 sequential repeats of one row there were **0 HOT updates** (`last_seen_at` is indexed and rewritten
+  on every repeat, as on `csp_reports`) and **+1,944 dead tuples**. That churn is bounded by the 1,000-row
+  cap and cleared by autovacuum, and is accepted. (This paragraph leaned on `csp_reports`' figures,
+  0.16–0.25 ms and `n_tup_hot_upd = 0`, until then.)
 
 - **Service-layer obligations the database cannot enforce** (model docblock, M1-T2):
   - **Strip U+0000** from every text value. A NUL fails the statement before any CHECK runs, and it

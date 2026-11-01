@@ -99,6 +99,10 @@ message, route pattern, top five frames, browser)` joined on U+001F. A crash tha
 - **Not done:** symbolication (a developer resolves frames against the release's source map; the bundle
   ships them), `window.onerror`, anonymous and guest coverage, alerts to a webhook, and a chunk-load failure
   after a deploy (not a defect, ADR-0047).
+- **Measured, 2026-11-01** (`apps/api/test/measure/crash-reports-upsert.measure.ts`): the upsert takes
+  0.2–0.43 ms at 0, 999 and 1,000 rows for a new and an existing hash, and the cap check does the same work
+  (shared hit 64) at every size. Repeats made no HOT updates, because `last_seen_at` is indexed, and left
+  +1,944 dead tuples over 1,000 repeats; the 1,000-row cap bounds that and autovacuum clears it. Accepted.
 - A failed write is visible to the caller (`reference: null`, so the fallback never claims a report was
   sent) and to the operator (`crash_report.persist_failed`, carrying a SQLSTATE and a constraint name and
   never content, `docs/OBSERVABILITY.md`).

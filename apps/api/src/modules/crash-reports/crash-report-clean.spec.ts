@@ -54,6 +54,12 @@ describe('cleanMessage — one fixture per rule', () => {
     );
   });
 
+  it('keeps every host when a message carries two URLs (the regex rule must not span ://)', () => {
+    expect(
+      cleanMessage('Failed for ada at https://evil.example/a/b and https://app.example/x again'),
+    ).toBe('Failed for ada at https://evil.example and https://app.example again');
+  });
+
   it('drops a regular-expression literal', () => {
     expect(cleanMessage('Invalid pattern /^acme-corp$/i for field')).toBe(
       'Invalid pattern [regex] for field',

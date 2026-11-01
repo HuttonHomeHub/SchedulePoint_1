@@ -48,7 +48,8 @@ const HOST_PATH = /(?<![\w@.:/-])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?\/\S*/
 // `1/2` and `text/html` out; anything after the first `/` up to a space is the path.
 const ROOTED_PATH = /(?<=^|[\s'"`([=,;])\/(?![/*])[\w.~%@+=,;:!$&*-]+(?:\/[\w.~%@+=,;:!$&*-]*)*/g;
 // A regular-expression literal (`/^acme-\d+$/`) is a pattern someone wrote, and may hold a value.
-const REGEX_LITERAL = /(?<![\w)\]])\/(?![/*\s])(?:[^/\n\\]|\\.)+\/[a-z]*/g;
+// Not after `:` or `/`: that would start inside `https://` and run on to the next URL.
+const REGEX_LITERAL = /(?<![\w)\]:/])\/(?![/*\s])(?:[^/\n\\]|\\.)+\/[a-z]*/g;
 // Unicode decimal digits: Arabic-Indic, fullwidth and the rest are numbers too.
 const DIGIT_RUN = /\p{Nd}{4,}/gu;
 // A quote opens a span to its twin, or to the end when it never closes: an unterminated quote must
