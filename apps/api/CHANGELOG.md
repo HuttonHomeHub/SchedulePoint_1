@@ -1,5 +1,13 @@
 # @repo/api
 
+## 0.103.5
+
+### Patch Changes
+
+- [#1244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1244) [`fac2fe6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fac2fe6052bbe079babf6389c284f39017c45168) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A start milestone or zero-duration task that follows a cross-plan link now starts at the instant the link gives it, as it does in one plan, instead of being moved to its own calendar's next working minute. A start milestone on a weekend calendar after weekend work in another plan no longer pushes the weekday work after it a week late. Plans with such a link are recalculated on their next recalculation.
+
+- [#1240](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1240) [`d473b18`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d473b18ad72887fdead6dbb3d4c8afaf36ae39b6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The redundant-links health check now also lists a link whose other route passes through an activity that starts together with the next one, when that activity shares the first activity's calendar. Removing the link was already shown to change no date or float; the check was withholding it.
+
 ## 0.103.4
 
 ### Patch Changes
