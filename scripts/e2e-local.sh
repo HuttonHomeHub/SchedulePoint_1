@@ -152,25 +152,34 @@ echo "ready: ${DATABASE_URL}"
 # lock is released the moment that session ends, including when this script is killed (bash dying
 # closes the pipe, `psql` sees EOF and exits), so a crashed run can never leave a stale lock behind.
 # `pg_try_advisory_lock` refuses at once rather than queueing — a queue would turn a fast failure
-# into a slow one and hide the same fact. The key is fixed (the row's number) and the lock lives in
-# the database it guards, so a different DATABASE_URL is a different lock.
+# into a slow one and hide the same fact.
+#
+# **The session connects to the `postgres` maintenance database, not the guarded one** (#545). A
+# session connected to `app_test` is itself something "else connected to app_test", so
+# `backup-restore-check.sh` step 0 ("the comparison needs a quiet database") refused every
+# `e2e-local.sh api backup` run on this script's own lock. The lock is still per guarded database:
+# the key is the two-integer form (the row's number, a hash of the database's NAME), so a different
+# DATABASE_URL is a different lock, and two runs on the same database still collide.
 #
 # Taken before the migration, which is the first thing here that writes to the shared database.
 DB_LOCK_KEY=349
 db_conninfo="${DATABASE_URL%%\?*}" # libpq rejects Prisma's `?schema=public`
-coproc DBLOCK { PGAPPNAME="e2e-local[$$]" psql -qtA "$db_conninfo"; }
+lock_db_name="${db_conninfo##*/}"
+lock_conninfo="${db_conninfo%/*}/postgres"
+lock_objid="hashtext('${lock_db_name}')"
+coproc DBLOCK { PGAPPNAME="e2e-local[$$]" psql -qtA "$lock_conninfo"; }
 trap 'kill "${DBLOCK_PID:-}" 2>/dev/null || true' EXIT
 # SIGPIPE is ignored for this one write: if `psql` could not connect it is already gone, and writing
 # to it must reach the "no answer" refusal below rather than kill this script silently with status
 # 141. (Not a subshell: bash closes a coproc's descriptors in one.)
 trap '' PIPE
-echo "SELECT pg_try_advisory_lock(${DB_LOCK_KEY});" >&"${DBLOCK[1]}" 2>/dev/null || true
+echo "SELECT pg_try_advisory_lock(${DB_LOCK_KEY}, ${lock_objid});" >&"${DBLOCK[1]}" 2>/dev/null || true
 trap - PIPE
 got=""
 read -r -t 15 got <&"${DBLOCK[0]}" || true
 if [ "$got" != "t" ]; then
   if [ "$got" = "f" ]; then
-    holder="$(psql -qtA "$db_conninfo" -c "SELECT a.application_name || ' (backend pid ' || l.pid || ')' FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.classid = 0 AND l.objid = ${DB_LOCK_KEY} AND l.granted LIMIT 1" 2>/dev/null || true)"
+    holder="$(psql -qtA "$lock_conninfo" -c "SELECT a.application_name || ' (backend pid ' || l.pid || ')' FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.classid = ${DB_LOCK_KEY} AND l.objid = (${lock_objid}::bigint & 4294967295)::oid AND l.granted LIMIT 1" 2>/dev/null || true)"
     cat >&2 <<EOF
 
 Another run already holds the lock on this database (${holder:-holder not found}).
@@ -181,11 +190,11 @@ product, not with an error that names the contention. Wait for it to finish, or 
 at a database of your own, then re-run.
 EOF
   else
-    echo "Could not take the run lock on ${db_conninfo} (no answer from psql); refusing to run unguarded." >&2
+    echo "Could not take the run lock for ${lock_db_name} (via ${lock_conninfo}; no answer from psql); refusing to run unguarded." >&2
   fi
   exit 1
 fi
-echo "run lock held (advisory key ${DB_LOCK_KEY})"
+echo "run lock held (advisory key ${DB_LOCK_KEY}/${lock_db_name})"
 
 # --- 3. Schema --------------------------------------------------------------
 log "Migrations"
