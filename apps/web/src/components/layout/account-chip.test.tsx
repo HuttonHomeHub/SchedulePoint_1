@@ -226,14 +226,14 @@ describe('AccountChip', () => {
       // here would be a refusal with no state the reader could act on.
       renderChip();
       fireEvent.click(screen.getByRole('button', { name: /Account/ }));
-      expect(screen.queryByRole('menuitem', { name: 'Diagram keyboard shortcuts' })).toBeNull();
+      expect(screen.queryByRole('menuitem', { name: 'Diagram shortcuts and gestures' })).toBeNull();
     });
 
     it('appears and opens the registered sheet when a plan offers one', () => {
       const open = vi.fn();
       renderChip(open);
       fireEvent.click(screen.getByRole('button', { name: /Account/ }));
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram keyboard shortcuts' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Diagram shortcuts and gestures' }));
       expect(open).toHaveBeenCalledOnce();
     });
   });

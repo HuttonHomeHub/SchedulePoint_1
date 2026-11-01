@@ -25,7 +25,9 @@ describe('the plan shortcuts sheet', () => {
     // The title has to name the view: the two sheets share key NAMES and not meanings — Enter opens
     // the logic editor on the canvas and commits a cell edit in the grid — so a reader who cannot
     // tell which sheet they have been given is worse off than one with no sheet.
-    expect(screen.getByRole('dialog', { name: 'Gantt keyboard shortcuts' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Gantt shortcuts and gestures' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Navigate' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Edit' })).toBeInTheDocument();
   });
@@ -41,14 +43,18 @@ describe('the plan shortcuts sheet', () => {
   it('withholds the Edit section in the Gantt when editing is not enabled', () => {
     // A shaded or absent section, never a list of keys that do nothing — the lit-but-inert shape.
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} view="gantt" />);
-    expect(screen.getByRole('dialog', { name: 'Gantt keyboard shortcuts' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Gantt shortcuts and gestures' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Navigate' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
   it('defaults to the DIAGRAM sheet, so a host that forgets the prop is not shown an empty one', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled />);
-    expect(screen.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Diagram shortcuts and gestures' }),
+    ).toBeInTheDocument();
   });
 
   it('renders nothing while closed', () => {
@@ -79,5 +85,39 @@ describe('the undo/redo rows (undo-redo M5)', () => {
     expect(screen.getByText('⌘Z')).toBeInTheDocument();
     expect(screen.getByText('⇧⌘Z')).toBeInTheDocument();
     expect(screen.queryByText('Ctrl + Z')).not.toBeInTheDocument();
+  });
+});
+
+describe('the Touch section (long-press-hint M1)', () => {
+  it('lists the two gestures that work in both views, in the diagram', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} />);
+    expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
+    expect(screen.getByText('Press and hold a button')).toBeInTheDocument();
+    expect(screen.getByText('Press and hold an Explorer row')).toBeInTheDocument();
+    // The canvas has no finger-specific behaviour, so the sheet must not claim one.
+    expect(screen.queryByText('Tap a bar, then drag it')).not.toBeInTheDocument();
+  });
+
+  it('adds the Gantt row gestures, and the editing ones only where editing is enabled', () => {
+    const { rerender } = render(
+      <PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />,
+    );
+    expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
+    expect(screen.getByText('Press and hold a row')).toBeInTheDocument();
+    expect(screen.getByText('Tap a bar, then drag it')).toBeInTheDocument();
+    expect(screen.getByText('Double-tap a cell')).toBeInTheDocument();
+    rerender(<PlanShortcutsHelp open onClose={() => {}} editingEnabled={false} view="gantt" />);
+    expect(screen.getByRole('heading', { name: 'Touch' })).toBeInTheDocument();
+    expect(screen.getByText('Press and hold a row')).toBeInTheDocument();
+    expect(screen.queryByText('Tap a bar, then drag it')).not.toBeInTheDocument();
+    expect(screen.queryByText('Double-tap a cell')).not.toBeInTheDocument();
+  });
+
+  it('sets a gesture phrase as wrapping text, not as a monospaced no-wrap key', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled />);
+    const gesture = screen.getByText('Press and hold a button');
+    expect(gesture).not.toHaveClass('font-mono');
+    expect(gesture).not.toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('Enter', { selector: 'dt' })).toHaveClass('font-mono');
   });
 });
