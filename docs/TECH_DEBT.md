@@ -9407,7 +9407,6 @@ Since #349 (`e2e-local.sh` holds `pg_try_advisory_lock(349)` in a session that s
 
 **Next:** have the run lock connect to the `postgres` database with a key derived from the guarded database's name, or let the check ignore the session whose `application_name` starts `e2e-local[`. **Trigger:** none, open now; it is a two-line fix the next time someone works on the script.
 
-
 ### 548. `features/tsld` imports eleven files' worth of other features, against ADR-0026 §8
 
 **Status:** open · **Verified:** 2026-10-26, by `grep -rnE "from '@/features/(activities|wbs|plan-actions|gantt)" apps/web/src/features/tsld` (tests excluded) on `4d541256`, against the same grep on `6fe69268`, the tree before swimlanes · **Raised:** 2026-10-25 (swimlanes M5, `ui-architecture.md` C8) · **Size:** M · **Owner:** web
