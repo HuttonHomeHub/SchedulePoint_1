@@ -187,6 +187,7 @@ const MIDDLES: readonly [string, () => EngineActivity][] = [
   ['a start milestone on the plan calendar', () => middle('START_MILESTONE')],
   ['a start milestone on the weekend calendar', () => middle('START_MILESTONE', WEEKEND_CAL)],
   ['a zero-duration task', () => middle('TASK')],
+  ['a zero-duration task on the weekend calendar', () => middle('TASK', WEEKEND_CAL)],
 ];
 
 /**
@@ -194,9 +195,11 @@ const MIDDLES: readonly [string, () => EngineActivity][] = [
  * (`docs/TECH_DEBT.md` #565). They are `it.fails`, the form the #539 fixture itself took before its fix:
  * each asserts the one-plan answer, so the case turns red the day the divergence is closed and has to be
  * flipped to a plain `it`. Each key is `middle name|cut|longer`. The "stored date cannot say" block below
- * proves the first three are one limit, not three defects; the fourth is a plan's own project finish.
+ * proves the first three bullets below (the weekend start milestone and zero-duration task, and the plan-calendar finish milestone)
+ * share one limit, the stored date; the fourth is the upstream plan's own finish basis.
  *
- * - A start milestone on the weekend calendar, cut at `M → K`: one plan keeps the instant its logic gives
+ * - A start milestone, or a zero-duration task (same date rule, ADR-0207 D3), on the weekend calendar,
+ *   cut at `M → K`: one plan keeps the instant its logic gives
  *   (Monday 06-28 00:00, where the weekend work ended), so `K` starts Monday 06-28; the date the plan
  *   stores for a start milestone is the day its next working minute opens (ADR-0207 D3), Saturday 07-03,
  *   and `K` starts a week late, Monday 07-05.
@@ -214,6 +217,8 @@ const DIVERGES = new Set([
   'a start milestone on the weekend calendar|M->K|false',
   'a start milestone on the weekend calendar|M->K|true',
   'a finish milestone on the plan calendar|W->M|true',
+  'a zero-duration task on the weekend calendar|M->K|false',
+  'a zero-duration task on the weekend calendar|M->K|true',
 ]);
 
 describe('the #539 fixture split across two plans equals the one-plan run (#555)', () => {
@@ -282,7 +287,8 @@ describe('the #539 fixture split across two plans equals the one-plan run (#555)
       );
       expect(successorDriven.get('M')!.lateFinish).toBe('2027-07-02');
       expect(constrained.get('M')!.lateFinish).toBe('2027-07-02');
-      expect(successorDriven.get('W')!.totalFloat).not.toBe(constrained.get('W')!.totalFloat);
+      expect(successorDriven.get('W')!.totalFloat).toBe(1440);
+      expect(constrained.get('W')!.totalFloat).toBe(0);
     });
 
     it('a weekend finish milestone reads its own plan’s finish, which a downstream bound cannot loosen', () => {
