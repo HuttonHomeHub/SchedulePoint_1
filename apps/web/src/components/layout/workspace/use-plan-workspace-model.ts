@@ -243,7 +243,7 @@ export interface DuplicateOutcome {
 /**
  * The single source of a plan surface's route-composed orchestration — every query, the
  * gating matrix, and the TSLD edit callbacks (create / reposition / link / auto-arrange /
- * refresh) that compose a mutation + authoritative recalc across features (ADR-0026 D8).
+ * refresh) that compose a mutation + authoritative recalc across features (ADR-0026 §8).
  *
  * Extracted from `PlanDetailScreen` so the legacy stacked page and the canvas-first
  * `PlanWorkspace` (ADR-0030) render the **same** behaviour from one implementation — the
@@ -302,7 +302,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
-  // trigger the same host-owned dialogs (ADR-0026 D8: the tsld feature stays dependency-free).
+  // trigger the same host-owned dialogs (ADR-0026 §8: the canvas imports no other feature).
   const [editActivityId, setEditActivityId] = useState<string | null>(null);
   const [deleteActivityId, setDeleteActivityId] = useState<string | null>(null);
   const onDeleteActivity = useCallback((a: ActivitySummary) => setDeleteActivityId(a.id), []);
@@ -852,8 +852,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }
   }, [structureSignature, activities.isPending, dependencies.isPending, autoRecalc]);
 
-  // TSLD create-by-drag (M2): the route composes the create + recalc so features/tsld imports
-  // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK **hand-placed** at the dropped
+  // TSLD create-by-drag (M2): the route composes the create + recalc so the canvas imports
+  // no other feature (ADR-0026 §8). A drag becomes a 1-day-min TASK **hand-placed** at the dropped
   // day, then the authoritative recalc lands its dates. (It read "pinned … with an SNET
   // constraint" until the M-J gate pass — true of the code M-F-T3 deleted, and contradicted
   // twenty lines below by the block that describes what replaced it.)
@@ -2262,7 +2262,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [editHistory, updateDependency.mutateAsync, beginLayoutEdit],
   );
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
-  // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
+  // composes the create + recalc (ADR-0026 §8). A cycle or duplicate (ADR-0021) is a 422/409 the
   // engine rejects — surfaced non-destructively (nothing was created), never retried.
   const onTsldLink = async ({
     predecessorId,

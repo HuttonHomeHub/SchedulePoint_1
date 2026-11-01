@@ -327,7 +327,7 @@ export interface TsldPanelProps {
    * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
    */
   scheduleRefusal?: (action: string) => string | null;
-  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 D8). Its presence + the
+  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence + the
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
@@ -450,7 +450,7 @@ export interface TsldPanelProps {
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
    * Dissolve the selected WBS summary — remove the grouping and keep the work
-   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 D8).
+   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 §8).
    * Optional: absent ⇒ the action is inert, and the `dissolve` item is itself flag-gated in
    * {@link selectionActionItems} and hidden for a non-summary selection, so flag-off is
    * byte-for-byte.
@@ -465,7 +465,7 @@ export interface TsldPanelProps {
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
-   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
+   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 §8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
    * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
   onResources?: (activity: ActivitySummary) => void;

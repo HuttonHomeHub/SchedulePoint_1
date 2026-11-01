@@ -61,7 +61,7 @@ export const SWIMLANES_FOLLOW_WBS_REASON =
 /**
  * Why the activity editor's Swimlane field is read-only while the swimlanes are made from a code, and
  * where the value is written: the Codes section of the same tab. Lives beside the grids' sentence so the
- * two cannot drift; `features/tsld` imports no feature, so the swimlanes feature imports this.
+ * two cannot drift; the TSLD's render layer imports no feature, so the swimlanes feature imports this.
  */
 export const swimlanesFollowCodeEditorReason = (typeName: string): string =>
   `Swimlanes follow ${typeName} in this plan. Change it under Codes on this tab.`;

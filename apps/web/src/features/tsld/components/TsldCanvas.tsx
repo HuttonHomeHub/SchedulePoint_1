@@ -946,7 +946,7 @@ const AXIS_MARKER_CURSOR_CLASS = `${AXIS_MARKER_CLASS} bg-primary text-primary-f
  * a `create` intent on release; in `select` mode a drag on a bar body starts a reposition ghost
  * that commits a `reposition` intent on drop (or selects the bar if it never moved), while empty
  * space keeps the M1 pan/select path. Committed edits go to `onIntent`; `TsldPanel` owns the
- * mutation + recalc (ADR-0026 D8). With `editing` off this is byte-for-byte the M1 read-only canvas.
+ * mutation + recalc (ADR-0026 §8). With `editing` off this is byte-for-byte the M1 read-only canvas.
  */
 export function TsldCanvas({
   activities,

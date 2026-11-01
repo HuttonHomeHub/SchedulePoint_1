@@ -20,7 +20,7 @@ import {
  * "pure core" half of the canvas's core/shell split (mirroring `render-model`): **no**
  * canvas, DOM, React, or network, so it is exhaustively unit-testable. The imperative
  * shell (`TsldCanvas`) feeds it events, paints the transient state, and hands each intent
- * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 D8).
+ * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 §8).
  *
  * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **dependency-draw** (2.3),
  * **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once), **duration resize**
