@@ -172,7 +172,7 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
         {openShortcuts ? (
           <MenuItem onSelect={openShortcuts}>
             <Keyboard aria-hidden="true" className="size-4" />
-            Diagram keyboard shortcuts
+            Diagram shortcuts and gestures
           </MenuItem>
         ) : null}
         <div className="border-border my-1 border-t" />

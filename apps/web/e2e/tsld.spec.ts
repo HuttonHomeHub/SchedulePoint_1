@@ -123,9 +123,9 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
 
   // `?` opens the in-app keyboard-shortcuts help; Escape closes it (native dialog).
   await page.keyboard.press('?');
-  await expect(page.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Diagram shortcuts and gestures' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Diagram keyboard shortcuts' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Diagram shortcuts and gestures' })).toBeHidden();
 
   // The "Fit to plan" control re-frames the diagram without error.
   //

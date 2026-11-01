@@ -25,7 +25,7 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
         },
       ]),
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
-  { keys: '?', action: 'Show this shortcuts help' },
+  { keys: '?', action: 'Show this help' },
   { keys: 'Esc', action: 'Disarm the current tool, cancel a gesture, or close a popover' },
 ];
 
@@ -154,7 +154,7 @@ const GANTT_READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: '↑ / ↓', action: 'Previous / next row' },
   { keys: 'Home / End', action: 'First / last row' },
   { keys: '← / →', action: 'Collapse / expand a summary row' },
-  { keys: '?', action: 'Show this shortcuts help' },
+  { keys: '?', action: 'Show this help' },
 ];
 
 const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
@@ -175,12 +175,74 @@ const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
   },
 ];
 
-function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {
+/**
+ * **Touch gestures — every row names a gesture the code implements, with its evidence beside it**
+ * (`docs/specs/long-press-hint/` §2.5, CLAUDE.md §19.11). The diagram canvas contributes none:
+ * `features/tsld` has no `pointerType` branch, so nothing there behaves differently for a finger
+ * than for a mouse, and a row would invent a gesture (ADR-0076).
+ */
+const TOUCH_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // `components/ui/tooltip.tsx` — `TOOLTIP_LONG_PRESS_MS`; the click a released long-press
+    // would fire is swallowed in `onClickCapture`.
+    keys: 'Press and hold a button',
+    action: 'See its name without pressing it. A plain tap still presses it.',
+  },
+  {
+    // `features/navigator/components/HierarchyTree.tsx` — `startLongPress` opens the row menu.
+    keys: 'Press and hold an Explorer row',
+    action: 'Open its actions',
+  },
+];
+
+/** Gantt touch rows that need no write permission: the row menu is not a plan write. */
+const GANTT_TOUCH_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // ADR-0177 D3: a touch hold fires `contextmenu`, which opens the row menu
+    // (`docs/UX_STANDARDS.md` "Row / node actions").
+    keys: 'Press and hold a row',
+    action: 'Open its actions',
+  },
+];
+
+/** Gantt touch rows that only mean something where bars and cells are editable. */
+const GANTT_TOUCH_EDIT_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // ADR-0177 D2: a finger's bar responds only once selected; `TOUCH_ARM_HINT` in `touch-note.ts`.
+    keys: 'Tap a bar, then drag it',
+    action: 'Move it',
+  },
+  {
+    // `GanttCell.tsx` `onDoubleClick` — a double tap is a `dblclick` on the cell.
+    keys: 'Double-tap a cell',
+    action: 'Edit it',
+  },
+];
+
+/**
+ * `keys` is for chords, which are short and must not break; `gesture` is for a phrase, which must
+ * wrap inside the dialog's `max-w-md` at the 1024 floor (ADR-0179).
+ */
+function ShortcutList({
+  items,
+  variant = 'keys',
+}: {
+  items: readonly Shortcut[];
+  variant?: 'keys' | 'gesture';
+}): React.ReactElement {
   return (
     <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
       {items.map((s) => (
         <div key={s.keys} className="contents">
-          <dt className="text-muted-foreground font-mono whitespace-nowrap">{s.keys}</dt>
+          <dt
+            className={
+              variant === 'gesture'
+                ? 'text-muted-foreground max-w-48'
+                : 'text-muted-foreground font-mono whitespace-nowrap'
+            }
+          >
+            {s.keys}
+          </dt>
           <dd>{s.action}</dd>
         </div>
       ))}
@@ -214,7 +276,7 @@ export function PlanShortcutsHelp({
       <Dialog
         open={open}
         onClose={onClose}
-        title="Gantt keyboard shortcuts"
+        title="Gantt shortcuts and gestures"
         description="Focus a row in the chart, then use these keys to navigate and edit."
       >
         <div className="flex flex-col gap-5">
@@ -230,6 +292,17 @@ export function PlanShortcutsHelp({
               />
             </section>
           ) : null}
+          <section className="flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Touch</h3>
+            <ShortcutList
+              variant="gesture"
+              items={[
+                ...TOUCH_SHORTCUTS,
+                ...GANTT_TOUCH_SHORTCUTS,
+                ...(editingEnabled ? GANTT_TOUCH_EDIT_SHORTCUTS : []),
+              ]}
+            />
+          </section>
         </div>
       </Dialog>
     );
@@ -244,7 +317,7 @@ export function PlanShortcutsHelp({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Diagram keyboard shortcuts"
+      title="Diagram shortcuts and gestures"
       description="Focus the activity list, then use these keys to navigate and edit."
     >
       <div className="flex flex-col gap-5">
@@ -292,6 +365,10 @@ export function PlanShortcutsHelp({
             <ShortcutList items={editShortcuts} />
           </section>
         ) : null}
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Touch</h3>
+          <ShortcutList variant="gesture" items={TOUCH_SHORTCUTS} />
+        </section>
       </div>
     </Dialog>
   );
