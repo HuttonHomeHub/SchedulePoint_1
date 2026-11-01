@@ -57,4 +57,28 @@ export default [
       ],
     },
   },
+  {
+    /**
+     * `features/tsld` takes the activity labels and the scope gate from `@repo/types` and `lib/`, not
+     * from `features/activities` (ADR-0026 §8 as amended, docs/TECH_DEBT.md #548). The dependencies
+     * §8 still accepts (`plan-actions`, `wbs`, `gantt` and the toolbar's workspace commands) are named
+     * in the ADR and deliberately not listed here.
+     */
+    files: ['src/features/tsld/**/*.{ts,tsx}'],
+    ignores: ['src/features/tsld/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/activities', '@/features/activities/**'],
+              message:
+                'The TSLD does not import the activities feature (ADR-0026 §8). Labels come from `@repo/types` and `@/lib/*`; ScopeGate from `@/lib/scope-gate`.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

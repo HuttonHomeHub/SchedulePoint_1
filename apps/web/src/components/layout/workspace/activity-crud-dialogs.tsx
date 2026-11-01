@@ -34,8 +34,8 @@ import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
- * TSLD canvas (ADR-0031). The canvas can't own these — the tsld feature imports no other feature
- * (ADR-0026 D8) — so the workspace hosts them here, driven by the shared model's `editActivityId` /
+ * TSLD canvas (ADR-0031). The canvas can't own these — it imports no other feature
+ * (ADR-0026 §8) and the editor lives in `features/activities` — so the workspace hosts them here, driven by the shared model's `editActivityId` /
  * `deleteActivityId` (which the bar's callbacks set). The edit target is re-derived from the live
  * query so a 409 retry carries the current version, mirroring {@link ActivitiesTable}'s own dialogs;
  * both use the same shared `ActivityEditorDialog` / `ConfirmDialog`, so their behaviour can't drift.

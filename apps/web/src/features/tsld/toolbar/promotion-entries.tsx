@@ -1,4 +1,9 @@
-import { DEPENDENCY_TYPES, type ActivityType, type DependencyType } from '@repo/types';
+import {
+  ACTIVITY_TYPE_LABELS,
+  DEPENDENCY_TYPES,
+  type ActivityType,
+  type DependencyType,
+} from '@repo/types';
 import {
   ChartArea,
   DollarSign,
@@ -28,7 +33,6 @@ import {
   GUEST_SHARE_LINKS_ENABLED,
   RESOURCE_CURVES_ENABLED,
 } from '@/config/env';
-import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 
 /**

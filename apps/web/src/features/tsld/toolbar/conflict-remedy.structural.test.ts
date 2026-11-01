@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import { CONFLICT_FLAGS, type ConflictKey } from '../render/conflicts';
 
-import { CONFLICT_REMEDIES, leadingConflictKey } from './conflict-remedy';
-import { selectionActionItems } from './selection-actions';
+import { CONFLICT_REMEDIES, leadingConflictKey } from '@/features/plan-actions/conflict-remedy';
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**
  * **Every conflict a planner can land on has a remedy behind it** (ADR-0094 D4).

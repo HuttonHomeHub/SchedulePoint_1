@@ -21,8 +21,8 @@ import {
  * which any test of the live canvas would notice.
  *
  * It lives **here** rather than in `features/tsld/render/`, where it was first drafted, for two
- * reasons the epic's own code already spells out elsewhere: `features/tsld` imports no other
- * feature (ADR-0026 D8), and the render tier is pure — it reads no feature flag. The direction that
+ * reasons the epic's own code already spells out elsewhere: the TSLD's render layer imports no other
+ * feature (ADR-0026 §8), and the render tier is pure — it reads no feature flag. The direction that
  * IS allowed is this one, `wbs → tsld`, and only for the band's pure geometry.
  *
  * The flag is therefore a **parameter**, not an import: both callers are components that already

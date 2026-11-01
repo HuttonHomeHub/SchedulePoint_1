@@ -3,9 +3,9 @@ import type { ActivitySummary } from '@repo/types';
 import { deriveMakeMilestoneGate } from './make-milestone-gate';
 import type { SelectionBarContext, SelectionCanvasContext, SetCodeGate } from './selection-actions';
 
-import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { SwimlaneAssignment } from '@/features/tsld/model/swimlane-assignment';
 import { matchingConflictFlags } from '@/features/tsld/render/conflicts';
+import type { ScopeGate } from '@/lib/scope-gate';
 
 /**
  * **One builder, two hosts.**

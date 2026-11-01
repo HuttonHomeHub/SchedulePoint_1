@@ -86,7 +86,7 @@ export interface HitZone {
  * (span derived from its SS/FF ties, ADR-0035 §21) and WBS summaries (rolled up from the branch,
  * ADR-0035 §24) — which therefore offer no resize handles. Mirrors `isDurationDerivedType` in
  * `features/activities` (kept in step by hand: the pure render model imports no other feature —
- * ADR-0026 D8).
+ * ADR-0026 §8).
  */
 export function isResizeEligibleType(type: ActivityType): boolean {
   return !isMilestone(type) && type !== 'LEVEL_OF_EFFORT' && type !== 'WBS_SUMMARY';
@@ -140,7 +140,7 @@ export function summaryNotMovablePluralReason(count: number): string {
  * `actualFinish`. Mirrors the engine's `isFrozenByActuals` — an activity with an actual is drawn
  * from it and ignores a hand-placed start, so a start-edge write would save an inert placement and
  * move the FINISH instead. The ONE rule both the diagram and the Gantt ask (docs/TECH_DEBT.md
- * #431); a pure predicate here because the render model imports no other feature (ADR-0026 D8).
+ * #431); a pure predicate here because the render model imports no other feature (ADR-0026 §8).
  * A move is deliberately not covered: both views still allow it.
  */
 export function isStartEdgeFrozen(activity: {

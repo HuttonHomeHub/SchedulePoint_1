@@ -1,12 +1,9 @@
 import { csvCell } from '@repo/interchange';
-import type { ActivitySummary } from '@repo/types';
+import { ACTIVITY_TYPE_LABELS, type ActivitySummary } from '@repo/types';
 
-import {
-  ACTIVITY_STATUS_LABELS,
-  ACTIVITY_TYPE_LABELS,
-  CONSTRAINT_TYPE_LABELS,
-} from '@/features/activities';
+import { ACTIVITY_STATUS_LABELS } from '@/lib/activity-status-labels';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
+import { CONSTRAINT_TYPE_LABELS } from '@/lib/constraint-format';
 import { formatMoney } from '@/lib/format-money';
 import { statedDuration } from '@/lib/stated-duration';
 

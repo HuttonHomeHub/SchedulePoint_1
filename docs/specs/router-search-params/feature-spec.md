@@ -135,7 +135,7 @@ of the same idea, each written by a different epic:
 | `pickText` / `pickParam` | `hooks/use-url-filter-state.ts:65-81`              | `q`, `scope`, `archived`, `kind`                               |
 | `asString` / `asIsoDate` | `features/audit/model/audit-filter.ts:115-123`     | `categories`, `outcome`, `from`, `to`                          |
 
-(A fifth reader, `parsePlanViewMode` (`features/gantt/view-mode.ts:33-35`), covers `view` by
+(A fifth reader, `parsePlanViewMode` (`features/gantt/view-mode.ts:33-35`, now `lib/plan-view-mode.ts`), covers `view` by
 equality against two literals. It is total and needs no helper, so it is not part of the
 consolidation — named here so the count below reconciles.)
 

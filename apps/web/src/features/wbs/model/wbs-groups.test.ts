@@ -160,8 +160,8 @@ describe('deriveWbsGroups', () => {
 
 /**
  * The bridge from activities to TSLD band rows (ADR-0063). It is deliberately here rather than in
- * `features/tsld/render/wbs-band.ts`, because the tsld feature imports no other feature (ADR-0026
- * D8) — the host composes the two, and the shapes match structurally.
+ * `features/tsld/render/wbs-band.ts`, because the TSLD's render layer imports no other feature
+ * (ADR-0026 §8) — the host composes the two, and the shapes match structurally.
  */
 describe('wbsBandGroups', () => {
   it('emits a row per summary plus the bucket, outermost first and the bucket last', () => {

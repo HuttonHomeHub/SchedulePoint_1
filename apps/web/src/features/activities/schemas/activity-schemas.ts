@@ -6,7 +6,6 @@ import {
   PERCENT_COMPLETE_TYPES,
   SELECTABLE_CONSTRAINT_TYPES,
   type AccrualType,
-  type ActivityStatus,
   type ActivityType,
   type ConstraintType,
   type DurationType,
@@ -17,6 +16,7 @@ import { z } from 'zod';
 import { durationTextField } from '../model/duration-field';
 import { remainingTextField } from '../model/remaining-field';
 
+import { ACTIVITY_STATUS_LABELS } from '@/lib/activity-status-labels';
 import { moneyMajorAmount } from '@/lib/money-schema';
 
 // The constraint labels live in the shared lib so the form, the table, and the TSLD
@@ -176,12 +176,7 @@ export const CONSTRAINT_TYPES = [...SELECTABLE_CONSTRAINT_TYPES, ...PARKED_CONST
   ...ConstraintType[],
 ];
 
-/** Human labels for progress status (derived server-side from the numbers). */
-export const ACTIVITY_STATUS_LABELS: Record<ActivityStatus, string> = {
-  NOT_STARTED: 'Not started',
-  IN_PROGRESS: 'In progress',
-  COMPLETE: 'Complete',
-};
+export { ACTIVITY_STATUS_LABELS };
 
 /**
  * Activity DEFINITION create/edit form schema — mirrors the API's DTO (progress
