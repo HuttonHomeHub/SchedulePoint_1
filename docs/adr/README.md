@@ -234,3 +234,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0208](0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)                        | An import reuses a calendar it would have copied exactly                                   | Accepted           |
 | [0209](0209-an-imported-note-is-the-importers.md)                                               | An imported note is the importer's                                                         | Accepted           |
 | [0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)              | An activity code is plan data                                                              | Accepted           |
+| [0211](0211-a-crash-report-is-the-screens-never-the-persons.md)                                 | A crash report is the screen's, never the person's                                         | Proposed           |

@@ -19,10 +19,10 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 28 API modules
+> **Current stage: the application is substantially built.** 29 API modules
 > (`apps/api/src/modules/`), 43 Prisma models across 81 migrations, 1908 web
 > source files with 49 Playwright suites beside the base journey, and
-> 210 ADRs.
+> 211 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -111,7 +111,7 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   28 feature modules
+│   │   ├── src/modules/      #   29 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
 │   │   ├── prisma/           #   Schema (43 models) + 81 migrations
@@ -613,6 +613,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0208** _(Accepted; amends ADR-0053 §5)_ — An import reuses a calendar it would have copied exactly → [`0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md`](docs/adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md)
 - **ADR-0209** _(Accepted; amends ADR-0050's notes mapping row)_ — An imported note is the importer's, and a SchedulePoint note travels as text under its own topic → [`0209-an-imported-note-is-the-importers.md`](docs/adr/0209-an-imported-note-is-the-importers.md)
 - **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
+- **ADR-0211** _(Proposed; Accepted when the staff panel ships)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
@@ -644,9 +645,10 @@ A lighter-weight running log of smaller decisions is in
   [`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). The owner
   armed it on 2026-10-20 after a same-day `check`; its first run removed 9 test clients deleted
   2026-07-21 (`docs/DECISIONS.md`). On that host, do read "shipped" as "deleting".
-- **Retention is enforced on three tables and not on `audit_events`, and the difference is a
-  decision.** `csp_reports` (30 days), `mail_events` (12 months) and `perf_probe_results`
-  (365 days) are swept hourly since 2026-08-10 (ADR-0087) — this application's **first** scheduled
+- **Retention is enforced on four tables and not on `audit_events`, and the difference is a
+  decision.** `csp_reports` (30 days), `mail_events` (12 months), `perf_probe_results`
+  (365 days) and, since 2026-11-01, `crash_reports` (30 days after the crash was last reported,
+  ADR-0211) are swept hourly since 2026-08-10 (ADR-0087) — this application's **first** scheduled
   work of any kind. This bullet said "two tables and not the third" until the 2026-09-08 pass;
   `perf_probe_results` joined `RETENTION_TABLES` at ADR-0128 and the prose was not swept, which is
   the same omission that epic had already found and fixed **in the code** — the `retention.configured`
