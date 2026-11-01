@@ -229,9 +229,9 @@ describe('every exclusion is necessary (M0-T3)', () => {
   it('CE2 as it was drawn before #539 no longer diverges on the new engine (recorded: TECH_DEBT #557)', () => {
     // The original plan: A on the plan calendar, C late on a Saturday on Monday-to-Friday's roll. Its
     // divergence rested on the milestone rolling C's late finish back a weekend, which D1 removed. The
-    // exclusion this case justified (an intermediate left at its start across calendars) is therefore
-    // pinned by the replacement above and by nothing else; whether the exclusion is now over-conservative
-    // is #557. This case holds the observation so that a change to it is a reviewed one.
+    // exclusion this case justified (an intermediate left at its start across calendars) is pinned by the
+    // replacement above, and by the rule-side cases in `redundant-links.soundness.spec.ts` that narrowed
+    // it (TECH_DEBT #557, ADR-0196). This case holds the observation so that a change to it is reviewed.
     const p = plan(
       [
         task('A', 60),
