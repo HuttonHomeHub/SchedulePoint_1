@@ -25,8 +25,7 @@ not offer them.
 
 ## Where things stand
 
-- **Latest releases:** `web` **0.200.7** (tag `web-v0.200.7`), Version Packages #1235, `Release` run 41259363670 (see
-  the PR that adds this file for the publish job's result). `api` is still **0.103.4** (tag `api-v0.103.4`, #1228).
+- **Latest releases:** `web` **0.200.7** (tag `web-v0.200.7`), Version Packages #1235, `Release` run 41259363670: "Build & push web" passed; "Build & push api" ran and skipped every step (no `api` release). `api` is still **0.103.4** (tag `api-v0.103.4`, #1228).
 - **This session's PRs, in merge order:**
   - **#1232** `docs(docs)` (#556 + pointer drift): `docs/DEPLOYMENT.md` has "Rolling back past the progressed-predecessor
     release"; rows #121, #202, #211, #263, #320, #358 and #366 re-pointed and verified 2026-10-31. **#211's "dormant"
