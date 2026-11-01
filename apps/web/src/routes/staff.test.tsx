@@ -89,6 +89,7 @@ function otherPanels(path: string): Promise<unknown> {
   // `rows.map is not a function` — a failure that names neither the panel nor the route.
   if (
     path === '/staff/csp-reports' ||
+    path === '/staff/crash-reports' ||
     path === '/staff/activity' ||
     path === '/staff/probe-results'
   ) {

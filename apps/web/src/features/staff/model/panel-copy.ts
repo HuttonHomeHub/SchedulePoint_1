@@ -106,6 +106,37 @@ export const SECURITY = {
   empty: 'No reports received.',
 } as const;
 
+export const CRASHES = {
+  intro:
+    'When a screen stops working for someone who is signed in, their browser reports it here. The same crash is listed once, with a count.',
+  /** Always shown, and the table's description target: it changes how an empty list reads. */
+  caveat:
+    'Only screens seen while signed in are reported. An empty list means nothing arrived, not that nothing happened.',
+  caption: 'Screen crashes, most recently seen first',
+  empty: 'No crashes received.',
+  /**
+   * The table is full, and a full table must not read as a quiet one: from here a crash of a new
+   * kind is dropped, so the list can look steady while new problems go unseen.
+   */
+  capReached: {
+    verdict: 'Not recording new kinds of crash',
+    sentence: (cap: number): string =>
+      `The list holds ${cap.toLocaleString('en')} different crashes, which is as many as it keeps. A new kind of crash is not being recorded until older ones are cleared out automatically. Crashes already listed are still counted.`,
+  },
+  showing: (shown: number, total: number): string =>
+    `Showing the ${String(shown)} most recent of ${total.toLocaleString('en')}.`,
+  noScreen: 'No screen',
+  reference: (code: string): string => `Reference ${code}`,
+  stack: (code: string): string => `Stack for ${code}`,
+  stackHeading: 'Stack',
+  componentStackHeading: 'Component stack',
+  noStack: 'No stack was reported.',
+  status: (rows: number, capReached: boolean): string =>
+    `Screen crashes: ${
+      rows === 0 ? 'none received' : `${String(rows)} ${rows === 1 ? 'kind' : 'kinds'} received`
+    }.${capReached ? ' New kinds are not being recorded.' : ''}`,
+} as const;
+
 export const ACCOUNTS = {
   none: 'Everyone has confirmed their email address.',
   some: (n: number): string =>

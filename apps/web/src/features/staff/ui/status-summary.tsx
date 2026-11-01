@@ -55,7 +55,7 @@ const BADGE_VARIANT: Record<CheckView['tone'], 'neutral' | 'warning' | 'outline'
 export interface StaffStatusSummaryProps {
   status: ConsoleStatus;
   /**
-   * The same action as the header's Refresh: the six named reads. Offered only when two or more
+   * The same action as the header's Refresh: the seven named reads. Offered only when two or more
    * checks could not be read, so a single failure keeps its box's own Try again and nothing else.
    */
   onRetryAll?: () => void;

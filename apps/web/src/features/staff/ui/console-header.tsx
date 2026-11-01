@@ -20,7 +20,7 @@ export interface ConsoleHeaderProps {
  * The title, the way back, and the answer to "how old is this?" with the means to make it newer.
  *
  * **The time is the oldest of the page's reads** (`freshnessOf`), and the sentence beside the button
- * states the audit cost: every Refresh is six audited reads in a table that refuses `DELETE`, which
+ * states the audit cost: every Refresh is seven audited reads in a table that refuses `DELETE`, which
  * is the same cost as reloading the page and which the reader is entitled to know before pressing.
  * The button never leaves and keeps focus; while a refresh runs it is shaded and its handler
  * refuses, so a second press cannot make twelve reads (ADR-0082).

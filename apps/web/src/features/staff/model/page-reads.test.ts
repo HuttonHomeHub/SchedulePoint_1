@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { STAFF_PAGE_READS } from './page-reads';
 
 describe('STAFF_PAGE_READS', () => {
-  // The audit cost of a Refresh is this list's length, so it is pinned (SC-5): the day it is six
-  // and a seventh read is added, this fails and somebody states the new cost.
-  it('is the six reads a page load makes, each once', () => {
-    expect(STAFF_PAGE_READS).toHaveLength(6);
-    expect(new Set(STAFF_PAGE_READS.map((key) => key.join('/'))).size).toBe(6);
+  // The audit cost of a Refresh is this list's length, so it is pinned (SC-5): the day it is seven
+  // and an eighth read is added, this fails and somebody states the new cost.
+  it('is the seven reads a page load makes, each once', () => {
+    expect(STAFF_PAGE_READS).toHaveLength(7);
+    expect(new Set(STAFF_PAGE_READS.map((key) => key.join('/'))).size).toBe(7);
   });
 
   // Diagnostics is press-only by ADR-0140: it reads customer tables, so a refresh must not run it.
