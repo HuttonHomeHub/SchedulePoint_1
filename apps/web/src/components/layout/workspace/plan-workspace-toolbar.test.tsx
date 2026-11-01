@@ -657,11 +657,17 @@ describe('the placement-migration notice (one-planning-surface M-I)', () => {
  * Gantt's own chain places it — the same three-party seam as the migration notice above.
  */
 describe('the touch-gesture tip', () => {
-  const press = (pointerType: string) => {
-    const event = new Event('pointerdown', { bubbles: true });
-    Object.defineProperty(event, 'pointerType', { value: pointerType });
-    act(() => {
-      document.body.dispatchEvent(event);
+  /** A whole touch (down, up) of the given type, then long enough for the hook's frame. */
+  const press = async (pointerType: string) => {
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, 'pointerType', { value: pointerType });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
     });
   };
 
@@ -674,19 +680,19 @@ describe('the touch-gesture tip', () => {
     await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
     expect(h.tsldProps.current?.touchGestureHint).toBeNull();
 
-    press('mouse');
+    await press('mouse');
     expect(h.tsldProps.current?.touchGestureHint).toBeNull();
 
-    press('touch');
+    await press('touch');
     expect(h.tsldProps.current?.touchGestureHint).not.toBeNull();
   });
 
-  it('shows in the Gantt dock after a finger, and Dismiss removes it for good', () => {
+  it('shows in the Gantt dock after a finger, and Dismiss removes it for good', async () => {
     h.search = { view: 'gantt' };
     renderScreen();
     expect(screen.queryByRole('button', { name: 'Touch gestures' })).not.toBeInTheDocument();
 
-    press('touch');
+    await press('touch');
     expect(screen.getByRole('button', { name: 'Touch gestures' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss this tip' }));

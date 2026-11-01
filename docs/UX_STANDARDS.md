@@ -114,7 +114,9 @@ entry stops being needed.
   shows nothing. **A shaded labelled control says why to every input the same way**
   (ADR-0204): its reason is the tip, via `purpose: 'reason-echo'`, and a press on it —
   which does nothing — opens the tip. The binding `title` discriminator table is in
-  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`.
+  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`. **The product teaches the
+  long-press once**: after the first finger touch completes in a plan, a dock strip says so, and
+  the help sheet's Touch section lists it for good.
 - **Destructive actions** require explicit confirmation (AlertDialog) and use
   the `destructive` intent; prefer reversible actions with undo.
 - **A confirmation must name what is actually destroyed — including what the user

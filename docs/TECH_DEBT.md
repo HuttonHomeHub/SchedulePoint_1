@@ -4818,12 +4818,22 @@ ScheduleHealthPanel.tsx:364-365`) and nothing in `HealthPrintDocument.tsx`
 **Status:** open · **Verified:** 2026-10-31, by opening every `path:line` in the re-read notes below (the documented gesture is `docs/UX_STANDARDS.md:111-113`, the undo/redo pair's `useTooltip({` is `tsld-toolbar-items.tsx:2648`, `<PlanShortcutsHelp` is `plan-workspace-toolbar.tsx:2724`, the `markerRow` default is `render-export-image.ts:344`, the reservation case is `export-image.test.ts:353-368`) · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
-long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
+long-press listener cleanup, both landed with the pass; and on 2026-11-01 the first item below was
+**closed** by `docs/specs/long-press-hint/`, whose journey is `e2e-toolbar/touch-gestures.spec.ts`
+— the `path:line` notes under that item are the history of the finding and were not re-opened) ·
+**Size:** S ×1 · **Owner:** web
 
-Three suggestions judged real and filed rather than quietly dropped; **two survive** — the third
-closed on 2026-08-31 and the size beside this line still said three until 2026-09-09:
+Three suggestions judged real and filed rather than quietly dropped; **one survives** — the third
+closed on 2026-08-31, the first on 2026-11-01, and the size beside this line still said three
+until 2026-09-09:
 
-- **The touch long-press has no visible affordance and no documentation a user would find** (ux).
+- ~~**The touch long-press has no visible affordance and no documentation a user would find** (ux).~~
+  **CLOSED 2026-11-01** (`docs/specs/long-press-hint/`, owner-approved). The help sheet is now
+  "Diagram/Gantt shortcuts and gestures" with an always-shown Touch section (account-menu item:
+  "Shortcuts and gestures"), and the first completed finger touch in a plan raises a one-time
+  strip in the dock — "Press and hold an icon button to see its name. A tap still presses it." —
+  that stays until dismissed and then never returns on that device. The finding below is kept as
+  history.
   `useTooltip`'s 500 ms long-press names an icon-only control without firing it, and nothing in
   the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
   as before), so this is an unadvertised affordance rather than a defect; the right home is

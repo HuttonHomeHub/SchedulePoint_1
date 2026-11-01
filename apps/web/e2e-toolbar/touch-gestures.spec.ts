@@ -128,12 +128,14 @@ async function probeStrip(page: Page, tag: string): Promise<number> {
       strip = strip.parentElement;
     }
     const hits: Record<string, string[]> = {};
+    const sizes: Record<string, [number, number]> = {};
     for (const name of ['Touch gestures', 'Dismiss this tip']) {
       const control = Array.from(strip.querySelectorAll('button')).find(
         (b) => b.textContent?.trim() === name || b.getAttribute('aria-label') === name,
       );
       if (!control) throw new Error(`no ${name} control`);
       const r = control.getBoundingClientRect();
+      sizes[name] = [r.width, r.height];
       const points: [number, number][] = [
         [r.x + r.width / 2, r.y + r.height / 2],
         [r.x + 2, r.y + 2],
@@ -150,8 +152,21 @@ async function probeStrip(page: Page, tag: string): Promise<number> {
     for (let n: HTMLElement | null = strip; n; n = n.parentElement) {
       overflow.push(n.scrollWidth - n.clientWidth);
     }
-    return { height: strip.getBoundingClientRect().height, hits, overflow };
+    return {
+      height: strip.getBoundingClientRect().height,
+      hits,
+      overflow,
+      sizes,
+      coarse: matchMedia('(pointer: coarse)').matches,
+    };
   });
+  // WCAG 2.5.8 and ADR-0118: under a coarse pointer every control is finger-sized.
+  if (report.coarse) {
+    for (const [name, [width, height]] of Object.entries(report.sizes)) {
+      expect(width, `${tag}: ${name} width`).toBeGreaterThanOrEqual(44);
+      expect(height, `${tag}: ${name} height`).toBeGreaterThanOrEqual(44);
+    }
+  }
   for (const [name, hits] of Object.entries(report.hits)) {
     expect(hits, `${tag}: ${name} centre and corners`).toEqual(Array(5).fill('self'));
   }
@@ -192,7 +207,7 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   expect(results.violations).toEqual([]);
 
   // Touch gestures opens the sheet and the tip stays; Escape returns focus to the button.
-  const open = page.getByRole('button', { name: 'Touch gestures' });
+  const open = page.getByRole('button', { name: 'Touch gestures', exact: true });
   await open.click();
   const sheet = page.getByRole('dialog', { name: 'Diagram shortcuts and gestures' });
   await expect(sheet.getByRole('heading', { name: 'Touch' })).toBeVisible();
@@ -214,7 +229,13 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   });
   expect(focusLanded, 'focus is on the plan surface, not <body>').toBe(true);
   await page.reload();
+  // The dismissal is on the device, not in memory: read the key the app reads.
+  expect(
+    await page.evaluate(() => JSON.parse(localStorage.getItem('schedulepoint-hints') ?? '{}')),
+  ).toMatchObject({ 'touch-gestures': true });
   await press(page, 'touch');
+  // Settle past the hook's frame, so "hidden" is not asserted before the strip could have shown.
+  await page.waitForTimeout(500);
   await expect(tip).toBeHidden();
 });
 
@@ -236,8 +257,10 @@ test('the tip is raised in the Gantt too, on a coarse pointer', async ({ browser
     const tip = page.getByText(TIP);
     await expect(tip).toBeHidden();
 
-    // The listener is the document's, so any element will carry the press.
+    // The listener is the document's, so any element will carry the touch. This one is a button
+    // (the view switch), not a Gantt bar or cell: the Gantt's own gestures are not the subject.
     await gantt.dispatchEvent('pointerdown', { pointerType: 'touch' });
+    await gantt.dispatchEvent('pointerup', { pointerType: 'touch' });
     await probeStrip(page, 'coarse 1024 x 600, Gantt');
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%';

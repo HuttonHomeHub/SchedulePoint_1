@@ -1,7 +1,7 @@
 # Implementation Plan: Telling a touch user about press-and-hold
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown. — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown.; shipped — built on `feat/touch-gestures-sheet` and `feat/touch-gesture-tip` (PR number to be filled at merge; no ADR was proposed, so the header stays Approved).
 - **Owner:** web (James Ewbank, product owner; built by the builder agent)
 
 The plan is named `implementation-plan.md`, per the request, rather than the template's `implementation-plan.md`. `check:spec-status` P1 reads only `implementation-plan.md` (`scripts/check-spec-status.mjs:365`), so this file makes no claim that gate checks. The header above is a bare link, which is the form P1 treats as clean anyway.

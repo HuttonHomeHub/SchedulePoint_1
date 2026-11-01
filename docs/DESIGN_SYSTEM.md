@@ -1584,7 +1584,9 @@ an unlabelled control it names the command to a mouse and to nobody else; the pr
 same string on hover, on focus, and on a coarse-pointer long-press that does **not** fire the
 command. The full authoring contract, the `purpose` discriminant (no default — `'name-echo'` is
 `aria-hidden` so a screen reader never hears the name twice) and the binding `title` discriminator
-table live in [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`.
+table live in [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`. The long-press is
+taught once, in the dock, after the first finger touch in a plan, and listed in the help sheet's
+Touch section.
 
 What `title` is still FOR: a truncated text's full value, and a supplementary clause on a control
 whose name is already visible. What it is never for again: being the only way to learn an

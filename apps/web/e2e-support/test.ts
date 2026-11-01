@@ -87,10 +87,13 @@ export async function acknowledgeViewportNotice(target: Page | BrowserContext): 
 /**
  * ## The one-time touch tip, and why a touching journey acknowledges it (`docs/specs/long-press-hint/`)
  *
- * The first `pointerType: 'touch'` press in a plan puts a strip in the foot row, which costs the
- * canvas or the Gantt a line of height. A journey that **measures geometry and then delivers touch
- * input** (a drag from a box read before the first tap, a hit-test, a foot-row height) would see
- * the layout move under it, so it asks for the strip to be already dismissed — it writes the same
+ * The first completed `pointerType: 'touch'` press in a plan puts a strip in the foot row. The dock
+ * pays no height for a strip in the usual case (`CanvasDock`: it fills a row that already exists),
+ * but that holds only while the strip fits the row's one line; at 1024 wide, at a larger text size
+ * or on a wrapping line it grows the row, and the canvas or the Gantt gives up the difference. A
+ * journey that **measures geometry and then delivers touch input** (a drag from a box read before
+ * the first tap, a hit-test, a foot-row height) could see the layout move after its first touch,
+ * so it asks for the strip to be already dismissed — it writes the same
  * storage key the app reads, before any page script runs. The remedy is this, never a widened
  * tolerance.
  *

@@ -5,9 +5,9 @@ import { useTouchGestureHint } from './use-touch-gesture-hint';
 
 const KEY = 'schedulepoint-hints';
 
-/** A `pointerdown` carrying a `pointerType`, which jsdom's `Event` does not model. */
-function press(pointerType: string): Event {
-  const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+/** A pointer event carrying a `pointerType`, which jsdom's `Event` does not model. */
+function fire(type: 'pointerdown' | 'pointerup', pointerType: string): Event {
+  const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'pointerType', { value: pointerType });
   act(() => {
     document.body.dispatchEvent(event);
@@ -15,41 +15,78 @@ function press(pointerType: string): Event {
   return event;
 }
 
+const flushFrame = () =>
+  act(() => {
+    vi.runAllTimers();
+  });
+
+/** A finger's whole touch: down, up, then the frame the hook waits for. */
+function touch(): void {
+  fire('pointerdown', 'touch');
+  fire('pointerup', 'touch');
+  flushFrame();
+}
+
 describe('useTouchGestureHint', () => {
-  beforeEach(() => localStorage.removeItem(KEY));
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    localStorage.removeItem(KEY);
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   it.each(['mouse', 'pen'])('is not due after a %s press', (pointerType) => {
     const { result } = renderHook(() => useTouchGestureHint());
-    press(pointerType);
+    fire('pointerdown', pointerType);
+    fire('pointerup', pointerType);
+    flushFrame();
     expect(result.current.due).toBe(false);
   });
 
-  it('is due after the first touch press', () => {
+  it('is due after the first touch completes', () => {
     const { result } = renderHook(() => useTouchGestureHint());
     expect(result.current.due).toBe(false);
-    press('touch');
+    touch();
     expect(result.current.due).toBe(true);
   });
 
-  it('observes the press without consuming it', () => {
+  it('is not due while the finger is still down, so the strip never moves the press it answers', () => {
+    const { result } = renderHook(() => useTouchGestureHint());
+    fire('pointerdown', 'touch');
+    flushFrame();
+    expect(result.current.due).toBe(false);
+  });
+
+  it('waits a frame after the lift', () => {
+    const { result } = renderHook(() => useTouchGestureHint());
+    fire('pointerdown', 'touch');
+    fire('pointerup', 'touch');
+    expect(result.current.due).toBe(false);
+    flushFrame();
+    expect(result.current.due).toBe(true);
+  });
+
+  it('observes the touch without consuming it', () => {
     renderHook(() => useTouchGestureHint());
-    expect(press('touch').defaultPrevented).toBe(false);
+    expect(fire('pointerdown', 'touch').defaultPrevented).toBe(false);
+    expect(fire('pointerup', 'touch').defaultPrevented).toBe(false);
   });
 
   it('removes its listener after the first touch', () => {
     const remove = vi.spyOn(document, 'removeEventListener');
     renderHook(() => useTouchGestureHint());
-    press('touch');
-    expect(remove).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
+    touch();
+    expect(remove).toHaveBeenCalledWith('pointerup', expect.any(Function), true);
   });
 
   it('attaches nothing when the tip was already dismissed', () => {
     localStorage.setItem(KEY, JSON.stringify({ 'touch-gestures': true }));
     const add = vi.spyOn(document, 'addEventListener');
     const { result } = renderHook(() => useTouchGestureHint());
-    expect(add).not.toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
-    press('touch');
+    expect(add).not.toHaveBeenCalledWith('pointerup', expect.any(Function), true);
+    touch();
     expect(result.current.due).toBe(false);
   });
 
@@ -57,12 +94,12 @@ describe('useTouchGestureHint', () => {
     const remove = vi.spyOn(document, 'removeEventListener');
     const { unmount } = renderHook(() => useTouchGestureHint());
     unmount();
-    expect(remove).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
+    expect(remove).toHaveBeenCalledWith('pointerup', expect.any(Function), true);
   });
 
   it('dismiss persists and withdraws the tip', () => {
     const { result } = renderHook(() => useTouchGestureHint());
-    press('touch');
+    touch();
     act(() => result.current.dismiss());
     expect(result.current.due).toBe(false);
     expect(JSON.parse(localStorage.getItem(KEY) ?? '{}')).toMatchObject({ 'touch-gestures': true });
@@ -70,7 +107,7 @@ describe('useTouchGestureHint', () => {
 
   it('is not marked seen merely for having appeared', () => {
     renderHook(() => useTouchGestureHint());
-    press('touch');
+    touch();
     expect(localStorage.getItem(KEY)).toBeNull();
   });
 });

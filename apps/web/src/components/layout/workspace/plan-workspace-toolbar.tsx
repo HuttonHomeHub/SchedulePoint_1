@@ -2094,10 +2094,11 @@ export function ToolbarPlanWorkspace({
           */}
           {/* **One transient strip at a time, in the canvas's order** (`resolveDockStrip`): an
               overlap resolved by the planner's last edit outranks the migration notice, which is a
-              standing fact and waits. Stacking both, as the first version did, gave the same pair
-              of facts one strip on the diagram and two on the Gantt (component review). The
-              undo/redo result is the newest of the three — it describes the step just taken, and
-              replaces the overlap notice it would otherwise contradict (`resolveDockStrip`). */}
+              standing fact and waits. Stacking them, as the first version did, gave the same
+              facts one strip on the diagram and several on the Gantt (component review). The
+              undo/redo result is the newest of the four candidates — it describes the step just
+              taken, and replaces the overlap notice it would otherwise contradict. The touch tip
+              is last of all: it teaches a gesture and describes nothing about the plan. */}
           {historyResultNotice?.node ??
             layoutResolvedNotice ??
             placementMigrationNotice ??
