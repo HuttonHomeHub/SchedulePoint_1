@@ -378,6 +378,8 @@ export class InterchangeService {
         projectId: project.id,
         planId,
         userId: principal.userId,
+        // FILE counts: `calendars` is what the file held, so calendars written = calendars - reused -
+        // skipped (ADR-0208 D7). Kept as file counts so the log contract does not change.
         calendars: graph.calendars.length,
         calendarsReused: reusedCalendarCount,
         calendarsSkipped,
@@ -455,6 +457,8 @@ export class InterchangeService {
         sourceFilename: report.sourceFilename,
         activityCount: graph.activities.length,
         dependencyCount: graph.dependencies.length,
+        // A FILE count, unchanged in meaning: calendars written = calendarCount - calendarsReused -
+        // calendarsSkipped (ADR-0208 D7).
         calendarCount: graph.calendars.length,
         // How many of those were an existing calendar rather than a new one (ADR-0208 D4).
         calendarsReused: reusedCalendarCount,

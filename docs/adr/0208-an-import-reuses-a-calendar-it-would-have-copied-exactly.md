@@ -109,13 +109,18 @@ same working week, exceptions and hours per day, so a copy would differ only in 
   sentence in the pure package; the API finds the mapper's finding through `isResourceTierFinding`
   (kind, entity, reason and the clamped source reference, so it survives `boundReport`), never by text.
   The commit's lock prediction still runs on the full graph, so it may lock a candidate for a calendar
-  that is then left out: a superset of locks, which ADR-0208 R2 already accepts. The library read the
+  that is then left out: a superset of locks, which ADR-0208 R2 already accepts. This is a deliberate trade:
+  predicting on the left-out graph would need the library read, and the matcher, before the transaction
+  and its locks, which is the read D7 moves inside them; a `FOR SHARE` on one extra calendar for one
+  transaction is the cheaper error. The commit decides again inside (E13); E14 (a library crew that
+  appears between the dry-run and the commit) is matched by the same in-transaction read. The library read the
   matcher needs moves ahead of calendar resolution inside the transaction, and the dry-run reads the
   library once for both the matches and the collision questions. Parity: nothing references a left-out
   calendar, and a reference that survived would fail the whole import at `resolveCalendarId` (422
   `INCONSISTENT_GRAPH`), never silently. Not in scope: copies earlier imports already left behind (no
   clean-up), and a crew calendar an activity also uses, which stays in the shared library
-  (`docs/TECH_DEBT.md` #567).
+  (`docs/TECH_DEBT.md` #568). `calendarCount` (audit) and `calendars` (log) remain counts of the calendars in
+  the file, not of those written: written = count - `calendarsReused` - `calendarsSkipped`.
 
 ## Alternatives considered
 

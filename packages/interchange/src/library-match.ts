@@ -1,6 +1,6 @@
 import type { ImportGraph } from './import-graph.js';
 import { isResourceTierFinding } from './mapper.js';
-import type { InterchangeReport, ReportFinding } from './report.js';
+import { clampFinding, type InterchangeReport, type ReportFinding } from './report.js';
 
 /**
  * Leaving out a calendar only matched resources would hold (ADR-0208 D7, `docs/TECH_DEBT.md` #554).
@@ -77,7 +77,15 @@ function leftOutFinding(
       : `the file gives ${nameList(different.map((holder) => holder.name))} a different working ` +
         `week, so ${different.length === 1 ? 'its' : 'their'} work is scheduled on the calendar the ` +
         'library already holds; an import never changes an existing resource’s calendar';
-  return { kind: 'approximation', entity: 'calendar', sourceRef: calendarKey, detail, reason };
+  // Bounded like every other finding, so a long calendar or crew name cannot make the swapped-in sentence
+  // the one a strict reader refuses (#399).
+  return clampFinding({
+    kind: 'approximation',
+    entity: 'calendar',
+    sourceRef: calendarKey,
+    detail,
+    reason,
+  });
 }
 
 /**

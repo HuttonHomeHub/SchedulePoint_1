@@ -9473,7 +9473,7 @@ A lane is stored per `(activity, type, value)` basis (ADR-0206: switching a sour
 
 Options for later: sweep or cap stale rows per activity on a write, or a covering partial index (database-architect, CLAUDE.md §19.3). **Trigger:** stored lane rows of one type exceeding about 10 per activity on average, or the plan-wide read's measured median passing 10 ms at 5,000 activities.
 
-### 565. An MSPDI report says every calendar was created in this project, while the mapper puts a resource's calendar in the shared library
+### 566. An MSPDI report says every calendar was created in this project, while the mapper puts a resource's calendar in the shared library
 
 **Status:** open · **Verified:** 2026-11-01, by reading `packages/interchange/src/mspdi-adapter.ts:363-376` (the adapter's finding says every calendar was created in this project) and `packages/interchange/src/mapper.ts` (`resourceTierFinding`, which forces a calendar a resource holds to `ORG` and says so), and `docs/adr/0053-calendar-scoping-and-resource-management.md` §5 ("MSPDI import is always PROJECT"). **Not run.** · **Raised:** 2026-11-01 (found while specifying #554, spec F17) · **Size:** S · **Owner:** interchange
 
@@ -9481,7 +9481,7 @@ For an MSPDI file with a calendar a resource holds, the report contradicts itsel
 
 **Next:** reword the adapter's finding to name the exception, and correct the ADR-0053 §5 sentence; both are wording, with no change to what is created. **Trigger:** the next change to the MSPDI adapter's calendar findings, or a report from a planner who read both sentences.
 
-### 566. A code-matched resource silently drops the file's rate, with no finding
+### 567. A code-matched resource silently drops the file's rate, with no finding
 
 **Status:** open · **Verified:** 2026-11-01, by reading `apps/api/src/modules/interchange/interchange.service.ts` (the resource loop binds a `match` and `continue`s before `newResourceRows`, so `costPerUnit` and `maxUnitsPerHour` are never read for it) and `apps/api/src/modules/interchange/resource-match.ts` (only the `answer` path writes a finding, and its reason names the rate). **Not run.** · **Raised:** 2026-11-01 (found while specifying #554, spec F3) · **Size:** S · **Owner:** api
 
@@ -9489,7 +9489,7 @@ A source resource matched to a library row by code keeps the library row's rate 
 
 **Next:** decide whether a code match whose rate or capacity differs from the library row's should write a `repair` finding (no new kind, the #541 argument), and only when they differ so a clean re-import stays quiet. **Trigger:** a report of a rate that did not change after a re-import, or the next change to resource matching on import.
 
-### 567. A crew calendar an activity also uses stays in the shared library after the crew is matched
+### 568. A crew calendar an activity also uses stays in the shared library after the crew is matched
 
 **Status:** open · **Verified:** 2026-11-01, by the e2e `creates the calendar when an activity also uses it (E6)` in `apps/api/test/interchange.e2e-spec.ts` (the calendar is created at `ORG`, bound to the activity, and the matched crew keeps its own) · **Raised:** 2026-11-01 (product owner's answer to Q2 on the #554 spec) · **Size:** M · **Owner:** api
 

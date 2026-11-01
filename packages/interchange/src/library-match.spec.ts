@@ -284,6 +284,8 @@ describe('isResourceTierFinding', () => {
     const out = leaveOutCalendarsOnlyMatchedResourcesHold(graph, bounded, matchedAll(graph));
     expect(out.leftOut).toEqual([longKey]);
     expect(out.report.approximations).toHaveLength(1);
-    expect(out.report.approximations[0]?.detail).toContain('was not created');
+    // The swapped-in sentence is bounded like any other, so it is clamped, not refused (#399).
+    expect(out.report.approximations[0]?.detail.length).toBe(REPORT_SENTENCE_MAX_LENGTH);
+    expect(out.report.approximations[0]?.detail.startsWith('calendar “NNN')).toBe(true);
   });
 });

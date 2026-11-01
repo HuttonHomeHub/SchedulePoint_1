@@ -2250,6 +2250,9 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       ).approximations.filter(
         (f) => f.entity === 'calendar' && f.detail.includes(`“${calendarName}”`),
       );
+    // E17 (every calendar left out) is unreachable through either parser: the XER adapter defaults the plan to
+    // its first calendar and MSPDI to its project calendar. It is covered by library-match.spec.ts and by
+    // `createManyForImport([])` being a no-op, so there is no e2e for it.
     const TIER_SENTENCE = 'was created in the shared organisation library';
     const crewShiftCopies = (orgId: string) =>
       prisma.calendar.count({
@@ -2304,6 +2307,12 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
       expect(crewShift[0]?.reason).toBe(
         'the calendar each of them already has is the same as the file’s, so nothing was lost',
       );
+      // E9: before D7 all three were reused (calendarsReused 3); now Crew Shift is skipped instead.
+      expect(await auditAfterOf(again.body.data.planId)).toMatchObject({
+        calendarCount: 3,
+        calendarsReused: 2,
+        calendarsSkipped: 1,
+      });
     });
 
     it('still reuses an identical shared-library calendar when a NEW crew holds it (ADR-0208 at the org tier)', async () => {
@@ -2397,6 +2406,50 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
 
       // Counted on the provenance row (the allow-list in audit-redactor).
       expect(await auditAfterOf(plan.id)).toMatchObject({ calendarsSkipped: 1 });
+    });
+
+    it('schedules a revision exactly as the first import did when only the matched crew’s calendar differs', async () => {
+      const { actor } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const first = await importFile(actor, projectId, crewXer());
+      const second = await importFile(
+        actor,
+        projectId,
+        crewXer({ planName: 'Again', crewData: SIX_DAY() }),
+      );
+
+      // The activities' calendars are identical in both files, so every date must be identical: the
+      // crew calendar that is no longer created was never an input to the schedule.
+      const datesOf = async (planId: string) =>
+        prisma.activity.findMany({
+          where: { planId },
+          orderBy: { code: 'asc' },
+          select: { code: true, earlyStart: true, earlyFinish: true, lateFinish: true },
+        });
+      const before = await datesOf(first.body.data.planId);
+      expect(before).toHaveLength(2);
+      expect(before.every((a) => a.earlyStart !== null && a.earlyFinish !== null)).toBe(true);
+      expect(await datesOf(second.body.data.planId)).toEqual(before);
+    });
+
+    it('matches a library crew that appears between the dry-run and the commit (E14)', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const projectId = await makeProject(actor);
+      const revision = crewXer({ planName: 'Later', crewData: SIX_DAY() });
+      const dry = await actor.agent
+        .post(dryRunUrl(projectId))
+        .attach('file', Buffer.from(revision, 'utf8'), 'rev.xer')
+        .expect(200);
+      // Nothing to match yet, so the preview shows the calendar as created.
+      expect(approximationsAbout(dry.body.data, 'Crew Shift')[0]?.detail).toContain(TIER_SENTENCE);
+
+      await importFile(actor, projectId, crewXer({ planName: 'Seed' }));
+      const committed = await importFile(actor, projectId, revision);
+
+      expect(await crewShiftCopies(orgId)).toBe(0);
+      expect(approximationsAbout(committed.body.data.report, 'Crew Shift')[0]?.detail).toContain(
+        'was not created',
+      );
     });
 
     it('leaves the calendar out for a REUSE_EXISTING answer and keeps it for CREATE_COPY (E2, E3, E12)', async () => {

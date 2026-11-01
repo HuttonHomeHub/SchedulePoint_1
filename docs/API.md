@@ -1234,7 +1234,8 @@ and is identical in hours per day, weekly shifts and active exceptions (dates, w
 exact name is preferred, then the oldest variant, and one existing calendar serves one calendar of the
 file. The report's `repairs` says `calendar “<source>” was matched to the existing calendar “<existing>”`
 in the dry-run and in the commit, and the `interchange.imported` audit row carries `calendarsReused` (and
-`calendarsSkipped`, above). A
+`calendarsSkipped`, above); `calendarCount` and the log's `calendars` stay counts of the calendars in
+the **file**, so the number written is the count less the reused and the skipped. A
 name the tier holds that is **not** identical (or is archived) is created afresh as
 `"<name> (imported YYYY-MM-DD)"` and reported as `was created as` — **never reused by name alone**,
 because two calendars sharing a name can have different working weeks. The commit decides again under its own locks, so it can differ from the dry-run when a calendar
