@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 42
-> models across 80 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 43
+> models across 81 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -2291,12 +2291,14 @@ oversight — which is why it is documented here at length rather than listed.
 
 ## Operational telemetry (installation-wide, not organisation-scoped)
 
-Three tables. None is part of the `Organization → Client → … → Activity` hierarchy above,
-none carries an `organization_id`, and all three are read by a staff member about the
-installation rather than by a member about their own data. All three are **ordinary** tables —
-updatable, deletable, expirable — and all three migrations say so at length, because the reflex in
-this repository after ADR-0072 is to model a new "things that happened" table on
-`audit_events` and in all three cases that would be a defect rather than a style choice.
+Four tables (`crash_reports` joined on 2026-11-01). None is part of the
+`Organization → Client → … → Activity` hierarchy above, none carries an `organization_id`, and all
+four are read by a staff member about the installation rather than by a member about their own
+data. All four are **ordinary** tables — updatable, deletable, expirable — and every migration says
+so at length, because the reflex in this repository after ADR-0072 is to model a new "things that
+happened" table on `audit_events` and in every case that would be a defect rather than a style
+choice. None declares `deleted_at`, so none is in the subject of ADR-0172's soft-delete filter gate,
+and the organisation export excludes all four (ADR-0194, `EXCLUDED_MODELS`).
 
 ### MailEvent: failed and abandoned sends (staff console M1)
 
@@ -2775,6 +2777,131 @@ reach it. Updatable, deletable, expirable. **Do not add a trigger to it.**
   rather than a silent evidence loss; and **the POST body is never logged** — a Pino line carrying
   it would put a named staff member's GPU string and user-agent outside this table's 365-day bound,
   which is the argument `RetentionSweepService` already makes about `mail_events`.
+
+### CrashReport: deduplicated browser crash reports (browser crash reports M1)
+
+`crash_reports` (`20261101120000_crash_reports`; spec `docs/specs/browser-crash-reports/spec.md`
+§4.4; `docs/TECH_DEBT.md` #551) records one row per **distinct** screen crash. A crash is a render
+error caught by the router's per-match boundary (`boundary = 'route'`) or by `AppErrorBoundary`
+(`'app'`). It is `csp_reports` with two differences that decide most of what follows. The sink is
+**authenticated** (`POST /api/v1/crash-reports`, not `@Public()`). And its producer **answers** with
+a display reference instead of a 204. **Non-scheduling**: a single additive table create.
+
+- **The screen's, never the person's — by column list.** The columns are `id`, `dedupe_hash`,
+  `boundary`, `error_name`, `message`, `route_pattern`, `web_version`, `browser`, `browser_major`,
+  `stack`, `component_stack`, `count`, `first_seen_at` and `last_seen_at`. **Must NOT hold**: any
+  user, organisation, plan, project, client or activity id, email, IP, full user agent, full or
+  resolved URL, query string, or correlation id. A correlation id joins the row to a Pino line that
+  carries the principal id, which would make the row attributable. `crash-reports.fields.structural.spec.ts`
+  reads the DMMF field list and refuses those names and any `*Id` but `id`. So a column added later
+  fails the build and needs a privacy argument, not just a migration. The browser is a **family**
+  (`chrome`/`edge`/`firefox`/`safari`/`other`) plus a major version, derived on the server. The
+  message and stacks are **cleaned** before the write (spec §2 "Validation rules"). The row
+  therefore adds no erasure obligation under ADR-0085.
+- **Ordinary, and no foreign key at all.** No trigger, `deleted_at`, `version`,
+  `created_at`/`updated_at`/`created_by` or `organization_id`, for the `mail_events`/`csp_reports`
+  reasons. `first_seen_at`/`last_seen_at` are the two timestamps, and the only writer is an
+  increment, which is not a read-modify-write. With no `deleted_at` it is outside ADR-0172's gate
+  by construction. The organisation export excludes it as **screen crash reports**
+  (`EXCLUDED_MODELS`, `ORGANISATION_EXPORT_FORMAT.md`). That adds one entry to the manifest's
+  `excluded` list and changes no file or column.
+- **Dedupe is a producer-computed sha256**, `dedupe_hash`, over `web_version ␟ boundary ␟ error_name
+␟ message ␟ route_pattern ␟ top-5 frames ␟ browser`, joined on U+001F. This is the `CspReport`
+  decision verbatim: a btree over browser-supplied text fails at ~2,700 incompressible bytes, and
+  this database cannot compute a strong hash itself. **The release is in the key on purpose**: a
+  crash that comes back after a fix is a new row, not a merged count. `browser_major`, `stack` and
+  `component_stack` are last-writer-wins through `COALESCE`, so a later report cannot erase them.
+  The six-character `reference` is the hash's prefix. It is display only and not stored.
+- **Every CHECK is one the producer structurally cannot violate.** This is the rule
+  `20260809170000_csp_reports_refusable_constraints` paid for. There, CHECKs a browser could reach
+  were silent deletes. Here the cleaners and normaliser ship in the **same API image** as the
+  migration, so they cannot skew across a release (the web bundle can, ADR-0027, and is not the
+  producer). A refusal is visible too (`reference: null` plus a warn). There are twelve:
+  - the hash shape;
+  - fail-closed value lists on `boundary` and `browser` (TEXT, not enums: a third boundary is one
+    DROP + ADD, not two migrations);
+  - an ASCII-explicit `error_name` shape (Postgres' `\w` follows the locale; JavaScript's does not);
+  - a `route_pattern` shape that **also refuses any UUID-shaped run**. It is the one column a
+    producer mistake would fill with identifiers, and a route id never holds one. It cannot refuse a
+    resolved org slug, which fits the shape;
+  - a loose `web_version` token (`[0-9A-Za-z.+-]{1,32}`), deliberately not a SemVer regex;
+  - `browser_major` in `0..9999`;
+  - `count >= 1`;
+  - `last_seen_at >= first_seen_at`.
+- **Lengths are bounded in the database, unlike `csp_reports`' URIs, and that is a stated
+  departure.** `message <= 300`, `stack <= 4000`, `component_stack <= 2000` (`char_length`). This
+  table promises a **storage** bound: ~1,000 rows of at most ~6.3 k characters each, so roughly
+  8 MB. A bound is a fact only if the database holds it. It is safe because each cleaner caps as its
+  **last** step, in UTF-16 units or code points, and both are `>= char_length`. M1-T2's e2e posts an
+  at-cap fixture for each bounded column, so a producer cap raised without a migration fails CI.
+- **`count` is `INTEGER`**, the `CspReport` argument made stronger. With authentication and 10/min
+  per IP, one row reaches int4's limit only after ~149,000 address-days on one fingerprint, and the
+  release in the key starts a new row every deploy. The statement below saturates anyway.
+- **`ck_crash_reports_seen_order` is kept beside the clamp.** `GREATEST(clock_timestamp(),
+first_seen_at)` makes it unviolable: both values sit on the `timestamptz(3)` millisecond grid, and
+  a value at or above a grid point rounds to at or above it. It is true, and it surfaced #311 on
+  `csp_reports`. A future statement that drops the clamp then fails the 16-way burst test instead of
+  writing an impossible pair.
+- **The write and the cap check are ONE statement** (Q-a + Q-b). M1-T2 owns it; this is the shape
+  the schema was designed for. The casts are deliberate: in `INSERT … SELECT` a bound `null` has no
+  target column to take its type from. **Not run against a database when written** — M1-T2's e2e
+  proves it.
+
+  ```sql
+  INSERT INTO crash_reports (id, dedupe_hash, boundary, error_name, message, route_pattern,
+    web_version, browser, browser_major, stack, component_stack, count, first_seen_at, last_seen_at)
+  SELECT gen_random_uuid(), $hash::text, $boundary::text, $errorName::text, $message::text,
+    $routePattern::text, $webVersion::text, $browser::text, $browserMajor::int, $stack::text,
+    $componentStack::text, 1, clock_timestamp(), clock_timestamp()
+  WHERE EXISTS (SELECT 1 FROM crash_reports WHERE dedupe_hash = $hash::text)
+     OR (SELECT count(*) FROM (SELECT 1 FROM crash_reports LIMIT 1000) AS capped) < 1000
+  ON CONFLICT (dedupe_hash) DO UPDATE SET
+    count = CASE WHEN crash_reports.count < 2147483647
+                 THEN crash_reports.count + 1 ELSE crash_reports.count END,
+    last_seen_at = GREATEST(clock_timestamp(), crash_reports.first_seen_at),
+    browser_major = COALESCE(EXCLUDED.browser_major, crash_reports.browser_major),
+    stack = COALESCE(EXCLUDED.stack, crash_reports.stack),
+    component_stack = COALESCE(EXCLUDED.component_stack, crash_reports.component_stack)
+  ```
+
+  The affected-row count is the answer. `1` means the report was stored or counted, so return the
+  reference. `0` means a new fingerprint at the cap, so return `reference: null`. A **repeat always
+  counts**, because the `EXISTS` admits it to the conflict path whatever the total. Two races are
+  accepted, as the spec allows. First, two new hashes at 999 can both pass and leave 1,001 rows.
+  Second, at the cap, a repeat whose first insert is still uncommitted in another transaction is not
+  visible to `EXISTS`, so it is dropped rather than counted. The count is bounded by its own
+  `LIMIT`, so an overshoot can never make the check slower.
+
+- **One index, `(last_seen_at, id)`**, the `csp_reports` index verbatim, plus the unique key. It
+  serves four queries:
+  - **Q-c**, the staff list `ORDER BY last_seen_at DESC, id DESC LIMIT 50`: a backward scan.
+  - **Q-d**, the 7-day summary: write it as two scalar subqueries, `(SELECT count(*) … WHERE
+last_seen_at >= $since)` and `(SELECT max(last_seen_at) …)`. The first is a range on the leading
+    column; the second is the backward scan's first tuple. One `count(*) FILTER (…), max(…)` would
+    scan everything instead. That costs nothing at 1,000 rows, but there is no reason to.
+  - **Q-e**, the ADR-0087 sweep `ctid IN (SELECT ctid … WHERE last_seen_at < $cutoff ORDER BY
+last_seen_at, id LIMIT 1000)`: a forward range that already yields rows in order.
+  - **Q-f**, oldest surviving: the forward scan's first tuple.
+
+  Q-c's `total` and `capReached` are a `count(*)` over a table the cap bounds. **Q-b gets no index**:
+  it is one unique-key probe plus a bounded count. A counter row or a trigger-maintained total would
+  add a second write to every report to save a sub-millisecond scan. **Unmeasured on this table**:
+  it was authored without a database. The figures it leans on are `csp_reports`' (0.16–0.25 ms for a
+  first page at 5,000 rows, `n_tup_hot_upd = 0` on spaced repeats). M1-T2's review records
+  `EXPLAIN (ANALYZE, BUFFERS)` for Q-b to Q-f at 1,000 rows.
+
+- **Service-layer obligations the database cannot enforce** (model docblock, M1-T2):
+  - **Strip U+0000** from every text value. A NUL fails the statement before any CHECK runs, and it
+    is the one failure browser input alone can reach.
+  - **Cap last** in each cleaner.
+  - **Parse `browser_major` to at most four digits** or null.
+  - **Stamp both timestamps in the database.**
+  - **Log no content on a failed write**: the SQLSTATE and constraint name, never `err` whole. A
+    CHECK violation's DETAIL is `Failing row contains (…)`, which is the cleaned message and stacks.
+- **Retention**: 30 days on `last_seen_at` (`RETENTION_CRASH_REPORTS_DAYS`, plan M1-T3), swept
+  hourly by ADR-0087's runner as the fourth `RETENTION_TABLES` entry. Like `csp_reports`, it is a
+  claim about **rows**: a crash still happening never expires, so `first_seen_at` can be older than
+  the period.
 
 ## Backups and the export — what a schema change owes them
 
