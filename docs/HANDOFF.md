@@ -88,6 +88,7 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   or a 30-minute timeout. No fifth shard.
 - The diagram keeps its own colours under a Windows contrast theme (#508).
 - `Start editing` stays plain while the pen is not held.
+- The `View ▾` panel's Zoom and Colour-by radio rows stay 24 px under a coarse pointer; the 420 px bar holds (#561, 2026-11-01).
 - The default database password is warned about, not refused (2026-10-16).
 - Metric tiles: the shared look everywhere, no boxed option (2026-10-16).
 - The combobox's disabled-option behaviour ships before any screen uses it (2026-10-16).
@@ -215,7 +216,7 @@ guessed column names (ADR-0071 §5).
 - Small open rows checked 2026-10-31/11-01 as still real and not yet offered or taken: **#554** (an import's unused
   calendar copy; needs a spec), **#551** (a browser crash reaches nobody; needs a channel, so likely an owner
   decision), **#555** (the cross-plan twin has no weekend calendar; on a trigger), **#548** (`features/tsld` imports
-  other features), **#561** (View ▾ radio rows 24 px under a coarse pointer; growing them breaks the 420 px bar).
+  other features). **#561** is closed by decision (2026-11-01).
   **#562** and **#563** stay on their own triggers.
 - **#211** may be worth re-offering: its long-press finding now reaches 13 icon-only production items, not two.
 - The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31).

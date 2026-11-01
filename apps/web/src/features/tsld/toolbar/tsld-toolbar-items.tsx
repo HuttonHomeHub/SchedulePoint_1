@@ -158,6 +158,10 @@ import { cn } from '@/lib/utils';
  * job, but it forwards a ref for RHF `register()` and these are controlled toggles inside a menu
  * panel, so the migration is a larger change than the defect warrants; the remainder is
  * `docs/TECH_DEBT.md` #138(b). One constant is what stops the seventh copy being written without it.
+ *
+ * It stays 24 px under a coarse pointer on purpose: the Zoom level and Colour-by radio rows are the house
+ * 44 px rule's named exception, decided 2026-11-01 (`docs/DECISIONS.md`, #561), because growing them
+ * breaks SC-13's 420 px `View ▾` bar. Do not add `pointer-coarse:min-h-*` here.
  */
 const TOGGLE_ROW = 'flex min-h-6 items-center gap-2 py-1 text-sm';
 
