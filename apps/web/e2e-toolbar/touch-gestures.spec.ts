@@ -3,7 +3,7 @@ import { type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
 
-import { onboard, openNewPlan, startEditing } from './support';
+import { addActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
  * **The help sheet lists the finger gestures** (`docs/specs/long-press-hint/` M1).
@@ -101,12 +101,15 @@ test('the help sheet lists the touch gestures, in the diagram and in the Gantt',
  */
 const TIP = 'Press and hold an icon button to see its name. A tap still presses it.';
 
-/** Dispatch a `pointerdown` of the given type on the zoom-out deck glyph. */
+/**
+ * Dispatch a `pointerdown` of the given type on the Comments icon button. (Not the zoom glyphs:
+ * at the 1024 x 600 floor they are folded into a popover and are not on the strip.)
+ */
 async function press(page: Page, pointerType: 'mouse' | 'pen' | 'touch'): Promise<void> {
-  const glyph = page.locator('[data-toolbar-item="zoom-out"]');
+  const glyph = page.getByRole('button', { name: 'Comments' });
   await expect(glyph).toBeVisible();
   const box = await glyph.boundingBox();
-  if (!box) throw new Error('the zoom-out glyph has no box');
+  if (!box) throw new Error('the Comments glyph has no box');
   await glyph.dispatchEvent('pointerdown', {
     pointerType,
     clientX: box.x + box.width / 2,
@@ -136,12 +139,14 @@ async function probeStrip(page: Page, tag: string): Promise<number> {
       if (!control) throw new Error(`no ${name} control`);
       const r = control.getBoundingClientRect();
       sizes[name] = [r.width, r.height];
+      // 4 px in, not 2: the buttons are `rounded-md` (8 px), and a point 2 px in on the diagonal
+      // lies outside the arc, where the strip behind is correctly what a hit-test returns.
       const points: [number, number][] = [
         [r.x + r.width / 2, r.y + r.height / 2],
-        [r.x + 2, r.y + 2],
-        [r.right - 2, r.y + 2],
-        [r.x + 2, r.bottom - 2],
-        [r.right - 2, r.bottom - 2],
+        [r.x + 4, r.y + 4],
+        [r.right - 4, r.y + 4],
+        [r.x + 4, r.bottom - 4],
+        [r.right - 4, r.bottom - 4],
       ];
       hits[name] = points.map((p) => {
         const top = document.elementFromPoint(p[0], p[1]);
@@ -182,6 +187,8 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   await onboard(page, Date.now() + 1);
   await openNewPlan(page);
   await startEditing(page);
+  // The diagram's dock (where the tip renders) is mounted only once there is something to draw.
+  await addActivity(page, 'Excavate');
   const tip = page.getByText(TIP);
 
   await press(page, 'mouse');
