@@ -124,7 +124,8 @@ Three **critical** questions for the owner are at the end of this document (§6)
 - **Plan switch**: the hook lives in the workspace host, which does not remount on a plan change (`plan-workspace-toolbar.tsx:1224-1227`). `due` carries over, which is right, because the tip is about the device and not the plan.
 - **Two tabs**: each tab reads storage at mount. Dismissing in one does not hide it live in the other until that tab reloads. Accepted; it is a courtesy strip.
 - **1024 × 600, coarse**: the dock outlet wraps rather than clipping (`canvas-dock.tsx:80-88`). Its floors are capped at `min(…, 100%)` (`:125-132`), so the strip takes its own line where the facts are wide. That cost is the same one every dock strip already pays. It is recorded by the journey, not assumed.
-- **200 % text** (WCAG 1.4.4): covered by the same outlet rules (`canvas-dock.tsx:125-132`). The journey adds a text-only 200 % reading of the strip at 1024.
+- **200 % text** (WCAG 1.4.4): covered by the same outlet rules (`canvas-dock.tsx:125-132`). The journey adds a text-only 200 % reading of the strip at 1024. **Measured while building:** at text-only 200 % in 1024 × 600 the toolbar covers the viewport and no dock strip can be pressed by a pointer, which is a workspace condition and not this tip's (`docs/TECH_DEBT.md` #569). The journey therefore asserts at that scale that Tab from the plan surface reaches both buttons, and keeps the pointer hit-test at 100 %.
+- **An empty diagram plan shows no tip.** The diagram's dock is mounted only once there is something to draw, so a first touch on a plan with no activities raises nothing there. Accepted by the product owner on 2026-11-01: the touch is still observed, so the tip is due and shows as soon as the dock mounts, and the help sheet lists the gesture regardless.
 
 ### 2.4 Permissions
 

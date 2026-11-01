@@ -243,8 +243,9 @@ function SheetSection({
 }
 
 /**
- * `keys` is for chords, which are short and must not break; `gesture` is for a phrase, which must
- * wrap inside the dialog's `max-w-md` at the 1024 floor (ADR-0179).
+ * `keys` is for chords, set in mono and capped so a long one wraps at its spaces; `gesture` is for a
+ * phrase, which must wrap inside the dialog's `max-w-md` at the 1024 floor (ADR-0179). Neither may
+ * widen the dialog.
  */
 function ShortcutList({
   items,
@@ -262,7 +263,9 @@ function ShortcutList({
               variant === 'gesture'
                 ? // A cap on the term column so the 1fr description keeps room to wrap at 1024 px.
                   'text-muted-foreground max-w-48'
-                : 'text-muted-foreground font-mono whitespace-nowrap'
+                : // Mono, capped, and free to wrap at spaces: a long chord ("F2 · double-click") used to be nowrap
+                  // and squeezed the description into a one-character column at 1024 px.
+                  'text-muted-foreground max-w-48 font-mono break-words'
             }
           >
             {s.keys}

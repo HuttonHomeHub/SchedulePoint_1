@@ -119,4 +119,14 @@ describe('the Touch section (long-press-hint M1)', () => {
     expect(gesture).not.toHaveClass('whitespace-nowrap');
     expect(screen.getByText('Enter', { selector: 'dt' })).toHaveClass('font-mono');
   });
+
+  it('lets a key chord wrap inside a capped column, so a long one cannot squeeze the description', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
+    const chords = screen.getAllByText(/double-click/, { selector: 'dt' });
+    expect(chords.length).toBeGreaterThan(1);
+    for (const chord of chords) {
+      expect(chord).toHaveClass('font-mono', 'max-w-48', 'break-words');
+      expect(chord).not.toHaveClass('whitespace-nowrap');
+    }
+  });
 });
