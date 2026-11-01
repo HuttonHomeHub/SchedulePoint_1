@@ -1760,7 +1760,7 @@ test('the console keeps focus, shading, announcements and reflow honest (M1)', a
  * which ADR-0105 says needs a spec. The shape asserted is the same.
  *
  * **The audit cost is read back from the server, not inferred from the requests.** Every read of a
- * staff panel writes a `staff.panel_read` row to a table that refuses `DELETE`, so "exactly six per
+ * staff panel writes a `staff.panel_read` row to a table that refuses `DELETE`, so "exactly seven per
  * Refresh" is asserted twice: by counting the browser's requests, and by diffing the activity list
  * (the Staff activity table collapses consecutive reads into one row, so it cannot be counted by
  * eye).
@@ -1770,9 +1770,10 @@ test('a staff member reads the console by group and acts on a condition', async 
   const staff = await staffContext.newPage();
   await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
 
-  const SIX = [
+  const SEVEN = [
     '/staff/health',
     '/staff/csp-reports',
+    '/staff/crash-reports',
     '/staff/accounts',
     '/staff/installation',
     '/staff/activity',
@@ -1792,8 +1793,8 @@ test('a staff member reads the console by group and acts on a condition', async 
   ).toBeVisible({ timeout: 30_000 });
   await expect(staff.getByText(/^Read at /)).toBeVisible({ timeout: 30_000 });
 
-  // ------------------------------------------------ A load is six reads, and never the diagnostics
-  for (const path of SIX) expect(countOf(path), `${path} on load`).toBe(1);
+  // ---------------------------------------------- A load is seven reads, and never the diagnostics
+  for (const path of SEVEN) expect(countOf(path), `${path} on load`).toBe(1);
   expect(countOf('/staff/diagnostics'), 'arriving must not run the diagnostics').toBe(0);
 
   // ------------------------------------------------------------------ The groups, in order
@@ -1817,6 +1818,7 @@ test('a staff member reads the console by group and acts on a condition', async 
     'Mail delivery',
     'Clearing old records',
     'Browser security reports',
+    'Screen crashes',
     'Unconfirmed accounts',
     'Alerts',
   ]);
@@ -1888,7 +1890,7 @@ test('a staff member reads the console by group and acts on a condition', async 
   await staff.locator('#staff-group-tools').getByRole('link', { name: 'Back to top' }).click();
   await expect(staff.locator('#staff-top')).toBeFocused();
 
-  // ------------------------------------------------------------------ Refresh: six reads, six rows
+  // ------------------------------------------------------------------ Refresh: seven reads, seven rows
   const readTime = async (): Promise<string> =>
     (await staff.locator('time[datetime]').first().getAttribute('datetime')) ?? '';
   const panelReads = async (): Promise<string[]> => {
@@ -1911,7 +1913,7 @@ test('a staff member reads the console by group and acts on a condition', async 
   await refresh.focus();
 
   // **Make a box's sentence move, or the silence below proves nothing.** Staff activity is capped
-  // at 50 and a Refresh adds six rows to it, so on a busy host its count never changes and "no box
+  // at 50 and a Refresh adds seven rows to it, so on a busy host its count never changes and "no box
   // spoke" would pass whatever the mute did. The real response is fetched and served back with one
   // entry removed, so the sentence goes from N to N - 1.
   const countBefore = Number(
@@ -1970,18 +1972,18 @@ test('a staff member reads the console by group and acts on a condition', async 
     ).size,
     'the page announcer spoke one sentence',
   ).toBe(1);
-  for (const path of SIX) expect(countOf(path), `${path} on Refresh`).toBe(1);
+  for (const path of SEVEN) expect(countOf(path), `${path} on Refresh`).toBe(1);
   expect(countOf('/staff/diagnostics'), 'Refresh must never run the diagnostics').toBe(0);
   expect(await readTime(), 'the header time moved').not.toBe(timeBefore);
 
   const after = await panelReads();
   // The diff's own read (the `before` fetch) is one of the new rows: it landed after `before` was
-  // listed. Six from Refresh plus that one is seven, and `after` itself is not in its own list.
+  // listed. Seven from Refresh plus that one is eight, and `after` itself is not in its own list.
   const fresh = after.filter((id) => !before.includes(id));
   expect(
     fresh,
-    'exactly six audited reads for one Refresh, plus the one the diff made',
-  ).toHaveLength(7);
+    'exactly seven audited reads for one Refresh, plus the one the diff made',
+  ).toHaveLength(8);
 
   // ---------------------------------------- One failed read: both boxes say so, one button heals them
   await staff.route('**/api/v1/staff/health', (route) =>
@@ -2033,7 +2035,7 @@ test('a staff member reads the console by group and acts on a condition', async 
  * not raced. What only a browser can say: the Mail figures' labels and the Accounts table's column
  * headings are on screen at once, the table's headings are not exposed as column headers (the
  * skeleton is `aria-hidden`), and no panel adds a `role="status"` of its own, so the page does not
- * announce six times on load.
+ * announce seven times on load.
  */
 test('the console shows each panel’s shape while its read is held (loading-skeletons M3)', async ({
   browser,
@@ -2073,6 +2075,112 @@ test('the console shows each panel’s shape while its read is held (loading-ske
   release();
   await expect(mail.getByText('Failed in the last 24 hours')).toBeVisible();
   await expect(accounts.getByRole('columnheader', { name: 'Signed up' })).toBeVisible();
+
+  await staffContext.close();
+});
+
+/**
+ * **A real screen crash reaches the staff console — browser crash reports M3 (ADR-0211).**
+ *
+ * The milestone that adds the reader lands with the journey that drives the whole path, because
+ * every unit tier on either side of it mocks the other: the reporter's tests stub `fetch`, the
+ * panel's tests stub the API, and nothing but a browser can say that a crash on a real screen
+ * produces a row a staff member can find by the reference the planner was shown.
+ *
+ * **The trigger is a corrupt calendars list** (`docs/specs/browser-crash-reports/m0-record.md` §2):
+ * a `200` whose single row is `null`, which no `ApiFetchError` can describe, so `CalendarsTable`
+ * throws a `TypeError` while rendering inside the `/orgs/$orgSlug/calendars` route match. That is a
+ * real screen breaking in a real router, not a component test that throws on purpose. If the
+ * response shape ever gains a row check this fails loudly (no fallback screen) rather than passing.
+ *
+ * Asserted in order: the planner sees "Something went wrong" and a reference line; staff open the
+ * console and see that reference on a row for that screen; the top line says "Needs attention"
+ * because a crash was reported in the last 7 days; the summary's link goes to the section. The
+ * section is checked with axe, with its stack opened.
+ */
+test('a screen crash reaches the staff console with the reference the planner saw', async ({
+  browser,
+}) => {
+  const stamp = Date.now();
+
+  // ------------------------------------------------------------------ A planner meets a crash
+  const plannerContext = await browser.newContext();
+  const planner = await plannerContext.newPage();
+  await signUpOrIn(planner, `crash-planner-${stamp}@example.com`, 'Crash Planner');
+  await expect(planner).not.toHaveURL(/\/sign-(in|up)/);
+  const created = await planner.request.post('/api/v1/organizations', {
+    data: { name: `Crash ${stamp}` },
+    headers: { Origin: 'http://localhost:5173' },
+  });
+  const slug = ((await created.json()) as { data: { slug: string } }).data.slug;
+  expect(slug, 'the planner has an organisation to open the calendars of').toBeTruthy();
+
+  await planner.route('**/api/v1/organizations/*/calendars*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: '{"data":[null],"meta":{"hasMore":false,"nextCursor":null}}',
+    }),
+  );
+  const reported = planner.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/crash-reports') && response.request().method() === 'POST',
+  );
+  await planner.goto(`/orgs/${slug}/calendars`);
+
+  await expect(planner.getByRole('heading', { name: 'Something went wrong' })).toBeVisible({
+    timeout: 30_000,
+  });
+  expect((await reported).status(), 'the report was accepted').toBe(200);
+  const line = planner.getByText(/^This problem has been reported\. Reference: /);
+  await expect(line, 'the person is told, and only once the report arrived').toBeVisible();
+  const reference = (await line.locator('span').textContent())?.trim() ?? '';
+  expect(reference, 'the reference is six upper-case hex characters').toMatch(/^[0-9A-F]{6}$/);
+  await plannerContext.close();
+
+  // ------------------------------------------------------------------ Staff find it
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(staff.getByText(/^Read at /)).toBeVisible({ timeout: 30_000 });
+
+  const section = staff.locator('#staff-section-crashes');
+  await expect(section.getByRole('heading', { name: 'Screen crashes' })).toBeVisible();
+  const row = section.getByRole('row').filter({ hasText: reference });
+  await expect(row, 'the row carries the reference the planner was shown').toBeVisible();
+  await expect(row.getByText('TypeError')).toBeVisible();
+  await expect(row.getByText('/_authed/orgs/$orgSlug/calendars')).toBeVisible();
+  await expect(
+    section.getByText(/means nothing arrived, not that nothing happened/),
+    'the caveat is drawn with the list',
+  ).toBeVisible();
+  await expect(
+    section.getByText(/Not recording new kinds of crash/),
+    'the cap sentence is absent far below the cap',
+  ).toHaveCount(0);
+
+  // The top line: a crash in the last 7 days is "Needs attention", and its row opens the section.
+  const status = staff.getByRole('region', { name: 'Status' });
+  const crashRow = status.getByRole('listitem').filter({ hasText: 'Screen crashes' });
+  await expect(crashRow.getByText('Needs attention')).toBeVisible();
+  await expect(crashRow).toContainText(/\d+ kinds? in the last 7 days/);
+  await crashRow.getByRole('link', { name: 'Screen crashes' }).click();
+  await expect(section).toBeFocused();
+
+  // The stack opens on request, as text.
+  await row.getByRole('button', { name: `Stack for ${reference}` }).click();
+  await expect(row.locator('pre').first()).toBeVisible();
+
+  const results = await new AxeBuilder({ page: staff })
+    .include('#staff-section-crashes')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
 
   await staffContext.close();
 });

@@ -91,6 +91,12 @@ const DECLARED: Record<string, Declared> = {
       'the timestamp is sampled; the Email kind is a label from a closed set no one sample can stand for',
   },
   'features/staff/ui/retention-panel.tsx': { fit: 3, sampled: 0, reason: NOT_SC3 },
+  'features/staff/ui/crash-reports-panel.tsx': {
+    fit: 3,
+    sampled: 1,
+    reason:
+      'the timestamp is sampled; Reference is six hex characters and Times is a count, neither worth a sample',
+  },
   'features/staff/ui/security-panel.tsx': {
     fit: 3,
     sampled: 1,

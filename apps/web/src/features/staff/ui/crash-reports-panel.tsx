@@ -35,7 +35,7 @@ function browserLabel(row: Pick<CrashReportRow, 'browser' | 'browserMajor'>): st
 function StackText({ heading, text }: { heading: string; text: string }): React.ReactElement {
   return (
     <div>
-      <p className="text-foreground font-medium">{heading}</p>
+      <p className="text-foreground">{heading}</p>
       <pre className="font-mono text-xs wrap-anywhere whitespace-pre-wrap">{text}</pre>
     </div>
   );
@@ -48,7 +48,7 @@ const COLUMNS: Column<CrashReportRow>[] = [
     wrap: 'anywhere',
     cell: (row) => (
       <>
-        <span className="font-medium">{row.errorName}</span>
+        {row.errorName}
         {row.message !== '' && <span className="block">{row.message}</span>}
         <Disclosure label={CRASHES.stack(row.reference)} collapsed="hidden">
           {row.stack === null && row.componentStack === null ? (

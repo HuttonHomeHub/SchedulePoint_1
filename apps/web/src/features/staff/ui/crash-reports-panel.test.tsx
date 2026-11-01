@@ -20,7 +20,7 @@ const crash = (overrides: Partial<CrashReportRow> = {}): CrashReportRow => ({
   webVersion: '0.200.7',
   browser: 'chrome',
   browserMajor: 131,
-  stack: 'at Plan @ /assets/plan.js:1:2',
+  stack: 'at Plan (/assets/plan-abc)',
   componentStack: 'at PlanScreen',
   count: 4,
   firstSeenAt: '2026-11-01T10:00:00.000Z',
@@ -101,7 +101,7 @@ describe('CrashReportsPanel', () => {
 
   it('keeps the stack behind a disclosure named for its row, and renders it as text', async () => {
     apiFetchEnvelope.mockReturnValue(
-      answer([crash({ stack: 'at <img src=x onerror=alert(1)> @ /a.js:1:1' })]),
+      answer([crash({ stack: 'at <img src=x onerror=alert(1)> @ /assets/a' })]),
     );
     mount();
 

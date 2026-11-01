@@ -41,7 +41,7 @@ const ROW = {
   webVersion: '0.200.7',
   browser: 'chrome',
   browserMajor: 131,
-  stack: 'fn @ /assets/a.js:1:2',
+  stack: 'fn @ /assets/a',
   componentStack: null,
   count: 3,
   firstSeenAt: new Date('2026-11-01T10:00:00.000Z'),
