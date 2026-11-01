@@ -5,7 +5,8 @@ import type { ThrottlerStorage } from '@nestjs/throttler';
  *
  * Per-handler throttle counters are shared mutable state across tests in one 60 s window, which
  * `docs/TESTING.md` forbids. Clearing them is isolation, not a weakened bound: every test still
- * runs its own requests under the real limit, and nothing in `apps/api/test` asserts a 429.
+ * runs its own requests under the real limit. Only `crash-reports.e2e-spec.ts` asserts a 429, and it
+ * resets the counters after every test so the spent bucket never reaches a later suite.
  *
  * **Why `storage.clear()` alone stopped being enough.** From `@nestjs/throttler@6.7.1` the service
  * keeps each hit's expiry in a private `hitExpirations` map and, on every increment, rewrites

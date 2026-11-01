@@ -50,6 +50,13 @@ durationMs }` — enough to watch the performance NFR (`durationMs` vs plan size
   (`constraintWarningCount`, N15) without logging any schedule data. The
   unreachable DAG-guard breach logs distinctly (a broken invariant) and surfaces
   as a 500.
+- **Browser crash reports** (ADR-0211): two events, scalars only, and **never the report's content**.
+  `crash_report.persist_failed` (warn) carries `prismaCode`, `sqlstate` and the `constraint` name and
+  nothing else, because a CHECK violation's DETAIL is `Failing row contains (…)`, the cleaned message
+  and stacks; the write failure is not logged as `err`. `crash_report.cap_reached` (warn, at most once
+  an hour per process) says the 1,000-row table is full and new kinds of crash are being dropped. A
+  row has no correlation id by design: that id joins a log line carrying the principal, which would
+  make an anonymous crash attributable.
 - The same shape applies to any future long-running or invariant-guarded
   operation: counts and durations, never the payload.
 

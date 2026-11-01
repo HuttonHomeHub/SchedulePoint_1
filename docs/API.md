@@ -169,7 +169,8 @@ presence only; the guard alone decides whether they are good). A request under
 `@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit (the widest,
 2,000 placements, is about 356 KB). **Everything else is 64 KB**: the routes a caller with no session
 can post to (`csp-report`, `invitations/preview`), guest `share` reads, an anonymous request under
-`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff`. An over-cap
+`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff` and
+`/api/v1/crash-reports`. An over-cap
 body answers `413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered
 an opaque 500. Because the parser cannot validate a credential, a junk cookie still buys the 512 KB
 read before the 401. Multipart uploads are a separate cap (the interchange upload cap, see
@@ -2108,6 +2109,32 @@ What it replaces is `docker compose exec db psql` on the host — wider, unaudit
 unreachable by the person who needs the number. Like every route here it writes one
 `staff.panel_read` row naming the panel and never its contents, and it is throttled at the
 controller's 30 / 60 s per handler.
+
+### Browser crash reports (ADR-0211)
+
+`POST /api/v1/crash-reports` is where a signed-in browser reports a screen crash. It is the one
+route here that is **authenticated but has no organisation scope and no role check**, like
+`GET /api/v1/me`: any valid session may post, no field of the principal is read, and none is stored.
+An anonymous request answers `401`, so a crash on a sign-in or share-link screen is not reported.
+
+```text
+Request   { name?, message?, stack?, componentStack?, routeId?, boundary?: 'route' | 'app', webVersion? }
+Response  200 { "data": { "reference": "7F3A9C" | null } }
+          401 no session · 429 more than 10 a minute from one address · 400 unparseable JSON
+```
+
+- **Always `200` for a body it can parse.** The caller is a crashed screen that cannot act on a `422`,
+  and one rejected field would lose the whole report, so the body is normalised and dropped rather than
+  validated. `reference: null` means nothing was stored or counted: the body was unusable, the table
+  already holds its 1,000 distinct crashes (a repeat of a stored crash still counts), or the write
+  failed. A client must show a reference only when it is non-null.
+- **Cleaned on the server before it is written.** The message and both stacks lose URLs' queries,
+  emails, UUIDs, digit runs of four or more and quoted values; frames keep a same-origin path and nothing
+  else. The browser family and major version come from the `User-Agent` header, which is never stored,
+  and no user, organisation, address or correlation id is stored at all. The reference is the first six
+  hex characters of the dedupe hash: display only, not unique by contract.
+- **Unaudited** (`BROWSER_TELEMETRY` in the audit census), and absent from the organisation export.
+- Reading the rows is a staff-console panel in a later milestone (`GET /api/v1/staff/crash-reports`).
 
 ## Pagination, filtering, sorting
 

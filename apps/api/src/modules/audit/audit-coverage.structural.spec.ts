@@ -217,6 +217,10 @@ const REASONS = {
    * a row about a CSS file. Blast radius: it alters nobody's rights and nobody's work. And an
    * audit row per report would be actively harmful, since the endpoint is unauthenticated and
    * anyone could then fill the one table in the system that refuses DELETE.
+   *
+   * `POST /api/v1/crash-reports` is the second entry and is authenticated, not anonymous: it is
+   * still a machine report about our own code, it stores no actor, and an audit row per crash would
+   * let one broken screen fill the append-only table.
    */
   BROWSER_TELEMETRY: 'browser-telemetry',
 } as const;
@@ -225,6 +229,7 @@ type Reason = (typeof REASONS)[keyof typeof REASONS];
 
 /** Every route that records nothing, and why. */
 const UNAUDITED_ROUTES: Record<string, Reason> = {
+  'POST /api/v1/crash-reports': REASONS.BROWSER_TELEMETRY,
   'POST /api/v1/csp-report': REASONS.BROWSER_TELEMETRY,
   'DELETE /api/v1/organizations/:orgSlug/assignments/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
