@@ -2,6 +2,7 @@ import type { ActivityType } from '@repo/types';
 
 import {
   backwardUpperBound,
+  externalStartInstant,
   finishDateInstant,
   formatExternalInstant,
   forwardLowerBound,
@@ -381,7 +382,7 @@ export function deriveExternalInstants(
 
 /**
  * Later-of the derived early-start bound and the M1 column, compared as the engine will read each
- * (`clampExternalForwardStart` reads both through `startDateInstant`). The M1 string wins a tie.
+ * (`clampExternalForwardStart` reads both through `externalStartInstant`). The M1 string wins a tie.
  */
 function laterOfForward(
   activity: CrossPlanLocalActivity,
@@ -391,8 +392,8 @@ function laterOfForward(
   if (derivedAbs === undefined) return manual;
   const derived = formatExternalInstant(derivedAbs);
   if (manual === null) return derived;
-  const derivedRead = startDateInstant(activity.calendar, derived, activity.type);
-  const manualRead = startDateInstant(activity.calendar, manual, activity.type);
+  const derivedRead = externalStartInstant(activity, activity.calendar, derived);
+  const manualRead = externalStartInstant(activity, activity.calendar, manual);
   return derivedRead > manualRead ? derived : manual;
 }
 

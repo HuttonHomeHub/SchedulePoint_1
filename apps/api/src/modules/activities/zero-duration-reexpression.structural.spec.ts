@@ -28,7 +28,8 @@ import { REEXPRESSED_DATE_FIELDS } from './zero-duration-reexpression';
  *
  * `constraints.ts`'s `resolvePair` reads both the primary and the secondary constraint date through
  * its `constraintDate` parameter, so that argument maps to both; `clampExternalBackwardFinish` reads
- * `activity.externalLateFinish` through a local `external`. Both mappings are written below rather
+ * `activity.externalLateFinish` through a local `external` and `externalStartInstant` reads
+ * `activity.externalEarlyStart` through `value`. Both mappings are written below rather
  * than inferred, and a pinned positive case asserts the census found the five calls it expects, so a
  * parser that matched nothing could not pass (ADR-0093's rule for a census).
  *
@@ -51,7 +52,9 @@ const DATE_ARGUMENT: Readonly<Record<string, number>> = {
 const ARGUMENT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   'activity.visualStart': ['visualStart'],
   constraintDate: ['constraintDate', 'secondaryConstraintDate'],
-  'activity.externalEarlyStart': ['externalEarlyStart'],
+  // `externalStartInstant` (#565) reads an external early start through its `value` parameter, which
+  // `clampExternalForwardStart` and the cross-plan derivation both fill.
+  value: ['externalEarlyStart'],
   external: ['externalLateFinish'],
 };
 
@@ -123,12 +126,8 @@ describe('the re-expression rule covers every finish-milestone date input', () =
       { file: 'compute.ts', reader: 'startDateInstant', argument: 'activity.visualStart' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'constraintDate' },
       { file: 'constraints.ts', reader: 'finishDateInstant', argument: 'external' },
-      {
-        file: 'constraints.ts',
-        reader: 'startDateInstant',
-        argument: 'activity.externalEarlyStart',
-      },
       { file: 'constraints.ts', reader: 'startDateInstant', argument: 'constraintDate' },
+      { file: 'constraints.ts', reader: 'startDateInstant', argument: 'value' },
     ]);
   });
 
