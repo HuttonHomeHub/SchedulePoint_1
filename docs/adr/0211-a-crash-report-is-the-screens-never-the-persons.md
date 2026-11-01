@@ -41,8 +41,10 @@ text could reach a staff screen.
   activity id, an email, an address, a full user agent, a full or resolved URL, a query string or a
   correlation id (that id joins the row to a log line carrying the principal, which would make an anonymous
   row attributable). The server cleans every text value before it is written, whatever the browser did
-  (URLs reduced to a path, emails, UUIDs, digit runs of four or more and quoted values removed, frames
-  reduced to a same-origin path). **The cleaner is the ADR-0086 D6 guarantee for this table**, and
+  (a URL reduced to scheme and host, because a path is where a customer's slug lives; any rooted path,
+  host-with-path, token carrying a query and regular-expression literal replaced; emails, UUIDs and digit
+  runs of four or more removed in any script; quoted values removed unless they are a bare identifier;
+  frames reduced to a same-origin path). **The cleaner is the ADR-0086 D6 guarantee for this table**, and
   `crash-reports.fields.structural.spec.ts` asserts the field list over the model, so a column added later
   fails the build and needs a privacy argument, not only a migration. The row adds no erasure obligation
   under ADR-0085 and is outside the organisation export (ADR-0194).
@@ -83,8 +85,17 @@ message, route pattern, top five frames, browser)` joined on U+001F. A crash tha
 - A crash on a signed-in screen becomes a cleaned, deduplicated row staff can act on, without the owner
   checking anything on a server or a device.
 - **The cleaner is load-bearing, and its residue is stated.** A third-party library message that embeds a
-  user value in a form the rules miss can be stored. The row cannot be linked to anyone, is bounded by the
-  30-day period and the 1,000-row cap, and is read only by staff.
+  user value in a form the rules miss can be stored; the known case is an **unquoted single word**
+  (`Cannot find customer Jane`), which no rule can tell from prose. The row cannot be linked to anyone, is
+  bounded by the 30-day period and the 1,000-row cap, and is read only by staff.
+- **A flood can fill the table, and nothing evicts.** An authenticated user posting distinct fingerprints at
+  10 a minute reaches 1,000 rows in under two hours; from then on a genuinely new crash is dropped until old
+  rows expire (30 days after they were last reported). Eviction was declined: it would let a flood push out
+  the real findings it was meant to be recorded beside. The staff panel (M3) must therefore say when the cap
+  is reached, and the sink logs `crash_report.cap_reached`.
+- **The route is deliberately `200` for any body that parses**, and `200` does not mean stored: a client
+  shows a reference only when it is non-null. Unparseable JSON, `null`, a bare string and a body over 64 KB
+  are the body parser's `400` and `413`, answered before authentication.
 - **Not done:** symbolication (a developer resolves frames against the release's source map; the bundle
   ships them), `window.onerror`, anonymous and guest coverage, alerts to a webhook, and a chunk-load failure
   after a deploy (not a defect, ADR-0047).

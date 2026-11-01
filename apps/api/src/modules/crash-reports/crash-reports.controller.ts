@@ -1,9 +1,11 @@
 import { Body, Controller, Headers, HttpCode, Post } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
   ApiBody,
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
+  ApiPayloadTooLargeResponse,
   ApiTags,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
@@ -45,18 +47,27 @@ export class CrashReportsController {
     required: true,
     schema: {
       type: 'object',
+      // Lengths are what is READ, not what is stored: longer values are accepted and cleaned down to
+      // the column caps (300 / 4,000 / 2,000), and the whole body is held to 64 KB.
       properties: {
-        name: { type: 'string' },
-        message: { type: 'string' },
-        stack: { type: 'string' },
-        componentStack: { type: 'string' },
-        routeId: { type: 'string' },
+        name: { type: 'string', maxLength: 64 },
+        message: { type: 'string', maxLength: 4_000 },
+        stack: { type: 'string', maxLength: 60_000 },
+        componentStack: { type: 'string', maxLength: 60_000 },
+        routeId: { type: 'string', maxLength: 200 },
         boundary: { type: 'string', enum: ['route', 'app'] },
-        webVersion: { type: 'string' },
+        webVersion: { type: 'string', maxLength: 32 },
       },
     },
   })
-  @ApiOkResponse({ type: CrashReportResponseDto })
+  @ApiOkResponse({
+    type: CrashReportResponseDto,
+    description:
+      'Any body that parses answers 200, and 200 does not mean stored: `reference` is null when the ' +
+      'body was unusable, the table is full for new kinds of crash, or the write failed.',
+  })
+  @ApiBadRequestResponse({ description: 'The body is not parseable JSON (answered before auth).' })
+  @ApiPayloadTooLargeResponse({ description: 'The body is larger than 64 KB.' })
   @ApiUnauthorizedResponse({ description: 'No valid session.' })
   @ApiTooManyRequestsResponse({ description: 'More than 10 reports a minute from this address.' })
   submit(

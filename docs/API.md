@@ -2120,17 +2120,20 @@ An anonymous request answers `401`, so a crash on a sign-in or share-link screen
 ```text
 Request   { name?, message?, stack?, componentStack?, routeId?, boundary?: 'route' | 'app', webVersion? }
 Response  200 { "data": { "reference": "7F3A9C" | null } }
-          401 no session · 429 more than 10 a minute from one address · 400 unparseable JSON
+          401 no session · 429 more than 10 a minute from one address (the throttler keys on `req.ip`)
+          400 unparseable JSON, `null` or a bare string · 413 over 64 KB (both answered before auth)
 ```
 
-- **Always `200` for a body it can parse.** The caller is a crashed screen that cannot act on a `422`,
+- **Deliberately `200` for any body that parses, and `200` does not mean stored.** The caller is a crashed screen that cannot act on a `422`,
   and one rejected field would lose the whole report, so the body is normalised and dropped rather than
   validated. `reference: null` means nothing was stored or counted: the body was unusable, the table
   already holds its 1,000 distinct crashes (a repeat of a stored crash still counts), or the write
   failed. A client must show a reference only when it is non-null.
-- **Cleaned on the server before it is written.** The message and both stacks lose URLs' queries,
-  emails, UUIDs, digit runs of four or more and quoted values; frames keep a same-origin path and nothing
-  else. The browser family and major version come from the `User-Agent` header, which is never stored,
+- **Cleaned on the server before it is written.** In the message, a URL is reduced to scheme and host
+  (a path is where a customer's slug lives), and a rooted path, a host-with-path, any token carrying a
+  query, a regular-expression literal, an email (any script), a UUID, a digit run of four or more (any
+  script) and a quoted value are replaced; frames keep a same-origin path and nothing else. What it
+  cannot recognise survives: an unquoted single word in a third-party message. The browser family and major version come from the `User-Agent` header, which is never stored,
   and no user, organisation, address or correlation id is stored at all. The reference is the first six
   hex characters of the dedupe hash: display only, not unique by contract.
 - **Unaudited** (`BROWSER_TELEMETRY` in the audit census), and absent from the organisation export.

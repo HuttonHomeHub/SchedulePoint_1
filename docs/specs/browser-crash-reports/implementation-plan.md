@@ -251,7 +251,7 @@ axe check on the section. No new Playwright config and no new CI step (existing
 - **Risks:** a second observer of the key makes a second audited read → the panel and the summary
   both read the one query passed down (`staff-console-screen.tsx:118-123`). A long stack breaks the
   layout → `wrap-anywhere` `<pre>` inside a disclosure, checked at 1024 × 600 (ADR-0179).
-- **Testing:** panel unit tests for the loading, error, empty, data and cap-reached states.
+- **Testing:** panel unit tests for the loading, error, empty, data and cap-reached states; the last must say new kinds of crash are not being recorded until old ones expire (ADR-0211: nothing evicts).
   `console-status.test.ts` for the three verdicts. `check-answers-its-link.test.tsx`.
 - **Development steps:** hook, panel, copy, status; reviewers **component-reviewer**,
   **accessibility-reviewer**, **ux-reviewer**.
@@ -303,6 +303,8 @@ means `pnpm prepush` was **run**, plus `scripts/e2e-local.sh api` for every `app
 | A third-party error message embeds a plan value the cleaner misses    | low        | med     | Rules plus hostile fixtures; no identity stored, so the row cannot be linked to a person; 30-day expiry. Stated in the ADR as residual.               |
 | Stacks are minified and so hard to read                               | high       | low     | Source maps already ship (`vite.config.ts:79`). A developer resolves frames against that release's `.map`. Server-side symbolication is out of scope. |
 | The router changes how `defaultOnCatch` behaves on a bump             | low        | high    | M0 test + `check:claims` registration.                                                                                                                |
+| An unquoted single word in a third-party message survives the cleaner | med        | low     | Residual stated in ADR-0211: no rule tells it from prose. The row names no one, expires, and only staff read it.                                      |
+| A flood of distinct fingerprints fills the 1,000-row cap              | low        | low     | No eviction, by decision (ADR-0211): the cap is the bound. The staff panel states "cap reached" (M3-T2).                                              |
 | The journey's crash trigger is brittle (depends on a response shape)  | med        | low     | M0-T1 chooses it by reading. If it breaks, the journey fails loudly rather than passing.                                                              |
 | Signed-out and guest crashes stay unseen                              | certain    | low–med | Stated (Q1). The anonymous variant is an additive follow-up on the CSP precedent.                                                                     |
 | Chunk-load failures after a deploy are not counted                    | certain    | low     | Deliberate: they are not defects (ADR-0047). The skip rule is unit-tested so it stays deliberate.                                                     |

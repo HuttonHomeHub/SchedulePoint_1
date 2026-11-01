@@ -237,6 +237,10 @@ describe.skipIf(!hasDatabase)('Browser crash reports (e2e)', () => {
         `with "Mrs Smith" and 'Acme Tower' and code 123456`,
         `Unexpected token 'o', "[object Obj"... is not valid JSON`,
         'x\u0000y',
+        'https://app.example/api/v1/organizations/acme-corp/clients/jane-smith',
+        'Failed /api/v1/organizations/acme/plans?search=Jane%20Doe',
+        'www.x.com/customers/jane?token=abc',
+        'josé@example.com',
       ].join(' ');
 
       const res = await post({
@@ -262,12 +266,18 @@ describe.skipIf(!hasDatabase)('Browser crash reports (e2e)', () => {
         'u:pw',
         '\u0000',
         'Mozilla',
+        'jane-smith',
+        'Jane%20Doe',
+        'acme-corp',
+        'josé',
       ]) {
         expect(everything, secret).not.toContain(secret);
       }
       expect(row.message).toContain('[email]');
       expect(row.message).toContain('[id]');
-      expect(row.message).toContain('https://evil.example/a/b');
+      expect(row.message).toContain('[path]');
+      // Scheme and host only: a path is where a customer's slug lives.
+      expect(row.message).toContain('https://evil.example ');
       expect(row.message).toContain('xy');
       // A route id that carries a UUID is a pathname, not a pattern: stored as null, report kept.
       expect(row.routePattern).toBeNull();
@@ -275,6 +285,40 @@ describe.skipIf(!hasDatabase)('Browser crash reports (e2e)', () => {
       // which carried an email, is not a frame and is gone.
       expect(row.stack).toBe('a @ [https]:1:2\nb @ /assets/ok.jsx:3:4');
       expect(row.componentStack).toBe('C @ [https]:1:2');
+    });
+
+    it('refuses a body the parser cannot read (400) and one over 64 KB (413), storing nothing', async () => {
+      const raw = (body: string) =>
+        agent
+          .post('/api/v1/crash-reports')
+          .set('Origin', ORIGIN)
+          .set('Content-Type', 'application/json')
+          .send(body);
+
+      await raw('{"name":"TypeError","message":').expect(400);
+      await raw('null').expect(400);
+      await raw('"a bare string"').expect(400);
+      await raw(JSON.stringify({ ...BODY, message: 'x'.repeat(70 * 1024) })).expect(413);
+
+      expect(await prisma.crashReport.count()).toBe(0);
+    });
+
+    it('answers 200 with a null reference to a body that is not JSON at all', async () => {
+      for (const [type, body] of [
+        ['text/plain', 'TypeError: boom'],
+        ['application/x-www-form-urlencoded', 'name=TypeError&message=boom'],
+      ] as const) {
+        const res = await agent
+          .post('/api/v1/crash-reports')
+          .set('Origin', ORIGIN)
+          .set('Content-Type', type)
+          .send(body)
+          .expect(200);
+        expect(res.body.data.reference).toBeNull();
+      }
+      const bare = await agent.post('/api/v1/crash-reports').set('Origin', ORIGIN).expect(200);
+      expect(bare.body.data.reference).toBeNull();
+      expect(await prisma.crashReport.count()).toBe(0);
     });
 
     it('does not store the full User-Agent, only a family and a major version', async () => {

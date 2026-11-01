@@ -38,8 +38,19 @@ const UUID_GLOBAL = new RegExp(UUID_SOURCE, 'g');
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 const URL_TOKEN = /[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s'"`<>]+/g;
 const OPAQUE_URI = /\b(?:data|blob|javascript):[^\s'"`<>]+/gi;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
-const DIGIT_RUN = /\d{4,}/g;
+// Unicode-aware (`u`): `josé@example.com` and an internationalised domain are emails too.
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/gu;
+// Any token with a `?` that has something after it is a query string, wherever it came from.
+const QUERY_TOKEN = /\S*\?\S+/g;
+// A host with a path and no scheme: `www.x.com/customers/jane`.
+const HOST_PATH = /(?<![\w@.:/-])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?\/\S*/g;
+// A rooted path, one segment or many: `/api/v1/organizations/acme`. The lookbehind keeps `and/or`,
+// `1/2` and `text/html` out; anything after the first `/` up to a space is the path.
+const ROOTED_PATH = /(?<=^|[\s'"`([=,;])\/(?![/*])[\w.~%@+=,;:!$&*-]+(?:\/[\w.~%@+=,;:!$&*-]*)*/g;
+// A regular-expression literal (`/^acme-\d+$/`) is a pattern someone wrote, and may hold a value.
+const REGEX_LITERAL = /(?<![\w)\]])\/(?![/*\s])(?:[^/\n\\]|\\.)+\/[a-z]*/g;
+// Unicode decimal digits: Arabic-Indic, fullwidth and the rest are numbers too.
+const DIGIT_RUN = /\p{Nd}{4,}/gu;
 // A quote opens a span to its twin, or to the end when it never closes: an unterminated quote must
 // not let the rest of the message through.
 const QUOTED = /'([^']*)(?:'|$)|"([^"]*)(?:"|$)|`([^`]*)(?:`|$)/g;
@@ -68,27 +79,28 @@ export function capCodePoints(value: string, max: number): string {
 }
 
 /**
- * `scheme://host/path` with userinfo, query and fragment dropped. A trailing sentence punctuation
- * mark belongs to the prose, not the URL.
+ * `scheme://host` and nothing else. **The path goes too**: in this product a path is
+ * `/api/v1/organizations/acme-corp/clients/jane-smith`, and a slug is a customer's name. Userinfo,
+ * query and fragment go with it. A trailing sentence punctuation mark belongs to the prose.
  */
 function reduceUrl(token: string): string {
   const trailing = /[.,;:!)\]}]+$/.exec(token)?.[0] ?? '';
   const url = trailing ? token.slice(0, -trailing.length) : token;
-  const cut = url.search(/[?#]/);
-  const withoutTail = cut === -1 ? url : url.slice(0, cut);
-  const schemeEnd = withoutTail.indexOf('://') + 3;
-  const rest = withoutTail.slice(schemeEnd);
-  const slash = rest.indexOf('/');
-  const authority = slash === -1 ? rest : rest.slice(0, slash);
-  const path = slash === -1 ? '' : rest.slice(slash);
-  const host = authority.slice(authority.lastIndexOf('@') + 1);
-  return `${withoutTail.slice(0, schemeEnd)}${host}${path}${trailing}`;
+  const schemeEnd = url.indexOf('://') + 3;
+  const rest = url.slice(schemeEnd).split(/[/?#]/, 1)[0] ?? '';
+  const host = rest.slice(rest.lastIndexOf('@') + 1);
+  return `${url.slice(0, schemeEnd)}${host}${trailing}`;
 }
 
 /**
  * The message, with everything that could be somebody's value removed (spec §2, in this order):
- * URLs reduced, emails, UUIDs, digit runs of four or more, and quoted spans unless the quoted text is
- * a bare identifier (`reading 'startAt'` survives, `Unexpected token "secret"` does not).
+ * URLs reduced to scheme and host, emails, paths and query strings, regular-expression literals,
+ * UUIDs, digit runs of four or more, and quoted spans unless the quoted text is a bare identifier
+ * (`reading 'startAt'` survives, `Unexpected token "secret"` does not).
+ *
+ * **Residual, stated rather than hidden:** an unquoted single word in a third-party message
+ * (`Cannot find customer Jane`) is not recognisable as a value and survives. The row is bounded by
+ * the cap, the 30-day sweep and the fact that it names no one (ADR-0211).
  */
 export function cleanMessage(raw: unknown): string {
   if (typeof raw !== 'string') return '';
@@ -97,6 +109,11 @@ export function cleanMessage(raw: unknown): string {
   // `data:` / `blob:` URIs have no `//` and can carry a whole document.
   text = text.replace(OPAQUE_URI, (uri) => `${uri.slice(0, uri.indexOf(':') + 1)}[uri]`);
   text = text.replace(EMAIL, '[email]');
+  // Whatever still looks like a path or a query is dropped whole, scheme or no scheme.
+  text = text.replace(QUERY_TOKEN, '[path]');
+  text = text.replace(HOST_PATH, '[path]');
+  text = text.replace(ROOTED_PATH, '[path]');
+  text = text.replace(REGEX_LITERAL, '[regex]');
   text = text.replace(UUID_GLOBAL, '[id]');
   text = text.replace(DIGIT_RUN, '[n]');
   text = text.replace(QUOTED, (match: string, single?: string, double?: string, tick?: string) => {

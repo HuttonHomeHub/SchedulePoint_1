@@ -18,20 +18,60 @@ import {
 const ORIGINS = ['https://app.example'];
 
 describe('cleanMessage — one fixture per rule', () => {
-  it('reduces a URL to scheme://host/path, dropping userinfo, query and fragment', () => {
+  it('reduces a URL to scheme://host, dropping userinfo, path, query and fragment', () => {
     expect(cleanMessage('GET https://user:pw@api.example/v1/plans?token=abc#frag failed')).toBe(
-      'GET https://api.example/v1/plans failed',
+      'GET https://api.example failed',
+    );
+    expect(cleanMessage('See https://react.dev/errors/185?invariant=185 for details.')).toBe(
+      'See https://react.dev for details.',
     );
   });
 
-  it('keeps a documentation path, so react.dev/errors/185 survives', () => {
-    expect(cleanMessage('See https://react.dev/errors/185?invariant=185 for details.')).toBe(
-      'See https://react.dev/errors/185 for details.',
+  it('loses a slug in a URL path, because a slug is a customer', () => {
+    const cleaned = cleanMessage(
+      'Failed https://app.example/api/v1/organizations/acme-corp/clients/jane-smith',
+    );
+    expect(cleaned).toBe('Failed https://app.example');
+  });
+
+  it('drops a rooted path with or without a query, one segment or many', () => {
+    expect(cleanMessage('Failed /api/v1/organizations/acme/plans?search=Jane%20Doe now')).toBe(
+      'Failed [path] now',
+    );
+    expect(cleanMessage('no route /organizations/acme-corp/plans/tower-a')).toBe('no route [path]');
+    expect(cleanMessage("bad '/jane-smith' value")).toBe("bad '…' value");
+  });
+
+  it('drops a scheme-less host path and any token carrying a query', () => {
+    expect(cleanMessage('GET www.x.com/customers/jane?token=abc failed')).toBe('GET [path] failed');
+    expect(cleanMessage('GET www.x.com/customers/jane failed')).toBe('GET [path] failed');
+    expect(cleanMessage('bad page?name=Jane here')).toBe('bad [path] here');
+  });
+
+  it('leaves prose with a slash or a question mark alone', () => {
+    expect(cleanMessage('expected and/or text/html, got 1/2. Did you mean? Yes')).toBe(
+      'expected and/or text/html, got 1/2. Did you mean? Yes',
+    );
+  });
+
+  it('drops a regular-expression literal', () => {
+    expect(cleanMessage('Invalid pattern /^acme-corp$/i for field')).toBe(
+      'Invalid pattern [regex] for field',
+    );
+    expect(cleanMessage('Invalid pattern /(jane|john) smith/ here')).toBe(
+      'Invalid pattern [regex] here',
     );
   });
 
   it('redacts an email', () => {
     expect(cleanMessage('Invite for ada@example.com failed')).toBe('Invite for [email] failed');
+  });
+
+  it('redacts a non-ASCII local part and an internationalised domain', () => {
+    expect(cleanMessage('Invite for josé@example.com failed')).toBe('Invite for [email] failed');
+    expect(cleanMessage('Invite for ada@müller.de and 李@例え.jp')).toBe(
+      'Invite for [email] and [email]',
+    );
   });
 
   it('redacts a UUID', () => {
@@ -42,6 +82,10 @@ describe('cleanMessage — one fixture per rule', () => {
 
   it('redacts a run of four or more digits and leaves a shorter one', () => {
     expect(cleanMessage('code 123456 and 185 and 1234')).toBe('code [n] and 185 and [n]');
+  });
+
+  it('redacts digit runs written in other scripts', () => {
+    expect(cleanMessage('code ١٢٣٤٥٦ and １２３４５ and 12')).toBe('code [n] and [n] and 12');
   });
 
   it('keeps a quoted bare identifier, so `reading startAt` survives', () => {
@@ -107,7 +151,7 @@ describe('cleanMessage — one fixture per rule', () => {
   });
 
   it('is stable when run twice', () => {
-    const once = cleanMessage(`x "a b" 'c' 99999 https://h/p?q=1`);
+    const once = cleanMessage(`x "a b" 'c' 99999 https://h/p?q=1 /a/b`);
     expect(cleanMessage(once)).toBe(once);
   });
 });
