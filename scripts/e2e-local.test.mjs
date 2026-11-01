@@ -63,7 +63,7 @@ stub(
   `
 if [ "\$1" = "-qtA" ] && [ "\${3:-}" = "-c" ]; then echo "e2e-local[4242] (backend pid 99)"; exit 0; fi
 [ "\$STUB_LOCK" = dead ] && exit 2
-echo "session-start \$PGAPPNAME" >> "\$SESSION_LOG"
+echo "session-start \$PGAPPNAME \$2" >> "\$SESSION_LOG"
 trap 'echo session-end >> "\$SESSION_LOG"' EXIT
 IFS= read -r query
 echo "\$query" >> "\$SESSION_LOG"
@@ -92,7 +92,19 @@ assert.equal(held.status, 1, `a held lock should refuse, got ${String(held.statu
 assert.match(held.stderr, /Another run already holds the lock/, 'message names the cause');
 assert.match(held.stderr, /another scripts\/e2e-local\.sh run/, 'message names the likely holder');
 assert.match(held.stderr, /e2e-local\[4242\] \(backend pid 99\)/, 'message names the holder');
-assert.match(readFileSync(sessionLog, 'utf8'), /pg_try_advisory_lock\(349\)/, 'asks for the key');
+const asked = readFileSync(sessionLog, 'utf8');
+assert.match(asked, /pg_try_advisory_lock\(349, hashtext\('app_test'\)\)/, 'asks for the key');
+// #545: the session must not sit in the guarded database, or backup-restore-check.sh step 0 sees it.
+assert.match(
+  asked,
+  /session-start e2e-local\[\d+\] \S+\/postgres\n/,
+  'lock session is on postgres',
+);
+assert.doesNotMatch(
+  asked,
+  /session-start \S+ \S+\/app_test/,
+  'lock session is not on the guarded db',
+);
 
 const dead = runWithLock('dead');
 assert.equal(dead.status, 1, `an unanswered lock should refuse, got ${String(dead.status)}`);
