@@ -158,8 +158,8 @@ export function groupHasBar(group: DerivedGroup): boolean {
  * depth and the span it draws at.
  *
  * Structurally identical to the render model's `WbsBandGroup`, and deliberately declared here
- * rather than imported: `features/tsld` imports no other feature (ADR-0026 D8), so the geometry
- * module cannot reach into this one, and this one must not become the reason that rule bends. The
+ * rather than imported: the TSLD's render layer imports no other feature (ADR-0026 §8), so the
+ * geometry module cannot reach into this one, and this one must not become the reason that rule bends. The
  * host composes the two.
  */
 export interface WbsBandGroupInput {

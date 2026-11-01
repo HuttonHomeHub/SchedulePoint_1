@@ -14,9 +14,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ENTRY_ROUTES_ENABLED: true,
 }));
 
-import type { SelectionBarContext } from './selection-actions';
+import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 
-const { SelectionActionsBar } = await import('./selection-actions');
+const { SelectionActionsBar } = await import('@/features/plan-actions/selection-actions');
 
 const spies = {
   onOpenLogic: vi.fn(),

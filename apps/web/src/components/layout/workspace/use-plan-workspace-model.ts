@@ -996,8 +996,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * (`docs/specs/canvas-multi-select/` M4).
    *
    * Assembled HERE rather than in the panel because this is where the mutations and the ADR-0048
-   * command stack already live; `features/tsld` imports no other feature (ADR-0026 D8) and takes
-   * these as plain async functions.
+   * command stack already live; the TSLD takes these as plain async functions rather than
+   * reaching for the hooks (ADR-0026 §8 as amended: the canvas imports no feature).
    *
    * The gate is `canEditSchedule` — the same fused role+pen boolean every other authoring action
    * uses — with `penReadOnly` deciding which of the two sentences to show. A gate assembled a

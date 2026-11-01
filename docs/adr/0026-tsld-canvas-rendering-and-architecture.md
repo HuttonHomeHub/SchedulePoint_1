@@ -328,7 +328,8 @@ features/tsld/
   models + mutation callbacks** into `<TsldCanvas>`. `features/tsld` depends only on
   **shared layers and `@repo/types`** — it imports **no** other feature. This honours
   ADR-0004's `features → shared`, no `feature → feature` rule and keeps the canvas a
-  pure, testable presentation-plus-interaction unit.
+  pure, testable presentation-plus-interaction unit. **Amended 2026-11-01: the rule holds for
+  the canvas, not for the whole folder — see "Amendment, 2026-11-01" at the foot.**
 - **Lazy-loaded route chunk.** The canvas (and any WebGL escalation) is a
   heavy, non-critical bundle: it is `React.lazy` split behind a Suspense fallback so
   it never taxes the initial bundle (FRONTEND_QUALITY: route/heavy-dep splitting).
@@ -575,6 +576,53 @@ freedom), and #261 exists precisely because canvas size decides the verdict. Any
 - **§8 ("imports no other feature") is not held in the tree**, and was not before swimlanes: ten non-test files
   under `features/tsld` import `activities`, `plan-actions`, `wbs` or `gantt`, and the epic added one more
   (`model/reparent-lanes.ts`). They are recorded as `docs/TECH_DEBT.md` #548 rather than claimed.
+
+## Amendment, 2026-11-01 (`docs/TECH_DEBT.md` #548 and #358)
+
+§8 said `features/tsld` "imports no other feature". It never did hold for the folder, and this
+amendment says what holds instead, decided per import (measured with
+`grep -rnE "from '@/features/" apps/web/src/features/tsld`, tests excluded).
+
+**The rule, as it now stands.** The canvas and everything under it — `TsldCanvas`, `render/`,
+`interaction/`, `export/` — import **no other feature**, and `eslint.config.js` enforces the part of
+that which was cheap to enforce (no `@/features/activities`, in any non-test file of the folder).
+The **composition layer** — `TsldPanel`, `toolbar/` and three files in `model/` — imports the
+features below, each on purpose.
+
+**Moved, so the import points down.** The activity type and status labels
+(`ACTIVITY_TYPE_LABELS` is `@repo/types`; `ACTIVITY_STATUS_LABELS` is now `lib/activity-status-labels.ts`,
+`CONSTRAINT_TYPE_LABELS` was already `lib/constraint-format.ts`); `ScopeGate` (now `lib/scope-gate.ts`,
+re-exported by `features/activities`); and the plan view mode (`features/gantt/view-mode.ts` is now
+`lib/plan-view-mode.ts`, re-exported by `features/gantt`). `features/tsld` no longer imports
+`features/activities`. The two `toolbar/` re-export shims for `plan-actions` (`selection-actions`,
+`conflict-remedy`) are deleted and their consumers import `features/plan-actions` directly.
+
+**Accepted, and why moving them was not done.**
+
+- `features/plan-actions` (`TsldPanel`: `build-selection-context`; `toolbar/tsld-toolbar-items`:
+  `conflict-readout`; and the panel's `selection-actions`): the object-action vocabulary is
+  view-agnostic (ADR-0093) and itself imports the canvas types it renders. The two features are
+  peers, not a layer over a layer, so there is no lower tier to move either to without inventing one.
+- `features/wbs` (`TsldPanel`: band described rows and group names; `model/derive-diagram-source.ts`:
+  `deriveWbsBandSource`; `model/reparent-lanes.ts`: swimlane membership): these derive the canvas's
+  neutral inputs from the activity tree and import the canvas's input types back. Moving them under
+  `tsld/` would make the WBS feature depend on a folder that depends on it.
+- `features/gantt` (`toolbar/gantt-columns-group.tsx`, `use-tsld-toolbar-context.tsx`,
+  `tsld-toolbar-context.ts`): the toolbar is the plan workspace's one command band and carries the
+  Gantt's column controls and its print command (ADR-0059's view seam), so it names the Gantt's
+  column keys and widths. Those types are tangled with the grid's own layout; extracting them is real
+  churn for a pure type edge.
+- The toolbar's other workspace commands: `plan-lock` (`PlanPenControl`, pen copy), `undo-redo`
+  (hints, and `model/bulk-move.ts`'s placement type), `interchange` (export formats), `schedule`
+  (recalculate, `plan-summary-panel`), `plans` (`PLAN_STATUS_LABELS`) and `dependencies`
+  (`DEPENDENCY_TYPE_LABELS`). The toolbar is the host's command surface, and these are the commands.
+  These were not in #548's census; they are named here so the rule is not again stated as stronger
+  than the tree.
+
+**What is still open.** The accepted edges are conventions, not enforced: a new sideways import
+into `features/tsld` is caught by review. A rule listing the accepted set would be a shared gate and
+needs its own spec (ADR-0105). `features/tsld/` comments that cited this rule now say "the canvas" or
+"the render layer" where that is what they mean (`docs/TECH_DEBT.md` #358).
 
 ## References
 

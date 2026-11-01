@@ -1,9 +1,8 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
-import { DEFAULT_PLAN_VIEW_MODE, parsePlanViewMode, type PlanViewMode } from './view-mode';
-
 import { GANTT_VIEW_ENABLED } from '@/config/env';
+import { DEFAULT_PLAN_VIEW_MODE, parsePlanViewMode, type PlanViewMode } from '@/lib/plan-view-mode';
 
 /**
  * The plan workspace's current view, backed by `?view=` (ADR-0059 §3).

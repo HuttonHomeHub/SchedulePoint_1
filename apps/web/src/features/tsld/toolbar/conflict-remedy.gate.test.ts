@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { clearVisualPlacementGate, type ClearVisualPlacementInput } from './conflict-remedy';
+import {
+  clearVisualPlacementGate,
+  type ClearVisualPlacementInput,
+} from '@/features/plan-actions/conflict-remedy';
 
 /**
  * **The four-condition gate on clearing a hand-placed `visualStart`, and the order between them.**

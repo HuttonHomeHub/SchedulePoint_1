@@ -510,7 +510,7 @@ export interface TsldCanvasProps {
   onZoomStopChange?: (level: ZoomLevel) => void;
   /**
    * The pinned WBS band (ADR-0063): the groups to draw, or `null` when the band is off. The host
-   * derives them (`features/wbs`) because the tsld feature imports no other feature (ADR-0026 D8).
+   * derives them (`features/wbs`) because the canvas imports no other feature (ADR-0026 §8).
    */
   wbsBandGroups?: readonly WbsBandGroup[] | null;
   /**
@@ -529,7 +529,7 @@ export interface TsldCanvasProps {
    */
   gutterWidthPx?: number;
   /**
-   * What the gutter's labels say. Neutral on purpose: `features/tsld` imports no other feature
+   * What the gutter's labels say. Neutral on purpose: the canvas imports no other feature
    * (ADR-0026 §8), so the host maps the swimlanes onto `GutterSwimlane`. Ignored at width 0.
    */
   gutter?: Pick<SwimlaneGutterProps, 'swimlanes' | 'actions'> | null;

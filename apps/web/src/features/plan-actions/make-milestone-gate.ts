@@ -1,6 +1,6 @@
 import { isZeroDurationTask, type ActivitySummary, type DependencySummary } from '@repo/types';
 
-import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
+import type { ScopeGate } from '@/lib/scope-gate';
 
 /**
  * **The one label, spelled once** (ADR-0162 decision 4, M4-T2).

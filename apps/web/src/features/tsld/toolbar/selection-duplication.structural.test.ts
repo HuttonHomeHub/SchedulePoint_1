@@ -3,8 +3,9 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { selectionActionItems } from './selection-actions';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
+
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**
  * **An action whose subject is the selected object belongs on the object's surface** (ADR-0093).

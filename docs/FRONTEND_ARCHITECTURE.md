@@ -44,7 +44,8 @@ row-level volatile state, never a module singleton — see `docs/DECISIONS.md`, 
 
 A **feature-first** structure. Code is grouped by _what it does for the user_,
 not by technical type. Cross-feature reuse lives in shared layers. `features/tsld` is the known
-exception: it imports other features against ADR-0026 §8, tracked as `docs/TECH_DEBT.md` #548.
+exception: its canvas, render and interaction layers import no other feature, and its panel and toolbar import the
+features ADR-0026 §8 (as amended 2026-11-01) names.
 
 ```text
 apps/web/src/

@@ -5,7 +5,7 @@ import {
   SelectionActionsBar,
   type SelectionBarContext,
   type SelectionCanvasContext,
-} from './selection-actions';
+} from '@/features/plan-actions/selection-actions';
 
 /**
  * **The selection bar's canvas commands** (ADR-0090 M2-T1) — Zoom to, and Isolate logic path.
