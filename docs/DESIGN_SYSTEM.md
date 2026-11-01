@@ -911,7 +911,9 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   such by `e2e-workspace-fit`. **A divider's coarse strip has one named exception too:** the Gantt
   grid divider (`coarseStrip="none"`, `GanttPanel.tsx`, ADR-0188 D3), because 44 px would cover whole
   row menus and the Float left and Timeline headers; `View ▾` › Columns › `Table width` is its typed
-  equivalent.
+  equivalent. **The `View ▾` panel's Zoom level and Colour-by radio rows stay 24 px under a coarse pointer**
+  (`TOGGLE_ROW`): they clear SC 2.5.8 and not the 44 px rule, by the owner's decision of 2026-11-01
+  (`docs/DECISIONS.md`, #561), so SC-13's 420 px bar holds.
   **A control that blocks itself during its own mutation uses `aria-disabled`
   plus a submit/click guard — never the native `disabled` attribute.** A native
   disabled control is removed from the tab order the instant the request starts

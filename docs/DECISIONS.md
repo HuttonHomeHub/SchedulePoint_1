@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-01 — The View ▾ panel's radio rows stay 24 px under a finger (#561)
+
+**What was decided.** The product owner was offered three ways to settle `docs/TECH_DEBT.md` #561 and chose
+**(c), leave the rows as they are**. (a) A taller `View ▾` panel under a coarse pointer (about 470 px, against
+SC-13's 420 px bar). (b) Folding the Zoom level and Colour-by groups by default under a coarse pointer.
+(c) Leave the rows at 24 px.
+
+**Why it is acceptable.** The rows (`TOGGLE_ROW` in `apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx`)
+clear WCAG 2.2 SC 2.5.8 (24 px) but not the house 44 px finger rule, which the checkbox rows beside them meet
+since #558. Growing them measured 462 px for the Diagram panel, 42 px over the bar, and the Gantt's at 538 of 600.
+
+**Consequence.** The house rule has an exception: these two radio groups (Zoom level and Colour-by in the
+`View ▾` panel). SC-13's 420 px `View ▾` bar (`assertViewPanelFitsTheFloor`) is unchanged. #561 is closed by
+decision and its number is in the Closed ledger. Reopen only on a mis-tap report on either group, and then
+with the bar decision taken at the same time.
+
+---
+
 ## 2026-10-31 — P6 activity codes M7: ADR-0210 filed, and the reconciliation pass at the epic boundary
 
 **What was decided.** The product owner confirmed ADR-0210's outline as written (fourteen decisions and the
