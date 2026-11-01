@@ -68,7 +68,7 @@ describe('CreateResourceButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New resource' }));
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'Show groups' }));
 
-    const listbox = screen.getByRole('listbox', { name: 'Show groups' });
+    const listbox = screen.getByRole('listbox', { name: 'Groups' });
     await waitFor(() =>
       expect(screen.getByRole('option', { name: /Groundworks/ })).toBeInTheDocument(),
     );

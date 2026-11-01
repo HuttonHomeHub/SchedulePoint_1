@@ -131,7 +131,7 @@ test.describe('coarse pointer', () => {
     // *typing*; the pointer affordance is the trailing toggle). On touch that toggle is the only
     // pointer route in, which makes it the right thing to measure here anyway.
     await dialog.getByRole('button', { name: 'Show groups' }).click();
-    await expect(dialog.getByRole('listbox', { name: 'Show groups' })).toBeVisible();
+    await expect(dialog.getByRole('listbox', { name: 'Groups' })).toBeVisible();
 
     report.comboboxOpen = await page.evaluate(() => {
       const list = document.querySelector('[role="listbox"]:not([hidden])');

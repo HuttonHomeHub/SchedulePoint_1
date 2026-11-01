@@ -119,4 +119,24 @@ describe('RadioCardGroup', () => {
     fireEvent.keyDown(tidy, { key: ' ' });
     expect(onChange).not.toHaveBeenCalledWith('tidy');
   });
+
+  it('dims only the title of a shaded option, never the card or its reason (#564)', () => {
+    const shaded: RadioCardOption<V>[] = [
+      { ...OPTIONS[0]!, disabled: true, disabledReason: 'Too large to tidy.' },
+      OPTIONS[1]!,
+    ];
+    render(<Harness options={shaded} />);
+    const tidy = screen.getByRole('radio', { name: 'Tidy' });
+    // Opacity on the card would fade the reason to ~2.6:1; the dim belongs to the title row.
+    expect(tidy.className).not.toMatch(/(^|\s)aria-disabled:opacity/);
+    const reason = screen.getByText('Too large to tidy.');
+    expect(reason.className).not.toMatch(/opacity/);
+    expect(reason.className).toContain('text-muted-foreground');
+    const titleRow = screen.getByText('Tidy').parentElement!;
+    expect(titleRow.className).toContain('group-aria-disabled/card:opacity-60');
+    // Structure, not just classes: the dim cannot reach the reason, and the radio is described by it.
+    expect(titleRow.contains(reason)).toBe(false);
+    expect(tidy).toHaveAttribute('aria-describedby', reason.id);
+    expect(tidy).toHaveAccessibleDescription('Too large to tidy.');
+  });
 });
