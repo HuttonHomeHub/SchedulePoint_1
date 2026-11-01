@@ -3,40 +3,49 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-10-31 (evening). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.3
-and `web` 0.200.5 on #1224, both publish jobs passed in run 41189620756, #1220 to #1226 merged, no PRs open; GitHub's
-PR list prints `merged: false` for squash-merged PRs while giving a `merged_at`, which is the list endpoint, not a
-fault), then for a short list of what to build next. They chose three small rows, **#549**, **#552** and **#560**, and
-all three are merged and released as **`api` 0.103.4** and **`web` 0.200.6** (Version Packages #1228). None needed a
-spec (each stayed inside its row and added no new surface, ADR-0105). The owner's **hard rule** still stands: nothing
-that needs them to test, measure or check anything on their server or devices (a decision question is fine; a test is
-not). **1.0 is not cut**; that stays the owner's call (ADR-0190). **The P6 epic stays closed for what shipped (M0 to
-M4); M5 and M6 still wait for a real P6 export**, so do not offer them.
+**Written:** 2026-11-01 (early hours). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.4
+and `web` 0.200.6 on #1228, both publish jobs passed in run 41226850290, #1227 to #1231 merged, no PRs open), then for a
+short list of what to build next. They chose all four offered rows, **#564**, **#547**, **#556 plus the pointer drift**
+and **#546**; all four are merged and released as **`web` 0.200.7** (Version Packages #1235). **No `api` release**: none
+of the four touched `apps/api`, so there was no `api` changeset, no `api` tag and no `api` publish job (`api` stays
+0.103.4). None needed a spec (each stayed inside its row and added no new surface, ADR-0105) and none touched the
+schema. The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything on their
+server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call
+(ADR-0190). **The P6 epic stays closed for what shipped (M0 to M4); M5 and M6 still wait for a real P6 export**, so do
+not offer them.
 
-## The owner's answers this session (2026-10-31, evening)
+## The owner's answers this session (2026-11-01)
 
-- **Build:** "Gantt swimlane warning" (#549, recommended) and "Three consistency slips" (#552). Not taken: the two
-  shared-primitive accessibility fixes (#564) and the eight stale pointers.
-- **Codes rows:** "#560 note safety" over the recommended "None for now". #562 and #563 stay open on their triggers.
+- **Build:** all four: "Readable shaded cards (#564)", "Swimlane position kept (#547)", "Docs tidy-up (#556 +
+  pointers)" (the three recommended) and "Export legend check (#546)".
+- **Engineering decisions taken by the session (not asked):** the Combobox listbox name is derived from `toggleLabel`
+  ("Show codes" → "Codes", capitalised; no new prop); a shaded radio card dims its title row by opacity and leaves the
+  reason at full contrast; the editor's re-file reports the save first and stores the lane last; `planReparentLanes`
+  keeps its `removed` guard although no layout was found where it changes the answer.
 
 ## Where things stand
 
-- **Latest releases:** `api` **0.103.4** (tag `api-v0.103.4`) and `web` **0.200.6** (tag `web-v0.200.6`), Version Packages
-  #1228; both publish jobs passed (`Release` run 41226850290). Before that `api` 0.103.3 / `web` 0.200.5 (#1224).
+- **Latest releases:** `web` **0.200.7** (tag `web-v0.200.7`), Version Packages #1235, `Release` run 41259363670 (see
+  the PR that adds this file for the publish job's result). `api` is still **0.103.4** (tag `api-v0.103.4`, #1228).
 - **This session's PRs, in merge order:**
-  - **#1227** `fix(web)` (#549): the failed-swimlanes notice now shows in the Gantt view too, saying the Swimlane column
-    is hidden until swimlanes load, with Try again; it fires only when the column is actually gone.
-  - **#1229** `fix(web)` (#552): "Retry" → "Try again" on the overview and the float-paths panel; the Gantt's load-error
-    button uses the shared `Button`; the canvas palette's missing-token fallbacks are the light theme's values.
-  - **#1230** `fix(api)` (#560): a note create runs in a transaction and re-reads its parent there (an activity note
-    takes the activity row `FOR SHARE`; a plan note takes the plan advisory lock, because a plan delete stamps the plan
-    row last). Same 404s; no schema change. Accepted and written in the code: the wait has no `lock_timeout`, so a plan
-    note waiting past the 15 s transaction timeout behind a long import commit fails as a 500.
-  - **#1228** Version Packages (the one release).
+  - **#1232** `docs(docs)` (#556 + pointer drift): `docs/DEPLOYMENT.md` has "Rolling back past the progressed-predecessor
+    release"; rows #121, #202, #211, #263, #320, #358 and #366 re-pointed and verified 2026-10-31. **#211's "dormant"
+    premise no longer holds** (`labelVisibility: 'never'` is set at 13 production sites), recorded in the row; status
+    unchanged. **#358** now counts 12 sites in 8 files, not 9.
+  - **#1233** `fix(web)` (#564): `RadioCardGroup` dims only a shaded card's title row (reason ~6.0:1 on the card, 4.65:1
+    on the page background); `Combobox`'s listbox is named apart from its toggle via `listboxNameFor`. Reviewed by
+    accessibility-reviewer and component-reviewer before release (ADR-0111).
+  - **#1234** `fix(web)` (#546): `data-chrome="legend"` and `data-chrome="strip-caption"` are on the export chrome
+    roster; ADR-0200's Consequences note amended in place.
+  - **#1236** `fix(web)` (#547): the editor's General save (when `parentId` changes) and Dissolve store the movers'
+    swimlane lanes through the shared `useStoreReparentLanes`; census pinned. ADR-0206's known-gaps sentence updated.
+  - **#1235** Version Packages (the one release, `web` only).
 - **The P6 epic:** M0 to M4 shipped and recorded in ADR-0210. **M5 and M6 wait for a real P6 export** that uses activity
   codes (`m0-record.md`); the approved `plan.md` M5/M6 is their spec.
-- **Pointer drift still recorded, not fixed** (from the 2026-10-31 reconciliation pass): #121, #202, #211, #263, #320,
-  #358, #366. (#560 is closed now.) The owner did not pick it; it stays cheap to clear in the next pass.
+- **Pointer drift:** cleared (#1232). None outstanding from the 2026-10-31 pass.
+- **New, no row (from #1236's review):** `ActivityEditorDialog.tsx` now imports `@/features/wbs` (feature-to-feature,
+  an existing direction already used by `ActivitiesTable.tsx`); a seam would remove it. Cosmetic; not worth a row
+  unless #548's tidy-up runs.
 
 ## The reconciliation pass (2026-10-31)
 
@@ -45,7 +54,7 @@ reviewer agent ignorant of codes, and `security-reviewer.md`'s guest rule false 
 carry the codes invariants); ROADMAP's ADR-0207 still "ships with the next release"; `DATABASE.md`'s soft-delete model
 count (21 → 23); `PROJECT_BRIEF.md` calling codes a follow-on; two `scripts/surface-contract.json` `gap` rows for dialogs
 that shipped. Rows #74, #279, #549, #552, #557 and #562 corrected in place; none resolved. **Pointer drift recorded, not
-fixed:** #121, #202, #211, #263, #320, #358, #366, #560 (#560 has since been closed, #1230). **Not run:** step 5a (the clone is shallow).
+fixed:** #121, #202, #211, #263, #320, #358, #366, #560 (#560 has since been closed, #1230; the other seven were re-pointed by #1232). **Not run:** step 5a (the clone is shallow).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -204,12 +213,12 @@ guessed column names (ADR-0071 §5).
 - Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
   `docs/BACKLOG.md` has nothing buildable today (every entry has shipped, waits on an outside trigger, or is P6), so
   the list comes from `docs/TECH_DEBT.md`.
-- Offered this session and not taken, still open and still true on 2026-10-31: **#564** (a shaded radio card's reason
-  dimmed to about 2.6:1; the Combobox's listbox named like its toggle; needs accessibility-reviewer and
-  component-reviewer, ADR-0111), the pointer-drift list above (cheap), **#562** and **#563** (each on its own trigger).
-- Other small open rows checked this session as still real: **#554** (an import's unused calendar copy; needs a spec),
-  **#547** (two re-filing paths leave a swimlane lane derived), **#551** (a browser crash reaches nobody; needs a
-  channel, so likely an owner decision).
+- Small open rows checked 2026-10-31/11-01 as still real and not yet offered or taken: **#554** (an import's unused
+  calendar copy; needs a spec), **#551** (a browser crash reaches nobody; needs a channel, so likely an owner
+  decision), **#555** (the cross-plan twin has no weekend calendar; on a trigger), **#548** (`features/tsld` imports
+  other features), **#561** (View ▾ radio rows 24 px under a coarse pointer; growing them breaks the 420 px bar).
+  **#562** and **#563** stay on their own triggers.
+- **#211** may be worth re-offering: its long-press finding now reaches 13 icon-only production items, not two.
 - The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
