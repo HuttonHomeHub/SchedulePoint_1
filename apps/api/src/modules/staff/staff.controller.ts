@@ -34,6 +34,7 @@ import {
   ProbeResultsQueryDto,
 } from './dto/probe-result.dto';
 import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
+import { CrashReportRowDto, CrashReportsMetaDto } from './dto/staff-crash-reports.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
 import { StaffDiagnosticsDto } from './dto/staff-diagnostics.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
@@ -92,15 +93,15 @@ import { StaffGuard } from './staff.guard';
 // **The flood bound is 30 PER HANDLER, not 30 for the surface** (`docs/TECH_DEBT.md` #315, verified
 // 2026-09-13). `@nestjs/throttler` hashes the handler name into the counter key
 // (`dist/throttler.guard.js:148-150`), and a controller-level decorator sets each handler's limit
-// rather than pooling them. With NINE routes here the real ceiling on audit rows is 270 a minute.
+// rather than pooling them. With TEN routes here the real ceiling on audit rows is 300 a minute.
 // The decision is not revisited by this comment — it still needs a compromised staff session, and
-// 270/min is still far above human use — but the arithmetic the number was chosen against is
+// 300/min is still far above human use — but the arithmetic the number was chosen against is
 // recorded rather than left to be re-derived by the next reader.
 //
-// It said "eight routes … 240 a minute" until the diagnostics route landed and made it nine, which
-// is the drift this comment exists to prevent happening to the comment itself: an arithmetic note
-// whose input is the handler count goes stale the moment somebody adds a handler, and nothing
-// fails. Found by the ADR-0140 M4 security review.
+// It said "eight routes … 240 a minute" until the diagnostics route landed and made it nine (the
+// crash-reports route made it ten), which is the drift this comment exists to prevent happening to
+// the comment itself: an arithmetic note whose input is the handler count goes stale the moment
+// somebody adds a handler, and nothing fails. Found by the ADR-0140 M4 security review.
 //
 // **`diagnostics` carries its own, tighter `@Throttle` — the surface's first per-handler override.**
 // Thirty a minute is chosen against panel reads costing single-digit milliseconds; that route runs
@@ -218,6 +219,26 @@ export class StaffController {
     });
 
     return await this.health.cspReports();
+  }
+
+  @Get('crash-reports')
+  @ApiOperation({
+    summary: 'Which screens are crashing in the browser',
+    description:
+      'Distinct screen crashes reported by signed-in browsers, most recently seen first, at most ' +
+      '50. An EMPTY list means nothing arrived, not that nothing happened: signed-out and share-' +
+      'link screens are not reported (ADR-0211). `meta.capReached` means new kinds of crash are ' +
+      'no longer being recorded until old ones expire. Every field is already cleaned; the row ' +
+      'names no person.',
+  })
+  @ApiOkResponse({ type: [CrashReportRowDto] })
+  async crashReports(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+  ): Promise<Paginated<CrashReportRowDto, CrashReportsMetaDto>> {
+    await this.recordPanelRead(staff, context, 'crashes');
+    const { rows, meta } = await this.health.crashReports();
+    return new Paginated(rows, meta);
   }
 
   @Get('installation')

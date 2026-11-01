@@ -312,6 +312,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
       'csp_reports',
       'mail_events',
       'perf_probe_results',
+      'crash_reports',
     ]);
     expect(typeof retention.intervalMinutes).toBe('number');
     expect(typeof retention.processStartedAt).toBe('string');
@@ -720,5 +721,81 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     expect(await prisma.auditEvent.count({ where: { action: 'staff.access_denied' } })).toBe(
       before,
     );
+  });
+
+  describe('GET /api/v1/staff/crash-reports (browser crash reports, ADR-0211)', () => {
+    const crash = (n: number, lastSeenAt: Date) => ({
+      dedupeHash: n.toString(16).padStart(64, 'a'),
+      boundary: 'route',
+      errorName: 'TypeError',
+      message: `boom ${n}`,
+      routePattern: '/_authed/orgs/$orgSlug/plans/$planId',
+      webVersion: '0.0.0',
+      browser: 'chrome',
+      firstSeenAt: new Date('2026-01-01T00:00:00Z'),
+      lastSeenAt,
+    });
+
+    it('lists the newest first with the totals, and writes one panel_read row naming no content', async () => {
+      await prisma.crashReport.deleteMany();
+      const now = Date.now();
+      await prisma.crashReport.createMany({
+        data: [
+          crash(1, new Date(now - 30 * 24 * 60 * 60 * 1000)),
+          crash(2, new Date(now - 60 * 1000)),
+          crash(3, new Date(now - 3 * 24 * 60 * 60 * 1000)),
+        ],
+      });
+      const agent = await signedInStaff();
+      const before = await staffAuditCount();
+
+      const response = await agent
+        .get('/api/v1/staff/crash-reports')
+        .set('Origin', ORIGIN)
+        .expect(200);
+
+      expect(response.body.data.map((r: { message: string }) => r.message)).toEqual([
+        'boom 2',
+        'boom 3',
+        'boom 1',
+      ]);
+      expect(response.body.data[0].reference).toMatch(/^[0-9A-F]{6}$/);
+      expect(response.body.meta).toEqual({
+        total: 3,
+        cap: 1000,
+        capReached: false,
+        seenLast7Days: 2,
+      });
+      expect(await staffAuditCount()).toBe(before + 1);
+      const row = await prisma.auditEvent.findFirstOrThrow({
+        where: { action: 'staff.panel_read', subjectLabel: 'crashes' },
+      });
+      expect(row.changes).toBeNull();
+    });
+
+    it('answers an empty table with an empty list and no cap', async () => {
+      await prisma.crashReport.deleteMany();
+      const agent = await signedInStaff();
+
+      const response = await agent
+        .get('/api/v1/staff/crash-reports')
+        .set('Origin', ORIGIN)
+        .expect(200);
+
+      expect(response.body.data).toEqual([]);
+      expect(response.body.meta).toMatchObject({ total: 0, capReached: false, seenLast7Days: 0 });
+    });
+
+    it('answers a non-staff member with 404 and an anonymous caller with 401', async () => {
+      const member = request.agent(server());
+      await signUp(member, MEMBER_EMAIL).expect(200);
+      await prisma.user.updateMany({
+        where: { email: MEMBER_EMAIL },
+        data: { emailVerified: true },
+      });
+
+      await member.get('/api/v1/staff/crash-reports').set('Origin', ORIGIN).expect(404);
+      await request(server()).get('/api/v1/staff/crash-reports').expect(401);
+    });
   });
 });

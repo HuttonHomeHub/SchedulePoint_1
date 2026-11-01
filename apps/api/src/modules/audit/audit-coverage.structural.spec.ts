@@ -57,6 +57,7 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'GET /api/v1/staff/me': ['staff.session_started'],
   'GET /api/v1/staff/health': ['staff.panel_read'],
   'GET /api/v1/staff/csp-reports': ['staff.panel_read'],
+  'GET /api/v1/staff/crash-reports': ['staff.panel_read'],
   'GET /api/v1/staff/installation': ['staff.panel_read'],
   'GET /api/v1/staff/accounts': ['staff.panel_read'],
   'GET /api/v1/staff/activity': ['staff.panel_read'],

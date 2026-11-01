@@ -2024,8 +2024,8 @@ data is a compile error. Three properties follow, and they are unlike the rest o
   census assertion derives this from the path, so a staff route added later is covered the day it
   is written.
 - **Tighter throttling than the global limit** — 30 requests a minute, declared once on the
-  controller. Declared once, but **counted per route handler**, so the ceiling across the eight
-  staff routes is 240 a minute rather than 30 (`docs/TECH_DEBT.md` #315). That matters here because
+  controller. Declared once, but **counted per route handler**, so the ceiling across the ten
+  staff routes is 300 a minute rather than 30 (`docs/TECH_DEBT.md` #315). That matters here because
   every successful hit writes an `audit_events` row and nothing can prune that table.
 
 `POST /api/v1/staff/probe-results` is the surface's **first write** (ADR-0086 D6 claims one already
@@ -2137,7 +2137,25 @@ Response  200 { "data": { "reference": "7F3A9C" | null } }
   and no user, organisation, address or correlation id is stored at all. The reference is the first six
   hex characters of the dedupe hash: display only, not unique by contract.
 - **Unaudited** (`BROWSER_TELEMETRY` in the audit census), and absent from the organisation export.
-- Reading the rows is a staff-console panel in a later milestone (`GET /api/v1/staff/crash-reports`).
+
+`GET /api/v1/staff/crash-reports` is the read: a **staff** route (uniform `404` for anyone else, the
+controller's 30 / 60 s per handler, and one `staff.panel_read` row naming the panel `crashes` and never
+its contents). It is the Screen crashes panel in the console's Conditions group.
+
+```text
+Response  200 { "data": CrashReportRow[], "meta": { total, cap, capReached, seenLast7Days } }
+CrashReportRow { id, reference, boundary, errorName, message, routePattern, webVersion, browser,
+                 browserMajor, stack, componentStack, count, firstSeenAt, lastSeenAt }
+```
+
+- **Newest first, at most 50 rows**, by `last_seen_at` then `id` on the table's one index. `total` is
+  every stored crash and `seenLast7Days` the number last reported within seven days, which drives the
+  console's "Needs attention".
+- **`capReached` means new kinds of crash are not being recorded.** At 1,000 distinct rows a new
+  fingerprint is dropped until old ones expire after 30 days; a repeat of a stored one still counts.
+  The panel says so in words, because a full table otherwise looks like a quiet one.
+- **An empty list means nothing arrived, not that nothing happened:** signed-out and share-link screens
+  are not reported.
 
 ## Pagination, filtering, sorting
 

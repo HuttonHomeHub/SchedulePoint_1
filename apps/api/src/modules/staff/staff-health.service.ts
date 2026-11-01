@@ -11,7 +11,10 @@ import { RetentionStatusStore } from '../../common/operational/retention-status.
 import { AppConfigService } from '../../config/app-config.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { VersionService } from '../../version/version.service';
+import { referenceOf } from '../crash-reports/crash-report-body';
+import { CRASH_REPORT_CAP } from '../crash-reports/crash-report.service';
 
+import type { CrashReportRowDto, CrashReportsMetaDto } from './dto/staff-crash-reports.dto';
 import type { CspReportRowDto } from './dto/staff-csp-reports.dto';
 import type { RetentionDto, StaffHealthDto } from './dto/staff-health.dto';
 import type {
@@ -31,6 +34,9 @@ const RECENT_LIMIT = 20;
  * policy is already wrong in a way the first fifty rows have made obvious.
  */
 const CSP_LIMIT = 50;
+
+/** How many distinct crashes the Screen crashes panel shows (the {@link CSP_LIMIT} precedent). */
+const CRASH_LIMIT = 50;
 
 /** One page of unverified accounts. Bounded because the page carries addresses. */
 const ACCOUNTS_PAGE = 25;
@@ -258,6 +264,53 @@ export class StaffHealthService {
       lineNumber: row.lineNumber,
       columnNumber: row.columnNumber,
     }));
+  }
+
+  /**
+   * The distinct screen crashes, most recently seen first (ADR-0211).
+   *
+   * Newest-first rides the one `(last_seen_at, id)` index backwards. The totals are two separate
+   * scalar counts rather than one `FILTER` aggregate, as `docs/DATABASE.md` "CrashReport"
+   * recommends: the 7-day count is a range on the index's leading column, and the table is bounded
+   * by its own row cap, so the unfiltered count is cheap. They are Prisma `count`s because this
+   * module declares no raw SQL (`staff-boundary.structural.spec.ts`). `capReached` is derived from
+   * the total here, not remembered, so it cannot disagree with the table.
+   */
+  async crashReports(): Promise<{ rows: CrashReportRowDto[]; meta: CrashReportsMetaDto }> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [rows, total, seenLast7Days] = await Promise.all([
+      this.prisma.crashReport.findMany({
+        orderBy: [{ lastSeenAt: 'desc' }, { id: 'desc' }],
+        take: CRASH_LIMIT,
+      }),
+      this.prisma.crashReport.count(),
+      this.prisma.crashReport.count({ where: { lastSeenAt: { gte: since } } }),
+    ]);
+
+    return {
+      rows: rows.map((row) => ({
+        id: row.id,
+        reference: referenceOf(row.dedupeHash),
+        boundary: row.boundary,
+        errorName: row.errorName,
+        message: row.message,
+        routePattern: row.routePattern,
+        webVersion: row.webVersion,
+        browser: row.browser,
+        browserMajor: row.browserMajor,
+        stack: row.stack,
+        componentStack: row.componentStack,
+        count: row.count,
+        firstSeenAt: row.firstSeenAt.toISOString(),
+        lastSeenAt: row.lastSeenAt.toISOString(),
+      })),
+      meta: {
+        total,
+        cap: CRASH_REPORT_CAP,
+        capReached: total >= CRASH_REPORT_CAP,
+        seenLast7Days,
+      },
+    };
   }
 
   /**
