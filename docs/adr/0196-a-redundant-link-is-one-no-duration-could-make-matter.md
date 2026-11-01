@@ -35,7 +35,8 @@ for neither (`capability-network-shape`'s N3 is a shorter parallel path, a third
 
 **D1. The rule is provable dominance, with named exclusions.** A link `D = A → C` is redundant when a chain of other
 links `A → … → C` satisfies W1 to W5 of the spec's §2.1: no leads on the chain; every intermediate is _transparent_
-(not a level of effort or summary, not started, no mandatory pin) and is entered at its start and left at its finish;
+(not a level of effort or summary, not started, no mandatory pin) and is entered at its start and left at its finish
+(or left at its start, when it schedules on A's calendar: the amendment below);
 the first link leaves A at an end at or after D's and the last binds C at an end at or before D's; a positive D lag
 needs a chain lag sum at least as large with every positive chain lag on D's lag calendar; and single-calendar mode
 (W5) may relax the entry and exit rule when A, C and every intermediate share a scheduling calendar. C must be
@@ -58,10 +59,24 @@ catalogue, the fixture progressed and unprogressed, and `scale-500`. Each exclus
 red (`redundant-links.oracle.spec.ts`, CE1 to CE9) or is marked "reasoned, not demonstrated" here:
 
 - **Demonstrated:** CE1 an intermediate entered at its finish across calendars; CE2 an intermediate left at its start
-  (a backward-pass-only divergence); CE3 **a started successor entered at its finish** (FF direct, SF chain: A's free
+  across calendars (a backward-pass-only divergence; see the 2026-11-01 amendment for the plan that now shows it); CE3 **a started successor entered at its finish** (FF direct, SF chain: A's free
   float moves); CE4 a started intermediate under Progress Override; CE5 a mandatory intermediate; CE6 positive lags on
   two calendars with equal sums (on offsets, not dates); CE7 a lag sum that falls short; CE8 a lead on the chain; CE9 a
   level-of-effort intermediate.
+- **CE2 is amended (2026-11-01, TECH_DEBT #557).** CE2's first plan depended on the engine rolling a finish
+  milestone's late finish back a weekend, which ADR-0207 D1 removed, so it stopped diverging and the exclusion it
+  justified looked over-conservative. Measured rather than assumed: lifting "left at its start" outright leaves the
+  seeded population clean (500 plans, five draws each, and 3,000 triangles: zero divergences) but a grid of calendars
+  and durations still diverges, with one intermediate (348 of 46,656 flagged variants) and with two (1,306 of
+  82,944). Every divergence has the intermediate on a calendar other than the source's and is a backward-pass move of
+  A's late dates and total float. The replacement witness is A and C on the plan calendar, B (60 minutes or one
+  office day) on another, B to C start-to-start, C a full-day task, with a finish milestone behind C and a longer
+  path. The rule therefore keeps the exclusion for an intermediate on another calendar than the source's and lifts
+  it where the intermediate shares the source's calendar: zero divergences on the same population and both grids.
+  The narrowing is deliberately a source-side test, not the weaker one the grid alone would allow (B on C's calendar
+  also held), because a source-side test composes down a longer chain. The witness, the admitted shape and a
+  two-intermediate chain are pinned in `redundant-links.soundness.spec.ts` ("W2: an intermediate left at its
+  start"), verified red against the lifted rule. A chain admitted by the narrowing is newly flagged where it was not.
 - **CE3 was first mispredicted.** The spec argued a _pinned_ or _started_ successor entered by a **start-bound** link
   moves free float. Measured, it does not: the engine pins such a successor's late dates to its early ones, so the
   chain's total float is already at or below D's gap. Four constructions showed nothing; the mutation run then caught

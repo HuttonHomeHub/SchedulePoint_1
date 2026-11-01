@@ -5,6 +5,7 @@ import { capabilitySpecs } from '../../../../seed-cli/src/capabilities/index';
 import { referenceSpecs } from '../../../../seed-cli/src/references/index';
 import {
   buildRuleInput,
+  CALENDAR_SHAPES,
   engineDivergences,
   engineGraphOfSpec,
   generatePlan,
@@ -12,6 +13,9 @@ import {
   redrawDurations,
   ruleInputOfSpec,
   type Divergence,
+  type OracleActivity,
+  type OracleLink,
+  type OraclePlan,
 } from '../../../test/support/redundant-links-oracle';
 
 import { findRedundantLinks } from './health/redundant-links';
@@ -95,4 +99,115 @@ describe('SC-1 — the rule is sound against the engine', () => {
     },
     600_000,
   );
+});
+
+/**
+ * **An intermediate left at its start (TECH_DEBT #557).** W2's cross-calendar form once refused any
+ * chain that left an intermediate at its start. The exclusion's first counterexample (CE2) rested on
+ * a milestone behaviour ADR-0207 removed, and a search of calendars and durations found a replacement
+ * with A and C on the plan calendar and B on another. The rule now lets such a chain through when the
+ * intermediate schedules on the source's calendar. These cases pin both edges: the witness stays
+ * unflagged (and the oracle shows removing its link really does move A), and the shape the narrowing
+ * admits is flagged and the engine agrees.
+ */
+describe('W2: an intermediate left at its start (TECH_DEBT #557)', () => {
+  const DAY = 1440;
+  const task = (id: string, durationMinutes: number, calendar?: string): OracleActivity => ({
+    id,
+    durationMinutes,
+    ...(calendar === undefined ? {} : { calendar }),
+  });
+  const link = (
+    id: string,
+    from: string,
+    to: string,
+    type: OracleLink['type'] = 'FS',
+  ): OracleLink => ({ id, from, to, type, lagMinutes: 0 });
+  const milestone: OracleActivity = { id: 'M', durationMinutes: 0, type: 'FINISH_MILESTONE' };
+  const plan = (activities: OracleActivity[], links: OracleLink[]): OraclePlan => ({
+    dataDate: '2026-01-05',
+    calendars: CALENDAR_SHAPES,
+    planCalendar: 'MON_FRI',
+    activities,
+    links,
+  });
+  const flaggedIn = (p: OraclePlan): string[] =>
+    find(buildRuleInput(p)).offenders.map((o) => o.linkId);
+
+  // A and C on the plan calendar, B on the office calendar, entered at B's start and left at it.
+  const witness = plan(
+    [
+      task('A', 60),
+      task('B', 480, 'OFFICE'),
+      task('C', DAY),
+      task('E', 6 * DAY, 'MON_SAT'),
+      milestone,
+    ],
+    [
+      link('AB', 'A', 'B'),
+      link('BC', 'B', 'C', 'SS'),
+      link('AC', 'A', 'C'),
+      link('CM', 'C', 'M'),
+      link('EM', 'E', 'M'),
+    ],
+  );
+
+  it('the replacement witness is not flagged, and the engine says why (A moves)', () => {
+    // Red first: with the exclusion lifted to "left at either end" the rule flags AC, and the oracle
+    // run below is exactly the divergence that makes that unsound (A's late finish and total float).
+    expect(flaggedIn(witness)).not.toContain('AC');
+    const found = oracleDivergences(witness, ['AC']);
+    expect(found.map((d) => `${d.subject}.${d.field}`)).toEqual(
+      expect.arrayContaining(['A.lateFinish', 'A.totalFloat']),
+    );
+  });
+
+  it('the same chain with B on the source calendar is flagged, and removing the link moves nothing', () => {
+    const p = plan(
+      [
+        task('A', 60, 'OFFICE'),
+        task('B', 480, 'OFFICE'),
+        task('C', DAY),
+        task('E', 6 * DAY, 'MON_SAT'),
+        milestone,
+      ],
+      [
+        link('AB', 'A', 'B'),
+        link('BC', 'B', 'C', 'SS'),
+        link('AC', 'A', 'C'),
+        link('CM', 'C', 'M'),
+        link('EM', 'E', 'M'),
+      ],
+    );
+    expect(flaggedIn(p)).toEqual(['AC']);
+    expect(oracleDivergences(p, ['AC'])).toEqual([]);
+  });
+
+  it('a two-intermediate chain is flagged only while the one left at its start is on the source calendar', () => {
+    const chain = (b: string, f: string) =>
+      plan(
+        [
+          task('A', 60),
+          task('B', 60, b),
+          task('F', 60, f),
+          task('C', DAY),
+          task('E', 6 * DAY, 'MON_SAT'),
+          milestone,
+        ],
+        [
+          link('AB', 'A', 'B'),
+          link('BF', 'B', 'F'),
+          link('FC', 'F', 'C', 'SS'),
+          link('AC', 'A', 'C'),
+          link('CM', 'C', 'M'),
+          link('EM', 'E', 'M'),
+        ],
+      );
+    const unsound = chain('MON_FRI', 'HALF_SAT');
+    expect(flaggedIn(unsound)).not.toContain('AC');
+    expect(oracleDivergences(unsound, ['AC']).length).toBeGreaterThan(0);
+    const sound = chain('MON_FRI', 'MON_FRI');
+    expect(flaggedIn(sound)).toContain('AC');
+    expect(oracleDivergences(sound, ['AC'])).toEqual([]);
+  });
 });

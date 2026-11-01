@@ -18,7 +18,7 @@
  * **The rule, in the spec's vocabulary.** A link leaves its predecessor from end π (start or finish)
  * and binds its successor's end σ. A witness for `D = A → C` is a path `A → … → C` of other links with:
  * W1 no leads; W2 every intermediate is *transparent* and is entered at its start and left at its
- * finish; W3 the first link leaves A at an end at or after D's and the last binds C at an end at or
+ * finish, or left at its start when it schedules on A's calendar (TECH_DEBT #557); W3 the first link leaves A at an end at or after D's and the last binds C at an end at or
  * before D's; W4 if D has a positive lag, the chain's lags sum to at least it and every positive lag
  * on the chain is on D's lag calendar; W5 (single-calendar mode) lets W2 relax to "entered no later
  * than left" when A, C and every intermediate share one scheduling calendar (and, when D's lag is
@@ -215,6 +215,19 @@ export function findRedundantLinks(
   const transparent = activities.map(isTransparent);
   const calendarOf = activities.map((a) => a.schedulingCalendarId);
 
+  /**
+   * W2 for the general (cross-calendar) mode: whether a chain entered intermediate `x` at end `entered`
+   * may leave it at end `left`, the chain starting from source `a`. Entering at the finish is never
+   * allowed (CE1). Leaving at the finish always is. Leaving at the start is allowed only when `x`
+   * schedules on the source's calendar: with the exclusion lifted outright the oracle finds the
+   * counterexample on a three-activity grid (A on the plan calendar, B on another, C a full-day plan
+   * task: A's late dates move), and none once `x` shares A's calendar (`redundant-links.soundness.spec.ts`,
+   * TECH_DEBT #557). The condition is deliberately narrower than that grid proves (B on C's calendar
+   * also held), because a source-side test is the one a longer chain composes.
+   */
+  const mayPass = (entered: number, left: number, x: number, a: number): boolean =>
+    entered === S && (left === F || calendarOf[x] === calendarOf[a]);
+
   // Candidates, grouped by source.
   const candidatesBySource = new Map<number, LinkRow[]>();
   for (const link of links) {
@@ -322,7 +335,7 @@ export function findRedundantLinks(
             remaining -= 1;
             // W2: enter at S and leave at F; single-calendar mode relaxes to "entered no later than
             // left", never F then S.
-            if (weak ? e > link.pi : !(e === S && link.pi === F)) continue;
+            if (weak ? e > link.pi : !mayPass(e, link.pi, x, a)) continue;
             if (!linkAllowed(link.dep, mode)) continue;
             consider(link, state, have, first);
           }
@@ -378,7 +391,7 @@ export function findRedundantLinks(
           const state = t.from * 4 + e * 2 + first;
           const have = value[state]!;
           if (have === Number.NEGATIVE_INFINITY) continue;
-          if (weak ? e > t.pi : !(e === S && t.pi === F)) continue;
+          if (weak ? e > t.pi : !mayPass(e, t.pi, t.from, d.from)) continue;
           if (have + t.dep.lagMinutes < need) continue;
           return { linkId: d.dep.id, via: viaOf(state), parallelType: null };
         }
