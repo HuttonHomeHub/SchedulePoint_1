@@ -17,14 +17,24 @@ import { allSourceFiles, SRC_DIR, stripComments } from '@/test/source-files';
  * surface (the Members panel, the bulk-assign bar, the Gantt's indent and outdent, and the undo and
  * redo of all three) writes parents through the helper.
  *
- * It does not cover the activity editor's Breakdown field, which saves `parentId` through the
- * scope's PATCH and is not an `updateParents` caller; see the M3-T2 note in the implementation plan.
+ * **The two other paths that change membership** (docs/TECH_DEBT.md #547) are pinned below by the
+ * same census: a summary dissolve, whose bare hook `useDissolveSummary` is named only by its
+ * definition, re-export, undo roster and wrapper; and the activity editor's Breakdown field, which
+ * saves `parentId` through the General scope's PATCH and so calls the shared lane-store hook itself.
+ * All three end in `useStoreReparentLanes`, the one place the lanes are planned and written.
  */
 const ALLOWED = [
   'features/activities/api/use-activities.ts',
   'features/activities/index.ts',
   'features/undo-redo/coverage.ts',
   'features/wbs/model/use-reparent-activities.ts',
+];
+
+const DISSOLVE_ALLOWED = [
+  'features/activities/api/use-activities.ts',
+  'features/activities/index.ts',
+  'features/undo-redo/coverage.ts',
+  'features/wbs/model/use-dissolve-summary.ts',
 ];
 
 const namesIn = (pattern: RegExp): string[] =>
@@ -44,6 +54,28 @@ describe('the parents-write census', () => {
       'features/wbs/components/ActivityMembersPanel.tsx',
       'features/wbs/components/WbsBulkAssignBar.tsx',
       'features/wbs/model/use-reparent-activities.ts',
+    ]);
+  });
+
+  it('names the bare dissolve hook only where it is defined, re-exported, rostered and wrapped', () => {
+    expect(namesIn(/\buseDissolveSummary\b/)).toEqual(DISSOLVE_ALLOWED);
+  });
+
+  it('is wired: every dissolve surface calls the wrapper that stores the promoted lanes', () => {
+    expect(namesIn(/\buseDissolveSummaryInSwimlanes\(/)).toEqual([
+      'components/layout/workspace/activity-crud-dialogs.tsx',
+      'components/layout/workspace/use-plan-workspace-model.ts',
+      'features/activities/components/ActivitiesTable.tsx',
+      'features/wbs/model/use-dissolve-summary.ts',
+    ]);
+  });
+
+  it('is wired: the editor’s General save and the two wrappers share the lane-store hook', () => {
+    expect(namesIn(/\buseStoreReparentLanes\(/)).toEqual([
+      'features/activities/components/ActivityEditorDialog.tsx',
+      'features/wbs/model/use-dissolve-summary.ts',
+      'features/wbs/model/use-reparent-activities.ts',
+      'features/wbs/model/use-store-reparent-lanes.ts',
     ]);
   });
 });

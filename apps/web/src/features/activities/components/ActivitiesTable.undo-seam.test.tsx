@@ -36,9 +36,14 @@ vi.mock('../api/use-activities', async (importOriginal) => {
   return {
     ...actual,
     useDeleteActivity: () => ({ mutate: deleteMutate, isPending: false }),
-    useDissolveSummary: () => ({ mutate: dissolveMutate, isPending: false }),
   };
 });
+// The dissolve goes through the wrapper that stores the promoted children's lanes (#547); the spy
+// stands in for it, since the mutation itself is what this file mocks.
+vi.mock('@/features/wbs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useDissolveSummaryInSwimlanes: () => ({ mutate: dissolveMutate, isPending: false }),
+}));
 
 const BASE: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
   id: 'a1',

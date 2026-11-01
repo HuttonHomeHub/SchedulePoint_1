@@ -168,8 +168,7 @@ Taken from feature-spec §4.14, where each is argued:
 - **No engine, recalculation or schedule change.** Swimlanes are not a scheduling input; the
   `schedule-input-fields.ts` classification makes adding one a compile error, and ADR-0034's parity gate
   is untouched.
-- **Known gaps, recorded:** the editor's Breakdown field and Dissolve leave the moved activity's lane to
-  be derived (`docs/TECH_DEBT.md` #547); a guest sees no swimlanes on a WBS-source plan (ADR-0205 D3);
+- **Known gaps, recorded:** a guest sees no swimlanes on a WBS-source plan (ADR-0205 D3);
   an XER export of a WBS-source plan writes only the source and level, because the reader re-derives
   membership; the Gantt view says nothing when the swimlane list fails to load (#549). The owner chose
   on 2026-10-25 to keep all of these as follow-ons.
