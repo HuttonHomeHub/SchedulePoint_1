@@ -149,6 +149,13 @@ export class StaffHealthService {
         });
         return row?.recordedAt ?? null;
       }
+      case 'crash_reports': {
+        const row = await this.prisma.crashReport.findFirst({
+          orderBy: [{ lastSeenAt: 'asc' }, { id: 'asc' }],
+          select: { lastSeenAt: true },
+        });
+        return row?.lastSeenAt ?? null;
+      }
     }
   }
 
@@ -158,6 +165,7 @@ export class StaffHealthService {
       csp_reports: this.config.retentionCspReportsDays,
       mail_events: this.config.retentionMailEventsDays,
       perf_probe_results: this.config.retentionPerfProbeDays,
+      crash_reports: this.config.retentionCrashReportsDays,
     };
     const intervalMinutes = this.config.retentionSweepIntervalMinutes;
 

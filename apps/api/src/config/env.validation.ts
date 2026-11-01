@@ -194,6 +194,7 @@ export const envSchema = z
      * ADR-0096's arming switch shipped inverted that way and `.env.example` carried the exact line.
      */
     RETENTION_PERF_PROBE_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    RETENTION_CRASH_REPORTS_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     /**
      * Days a soft-deleted client/project/plan is kept before the sweep permanently deletes it
      * (ADR-0096 D2). **The operator's override, and the reason the client is never allowed a

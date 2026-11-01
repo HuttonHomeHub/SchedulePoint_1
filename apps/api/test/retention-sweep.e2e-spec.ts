@@ -60,6 +60,7 @@ describe.skipIf(!hasDatabase)('Retention sweep (e2e)', () => {
   beforeEach(async () => {
     await prisma.cspReport.deleteMany();
     await prisma.mailEvent.deleteMany();
+    await prisma.crashReport.deleteMany();
   });
 
   /** A CSP row with independently-controlled first/last timestamps — the distinction under test. */
@@ -118,6 +119,45 @@ describe.skipIf(!hasDatabase)('Retention sweep (e2e)', () => {
     expect(mail?.deleted).toBe(1);
     const left = await prisma.mailEvent.findMany({ select: { recipient: true } });
     expect(left.map((r) => r.recipient)).toEqual(['recent@example.test']);
+  });
+
+  /** A crash row with independently-controlled first/last timestamps, like {@link cspRow}. */
+  const crashRow = (suffix: string, firstSeenAt: Date, lastSeenAt: Date) =>
+    prisma.crashReport.create({
+      data: {
+        dedupeHash: suffix.padStart(64, '0'),
+        boundary: 'route',
+        errorName: 'TypeError',
+        message: 'x is undefined',
+        webVersion: '1.2.3',
+        browser: 'chrome',
+        firstSeenAt,
+        lastSeenAt,
+      },
+    });
+
+  it('deletes an expired crash report, keeps a fresh one, and keeps one old but still happening', async () => {
+    // Browser crash reports M1-T3. The third row is the `last_seen_at` decision: first seen in 2020
+    // and reported moments ago is a live crash, and a `first_seen_at` predicate would delete it.
+    await crashRow('f6', LONG_AGO, LONG_AGO);
+    await crashRow('a7', RECENT, RECENT);
+    await crashRow('b8', LONG_AGO, RECENT);
+
+    const results = await runner.sweepAll(new Date());
+
+    expect(results.find((r) => r.table === 'crash_reports')?.deleted).toBe(1);
+    const left = await prisma.crashReport.findMany({ select: { dedupeHash: true } });
+    expect(left.map((r) => r.dedupeHash.slice(-2)).sort()).toEqual(['a7', 'b8']);
+  });
+
+  it('keeps a crash report exactly at the 30-day cutoff', async () => {
+    const now = new Date('2026-08-10T12:00:00.000Z');
+    const exactly = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    await crashRow('c9', exactly, exactly);
+
+    await runner.sweepAll(now);
+
+    expect(await prisma.crashReport.count()).toBe(1);
   });
 
   it('keeps a row exactly at the cutoff', async () => {

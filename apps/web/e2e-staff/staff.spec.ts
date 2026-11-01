@@ -627,6 +627,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // be missing is `#310`. This is the same shape `#165` records in `app-shell.test.tsx` — an
   // area's own suite using the broken state as its fixture — one tier out, in a journey.
   await expect(retention.getByText('Performance readings')).toBeVisible();
+  await expect(retention.getByText('Screen crash reports')).toBeVisible();
   // Each configured period as the API reports it, and scoped to ITS OWN ROW. Not `/\d+ days/` — a
   // regex would pass on whatever number arrived, including a default the server is not using.
   //
@@ -637,6 +638,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await expect(rowFor(retention, 'Policy violation reports').getByText('30 days')).toBeVisible();
   await expect(rowFor(retention, 'Mail events').getByText('365 days')).toBeVisible();
   await expect(rowFor(retention, 'Performance readings').getByText('365 days')).toBeVisible();
+  await expect(rowFor(retention, 'Screen crash reports').getByText('30 days')).toBeVisible();
   // The sweep runs at boot (`onApplicationBootstrap`), so by the time a browser has signed up,
   // verified an address and signed in twice, this process HAS swept — which makes the "not swept
   // yet" wording the wrong assertion here and the presence of a real last-run line the right one.

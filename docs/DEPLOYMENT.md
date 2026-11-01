@@ -1449,7 +1449,8 @@ encrypted and contain password hashes and session tokens. The `.env` file is not
 ADR-0087. Two tables documented a period, and until this shipped **nothing enforced either**:
 `csp_reports` (30 days) and `mail_events` (12 months). The API now sweeps them on a timer inside its
 own process — no Redis, no queue, nothing to install. `perf_probe_results` (365 days) joined them
-when the staff console gained its performance readings.
+when the staff console gained its performance readings, and `crash_reports` (30 days after the crash
+was last reported; `RETENTION_CRASH_REPORTS_DAYS`, optional) joined with browser crash reports.
 
 ```yaml
 api:
@@ -1458,6 +1459,7 @@ api:
     RETENTION_CSP_REPORTS_DAYS: 30
     RETENTION_MAIL_EVENTS_DAYS: 365
     RETENTION_PERF_PROBE_DAYS: 365
+    # RETENTION_CRASH_REPORTS_DAYS: 30  # optional; 30 is the default and nothing needs setting
     RETENTION_SWEEP_INTERVAL_MINUTES: 60
 ```
 

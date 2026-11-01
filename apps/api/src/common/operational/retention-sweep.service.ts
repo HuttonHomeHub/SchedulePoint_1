@@ -97,6 +97,9 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
         // Found by reading an e2e log rather than by anything failing — which is the shape the
         // comment above warns about: an irreversible number left to be inferred.
         perfProbeDays: this.config.retentionPerfProbeDays,
+        // The fourth table (browser crash reports M1-T3): named here in the same commit that added it,
+        // which is the omission the line above records.
+        crashReportsDays: this.config.retentionCrashReportsDays,
         intervalMinutes: this.config.retentionSweepIntervalMinutes,
       },
       'retention sweep armed',

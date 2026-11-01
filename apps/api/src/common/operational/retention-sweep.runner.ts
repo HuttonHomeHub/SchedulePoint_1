@@ -229,6 +229,12 @@ export class RetentionSweepRunner {
             SELECT ctid FROM perf_probe_results WHERE recorded_at < ${cutoff}
             ORDER BY recorded_at, id LIMIT ${BATCH_SIZE}
           )`;
+      case 'crash_reports':
+        return await this.prisma.$executeRaw`
+          DELETE FROM crash_reports WHERE ctid IN (
+            SELECT ctid FROM crash_reports WHERE last_seen_at < ${cutoff}
+            ORDER BY last_seen_at, id LIMIT ${BATCH_SIZE}
+          )`;
     }
   }
 }

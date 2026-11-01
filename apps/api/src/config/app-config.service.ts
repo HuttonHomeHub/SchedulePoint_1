@@ -90,6 +90,11 @@ export class AppConfigService {
     return this.config.get('RETENTION_PERF_PROBE_DAYS', { infer: true });
   }
 
+  /** Days after it was last reported that a browser crash row is kept (spec §2 US-5). */
+  get retentionCrashReportsDays(): number {
+    return this.config.get('RETENTION_CRASH_REPORTS_DAYS', { infer: true });
+  }
+
   /**
    * Days a soft-deleted client/project/plan is kept (ADR-0096 D2).
    *

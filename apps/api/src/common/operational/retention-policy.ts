@@ -96,6 +96,18 @@ export const RETENTION_POLICIES: readonly RetentionPolicy[] = [
      */
     days: 365,
   },
+  {
+    table: 'crash_reports',
+    /**
+     * **`last_seen_at`, for the `csp_reports` reason and with its consequence.** A crash that is
+     * still happening never expires, so the 30 days bound **staleness, not row age**:
+     * `first_seen_at` can be older than the period. Expiring a live finding would remove it from the
+     * one screen built to surface it. The row holds no person (spec §4.8), so there is no erasure
+     * clock to meet; this is hygiene, and `RETENTION_CRASH_REPORTS_DAYS` is an optional override.
+     */
+    column: 'last_seen_at',
+    days: 30,
+  },
 ];
 
 /**

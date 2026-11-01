@@ -40,7 +40,7 @@ function operationalSources(): string[] {
 }
 
 describe('the retention sweep cannot reach what it must not', () => {
-  it('names exactly three tables — by equality, so a fourth forces a decision', () => {
+  it('names exactly four tables — by equality, so a fifth forces a decision', () => {
     // **Editing this line IS the decision**, which is what the assertion is for. It went from two to
     // three for `perf_probe_results` (staff-performance-probe M4), and that addition is recorded in
     // `docs/specs/staff-performance-probe/m4-schema-record.md` and in the migration rather than
@@ -52,8 +52,13 @@ describe('the retention sweep cannot reach what it must not', () => {
     // binary ternary in `StaffHealthService.retention()` that would have reported `mail_events`'
     // oldest row as the new table's age. A gate that makes you look is worth more than the line it
     // costs.
+    //
+    // Three to four for `crash_reports` (browser crash reports M1-T3, ADR-0211): installation
+    // telemetry that holds no person by construction (`crash-reports.fields.structural.spec.ts`),
+    // so unlike the third it carries no erasure obligation, and the question put here was only
+    // whether the sweep may reach a fourth table with no foreign key. It may.
     expect(new Set(RETENTION_TABLES)).toEqual(
-      new Set(['csp_reports', 'mail_events', 'perf_probe_results']),
+      new Set(['csp_reports', 'mail_events', 'perf_probe_results', 'crash_reports']),
     );
   });
 

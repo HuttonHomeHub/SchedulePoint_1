@@ -28,6 +28,7 @@ const TABLE_LABELS: Record<RetentionTableName, string> = {
   csp_reports: 'Policy violation reports',
   mail_events: 'Mail events',
   perf_probe_results: 'Performance readings',
+  crash_reports: 'Screen crash reports',
 };
 
 export function tableLabel(table: string): string {
