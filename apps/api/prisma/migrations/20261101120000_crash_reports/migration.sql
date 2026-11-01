@@ -76,6 +76,8 @@ CREATE UNIQUE INDEX "crash_reports_dedupe_hash_key" ON "crash_reports"("dedupe_h
 -- The write-side cost is csp_reports': `last_seen_at` is indexed and rewritten on every repeat, so no
 -- repeat is a HOT update (measured there: n_tup_hot_upd = 0 over 2,000 spaced repeats). On a table
 -- throttled at 10 reports a minute per address that is nothing, and it buys every read above.
+CREATE INDEX "crash_reports_last_seen_at_id_idx" ON "crash_reports"("last_seen_at", "id");
+
 --
 -- Q-b, THE CAP CHECK, GETS NO INDEX, and the reason is the cap itself. The recommended statement
 -- (docs/DATABASE.md "CrashReport") inserts through `INSERT … SELECT … WHERE EXISTS (SELECT 1 … WHERE
