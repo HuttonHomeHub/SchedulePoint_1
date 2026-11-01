@@ -150,6 +150,13 @@ the in-plan twin's**, to the minute, within the parity domain. That is not ADR-0
 - **Placed upstreams.** ADR-0148 M-H feeds the upstream's **placed** dates to both engine passes on
   purpose, where one plan uses them in Pass 2 only. Not reopened; a placed upstream gets the corrected
   day rule and lag on its placed dates.
+- **Zero-span activities (ADR-0207 D1).** A start milestone, a finish milestone or a zero-duration task
+  keeps the instant its logic gives it, but its plan stores the day, so a cross-plan read of that day
+  cannot always recover the instant: the same stored date arises from instants a weekend apart on
+  another calendar (`cross-plan-milestone-fixture.spec.ts`, "what a stored date cannot say"). Exact
+  parity needs the instant persisted, the same deferred columns as the first edge (`docs/TECH_DEBT.md`
+  #565). What the derivation controls is fixed (2026-11-01): a **timed** external early start on a
+  zero-span activity is the instant itself, not rolled onto its calendar (`externalStartInstant`).
 - **Progress-mode tie dropping and expected-finish resizing**, which need state the derivation does
   not have. Filed.
 

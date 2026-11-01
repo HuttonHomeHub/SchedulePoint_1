@@ -190,29 +190,29 @@ const MIDDLES: readonly [string, () => EngineActivity][] = [
 ];
 
 /**
- * **The cases where the split does NOT equal the one-plan run today** (`docs/TECH_DEBT.md` #565). They
- * are `it.fails`, the form the #539 fixture itself took before its fix: each asserts the one-plan
- * answer, so the case turns red the day the divergence is closed and has to be flipped to a plain `it`.
- * Each key is `middle name|cut|longer`.
+ * **The cases where the split does NOT equal the one-plan run, and cannot without a stored instant**
+ * (`docs/TECH_DEBT.md` #565). They are `it.fails`, the form the #539 fixture itself took before its fix:
+ * each asserts the one-plan answer, so the case turns red the day the divergence is closed and has to be
+ * flipped to a plain `it`. Each key is `middle name|cut|longer`. The "stored date cannot say" block below
+ * proves the first three are one limit, not three defects; the fourth is a plan's own project finish.
  *
- * - A start milestone on the weekend calendar: one plan keeps the instant its logic gives (Sunday
- *   evening, so `K` starts Monday 06-28); across plans the date the milestone stores is Saturday 07-03,
- *   its own next working minute (ADR-0035 §22), and `K` starts a week late, Monday 07-05 (cut at
- *   `M → K`); with the cut at `W → M` the external early start is rolled onto `M`'s own calendar and
- *   the same week is lost.
- * - A finish milestone on the plan calendar with the cut at `W → M` and float to spare: its late
- *   instant is a Monday opening, stored as the Friday before, and read back as midnight at the end of
- *   that Friday, so `W` and `A` lose a weekend and a week of float.
- * - A finish milestone on the weekend calendar, cut at `M → K`: `M`'s late date reads Sunday 06-27
- *   across plans (the external clamp rolls it onto its calendar) and Monday 06-28 in one plan. Display
- *   only; no float or other activity differs.
+ * - A start milestone on the weekend calendar, cut at `M → K`: one plan keeps the instant its logic gives
+ *   (Monday 06-28 00:00, where the weekend work ended), so `K` starts Monday 06-28; the date the plan
+ *   stores for a start milestone is the day its next working minute opens (ADR-0207 D3), Saturday 07-03,
+ *   and `K` starts a week late, Monday 07-05.
+ * - A finish milestone on the plan calendar, cut at `W → M` with float to spare: its late instant is
+ *   Monday 07-05 08:00, stored as the Friday before; `W` and `A` lose a weekend and a week of float.
+ * - A finish milestone on the weekend calendar, cut at `M → K`: `M`'s late date reads Sunday 06-27 across
+ *   plans and Monday 06-28 in one plan. Not a derivation fault: the upstream plan's backward pass starts
+ *   from its own project finish (Sunday 19:00, where `M` is), which the downstream bound cannot loosen.
+ *   The `longer` variant, where that finish stops binding, equals one plan.
+ *
+ * #565 closed the other two of its six: a start milestone on the weekend calendar, cut at `W → M`.
  */
 const DIVERGES = new Set([
   'a finish milestone on the weekend calendar|M->K|false',
   'a start milestone on the weekend calendar|M->K|false',
   'a start milestone on the weekend calendar|M->K|true',
-  'a start milestone on the weekend calendar|W->M|false',
-  'a start milestone on the weekend calendar|W->M|true',
   'a finish milestone on the plan calendar|W->M|true',
 ]);
 
@@ -249,5 +249,53 @@ describe('the #539 fixture split across two plans equals the one-plan run (#555)
     expect(onePlan(middle('FINISH_MILESTONE'), true).get('W')!.totalFloat).toBeGreaterThan(0);
     const split = twoPlans(middle('FINISH_MILESTONE'), true, 'M->K');
     expect(split.get('W')!.totalFloat).toBeGreaterThan(0);
+  });
+
+  describe('what a stored date cannot say (#565)', () => {
+    it('two instants of a weekend start milestone store one date, and K starts a week apart', () => {
+      // The fixture: the weekend work ends Sunday 19:00 and the milestone keeps Monday 00:00. The
+      // witness: an SNET on Saturday 07-03 puts it at that day's first working minute.
+      const driven = onePlan(middle('START_MILESTONE', WEEKEND_CAL), false);
+      const pinned = onePlan(
+        middle('START_MILESTONE', WEEKEND_CAL, {
+          constraintType: 'SNET',
+          constraintDate: '2027-07-03',
+        }),
+        false,
+      );
+      expect(driven.get('M')!.earlyStart).toBe('2027-07-03');
+      expect(pinned.get('M')!.earlyStart).toBe('2027-07-03');
+      expect(driven.get('K')!.earlyStart).toBe('2027-06-28');
+      expect(pinned.get('K')!.earlyStart).toBe('2027-07-05');
+    });
+
+    it('two instants of a weekday finish milestone store one late date, and W has float a week apart', () => {
+      // The fixture: M's late instant is the Monday 07-05 08:00 opening. The witness: an FNLT on Friday
+      // 07-02 puts it at the end of that day. Both are dated Friday.
+      const successorDriven = onePlan(middle('FINISH_MILESTONE'), true);
+      const constrained = onePlan(
+        middle('FINISH_MILESTONE', undefined, {
+          constraintType: 'FNLT',
+          constraintDate: '2027-07-02',
+        }),
+        true,
+      );
+      expect(successorDriven.get('M')!.lateFinish).toBe('2027-07-02');
+      expect(constrained.get('M')!.lateFinish).toBe('2027-07-02');
+      expect(successorDriven.get('W')!.totalFloat).not.toBe(constrained.get('W')!.totalFloat);
+    });
+
+    it('a weekend finish milestone reads its own plan’s finish, which a downstream bound cannot loosen', () => {
+      const { activities } = network(middle('FINISH_MILESTONE', WEEKEND_CAL), false);
+      const upstreamAlone = run(
+        activities.filter((a) => ['A', 'W', 'M'].includes(a.id)),
+        [link('A', 'W'), link('W', 'M')],
+      );
+      const split = twoPlans(middle('FINISH_MILESTONE', WEEKEND_CAL), false, 'M->K');
+      expect(pick(split.get('M')!)).toEqual(pick(upstreamAlone.get('M')!));
+      expect(
+        twoPlans(middle('FINISH_MILESTONE', WEEKEND_CAL), true, 'M->K').get('M')!.lateFinish,
+      ).toBe(onePlan(middle('FINISH_MILESTONE', WEEKEND_CAL), true).get('M')!.lateFinish);
+    });
   });
 });

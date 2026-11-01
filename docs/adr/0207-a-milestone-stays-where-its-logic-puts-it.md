@@ -90,8 +90,10 @@ plan the previous image touched.
   (Q3 A). The changelog says so.
 - The cross-plan twin is plain `it` in every one of its 1,728 cells. _(2026-11-01, #555: the twin's
   mixed-calendar axis now includes a weekend calendar, and the row's own fixture is split across plans
-  in `cross-plan-milestone-fixture.spec.ts`. Six of its twenty cases differ from one plan and are
-  `it.fails` under #565; the original wording said the fixture was split nowhere.)_
+  in `cross-plan-milestone-fixture.spec.ts`. Six of its twenty cases differed from one plan; #565 fixed
+  two (a timed external early start is no longer rolled onto a zero-span activity's calendar,
+  `externalStartInstant`) and the other four stay `it.fails` because the plan stores a date and not the
+  instant D1 keeps; the original wording said the fixture was split nowhere.)_
 - The frozen levelling hashes, the legacy levelling copy, one redundant-link counterexample and one
   hand-derived cross-plan golden were replaced, each diffed against the parent commit first.
 - A plan restored from the recycle bin keeps its old `schedule_computed_at`, so it is pending at the

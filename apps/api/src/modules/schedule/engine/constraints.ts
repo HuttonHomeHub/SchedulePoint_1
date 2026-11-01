@@ -216,6 +216,25 @@ export function clampSecondaryBackwardFinish(
 }
 
 /**
+ * **The instant an external early start means for this activity** (#565): the one reader the forward
+ * clamp and the cross-plan derivation's later-of comparison share, so the value is compared as the
+ * engine will read it.
+ */
+export function externalStartInstant(
+  activity: Pick<EngineActivity, 'type' | 'durationMinutes'>,
+  calendar: WorkingTimeCalendar,
+  value: string,
+): number {
+  // A zero-span activity keeps the instant its logic gives it (#539, ADR-0207 D1), and a value carrying
+  // a time of day IS an instant, so it is not rolled onto the activity's calendar (#565). Rolled, the
+  // cross-plan bound of a start milestone on a weekend calendar, Monday 00:00 after weekend work, became
+  // the next Saturday and the weekday work after it started a week late. A bare date (the M1 column)
+  // is still read as the start of its day and rolled, so a hand-entered value is byte-identical.
+  if (value.length > 10 && isZeroSpan(activity)) return instantToAbsMinutes(value);
+  return startDateInstant(calendar, value, activity.type);
+}
+
+/**
  * Fold an activity's **external / inter-project early start** (ADR-0043, ADR-0035 §30.1) into the
  * logic-driven early start (forward pass), in absolute working-instants on the activity's calendar. An
  * external early start is an **SNET-shaped lower bound floored at the data date** (N25): the later of
@@ -232,7 +251,7 @@ export function clampExternalForwardStart(
   ignoreExternal: boolean,
 ): number {
   if (ignoreExternal || !activity.externalEarlyStart) return logicEarlyStart;
-  const externalAbs = startDateInstant(calendar, activity.externalEarlyStart, activity.type);
+  const externalAbs = externalStartInstant(activity, calendar, activity.externalEarlyStart);
   // §30.1 / N25: floor at the data date — an external date in the past can't pull work before it.
   return Math.max(logicEarlyStart, externalAbs, dataDateAbs);
 }
