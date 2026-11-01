@@ -210,4 +210,57 @@ describe('W2: an intermediate left at its start (TECH_DEBT #557)', () => {
     expect(flaggedIn(sound)).toContain('AC');
     expect(oracleDivergences(sound, ['AC'])).toEqual([]);
   });
+
+  it("a three-intermediate grid: every flagged link is sound, including one on A's calendar between two others", () => {
+    // A and C on the plan calendar; B, F and G each on one of three calendars, so F on the plan calendar
+    // sits between neighbours on two other calendars. Every hop is FS or SS, every duration short or
+    // an office day. Chains of three or more intermediates rest on this and on the per-hop composition
+    // the narrowing argues (ADR-0196).
+    const calendars = ['MON_FRI', 'HALF_SAT', 'OFFICE'];
+    const hops = ['FS', 'SS'] as const;
+    let variants = 0;
+    let flagged = 0;
+    for (const cb of calendars)
+      for (const cf of calendars)
+        for (const cg of calendars)
+          for (const db of [60, 480])
+            for (const df of [60, 480])
+              for (const dg of [60, 480])
+                for (const l1 of hops)
+                  for (const l2 of hops)
+                    for (const l3 of hops)
+                      for (const l4 of hops) {
+                        const p = plan(
+                          [
+                            task('A', 60),
+                            task('B', db, cb),
+                            task('F', df, cf),
+                            task('G', dg, cg),
+                            task('C', DAY),
+                            task('E', 6 * DAY, 'MON_SAT'),
+                            milestone,
+                          ],
+                          [
+                            link('AB', 'A', 'B', l1),
+                            link('BF', 'B', 'F', l2),
+                            link('FG', 'F', 'G', l3),
+                            link('GC', 'G', 'C', l4),
+                            link('AC', 'A', 'C'),
+                            link('CM', 'C', 'M'),
+                            link('EM', 'E', 'M'),
+                          ],
+                        );
+                        variants += 1;
+                        const ids = flaggedIn(p);
+                        if (!ids.includes('AC')) continue;
+                        flagged += 1;
+                        const found = oracleDivergences(p, ids);
+                        expect(
+                          found,
+                          JSON.stringify({ cb, cf, cg, db, df, dg, l1, l2, l3, l4 }),
+                        ).toEqual([]);
+                      }
+    expect(flagged).toBeGreaterThan(100);
+    expect(variants).toBe(3456);
+  });
 });

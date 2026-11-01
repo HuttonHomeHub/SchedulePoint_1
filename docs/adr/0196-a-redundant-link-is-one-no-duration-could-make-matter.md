@@ -67,8 +67,8 @@ red (`redundant-links.oracle.spec.ts`, CE1 to CE9) or is marked "reasoned, not d
   milestone's late finish back a weekend, which ADR-0207 D1 removed, so it stopped diverging and the exclusion it
   justified looked over-conservative. Measured rather than assumed: lifting "left at its start" outright leaves the
   seeded population clean (500 plans, five draws each, and 3,000 triangles: zero divergences) but a grid of calendars
-  and durations still diverges, with one intermediate (348 of 46,656 flagged variants) and with two (1,306 of
-  82,944). Every divergence has the intermediate on a calendar other than the source's and is a backward-pass move of
+  and durations still diverges, with one intermediate (93,312 variants, 46,656 of them flagged, 348 divergent) and with two (165,888 variants, 82,944
+  flagged, 1,306 divergent). Every divergence has the intermediate on a calendar other than the source's and is a backward-pass move of
   A's late dates and total float. The replacement witness is A and C on the plan calendar, B (60 minutes or one
   office day) on another, B to C start-to-start, C a full-day task, with a finish milestone behind C and a longer
   path. The rule therefore keeps the exclusion for an intermediate on another calendar than the source's and lifts
@@ -76,7 +76,8 @@ red (`redundant-links.oracle.spec.ts`, CE1 to CE9) or is marked "reasoned, not d
   The narrowing is deliberately a source-side test, not the weaker one the grid alone would allow (B on C's calendar
   also held), because a source-side test composes down a longer chain. The witness, the admitted shape and a
   two-intermediate chain are pinned in `redundant-links.soundness.spec.ts` ("W2: an intermediate left at its
-  start"), verified red against the lifted rule. A chain admitted by the narrowing is newly flagged where it was not.
+  start"), verified red against the lifted rule. Chains of three or more intermediates are covered by per-hop composition (the test is on each intermediate against
+  the same source) and by a three-intermediate grid in the same spec (3,456 variants, 512 flagged, 0 divergent). A chain admitted by the narrowing is newly flagged where it was not.
 - **CE3 was first mispredicted.** The spec argued a _pinned_ or _started_ successor entered by a **start-bound** link
   moves free float. Measured, it does not: the engine pins such a successor's late dates to its early ones, so the
   chain's total float is already at or below D's gap. Four constructions showed nothing; the mutation run then caught

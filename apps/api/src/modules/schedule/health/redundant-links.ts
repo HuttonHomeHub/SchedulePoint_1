@@ -18,8 +18,8 @@
  * **The rule, in the spec's vocabulary.** A link leaves its predecessor from end π (start or finish)
  * and binds its successor's end σ. A witness for `D = A → C` is a path `A → … → C` of other links with:
  * W1 no leads; W2 every intermediate is *transparent* and is entered at its start and left at its
- * finish, or left at its start when it schedules on A's calendar (TECH_DEBT #557); W3 the first link leaves A at an end at or after D's and the last binds C at an end at or
- * before D's; W4 if D has a positive lag, the chain's lags sum to at least it and every positive lag
+ * finish, or left at its start when it schedules on A's calendar (TECH_DEBT #557); W3 the first
+ * link leaves A at an end at or after D's and the last binds C at an end at or before D's; W4 if D has a positive lag, the chain's lags sum to at least it and every positive lag
  * on the chain is on D's lag calendar; W5 (single-calendar mode) lets W2 relax to "entered no later
  * than left" when A, C and every intermediate share one scheduling calendar (and, when D's lag is
  * positive, D's lag is on it).
