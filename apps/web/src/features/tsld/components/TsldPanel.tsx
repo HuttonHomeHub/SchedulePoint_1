@@ -3306,7 +3306,7 @@ export function TsldPanel({
               onClick={() => setShowHelp(true)}
               aria-haspopup="dialog"
             >
-              Keyboard shortcuts
+              Diagram shortcuts and gestures
             </Button>
           ) : null}
         </div>

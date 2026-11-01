@@ -184,8 +184,11 @@ const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
 const TOUCH_SHORTCUTS: readonly Shortcut[] = [
   {
     // `components/ui/tooltip.tsx` — `TOOLTIP_LONG_PRESS_MS`; the click a released long-press
-    // would fire is swallowed in `onClickCapture`.
-    keys: 'Press and hold a button',
+    // would fire is swallowed in `onClickCapture`. Worded "icon button" because every icon-only
+    // control names itself through `useTooltip` (ADR-0117); some text controls carry a tooltip
+    // too, but the sheet claims only the case that is always true.
+
+    keys: 'Press and hold an icon button',
     action: 'See its name without pressing it. A plain tap still presses it.',
   },
   {
@@ -199,23 +202,27 @@ const TOUCH_SHORTCUTS: readonly Shortcut[] = [
 const GANTT_TOUCH_SHORTCUTS: readonly Shortcut[] = [
   {
     // ADR-0177 D3: a touch hold fires `contextmenu`, which opens the row menu
-    // (`docs/UX_STANDARDS.md` "Row / node actions").
-    keys: 'Press and hold a row',
+    // (`docs/UX_STANDARDS.md` "Row / node actions"). The handler is the row's (`GanttPanel.tsx`
+    // `onContextMenu`), and a bar sits inside the row; `TOUCH_ARM_HINT` says the same of a bar.
+    keys: 'Press and hold a row or bar',
     action: 'Open its actions',
   },
 ];
 
-/** Gantt touch rows that only mean something where bars and cells are editable. */
+/**
+ * Gantt touch rows that only mean something where bars are editable.
+ *
+ * **"Double-tap a cell" is deliberately not listed.** `GanttCell` opens its editor on `dblclick`,
+ * but it sets no `touch-action: manipulation`, so a browser may spend the second tap on
+ * double-tap-to-zoom and never deliver the event. That could not be verified on a device, and a
+ * row for a gesture that may not work is the wrong claim ADR-0076 names. List it once the cell
+ * declares `manipulation` and a device check has passed.
+ */
 const GANTT_TOUCH_EDIT_SHORTCUTS: readonly Shortcut[] = [
   {
     // ADR-0177 D2: a finger's bar responds only once selected; `TOUCH_ARM_HINT` in `touch-note.ts`.
     keys: 'Tap a bar, then drag it',
     action: 'Move it',
-  },
-  {
-    // `GanttCell.tsx` `onDoubleClick` — a double tap is a `dblclick` on the cell.
-    keys: 'Double-tap a cell',
-    action: 'Edit it',
   },
 ];
 
@@ -253,7 +260,8 @@ function ShortcutList({
           <dt
             className={
               variant === 'gesture'
-                ? 'text-muted-foreground max-w-48'
+                ? // A cap on the term column so the 1fr description keeps room to wrap at 1024 px.
+                  'text-muted-foreground max-w-48'
                 : 'text-muted-foreground font-mono whitespace-nowrap'
             }
           >
@@ -293,7 +301,7 @@ export function PlanShortcutsHelp({
         open={open}
         onClose={onClose}
         title="Gantt shortcuts and gestures"
-        description="Focus a row in the chart, then use these keys to navigate and edit."
+        description="Focus a row in the chart, then use these keys to navigate and edit. Finger gestures are listed under Touch."
       >
         <div className="flex flex-col gap-5">
           <SheetSection title="Navigate">
@@ -331,7 +339,7 @@ export function PlanShortcutsHelp({
       open={open}
       onClose={onClose}
       title="Diagram shortcuts and gestures"
-      description="Focus the activity list, then use these keys to navigate and edit."
+      description="Focus the activity list, then use these keys to navigate and edit. Finger gestures are listed under Touch."
     >
       <div className="flex flex-col gap-5">
         <SheetSection title="Navigate">
