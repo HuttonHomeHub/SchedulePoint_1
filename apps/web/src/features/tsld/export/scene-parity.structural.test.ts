@@ -449,10 +449,10 @@ describe('the exported diagram accounts for every piece of DOM chrome the screen
   const composes = (input: string): boolean =>
     new RegExp(`(?:^|[\\s{,])${input}\\s*(?::|,|\\})`).test(call);
 
-  it('the roster is exactly the two known pieces, so a truncated parse cannot read as parity', () => {
+  it('the roster is exactly the four known pieces, so a truncated parse cannot read as parity', () => {
     // ADR-0093's second assertion, by NAME: a count passes when one element vanishes and another
     // appears, and a new piece of chrome should be a conscious edit here.
-    expect([...names].sort()).toEqual(['ruler', 'swimlane-gutter']);
+    expect([...names].sort()).toEqual(['legend', 'ruler', 'strip-caption', 'swimlane-gutter']);
   });
 
   it('every named piece is composed: a key of EXPORT_CHROME_INPUTS', () => {

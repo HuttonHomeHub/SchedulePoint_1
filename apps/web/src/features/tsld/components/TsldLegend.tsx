@@ -269,6 +269,8 @@ export function TsldLegend({
     <ul
       role="list"
       aria-label="Legend"
+      // The export mirrors this key by hand (TECH_DEBT #48(e)); ADR-0200 D2's roster pins it.
+      data-chrome="legend"
       className={cn(
         'text-muted-foreground text-xs',
         orientation === 'vertical'
