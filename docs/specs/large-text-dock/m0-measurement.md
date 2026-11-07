@@ -175,3 +175,50 @@ M1 is not built. The readings leave two builds, and the choice is the owner's: R
 a broad CSS side effect, ui-architect not yet run), or R1 at 12 rem **and** a fix to the rail's overflow on the landing page
 (a product change outside this epic, and the coarse selection bar's residual stays). Whichever is chosen, the journey change in
 spec §4.6 stands and needs the scaled corner inset (correction 6).
+
+## M1: the built frame against M0's R2
+
+The owner's choice above was settled after this record: ui-architect picked **R2** (spec §4.6, ADR-0213), and M1 built it. The two
+readings below are evidence, not a gate (ADR-0142): they say the built `.shell-frame` is what M0 injected, and that no overlay moved.
+
+### The equivalence reading (plan T1.1 step 6)
+
+The M0 harness, unchanged, on the M1 tree: `LTD_VARIANTS=base LTD_SUFFIX=.m1`, both pointers, 1024 × 600 and the SC-4 sweep. The
+`base` reading of this run is the built frame (no injected style). It was compared field by field against M0's `r2` reading
+(`m0-readings.fine.json` and `m0-readings.coarse.json`): every band, `main` and foot-row rect, every shell `overflow-y`, `shellRows`,
+scroll extent, probe tally and setup-error field, in all 27 cells and all 98 sweep rows of each pointer.
+
+**Result: 4 differences in 2 × (27 + 98) readings, every one a `[data-tooltip]`.**
+
+| Where                                            | M0 `r2`                                  | M1 built frame                                      | What it is                                             |
+| ------------------------------------------------ | ---------------------------------------- | --------------------------------------------------- | ------------------------------------------------------ |
+| coarse, plan sweep 320 × 720, `fixed` list       | three fixed elements, one `DIV 159 × 26` | two (the two closed dialogs)                        | the tooltip, `position: fixed`, `data-tooltip=""`      |
+| coarse, plan sweep 320 × 568, `fixed` list       | three, one `DIV 159 × 26`                | two                                                 | the same tooltip                                       |
+| coarse, Diagram, inline 200 %, selection: covers | `span.absolute.z-10.inset-y-0`: 6 points | the same span 5, `div.border-border.bg-popover…`: 1 | one probed point lands on the tooltip, not on the span |
+| (the same pair, the span count)                  | 6                                        | 5                                                   | the same point, counted on the other side              |
+
+The 159 × 26 box is the tooltip of whichever control has focus when the harness reads: `tooltip.tsx:514-531` portals a
+`position: fixed` `<div data-tooltip="">` to the body, outside the frame, and opens it on focus or a long press. M0's own table already
+recorded it as the one box present in an R2 reading and not in `base`, so it shows up in whichever reading the focus happened to be on
+when it opened: here it is in M0's `r2` and absent in M1's, and, in the selection cell, absent in M0's and present in M1's. Which tooltip is open depends on which control held focus when the read ran, so it is not a property of the layout: it is outside the
+frame and cannot be moved by it. (Why that tooltip was not made inert before this one point was counted was not investigated; the
+conclusion rests on its being the tooltip's element and class, not on a second run.) The reading's `parent` field names `div.shell-frame` now and `#root` in M0, as
+intended, and was left out of the comparison.
+
+### The overlay reading (plan T1.1 step 7, SC-6)
+
+A short test in the same harness file (`large-text-dock M1 overlays`, both pointers) at 1024 × 600, 100 % text, reads each overlay's
+`getBoundingClientRect()` twice on the same page: as built, and with `.shell-frame{container-type:normal}` injected, which restores
+today's containment state (`squat` is off at 1024 × 600 either way). Rects are `[top, left, width, height]`.
+
+| Overlay                                       | Fine, built = without container | Coarse, built = without container |
+| --------------------------------------------- | ------------------------------- | --------------------------------- |
+| Activity editor `Dialog`                      | `[32, 64, 896, 536]`            | `[32, 64, 896, 536]`              |
+| View ▾ popover                                | `[92, 161, 704, 366]`           | `[104, 213, 704, 402]`            |
+| Row `Menu` in the Explorer                    | `[211, 243, 160, 106]`          | `[303, 227, 160, 142]`            |
+| Tooltip (hover on fine, long press on coarse) | `[94, 760, 256, 42]`            | `[106, 760, 256, 42]`             |
+| Explorer `Sheet` at 1000 × 600                | `[0, 0, 320, 600]`              | `[0, 0, 320, 600]`                |
+
+**All ten pairs are equal**: no overlay is inside the containing block the frame creates. Raw readings:
+`apps/web/measure-output/large-text-dock-m1-overlays.{fine,coarse}.json` (not committed; reproduce with
+`playwright.measure-toolbar.config.ts --grep "M1 overlays"`).

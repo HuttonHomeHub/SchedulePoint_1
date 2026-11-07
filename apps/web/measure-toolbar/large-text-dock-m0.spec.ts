@@ -1,12 +1,14 @@
-import { type CDPSession, expect, type Page, test } from '@playwright/test';
+import { type CDPSession, expect, type Locator, type Page, test } from '@playwright/test';
 
 import { ganttRow, showGantt } from '../e2e-gantt/support';
+import { activityEditor } from '../e2e-support/activity-editor';
 import {
   createHierarchy,
   diagramList,
   ensurePen,
   linkActivities,
   newPlan,
+  openViewMenu,
   placeViaApi,
   recalculate,
   seedActivities,
@@ -641,6 +643,142 @@ for (const pointer of ['fine', 'coarse'] as const) {
       }
       await cdp.detach();
       expect(cells.length).toBeGreaterThan(0);
+    });
+  });
+}
+
+/**
+ * **M1's overlay reading (SC-6, ADR-0213).** The frame is a size container, and containment changes
+ * the containing block of a fixed descendant. Every overlay should be outside it (a top-layer
+ * `<dialog>`, or a portal into the body), so each rect is read twice on the same page: as built, and
+ * with the container switched off (`container-type: normal`, which restores today's containment
+ * state; `squat` is off at 1024 x 600 either way). They must be equal.
+ */
+async function overlayRects(page: Page, target: Locator): Promise<Record<string, unknown>> {
+  const read = (): Promise<number[]> =>
+    target.first().evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      return [b.top, b.left, b.width, b.height].map(Math.round);
+    });
+  const built = await read();
+  await page.evaluate(() => {
+    const tag = document.createElement('style');
+    tag.id = 'ltd-plain';
+    tag.textContent = '.shell-frame{container-type:normal}';
+    document.head.append(tag);
+  });
+  await page.waitForTimeout(200);
+  const plain = await read();
+  await page.evaluate(() => document.getElementById('ltd-plain')?.remove());
+  return { built, plain, equal: JSON.stringify(built) === JSON.stringify(plain) };
+}
+
+for (const pointer of ['fine', 'coarse'] as const) {
+  test.describe(`large-text-dock M1 overlays (${pointer})`, () => {
+    test.use({ actionTimeout: 8_000 });
+    if (pointer === 'coarse') test.use({ hasTouch: true });
+
+    test(`overlay rects with and without the frame's containment, ${pointer} pointer`, async ({
+      page,
+    }) => {
+      test.setTimeout(600_000);
+      const stamp = Date.now() + (pointer === 'coarse' ? 3 : 2);
+      const results: Record<string, unknown> = { pointer };
+      await page.addInitScript((key: string) => {
+        window.localStorage.setItem(key, '1');
+      }, VIEWPORT_NOTICE_ACK_KEY);
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await page.goto('/sign-up');
+      await page.getByLabel('Full name').fill('Dock Tester');
+      await page.getByLabel('Email').fill(`dock-ov-${stamp}@example.com`);
+      await page.getByLabel('Password').fill(PASSWORD);
+      await page.getByRole('button', { name: /create an account/i }).click();
+      await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+        timeout: 15_000,
+      });
+      await page.getByLabel('Organisation name').fill(`Dock Ov ${stamp}`);
+      await page.getByRole('button', { name: /create organisation/i }).click();
+      const orgSlug = `dock-ov-${stamp}`;
+      await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
+      await createHierarchy(page);
+      await newPlan(page, 'Dock M1 overlays');
+      await ensurePen(page);
+      await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0 }]);
+      const planUrl = page.url();
+
+      const arrange = async (width: number): Promise<void> => {
+        await page.setViewportSize({ width, height: 600 });
+        await page.goto(planUrl);
+        await page.waitForTimeout(700);
+        await ensurePen(page);
+      };
+
+      // 1. The activity editor Dialog, from the Activities panel's row menu.
+      await arrange(1024);
+      await page.getByRole('button', { name: 'Expand activities panel' }).click();
+      await page.getByRole('button', { name: 'Actions for Excavate' }).click();
+      await page.getByRole('menuitem', { name: 'Edit' }).click();
+      await expect(activityEditor(page)).toBeVisible();
+      results['activityEditor'] = await overlayRects(page, activityEditor(page));
+      await page.keyboard.press('Escape');
+
+      // 2. The View popover.
+      await arrange(1024);
+      await openViewMenu(page);
+      const view = page.getByRole('dialog', { name: /^View/ });
+      await expect(view).toBeVisible();
+      results['viewPopover'] = await overlayRects(page, view);
+      await page.keyboard.press('Escape');
+
+      // 3. A row Menu in the Explorer.
+      await arrange(1024);
+      const explorer = page.getByRole('navigation', { name: 'Project Explorer' });
+      await explorer
+        .getByRole('button', { name: /^Actions for/ })
+        .first()
+        .click();
+      const menu = page.getByRole('menu').first();
+      await expect(menu).toBeVisible();
+      results['explorerRowMenu'] = await overlayRects(page, menu);
+      await page.keyboard.press('Escape');
+
+      // 4. A tooltip: long-pressed on a finger, hovered otherwise.
+      await arrange(1024);
+      const glyph = page.getByRole('button', { name: 'Comments' });
+      await expect(glyph).toBeVisible();
+      if (pointer === 'coarse') {
+        const box = await glyph.boundingBox();
+        if (!box) throw new Error('no Comments box');
+        await glyph.dispatchEvent('pointerdown', {
+          pointerType: 'touch',
+          clientX: box.x + box.width / 2,
+          clientY: box.y + box.height / 2,
+        });
+        await page.waitForTimeout(900);
+      } else {
+        await glyph.hover();
+        await page.waitForTimeout(900);
+      }
+      const tooltip = page.locator('[data-tooltip]');
+      await expect(tooltip.first()).toBeVisible();
+      results['tooltip'] = await overlayRects(page, tooltip);
+      if (pointer === 'coarse') await glyph.dispatchEvent('pointerup', { pointerType: 'touch' });
+
+      // 5. The Explorer Sheet, below lg.
+      await arrange(1000);
+      await page.getByRole('button', { name: 'Show Project Explorer' }).click();
+      const sheet = page.getByRole('dialog', { name: 'Project Explorer' });
+      await expect(sheet).toBeVisible();
+      results['explorerSheet'] = await overlayRects(page, sheet);
+
+      writeMeasurement(`large-text-dock-m1-overlays.${pointer}`, results);
+      log(`${pointer} overlays ${JSON.stringify(results)}`);
+      for (const [name, r] of Object.entries(results)) {
+        if (name === 'pointer') continue;
+        expect((r as { equal: boolean }).equal, `${name} moved with the frame's containment`).toBe(
+          true,
+        );
+      }
     });
   });
 }
