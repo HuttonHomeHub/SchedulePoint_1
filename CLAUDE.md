@@ -622,8 +622,8 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
-- **The staff console is live but unwired** (ADR-0086, 2026-08-09). Five panels exist and every
-  route is audited; what does **not** exist yet is anybody receiving the two signals it added.
+- **The staff console is live but unwired** (ADR-0086, 2026-08-09). Nine panel components exist
+  (`apps/web/src/features/staff/ui/`; five when this was written) and every route is audited; what does **not** exist yet is anybody receiving the two signals it added.
   `MAIL_ALERT_URL` and `HEARTBEAT_URL` are compose edits on the host, both empty by default, and
   until they are set a broken relay still reaches nobody — which is the exact failure
   `docs/TECH_DEBT.md` #100 records, so that row stays **open on the operator half**. Likewise

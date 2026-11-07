@@ -38,6 +38,13 @@ review; you do not edit code. Assume an adversarial user.
   the CSP sink is an unauthenticated **write** — the only one — so it is rate-limited
   and retention-swept rather than trusted; its path is stored and its query string
   stripped.
+- **`POST /api/v1/crash-reports` is an authenticated write with no org scope, by design (ADR-0211).**
+  Not `@Public()` (a session makes an anonymous flood need an account first), no role check, no field of
+  the principal read or stored, unaudited (`BROWSER_TELEMETRY`), throttled at 10 a minute, and the body
+  is cleaned on the server (URL paths, emails, UUIDs, digit runs, quoted values) before any write. Treat
+  a stored principal, organisation, address or correlation id on `crash_reports` as blocking, and so a
+  `StaffPrincipal` route that returns the table's text beyond what ADR-0211 names; the staff read is
+  audited as a panel read and never logs contents.
 - **Request bodies are capped before any guard runs (#407, `app-setup.ts`,
   `common/http/body-limits.ts`).** JSON is 512 KB only under `/api/v1/organizations` **and** only
   when a cookie or `Authorization` header is presented; 64 KB everywhere else, the anonymous sinks

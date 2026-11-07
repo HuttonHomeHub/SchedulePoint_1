@@ -2254,7 +2254,7 @@ blocked the epic.
    > so the caveat at the top of this row does not apply to the 2026-09-13 date the way it applies
    > to the 2026-09-10 one. Item 1: `ToolbarItemRenderApi` still carries exactly five fields and no
    > `busy`, and the sentence quoted above is still on `activeKind` word for word. Item 2:
-   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:234`, 2026-10-26), and
+   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:239`, re-read 2026-11-07; was `:234`), and
    > `wbsGroupLabelById` / `composeListboxRowText` are both still single producers with two
    > consumers each, so the contrast the item draws still holds. Nothing changed; the value is that
    > the date now means what a reader will take it to mean.
@@ -2336,7 +2336,7 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 > could not report.
 
 > **Pointers re-read 2026-10-26; the row is otherwise unchanged.** The read route is now
-> `staff.controller.ts:196`; the content-type registration is `app-setup.ts:168-178`
+> `staff.controller.ts:199` (was `:196`, re-read 2026-11-07); the content-type registration is `app-setup.ts:168-178`
 > (`jsonTypes`, three types); and `e2e-csp/csp.spec.ts` states the "cannot prove delivery" limit
 > at `:213-221` and points back here at `:234`. The `:166`, `:69` and `:175-181` figures in the
 > 2026-09-10 note below have drifted for that reason alone.
@@ -2408,7 +2408,7 @@ observation on the host, not by a test.
 > Counted: the unit suite really is **20** cases (13 `it` plus an `it.each` of 7 at `:194`). The
 > parser registration is **three** content types, not two (`app-setup.ts:69` adds
 > `application/reports+json`) — the row understates itself. `nginx.conf:112-115` and `:136` emit both
-> directives, and the read route is `staff.controller.ts:166`.
+> directives, and the read route is `staff.controller.ts:199` (was `:166`, re-read 2026-11-07).
 >
 > **One footnote was stale in tense** — it said the parser fix "is filed separately as #231" while
 > #231 **closed on 2026-09-02** under ADR-0124, the fix being live at `doc-register.mjs:93-94,:120`.
@@ -2596,7 +2596,7 @@ same place. Recorded here so the next reader meets the conflict rather than the 
 > **Restatused to `standing` on 2026-09-09 for the same reason as #118a: a recorded consequence, not
 > owed work.** Still exactly true — `retention-policy.ts:74-75` sweeps on `last_seen_at` at 30 days
 > with the consequence stated in its own docblock at `:60-73` (re-read 2026-10-26), and the guard against "tightening" it
-> is live as a test: `retention-sweep.e2e-spec.ts:97`, _"KEEPS a violation that is old but still
+> is live as a test: `retention-sweep.e2e-spec.ts:98` (was `:97`, re-read 2026-11-07), _"KEEPS a violation that is old but still
 > being reported"_.
 
 Carried forward from #118 item 1 unchanged, because building the sweep neither fixed it nor made it
@@ -5977,7 +5977,7 @@ There is no `@Post`, `@Put`, `@Patch` or `@Delete` anywhere in `apps/api/src/mod
 controller has six `@Get` routes and nothing else. Verified by grep, 2026-09-07.
 
 **That paragraph went stale the same week and the row's claim did not — 2026-09-10.** The staff
-module now has a write: `staff.controller.ts:324` (was `:252`), `@Post('probe-results')`, shipped by ADR-0128 as
+module now has a write: `staff.controller.ts:359` (was `:324`, re-read 2026-11-07), `@Post('probe-results')`, shipped by ADR-0128 as
 the console's canvas benchmark. So "no `@Post` anywhere" is false, while **the row's actual subject
 — the "send a test message" route ADR-0086 D6 describes as existing — is still not built**. The
 distinction matters because the stale sentence is the one a reader would run, and finding a `@Post`
@@ -6770,7 +6770,7 @@ re-derive the diagnosis from four confusing failures.
 > reading is the obvious one: see `#302`, where the general rule was measured, drafted, and then
 > rejected on exactly this row.
 >
-> _(Re-read 2026-10-26: the port guard's loop is now `scripts/e2e-local.sh:214`, and
+> _(Re-read 2026-10-26: the port guard's loop is now `scripts/e2e-local.sh:224` (was `:214`, re-read 2026-11-07), and
 > `apps/web/package.json` declares **51** `test:e2e:*` scripts beside the base journey, so the
 > `43 of 44` denominator would read 51 of 52 today. The line cite and count above were exact on
 > their date.)_
@@ -8531,7 +8531,7 @@ has become a tripwire.
 
 ### 342. A client's plan count was built, measured, and withdrawn — two remedies, neither applied
 
-**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-26 (by reading `ClientDetail` in `packages/types/src/index.ts:300-303`, which carries `projectCount` and no `planCount`)
+**Status:** open · **Raised:** 2026-09-17 (ADR-0146 M5-T2, by FC-9) · **Verified:** 2026-10-26 (by reading `ClientDetail` in `packages/types/src/index.ts:435-438`, which carries `projectCount` and no `planCount`)
 
 `ClientDetail` carries `projectCount` and deliberately **no** plan count, because a count of plans
 across a client's projects has no stable query plan. Measured on a diluted local estate (500
@@ -9336,10 +9336,10 @@ A ZIP writes its entries one after another, so a table's JSON file and its CSV f
 
 ### 517. The organisation export's throttle is per address and runs before sign-in, and a slow client holds a snapshot
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`apps/api/src/app.module.ts:160-163`, guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`apps/api/src/app.module.ts:165-166` (was `:160-163`, re-read 2026-11-07), guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
 **Raised:** 2026-10-14 (organisation export M2 review) · **Size:** S · **Owner:** api
 
-Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:161-162`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
+Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:165-166`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
 
 **Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.
 
