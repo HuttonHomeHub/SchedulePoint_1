@@ -12,6 +12,7 @@ import {
   PROMOTION_STAGE_REMS,
   PROMOTION_STAGES,
   promotionStageQuery,
+  SQUAT_CONTAINER,
   SQUAT_MAX_HEIGHT_REM,
   SQUAT_QUERY,
 } from './breakpoints';
@@ -58,8 +59,17 @@ describe('designedMinWidthPx', () => {
 describe('SQUAT_QUERY', () => {
   const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
 
-  it('is declared as the stylesheet’s `squat` variant, word for word', () => {
-    expect(globals).toContain(`@custom-variant squat (@media ${SQUAT_QUERY});`);
+  it('is declared as a container query on the shell frame, not a media query', () => {
+    expect(globals).toContain(`@container ${SQUAT_CONTAINER} ${SQUAT_QUERY}`);
+    expect(globals).not.toContain('@custom-variant squat (@media');
+  });
+
+  it('has a frame that is a named size container exactly the window high', () => {
+    // Parsed as a block, so reordering its two declarations stays green. Without `height: 100dvh`
+    // size containment makes the frame 0 px high and `squat` matches in every window under 64rem.
+    const block = /@utility shell-frame\s*\{([^}]*)\}/.exec(globals)?.[1] ?? '';
+    expect(block).toMatch(new RegExp(`container:\\s*${SQUAT_CONTAINER}\\s*/\\s*size\\s*;`));
+    expect(block).toMatch(/height:\s*100dvh\s*;/);
   });
 
   it('is narrow by exactly the floor’s width and short by its own constant', () => {

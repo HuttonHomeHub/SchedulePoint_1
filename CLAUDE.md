@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 29 API modules
-> (`apps/api/src/modules/`), 43 Prisma models across 83 migrations, 1922 web
+> (`apps/api/src/modules/`), 43 Prisma models across 83 migrations, 1923 web
 > source files with 49 Playwright suites beside the base journey, and
 > 212 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -587,7 +587,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0182** _(Accepted; amends ADR-0143)_ — A page grid splits on the width it has → [`0182-a-page-grid-splits-on-the-width-it-has.md`](docs/adr/0182-a-page-grid-splits-on-the-width-it-has.md)
 - **ADR-0183** _(Accepted; amends ADR-0118; D7 amended by ADR-0188)_ — A row grows with the finger it holds, and the Gantt is the named exception → [`0183-a-row-grows-with-the-finger-it-holds.md`](docs/adr/0183-a-row-grows-with-the-finger-it-holds.md)
 - **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A row's subject wraps; it never clips → [`0184-a-rows-subject-wraps-it-never-clips.md`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)
-- **ADR-0185** _(Accepted; amends ADR-0031, ADR-0091 D3, ADR-0100 and ADR-0109 D1; D3 and D8 V1–V4 amended by ADR-0189)_ — The toolbar promotes what fits, and says what moved → [`0185-the-toolbar-promotes-what-fits-and-says-what-moved.md`](docs/adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md)
+- **ADR-0185** _(Accepted; amends ADR-0031, ADR-0091 D3, ADR-0100 and ADR-0109 D1; D3 and D8 V1–V4 amended by ADR-0189; D5 amended by ADR-0213)_ — The toolbar promotes what fits, and says what moved → [`0185-the-toolbar-promotes-what-fits-and-says-what-moved.md`](docs/adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md)
 - **ADR-0186** _(Accepted; amends ADR-0094 D5; amended by ADR-0187)_ — The reason a conflict exists is stated on the object, and the toolbar chip stays a count → [`0186-the-reason-a-conflict-exists-is-stated-on-the-object.md`](docs/adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)
 - **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
 - **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
@@ -615,6 +615,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
 - **ADR-0211** _(Accepted)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
 - **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
+- **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

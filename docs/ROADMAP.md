@@ -675,6 +675,11 @@ built next.
   deduplicated row (no person, organisation, address or full URL) and expires it 30 days after it was last
   reported. M2 adds the reporter in the browser; M3 adds the staff console's "Screen crashes" section, which
   is what makes any of it visible.
+- **Large text and the foot bar** — **in progress** (M1 built on its branch 2026-11-07,
+  [ADR-0213](adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md), Proposed; spec and plan at
+  [`docs/specs/large-text-dock/`](specs/large-text-dock/), closing `docs/TECH_DEBT.md` #569). Under large text in a
+  1024 × 600 window the toolbar covered every strip at the foot of a plan; the shell now asks its own frame, in the
+  text size the reader has, whether it is short, so the page scrolls to the strip however the text was enlarged.
 
 **The argument the theme rests on**, and the reason it counts as security work rather than
 convenience: before it, every staff operation on this installation happened over `psql` and left

@@ -1,9 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page } from '@playwright/test';
+import { type CDPSession, type Page } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
 
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
+
+// Under a browser text-size setting (CDP below) a 1024 px window is 32 rem wide, which is under the
+// designed floor, so the viewport notice would take a banner row of its own and move every reading.
+test.use({ acknowledgeViewportNotice: true });
 
 /**
  * **The help sheet lists the finger gestures** (`docs/specs/long-press-hint/` M1).
@@ -119,10 +123,8 @@ async function press(page: Page, pointerType: 'mouse' | 'pen' | 'touch'): Promis
 }
 
 /**
- * Tab from the plan surface reaches both of the strip's buttons. This is the 200 % text check
- * (WCAG 1.4.4, no loss of function): at 1024 × 600 with text-only 200 % the toolbar fills the
- * viewport and covers every dock strip, so a pointer cannot reach it — a pre-existing workspace
- * condition (`docs/TECH_DEBT.md` #569), not this tip's — and the keyboard is what must still work.
+ * Tab from the plan surface reaches both of the strip's buttons. This is the keyboard half of the
+ * 200 % text check (WCAG 1.4.4, no loss of function); {@link probeStrip} is the pointer half.
  */
 async function tabReachesStrip(page: Page, tag: string): Promise<void> {
   await page.evaluate(() => {
@@ -146,22 +148,41 @@ async function tabReachesStrip(page: Page, tag: string): Promise<void> {
 }
 
 /**
- * The strip's two controls hit-testable at centre and corners (unless `pointerHit` is off, see
- * {@link tabReachesStrip}), and no sideways scroll on it or any ancestor. Returns the strip
- * height, recorded (ADR-0142) so the report shows what the foot row paid.
+ * The strip's two controls hit-testable at centre and corners **once scrolled into view**, and no
+ * sideways scroll on it or any ancestor.
+ *
+ * Under large text the shell is the scroller (`squat`, ADR-0213) and the band sits above a
+ * full-window body, so a control is first off-window and a planner scrolls to it: each control is
+ * scrolled into view (`block: 'nearest'`) and a frame passes before it is hit-tested. A tooltip left
+ * open by an earlier press is set to `pointer-events: none` so it cannot report a cover. The corner
+ * inset scales with the root size, because the controls' `rounded-md` radius is in rem: a fixed 4 px
+ * lies outside the arc at a 32 px root and reports a strip that is not there
+ * (`docs/specs/large-text-dock/m0-measurement.md`, correction 6).
+ *
+ * Returns the strip height and the foot row's top **before any scrolling**, recorded (ADR-0142) so
+ * the report shows what the reader saw at rest, not only what they reached.
  */
 async function probeStrip(
   page: Page,
   tag: string,
-  { pointerHit = true }: { pointerHit?: boolean } = {},
-): Promise<number> {
+): Promise<{ height: number; footTopAtRest: number }> {
   const message = page.getByText(TIP);
   await expect(message, `${tag}: the tip is up`).toBeVisible();
-  const report = await message.evaluate((el) => {
+  const report = await message.evaluate(async (el) => {
     let strip: HTMLElement = el.parentElement as HTMLElement;
     while (strip.parentElement && !strip.querySelector('button[aria-label="Dismiss this tip"]')) {
       strip = strip.parentElement;
     }
+    for (const tooltip of document.querySelectorAll<HTMLElement>('[data-tooltip]')) {
+      tooltip.style.pointerEvents = 'none';
+    }
+    const footTopAtRest = (
+      strip.closest<HTMLElement>('[data-activities-bar]') ?? strip
+    ).getBoundingClientRect().top;
+    const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const inset = (4 * rootPx) / 16;
+    const frame = (): Promise<void> =>
+      new Promise((resolve) => requestAnimationFrame(() => resolve()));
     const hits: Record<string, string[]> = {};
     const sizes: Record<string, [number, number]> = {};
     for (const name of ['Touch gestures', 'Dismiss this tip']) {
@@ -169,16 +190,16 @@ async function probeStrip(
         (b) => b.textContent?.trim() === name || b.getAttribute('aria-label') === name,
       );
       if (!control) throw new Error(`no ${name} control`);
+      control.scrollIntoView({ block: 'nearest' });
+      await frame();
       const r = control.getBoundingClientRect();
       sizes[name] = [r.width, r.height];
-      // 4 px in, not 2: the buttons are `rounded-md` (8 px), and a point 2 px in on the diagonal
-      // lies outside the arc, where the strip behind is correctly what a hit-test returns.
       const points: [number, number][] = [
         [r.x + r.width / 2, r.y + r.height / 2],
-        [r.x + 4, r.y + 4],
-        [r.right - 4, r.y + 4],
-        [r.x + 4, r.bottom - 4],
-        [r.right - 4, r.bottom - 4],
+        [r.x + inset, r.y + inset],
+        [r.right - inset, r.y + inset],
+        [r.x + inset, r.bottom - inset],
+        [r.right - inset, r.bottom - inset],
       ];
       hits[name] = points.map((p) => {
         const top = document.elementFromPoint(p[0], p[1]);
@@ -191,6 +212,7 @@ async function probeStrip(
     }
     return {
       height: strip.getBoundingClientRect().height,
+      footTopAtRest,
       hits,
       overflow,
       sizes,
@@ -204,11 +226,72 @@ async function probeStrip(
       expect(height, `${tag}: ${name} height`).toBeGreaterThanOrEqual(44);
     }
   }
-  for (const [name, hits] of pointerHit ? Object.entries(report.hits) : []) {
+  for (const [name, hits] of Object.entries(report.hits)) {
     expect(hits, `${tag}: ${name} centre and corners`).toEqual(Array(5).fill('self'));
   }
   for (const w of report.overflow) expect(w, `${tag}: no sideways scroll`).toBeLessThanOrEqual(0);
-  return report.height;
+  return { height: report.height, footTopAtRest: report.footTopAtRest };
+}
+
+/**
+ * **Large text by a browser setting**: CDP `Page.setFontSizes`, so `rem` media queries answer as they
+ * do for a real text-size preference (a CSS `html { font-size }` moves `rem` lengths and not `rem`
+ * media queries). Copied from `e2e-narrow-shell/narrow-shell.spec.ts`: a Playwright `testDir` is its
+ * own compilation root, and `promotion.spec.ts` and `month-labels.spec.ts` copy it the same way.
+ *
+ * The session is returned **attached** and the caller detaches it after the last assertion: the
+ * override lives in the DevTools agent's per-page state. The root is asserted `32px` before anything
+ * is measured, and applied once more if it still reads 16 px (the CI-defensive form of that file).
+ */
+async function setDefaultFontSize(page: Page, scale: 1 | 2): Promise<CDPSession> {
+  const cdp = await page.context().newCDPSession(page);
+  await applyDefaultFontSize(cdp, scale);
+  const wanted = `${String(16 * scale)}px`;
+  const read = (): Promise<string> =>
+    page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
+  await page.waitForTimeout(300);
+  if ((await read()) !== wanted) {
+    await applyDefaultFontSize(cdp, scale);
+    await page.waitForTimeout(300);
+  }
+  expect(await read(), `the root size reads ${wanted} under CDP scale ${String(scale)}`).toBe(
+    wanted,
+  );
+  return cdp;
+}
+
+async function applyDefaultFontSize(cdp: CDPSession, scale: 1 | 2): Promise<void> {
+  await cdp.send('Page.setFontSizes', {
+    fontSizes: {
+      standard: 16 * scale,
+      fixed: 13 * scale,
+      serif: 16 * scale,
+      sansSerif: 16 * scale,
+    },
+  } as never);
+}
+
+/**
+ * **Large text by a user style sheet's root size** (`html { font-size: 200% }`, here inline): `rem`
+ * lengths double and `rem` media queries do not. No browser setting produces it, but a user style
+ * sheet does, and it is what #569 reproduced under. `squat` is a container query on the shell frame
+ * (ADR-0213), so it answers in the root size in force and the shell must take its scrolling form
+ * here exactly as it does under the setting: asserted, because a frame that stopped answering would
+ * leave the band holding the window and every probe below reporting a cover.
+ */
+async function enlargeByRootSize(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '200%';
+  });
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe(
+    '32px',
+  );
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.querySelector('main#main')!.parentElement!).overflowY,
+    ),
+    'the shell takes its scrolling form under an inline 200 % root',
+  ).toBe('auto');
 }
 
 test('a finger raises the tip once; a mouse or pen does not; it never returns', async ({
@@ -230,18 +313,33 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   await press(page, 'touch');
   const fine = await probeStrip(page, 'fine 1024 x 600');
 
-  // Text-only 200 % (WCAG 1.4.4): still reachable, still no sideways scroll.
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = '200%';
-  });
-  const large = await probeStrip(page, 'fine 1024 x 600 at 200% text', {
-    pointerHit: false,
-  });
-  expect(large).toBeGreaterThanOrEqual(fine);
-  await tabReachesStrip(page, 'fine 1024 x 600 at 200% text');
-  await page.evaluate(() => {
-    document.documentElement.style.fontSize = '';
-  });
+  // Large text (WCAG 1.4.4, no loss of function) by a browser setting: every strip button takes a
+  // pointer press once scrolled to, and the keyboard still reaches it.
+  const cdp = await setDefaultFontSize(page, 2);
+  try {
+    const large = await probeStrip(page, 'fine 1024 x 600 at 200% text (browser setting)');
+    expect(large.height).toBeGreaterThanOrEqual(fine.height);
+    await tabReachesStrip(page, 'fine 1024 x 600 at 200% text (browser setting)');
+    await applyDefaultFontSize(cdp, 1);
+  } finally {
+    await cdp.detach();
+  }
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe(
+    '16px',
+  );
+
+  // The same by a user style sheet's root size: ADR-0213's guard for the route #569 was found on.
+  try {
+    await enlargeByRootSize(page);
+    const large = await probeStrip(page, 'fine 1024 x 600 at 200% text (root size)');
+    expect(large.height).toBeGreaterThanOrEqual(fine.height);
+    await tabReachesStrip(page, 'fine 1024 x 600 at 200% text (root size)');
+  } finally {
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '';
+    });
+  }
 
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
@@ -307,11 +405,27 @@ test('the tip is raised in the Gantt too, on a coarse pointer', async ({ browser
     await gantt.dispatchEvent('pointerdown', { pointerType: 'touch' });
     await gantt.dispatchEvent('pointerup', { pointerType: 'touch' });
     await probeStrip(page, 'coarse 1024 x 600, Gantt');
-    await page.evaluate(() => {
-      document.documentElement.style.fontSize = '200%';
-    });
-    await probeStrip(page, 'coarse 1024 x 600 at 200% text, Gantt', { pointerHit: false });
-    await tabReachesStrip(page, 'coarse 1024 x 600 at 200% text, Gantt');
+    const cdp = await setDefaultFontSize(page, 2);
+    try {
+      await probeStrip(page, 'coarse 1024 x 600 at 200% text (browser setting), Gantt');
+      await tabReachesStrip(page, 'coarse 1024 x 600 at 200% text (browser setting), Gantt');
+      await applyDefaultFontSize(cdp, 1);
+    } finally {
+      await cdp.detach();
+    }
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe(
+      '16px',
+    );
+    try {
+      await enlargeByRootSize(page);
+      await probeStrip(page, 'coarse 1024 x 600 at 200% text (root size), Gantt');
+      await tabReachesStrip(page, 'coarse 1024 x 600 at 200% text (root size), Gantt');
+    } finally {
+      await page.evaluate(() => {
+        document.documentElement.style.fontSize = '';
+      });
+    }
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])

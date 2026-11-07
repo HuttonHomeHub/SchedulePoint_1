@@ -32,8 +32,9 @@ export function designedMinWidthPx(): number {
 }
 
 /**
- * **`squat`** — narrow **and** short (`globals.css`, `@custom-variant squat`). Under it the command
- * band scrolls away with the page instead of holding the window (toolbar-redesign M3, CQ-3).
+ * **`squat`** — narrow **and** short (`globals.css`, `@custom-variant squat`), asked of the shell frame
+ * (ADR-0213). Under it the command band scrolls away with the page instead of holding the window
+ * (toolbar-redesign M3, CQ-3).
  * `breakpoints.test.ts` pins the stylesheet's query to these two constants, so the variant, the
  * notice and the shell cannot drift apart.
  *
@@ -41,12 +42,23 @@ export function designedMinWidthPx(): number {
  * band is a 88-156 px header plus the 44-52 px scrolling line plus a 3 px rule — about 135-211 px —
  * so at the #471 cells it is 37-43 % of 360 px and 53-82 % of 256 px. Larger than that and the
  * default narrow-shell window (640 x 480, 30 rem) would lose its held band for no reason: its band
- * is 28-32 % of it. In rem, so text-only 200 % zoom (a 1280 x 800 window at a 32 px default font
- * size is 40 x 25 rem) lands inside it.
+ * is 28-32 % of it. In rem of the root in force, so text-only 200 % zoom (a 1280 x 800 window at a 32 px
+ * root size is 40 x 25 rem), by a browser setting or a user style sheet, lands inside it.
  */
 export const SQUAT_MAX_HEIGHT_REM = 26;
 
-/** The media query `@custom-variant squat` is declared with. */
+/**
+ * The container `@custom-variant squat` queries: the shell frame (`.shell-frame` in `globals.css`,
+ * wrapped around the grid in `app-shell.tsx`), a size container exactly the window high (ADR-0213).
+ */
+export const SQUAT_CONTAINER = 'app-shell';
+
+/**
+ * The condition `@custom-variant squat` is declared with — a CONTAINER condition evaluated on the
+ * shell frame ({@link SQUAT_CONTAINER}), not a media query. Its `rem` is the root element's font
+ * size in force, so a user style sheet's 200 % lands a 1024 x 600 window inside it exactly as a
+ * browser text-size setting does.
+ */
 export const SQUAT_QUERY = '(width < 64rem) and (height <= 26rem)';
 
 /**

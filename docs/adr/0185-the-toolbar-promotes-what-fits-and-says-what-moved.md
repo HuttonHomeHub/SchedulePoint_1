@@ -4,7 +4,8 @@
   the decisions in spec §0.2 (OD-1 to OD-3) were made after M0 and M4, and the visual brief's open choices
   (the closing action, the row mark) after the M6 review. Close-out is M7. **Amended by ADR-0189** (2026-10-12): D3's Baseline overlay
   shows its word from 79 rem, and D8 V1 (row marks), V2 (the group pill), V3 (the hollow Author outline) and V4
-  (the closing action's outline) are replaced by dividers, tracks and no boxes.
+  (the closing action's outline) are replaced by dividers, tracks and no boxes. **D5 amended by ADR-0213** (2026-11-07): `squat` keeps its condition, rows and consumer but is
+  asked of the shell's own frame, in the root size in force, instead of by a media query.
 - **Spec:** [`docs/specs/toolbar-redesign/feature-spec.md`](../specs/toolbar-redesign/feature-spec.md)
   · **Plan:** [`implementation-plan.md`](../specs/toolbar-redesign/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/toolbar-redesign/m0-measurement.md) (the stop rule and the

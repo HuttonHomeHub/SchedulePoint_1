@@ -507,8 +507,9 @@ disclosure: a row that hides four facts behind a press has traded a width
 problem for a discoverability one.
 
 - **Below 1024 the command deck is one scrolling line, and a narrow-and-short window scrolls the whole shell**
-  (`squat`, `(width < 64rem) and (height <= 26rem)`; toolbar-redesign M3). The way back to a band scrolled away is the
-  foot strip or keyboard focus, and a keyboard-focused control is brought clear of the edge fade. At 1024 and up the deck
+  (`squat`, `(width < 64rem) and (height <= 26rem)` asked of the shell frame, `.shell-frame`, in the root size in
+  force; toolbar-redesign M3, ADR-0213). The way back to a band scrolled away is the
+  foot strip or keyboard focus, and a keyboard-focused control is brought clear of the edge fade. At 1024 and up (64 rem of the root in force) the deck
   never scrolls sideways and the band never scrolls away, whatever the height.
 
 ### A short body gives the whole workspace to the panel (ADR-0180)

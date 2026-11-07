@@ -1229,6 +1229,8 @@ async function bandFacts(page: Page): Promise<{
     return {
       share: height / window.innerHeight,
       scrollsAway: shell !== null && shell.scrollHeight > shell.clientHeight,
+      // The shell frame's container condition (ADR-0213) equals this media query in every cell this
+      // suite runs (100 % and CDP 200 %), and would not under an inline root size.
       squat: window.matchMedia('(width < 64rem) and (height <= 26rem)').matches,
       mainTop: (main?.getBoundingClientRect().top ?? 0) + (shell?.scrollTop ?? 0),
       scrollTop: shell?.scrollTop ?? 0,

@@ -35,17 +35,36 @@
    the 704 px is where the 219 px block stops being needed to fill the column). */
 @custom-variant short (@media (max-height: 44rem));
 
-/* `squat`: NARROW and SHORT — under `lg` (64rem) wide and at most 26rem (416 px) high. The shell's
-   command band scrolls away vertically here instead of holding the window (`app-shell.tsx`), because
-   a header that wraps to 88-156 px plus the deck's scrolling line cannot be held at 40 % of a window
-   this short: 640 x 360 is 144 px of budget and 320 x 256 is 102. Height is in rem so text-only 200 %
-   zoom moves it with the text: a 1280 x 800 window at a 32 px default font size is 40 x 25rem, which
-   is below `lg` and inside this height, and its band was 88 % of the window (fine) and 127 % (coarse)
-   before this variant existed (toolbar-redesign `m0-measurement.md` §8). 26rem and not larger so a
-   640 x 480 window (30rem), where the band is 28-32 % and the journeys sit, keeps the held band.
-   Never applies at `lg` and wider, whatever the height: a short wide window (1280 x 600) keeps its
-   two rows (CQ-3). The query is pinned by `breakpoints.test.ts` beside `SQUAT_MAX_HEIGHT_REM`. */
-@custom-variant squat (@media (width < 64rem) and (height <= 26rem));
+/* `squat`: NARROW and SHORT — under `lg` (64rem) wide and at most 26rem (416 px) high, asked of the
+   SHELL FRAME (`.shell-frame`, below) and not of the window. The shell's command band scrolls away
+   vertically here instead of holding the window (`app-shell.tsx`), because a header that wraps to
+   88-156 px plus the deck's scrolling line cannot be held at 40 % of a window this short: 640 x 360
+   is 144 px of budget and 320 x 256 is 102. Height is in rem, and a `rem` in a container query is the
+   root element's ACTUAL font size, so text-only 200 % zoom moves it with the text however it was
+   made: a browser setting and a user style sheet's `html { font-size: 200% }` both land a 1024 x 600
+   window at 32 x 18.75rem, inside it. A media query could not say that — it answers `rem` at the
+   browser's initial 16 px, so the style-sheet route left the band holding a window it could not fit
+   (#569, ADR-0213). 26rem and not larger so a 640 x 480 window (30rem), where the band is 28-32 % and
+   the journeys sit, keeps the held band. Never applies at `lg` and wider, whatever the height: a
+   short wide window (1280 x 600) keeps its two rows (CQ-3). Matches only INSIDE `.shell-frame`; a
+   `squat:` class outside it never matches, which `app-shell.test.tsx` pins. The query is pinned by
+   `breakpoints.test.ts` beside `SQUAT_MAX_HEIGHT_REM`. */
+@custom-variant squat {
+  @container app-shell (width < 64rem) and (height <= 26rem) {
+    @slot;
+  }
+}
+
+/* The shell frame (`app-shell.tsx`): the named size container `squat` queries, exactly the window
+   high. `height: 100dvh` is load-bearing — size containment makes an auto-height block 0 px high,
+   so without it the container's height is 0 and `squat` matches in every window under 64rem. It is a
+   dedicated wrapper and never `#root`, which also hosts the public screens, the auth shell and the
+   guest view; they scroll the document and size containment there would change every one of them. The
+   shell grid inside is already `h-dvh`, so the frame adds a box of the same size at the same origin. */
+@utility shell-frame {
+  container: app-shell / size;
+  height: 100dvh;
+}
 
 /* `wide`: 100rem (1600 px). The deck's search field is 240 px from here and 168 below, so the product
    owner's 1646 and 1912 displays keep the field they were designed with
