@@ -1,6 +1,6 @@
 # Feature Spec: Telling a touch user about press-and-hold
 
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown.; shipped — built on `feat/touch-gestures-sheet` and `feat/touch-gesture-tip` (PR number to be filled at merge; no ADR was proposed, so the header stays Approved).
+- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown.; shipped — built on `feat/touch-gestures-sheet` and `feat/touch-gesture-tip` (#1258, released in `web` 0.201.0; no ADR was proposed, so the header stays Approved).
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-11-01
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #211, first surviving item ("The touch long-press has no visible affordance and no documentation a user would find")
