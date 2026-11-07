@@ -422,14 +422,15 @@ keep `main` releasable.
   lags were converted to working time on their lag calendar, each conversion recorded, and every
   linked plan is recalculated once, upstream first, when the API starts.
 
-- **A plan keeps the instant beside the date, and a cross-plan link reads it** — **in progress**
-  (M1 landed on its branch 2026-11-07, [ADR-0212](adr/0212-a-plan-keeps-the-instant-beside-the-date.md),
-  Proposed; spec and plan at [`docs/specs/cross-plan-instants/`](specs/cross-plan-instants/), closing
-  `docs/TECH_DEBT.md` #565). A plan stores only the day for a milestone, and a day cannot tell a Friday
-  16:00 from the Sunday 19:00 weekend work ended at, so a link into a milestone next to weekend work read
-  a week late, and a link from work finishing mid-day read the end of that day. The engine now reports the
-  four instants its dates come from and the derivation can read them; the schedule write and the switch
-  that turns the read on follow, so nothing a planner sees has changed yet.
+- **A plan keeps the instant beside the date, and a cross-plan link reads it** (shipped 2026-11-07,
+  [ADR-0212](adr/0212-a-plan-keeps-the-instant-beside-the-date.md); spec and plan at
+  [`docs/specs/cross-plan-instants/`](specs/cross-plan-instants/); closed `docs/TECH_DEBT.md` #565).
+  A plan stored only the day for a milestone, and a day cannot tell a Friday 16:00 from the Sunday 19:00
+  weekend work ended at, so a link into a milestone next to weekend work read a week late, and a link from
+  work finishing mid-day read the end of that day. A recalculation now keeps the instants beside the dates
+  and a cross-plan link reads them, so linked dates move earlier and float returns; linked plans are
+  recalculated once when the API starts. A plan linked later to an unrecalculated upstream reads its date
+  until that upstream is recalculated (#571).
 
 - **A finish milestone is dated by the day it closes** (ADR-0155, amending ADR-0023 §4). After a
   task ending Friday, a finish milestone now reads Friday, not the following Monday, which is how P6

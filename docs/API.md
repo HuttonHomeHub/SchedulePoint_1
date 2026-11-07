@@ -549,15 +549,17 @@ scheduling calendar, inheriting from **its own** plan; `TWENTY_FOUR_HOUR` is ela
   created with `lagMinutes`** — the request accepts whole `lagDays` only, so no sub-day cross-plan
   lag can be written.
 
-The derived bound is now the engine's own link arithmetic on absolute instants: an upstream finish
-is read as the **end** of its day, the lag walks working time on its calendar, FF/SF durations walk
-the successor's own calendar, and a Level-of-Effort endpoint contributes no bound (and is not
-counted as a never-calculated upstream). So a downstream plan's dates equal the dates the same link
-gives inside one plan, for upstream activities that finish on a day boundary. **Linked plans'
-dates change**: most downstream plans move later, and upstream plans lose float, by the amounts the
-old whole-calendar-day arithmetic hid. Two residuals remain and are documented, not fixed: an
-upstream that finishes mid-day is read as the end of that day (persisted dates carry no time), and
-a hand-placed upstream bounds its downstream on its placed dates in both passes (ADR-0148 M-H).
+The derived bound is now the engine's own link arithmetic on absolute instants: the lag walks working
+time on its calendar, FF/SF durations walk the successor's own calendar, and a Level-of-Effort endpoint
+contributes no bound (and is not counted as a never-calculated upstream). A recalculation persists the
+placed and late instants each activity is dated from (ADR-0212), and a cross-plan link reads them, so a
+downstream plan's dates equal the dates the same link gives inside one plan, including at a milestone next
+to weekend work and at work finishing mid-day. A remote plan with no current instants is read as its dates
+were before: an upstream finish is the end of its day. **Linked plans' dates change**: most downstream
+plans move earlier, and upstream plans regain float, and every linked plan is recalculated once, upstream
+first, when the API starts. Residuals, documented and not fixed: a hand-placed upstream bounds its
+downstream on its placed dates in both passes (ADR-0148 M-H), and a finish milestone on a different
+calendar from the plan keeps the upstream plan's own float basis (ADR-0212 D7).
 
 ### Cross-plan revision comparison
 

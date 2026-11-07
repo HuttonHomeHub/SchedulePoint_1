@@ -1,6 +1,6 @@
 # Feature Spec: A plan keeps the instant beside the date, so a cross-plan link reads what one plan keeps
 
-- **Status:** Approved 2026-11-07 (product owner; Q1 B — milestones and part-day finishes; Q2 A — recalculate linked plans once at first start)
+- **Status:** Accepted — shipped (ADR-0212)
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-07
 - **Tracking issue / epic:** [`docs/TECH_DEBT.md`](../../TECH_DEBT.md) #565 (build approved by the product

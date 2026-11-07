@@ -1,7 +1,7 @@
 # Implementation Plan: A plan keeps the instant beside the date, so a cross-plan link reads what one plan keeps
 
 - **Feature spec:** [`feature-spec.md`](./feature-spec.md)
-- **Status:** Approved 2026-11-07 (product owner; Q1 B — milestones and part-day finishes; Q2 A — recalculate linked plans once at first start)
+- **Status:** Accepted — shipped (ADR-0212)
 - **Owner:** api (builder agent, with database-architect for M2)
 
 ## Breakdown
