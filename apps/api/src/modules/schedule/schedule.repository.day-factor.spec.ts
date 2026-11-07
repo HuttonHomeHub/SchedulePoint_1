@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { ValidationError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
 
-import { ScheduleRepository } from './schedule.repository';
+import { SCHEDULE_DATE_OUT_OF_RANGE, ScheduleRepository } from './schedule.repository';
 
 /** One engine result, minutes as the engine emits them. */
 function result(
@@ -290,5 +291,38 @@ describe('writeResults — the schedule instants are arguments 26 to 29', () => 
       ),
     ).rejects.toThrow(/lateFinishInstant is not a whole minute/);
     expect(captured).toHaveLength(0);
+  });
+
+  it('refuses an instant past the int4 range with a 422, not an opaque database error', async () => {
+    for (const bad of [2_147_483_648, -2_147_483_649]) {
+      const { captured, tx } = capturing();
+      const attempt = repo.writeResults(
+        'org-1',
+        'plan-1',
+        [{ ...result('a', 0), placedFinishInstant: bad }],
+        new Map(),
+        tx as never,
+      );
+      await expect(attempt).rejects.toBeInstanceOf(ValidationError);
+      await expect(attempt).rejects.toMatchObject({
+        details: { reason: SCHEDULE_DATE_OUT_OF_RANGE },
+      });
+      expect(captured).toHaveLength(0);
+    }
+  });
+
+  it('accepts the int4 limits themselves', async () => {
+    const { captured, tx } = capturing();
+    await repo.writeResults(
+      'org-1',
+      'plan-1',
+      [
+        { ...result('a', 0), placedStartInstant: -2_147_483_648 },
+        { ...result('b', 0), lateFinishInstant: 2_147_483_647 },
+      ],
+      new Map(),
+      tx as never,
+    );
+    expect(captured).toHaveLength(1);
   });
 });

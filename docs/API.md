@@ -1385,6 +1385,14 @@ two 500ed and the last three still did — the enumeration is now computed
 is carried **only when it is unambiguous** (the plan schedules everything on one calendar);
 otherwise it is `null` rather than a guess (ADR-0076).
 
+### `SCHEDULE_DATE_OUT_OF_RANGE` (422)
+
+A recalculation stores four absolute instants per activity as whole minutes since 1970 in an `int4`
+(ADR-0212), which holds about 4,083 years. A constraint dated far in the future (the DTO accepts any
+four-digit year) can push a scheduled date past the year 6050; **recalculate** then answers 422
+`SCHEDULE_DATE_OUT_OF_RANGE` with the plan id, where it would otherwise have been an opaque 500 from
+the database. Nothing is written.
+
 ### `CALENDAR_HAS_NO_WORKING_TIME` (422)
 
 A calendar with an empty week and no working exceptions has no working time at all. It is a valid

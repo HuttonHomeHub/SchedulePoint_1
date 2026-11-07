@@ -139,6 +139,7 @@ import {
 import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
 import { resolveRemainingMinutes } from './remaining-duration';
 import {
+  SCHEDULE_DATE_OUT_OF_RANGE,
   ScheduleRepository,
   type EarnedValueCostSnapshot,
   type ScheduleActivityRow,
@@ -234,6 +235,9 @@ export const SCHEDULE_ERROR = {
    * synchronously in one request (ADR-0045: M2 is a synchronous, bounded solve; a background/queued
    * programme recalc is the deferred next slice). */
   PROGRAMME_TOO_LARGE: 'PROGRAMME_TOO_LARGE',
+  /** A scheduled instant would overflow its `int4` column (about the year 6050): a constraint date
+   * far in the future. Raised in `writeResults` (ADR-0212), where the value is first stored. */
+  SCHEDULE_DATE_OUT_OF_RANGE,
 } as const;
 
 /**

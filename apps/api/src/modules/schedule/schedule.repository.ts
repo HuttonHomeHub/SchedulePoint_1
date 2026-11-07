@@ -14,6 +14,7 @@ import {
 
 import { lockActivityRowsInIdOrder } from '../../common/db/activity-row-lock';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
+import { ValidationError } from '../../common/errors/domain-errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { loadDrivingResourceCalendarRows } from '../activities/driving-calendars';
 import { liveAssignmentWhere } from '../activities/live-assignment';
@@ -26,6 +27,11 @@ import {
   leveledFinishSql,
   placedFinishSql,
 } from './placed-finish';
+
+/** The machine-readable reason of the 422 for a scheduled instant that overflows its `int4` column. */
+export const SCHEDULE_DATE_OUT_OF_RANGE = 'SCHEDULE_DATE_OUT_OF_RANGE';
+const INT4_MAX = 2_147_483_647;
+const INT4_MIN = -2_147_483_648;
 
 /**
  * What the engine reads of an activity. Exported because it is the definition of a scheduling
@@ -947,6 +953,17 @@ export class ScheduleRepository {
         if (!Number.isSafeInteger(v)) {
           throw new Error(
             `Schedule instant ${name} is not a whole minute (${v}) for plan ${planId}.`,
+          );
+        }
+        // `int4` holds ±2^31 minutes, i.e. 1970 ± ~4,083 years, yet the DTO accepts any four-digit
+        // year, so a constraint dated 9999 walks the engine past it. That is a planner's date, not
+        // a server fault: refuse it with a 422 that names the limit rather than let Postgres answer
+        // "integer out of range" as an opaque 500.
+        if (v > INT4_MAX || v < INT4_MIN) {
+          throw new ValidationError(
+            'A scheduled date falls beyond the year 6050, which a recalculation cannot store. ' +
+              'Check the constraint dates and the durations of the plan.',
+            { reason: SCHEDULE_DATE_OUT_OF_RANGE, planId },
           );
         }
         return v;
