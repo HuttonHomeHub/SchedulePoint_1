@@ -3,48 +3,54 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-01 (early hours). The owner asked for a hand-off check (everything matched GitHub: `api` 0.103.4
-and `web` 0.200.6 on #1228, both publish jobs passed in run 41226850290, #1227 to #1231 merged, no PRs open), then for a
-short list of what to build next. They chose all four offered rows, **#564**, **#547**, **#556 plus the pointer drift**
-and **#546**; all four are merged and released as **`web` 0.200.7** (Version Packages #1235). **No `api` release**: none
-of the four touched `apps/api`, so there was no `api` changeset, no `api` tag and no `api` publish job (`api` stays
-0.103.4). None needed a spec (each stayed inside its row and added no new surface, ADR-0105) and none touched the
-schema. The owner's **hard rule** still stands: nothing that needs them to test, measure or check anything on their
-server or devices (a decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call
-(ADR-0190). **The P6 epic stays closed for what shipped (M0 to M4); M5 and M6 still wait for a real P6 export**, so do
-not offer them.
+**Written:** 2026-11-07. The session began on 2026-11-01 (hand-off check: everything matched GitHub, `web` 0.200.7 and
+`api` 0.103.4), the owner chose **all eight** offered rows, then the session sat idle for **six days** (a builder hit a
+usage limit and the wake-up chain died with it) until the owner typed "Continue" on 2026-11-07. Everything chosen is
+merged and released as **`web` 0.201.0** and **`api` 0.104.0** (Version Packages #1243, tags `web-v0.201.0` and
+`api-v0.104.0`, Release run 42373611861). The owner's **hard rule** still stands: nothing that needs them to test,
+measure or check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**;
+that stays the owner's call (ADR-0190). **The P6 epic stays closed for what shipped (M0 to M4); M5 and M6 still wait for
+a real P6 export**, so do not offer them.
 
 ## The owner's answers this session (2026-11-01)
 
-- **Build:** all four: "Readable shaded cards (#564)", "Swimlane position kept (#547)", "Docs tidy-up (#556 +
-  pointers)" (the three recommended) and "Export legend check (#546)".
-- **Engineering decisions taken by the session (not asked):** the Combobox listbox name is derived from `toggleLabel`
-  ("Show codes" → "Codes", capitalised; no new prop); a shaded radio card dims its title row by opacity and leaves the
-  reason at full contrast; the editor's re-file reports the save first and stores the lane last; `planReparentLanes`
-  keeps its `removed` guard although no layout was found where it changes the answer.
+- **Build:** all eight: #551 (crash reports), #554 (import calendars), #561, #211 (long-press hint), #545, #557,
+  #555, #548 + #358. Then, when #555's new tests found a real cross-plan defect (#565), **"fix it in this batch"**.
+- **#551 spec:** every recommended answer: signed-in people only; the console's top line says "Needs attention" while
+  any crash was reported in the last 7 days; the fallback shows "This problem has been reported. Reference: XXXXXX."
+  only when the report arrived; only errors that break the screen.
+- **#554 spec:** keep the library crew and say in the report that the file's hours differ; no clean-up of copies
+  earlier imports left.
+- **#211 spec:** the tip stays until dismissed, then never returns on that device; rename the sheet "Diagram/Gantt
+  shortcuts and gestures"; the Touch section is always shown.
+- **#561:** "Leave the rows as they are" (24 px; closed by decision, in `docs/DECISIONS.md`).
+- **Engineering decisions taken by the session (not asked):** #554 Q2 (a crew calendar an activity also uses stays
+  shared; row #568); the export format stays 2.3 for the new excluded `crash_reports` table; the account-menu item is
+  the neutral "Shortcuts and gestures" (the header cannot know the view; the sheets keep the owner's names); no
+  double-tap row in the Touch section (unverifiable); the tip appears on touch completion, not touch-down; the
+  crash cleaner keeps only scheme + host of a URL; the 200 %-text pointer gap is recorded (#569), not fixed here;
+  **#551 shipped as one PR** (four milestones, reviewed as a stack) rather than one PR per task.
 
 ## Where things stand
 
-- **Latest releases:** `web` **0.200.7** (tag `web-v0.200.7`), Version Packages #1235, `Release` run 41259363670: "Build & push web" passed; "Build & push api" ran and skipped every step (no `api` release). `api` is still **0.103.4** (tag `api-v0.103.4`, #1228).
-- **This session's PRs, in merge order:**
-  - **#1232** `docs(docs)` (#556 + pointer drift): `docs/DEPLOYMENT.md` has "Rolling back past the progressed-predecessor
-    release"; rows #121, #202, #211, #263, #320, #358 and #366 re-pointed and verified 2026-10-31. **#211's "dormant"
-    premise no longer holds** (`labelVisibility: 'never'` is set at 13 production sites), recorded in the row; status
-    unchanged. **#358** now counts 12 sites in 8 files, not 9.
-  - **#1233** `fix(web)` (#564): `RadioCardGroup` dims only a shaded card's title row (reason ~6.0:1 on the card, 4.65:1
-    on the page background); `Combobox`'s listbox is named apart from its toggle via `listboxNameFor`. Reviewed by
-    accessibility-reviewer and component-reviewer before release (ADR-0111).
-  - **#1234** `fix(web)` (#546): `data-chrome="legend"` and `data-chrome="strip-caption"` are on the export chrome
-    roster; ADR-0200's Consequences note amended in place.
-  - **#1236** `fix(web)` (#547): the editor's General save (when `parentId` changes) and Dissolve store the movers'
-    swimlane lanes through the shared `useStoreReparentLanes`; census pinned. ADR-0206's known-gaps sentence updated.
-  - **#1235** Version Packages (the one release, `web` only).
-- **The P6 epic:** M0 to M4 shipped and recorded in ADR-0210. **M5 and M6 wait for a real P6 export** that uses activity
-  codes (`m0-record.md`); the approved `plan.md` M5/M6 is their spec.
-- **Pointer drift:** cleared (#1232). None outstanding from the 2026-10-31 pass.
-- **New, no row (from #1236's review):** `ActivityEditorDialog.tsx` now imports `@/features/wbs` (feature-to-feature,
-  an existing direction already used by `ActivitiesTable.tsx`); a seam would remove it. Cosmetic; not worth a row
-  unless #548's tidy-up runs.
+- **Latest releases:** `web` **0.201.0** and `api` **0.104.0** (Version Packages #1243, `caccdc18`).
+- **This batch's PRs, in merge order:** #1238 (the three approved specs), #1239 (#545 run lock), #1240 (#557
+  redundant-link narrowing), #1241 (#561 decision), #1242 (#555 weekend twin; filed #565), #1244 (#565 part: a
+  timed cross-plan start on a zero-span activity is not re-rolled), #1245 (#548 + #358, ADR-0026 §8 amended), #1256
+  (#554, ADR-0208 D7), #1257 (#551 crash reports, ADR-0211, the `crash_reports` table), #1258 (#211 long-press hint),
+  #1243 (release).
+- **New rows:** **#565** (narrowed, open: five cross-plan cases a stored date cannot express; the fix needs instant
+  columns, i.e. a spec and database-architect — ADR-0161's deferred item), **#566** (an MSPDI report contradicts
+  itself about a resource calendar's tier), **#567** (a code-matched resource silently drops the file's rate),
+  **#568** (a crew calendar an activity also uses stays in the shared library), **#569** (at text-only 200 % in
+  1024 × 600 the toolbar covers the viewport, so no dock strip can be hit by pointer; keyboard reaches them).
+- **Closed:** #545, #548, #358, #551, #554, #555, #557, #561 (by decision); #211's long-press item (the row stays open
+  on its export-strip item, size S ×1).
+- **Dependabot #1246 to #1255** opened during the six-day gap and were **not touched**; offer them to the owner.
+- **Defects found and fixed on the way (in #1258):** the activities panel header overflowed 3 px at 1024 × 600 / 200 %;
+  dismissing any dock strip in the panel-takes-body layout dropped focus to `<body>` (fixed for every strip).
+- **The new table:** `crash_reports` (migration `20261101120000_crash_reports`) is the fourth retention table (30 days
+  after last seen). The staff console shows it as **Screen crashes**; it receives reports only from signed-in screens.
 
 ## The reconciliation pass (2026-10-31)
 
@@ -126,6 +132,8 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-10-31: ADR-0210's outline as written; the export gap is reported ("say so in the report").
 - 2026-10-31 (evening): build #549 and #552, plus #560 (over "none for now"); #564, the pointer list, #562 and
   #563 not taken.
+- 2026-11-01: build all eight (#551, #554, #561, #211, #545, #557, #555, #548 + #358) and fix #565 in the batch; the
+  three specs with every recommended answer; #561 "leave the rows as they are".
 
 ## Parked by the owner — keep, do not raise
 
@@ -207,23 +215,31 @@ owner returns to one, the steps are ready:
 ## Suggested next
 
 **The P6 epic is closed for what shipped.** Nothing in it is buildable until a real P6 export with activity codes
-arrives (M5 keeps them on import; M6 writes them to an XER, with the reader released first, ADR-0156 D9). Never on
-guessed column names (ADR-0071 §5).
+arrives (M5 keeps them on import; M6 writes them to an XER, with the reader released first, ADR-0156 D9).
 
 - Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
-  `docs/BACKLOG.md` has nothing buildable today (every entry has shipped, waits on an outside trigger, or is P6), so
-  the list comes from `docs/TECH_DEBT.md`.
-- Small open rows checked 2026-10-31/11-01 as still real and not yet offered or taken: **#554** (an import's unused
-  calendar copy; needs a spec), **#551** (a browser crash reaches nobody; needs a channel, so likely an owner
-  decision), **#555** (the cross-plan twin has no weekend calendar; on a trigger), **#548** (`features/tsld` imports
-  other features). **#561** is closed by decision (2026-11-01).
-  **#562** and **#563** stay on their own triggers.
-- **#211** may be worth re-offering: its long-press finding now reaches 13 icon-only production items, not two.
-- The next reconciliation pass is due at the next epic boundary (last full pass 2026-10-31).
+- **Worth offering:** **#565**'s remaining cases (a spec and database-architect: store the instant a cross-plan link
+  reads); **#569** (the 200 %-text toolbar covering the dock; needs a spec, it is a layout change); **#566** and
+  **#567** (small import fixes); the **Dependabot PRs #1246 to #1255**.
+- **#562**, **#563** and **#568** stay on their own triggers.
+- The next reconciliation pass is due now (an epic boundary; last full pass 2026-10-31).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
 ## Environment notes a new session would otherwise rediscover
+
+- **2026-11-01/07 lessons:**
+  - **Too many parallel agents starve the machine.** With 8 to 11 agents at once, every `pnpm prepush` hit 5 s test
+    timeouts and web lint was killed for memory. Run final prepush serially, one at a time, when builders are idle.
+  - **A builder that hits a usage limit stops silently, and a wake-up that fires while nobody responds is lost** — the
+    session sat idle six days. If the chain dies, re-arm on the next turn and resume the stopped agent with SendMessage.
+  - **Squash a long branch before rebasing it** when its commits renumber register rows mid-way; replaying them one by
+    one conflicts at every step. A PR is squash-merged anyway.
+  - **Two parallel branches will both take the next TECH_DEBT number.** Assign row numbers centrally before builders
+    file rows.
+  - **A worktree an agent left behind can hold staged files**; `git checkout` into it aborts and later checks run on
+    stale state. `git reset --hard` it first (agent worktrees only).
+  - **The Version Packages PR refreshes after each merge**; read its files only after the last merge's refresh.
 
 - **Run every e2e suite that touches what you changed, not just the suite named in the plan.** Two
   CI reds this session came from suites nobody ran locally: View ▾'s height is asserted in
