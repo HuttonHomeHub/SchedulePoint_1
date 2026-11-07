@@ -77,9 +77,9 @@ The frontend is not a blank slate; most "new" structure has a precedent.
 - **Swimlanes reach the canvas only through `projectSwimlanes`**
   (`features/tsld/render/project-swimlanes.ts`), and `deriveDiagramSource` feeds both screen and export
   (ADR-0206 B1–B2). The gutter is a left reservation in the band model, and the gutter and ruler carry
-  `data-chrome` under the `EXPORT_CHROME_INPUTS` roster (B4–B5). `features/tsld` importing other features
-  breaks ADR-0026 §8 and is tracked as `docs/TECH_DEBT.md` #548; do not add a new such import without
-  saying so.
+  `data-chrome` under the `EXPORT_CHROME_INPUTS` roster (B4–B5). `features/tsld` imports only the
+  features ADR-0026 §8 (as amended 2026-11-01, `docs/TECH_DEBT.md` #548) names, and ESLint refuses
+  an import of `features/activities`; do not add another cross-feature import without amending §8.
 
 Propose the smallest structure that fits these. If you are adding a third of
 something, extract the primitive; if you are adding a first, don't.

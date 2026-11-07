@@ -10,6 +10,66 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-07 — The reconciliation pass (last full pass 2026-10-31)
+
+**Why now.** Product-owner approval on 2026-11-07, one week after the previous pass, over the batch that shipped
+in between (ADR-0211 browser crash reports, ADR-0208 D7, the `features/tsld` import refactor, the eight-row
+batch released as `web` 0.201.0 and `api` 0.104.0, and the first #565 milestones). `check:reconcile-due` did not
+fire: it warns that this is a shallow clone and skips its ADR count, so the trigger was the approval. The pass
+ran over `origin/main` at `5ab4811c`; the #565 (cross-plan instants) and #569 (large-text dock) work still on
+open branches was left alone by instruction, as were the banner counts in `CLAUDE.md` and `README.md`, the
+hand-off file and the owner's parked items.
+
+**Found wrong, and corrected in place.**
+
+- **The agent policing security did not know the crash sink exists.** `grep -c` for ADR-0211 or "crash" returned 0
+  across all fifteen `.claude/agents/` files, the headline of five passes running. `security-reviewer.md` now
+  carries the one authenticated, org-less, unaudited write (`POST /api/v1/crash-reports`, not `@Public()`), what
+  must never be stored on it, and the staff read's rule. Its `@Public()` list was re-checked and is still
+  complete: `crash-reports.controller.ts` is deliberately not public, so "the CSP sink is the only
+  unauthenticated write" still holds.
+- **`ui-architect.md` still said `features/tsld` importing other features "breaks ADR-0026 §8 and is tracked as
+  #548"**, a day after #548 closed and §8 was amended; it now names the amended rule and the ESLint refusal of
+  `features/activities` (`apps/web/eslint.config.js:61-80`).
+- **`ARCHITECTURE.md` §10 named three swept tables**; `RETENTION_TABLE_NAMES` (`packages/types/src/index.ts:63`)
+  and `BACKEND_ARCHITECTURE.md:134` have four. `crash_reports` added.
+- **`CLAUDE.md` §17 said "Five panels exist"** for the staff console; `apps/web/src/features/staff/ui/` holds nine
+  panel components. Reworded with the 2026-08-09 figure kept as history.
+- **Register pointers moved by the day's edits**, corrected with the re-read date: #105 (`render-export-image.ts`
+  `EXPORT_LEGEND` `:234` to `:239`), #117 (`staff.controller.ts` read route `:196` and `:166` to `:199`), #118b
+  (`retention-sweep.e2e-spec.ts:97` to `:98`), #257 (`staff.controller.ts` write `:324` to `:359`), #264
+  (`scripts/e2e-local.sh` port loop `:214` to `:224`), #342 (`ClientDetail` `:300-303` to `:435-438`) and #517
+  (`app.module.ts` guards `:160-163` and `:161-162` to `:165-166`). None resolved.
+
+**Recorded and not fixed.**
+
+- **`pnpm audit --prod` reports 38 advisories (1 critical, 21 high, 11 moderate, 5 low), and nothing in the
+  repository records that it was ever run**: no CI step, no register row, no mention in `SECURITY_STANDARDS.md`.
+  Read by reachability, most are not exposed. The critical and four others are `dompurify@3.4.13` under
+  `jspdf@4.2.1`, and the product never calls jsPDF's `html()` (`export/pdf.ts` embeds a PNG), which is the path
+  that sanitises. `seroval` under TanStack Router is a server-rendering deserialiser the SPA does not run;
+  `mysql2` under `better-auth` is its MySQL adapter, and no `mysql2` import exists in `apps/api/src`;
+  `brace-expansion`, `browserslist`, `minimatch` and `baseline-browser-mapping` sit under ESLint and Babel in
+  `packages/config`; `fast-uri` is under `@hookform/resolvers`' `ajv` (a path this pass did not trace).
+  **Two are on the API's request path and are the ones to read:** `body-parser@2.3.0` (`GHSA-27r3-jxmh-p828`,
+  denial of service on trailing bytes, fixed in 2.4.0; the version is pinned in `scripts/dependency-claims.json`,
+  so a bump also moves `check:claims`) and `qs` (`GHSA-6pq8-jhm2-2vcw`, a throw on `arrayFormat: 'comma'`
+  stringify, and no `arrayFormat` or `qs` import exists in `apps/api/src` or `apps/web/src`). Reported to the product owner as a row to file, not filed here.
+- **`docs/specs/long-press-hint/` is headed "Approved" after it shipped** (`web` 0.201.0, #1258). No ADR cites it,
+  so `check:spec-status` has nothing to refuse; left as it is.
+- **Step 5a not run**: the clone is shallow, as on 2026-10-31. Step 7 not run.
+
+**Negative results.** Every gated count (29 modules, 43 models, 82 migrations, 1,922 web files, 49 suites, 212
+ADRs), `check:claims` (171 claims), `check:flags`, `check:spec-status`, `check:adr-coverage`, `check:doc-links`
+(2,880 links) and `check:playbook` (52 plans) are green. The four unbuilt ADRs (0009, 0010, 0011, 0013) still have
+no dependency in any manifest (`bullmq`, `ioredis`, `@aws-sdk`, `@opentelemetry`, Radix, CASL and shadcn all
+absent). All eleven manifest descriptions are accurate. The three exemplar modules exist, model pins read
+Opus/Sonnet/Haiku as §19.14 says, and the toolchain versions the docs name (NestJS 12, React 19, Tailwind 4,
+PostgreSQL 17, Zod 4, Prisma 6) match the manifests. Rows #562, #563, #568 and #570 were re-read against the code
+and are accurate; every row from #545 to #567 listed in the register's closed table reads closed, and #565, #569 and #570 are the in-flight ones.
+
+**Consequences.** `docs/RECONCILE.md` records 2026-11-07 as the last pass in all three places.
+
 ## 2026-11-01 — The View ▾ panel's radio rows stay 24 px under a finger (#561)
 
 **What was decided.** The product owner was offered three ways to settle `docs/TECH_DEBT.md` #561 and chose
