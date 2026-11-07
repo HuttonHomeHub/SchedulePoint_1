@@ -38,7 +38,7 @@ results before any product code changes (ADR-0076, CLAUDE.md §19.11).
 | R13 | XER/MSPDI interchange does not carry computed dates, so it is untouched.                                                                     | True                                      | `packages/interchange/src/xer-emit.ts:222-248` (TASK fields: inputs, constraints, actuals; no early/late dates). `mspdi-emit.ts:312-337` writes `ActualStart`/`ActualFinish`/expected finish only. Import recalculates through the engine, which will write the new columns like any recalculation.                                                                       |
 | R14 | An older image left running after a rollback would leave the new columns stale.                                                              | True by construction                      | `writeResults` names its columns explicitly (`schedule.repository.ts:934-960`), so an image that predates the columns never writes them and they keep the newer image's values while the dates move. Drives requirement D-4 (§4.4).                                                                                                                                       |
 | R15 | Linked plans keep old dates after a release that changes what the derivation reads, with nothing flagging them.                              | True                                      | Staleness is computed from upstream `schedule_computed_at` (ADR-0045 §5), which this change does not move. Four boot services exist for this reason, each keyed on a migration's `finished_at` (`docs/DATABASE.md:2125-2155`; `milestone-rederive.service.ts:11-15`, `:33-43`, `:155`).                                                                                   |
-| R16 | Creating a cross-plan link recalculates nothing.                                                                                             | True                                      | `cross-plan-dependencies.service.ts` has no recalculation call (searched for `recalc`, `stale`, `scheduleInputsChangedAt`). Drives the residual in §2 "Edge cases" and row #570.                                                                                                                                                                                          |
+| R16 | Creating a cross-plan link recalculates nothing.                                                                                             | True                                      | `cross-plan-dependencies.service.ts` has no recalculation call (searched for `recalc`, `stale`, `scheduleInputsChangedAt`). Drives the residual in §2 "Edge cases" and row #571.                                                                                                                                                                                          |
 
 ## 1. Business understanding
 
@@ -220,7 +220,7 @@ Everything else is decided in this spec ("Decided by analyst", §4.10).
 | Remote is hand-placed (ADR-0148 M-H)                                                                             | The **placed** instant is read, the instant the placed date is dated from. Still outside the parity domain (one plan uses placements in Pass 2 only), now with the exact instant rather than the day. A placed finish milestone reads the end of the typed day (ADR-0207 D2) as it does in one plan's Pass 2. |
 | Remote has progress (started, complete)                                                                          | The instant the engine used for its successors in that run. Covered by a progressed-upstream twin case in M0's prediction.                                                                                                                                                                                    |
 | Finish milestone's late date clamped to its early date (`lateDayOf`, `compute.ts:918-923`)                       | The stored late **date** is the clamped day; the stored late **instant** is the engine's late instant. They legitimately disagree; the derivation reads the instant, which is what one plan reads.                                                                                                            |
-| A downstream single-plan recalculation of a plan linked after the release to an upstream last computed before it | Reads the date (no instant yet) until the upstream is recalculated, by itself or by a programme recalculation. No worse than today; recorded as row #570 (§4.11).                                                                                                                                             |
+| A downstream single-plan recalculation of a plan linked after the release to an upstream last computed before it | Reads the date (no instant yet) until the upstream is recalculated, by itself or by a programme recalculation. No worse than today; recorded as row #571 (§4.11).                                                                                                                                             |
 | Data date moved on the remote plan without recalculation                                                         | Instants are absolute; they and the dates are as stale as each other, flagged by ADR-0045 §5 as today.                                                                                                                                                                                                        |
 | Two replicas both run the boot service                                                                           | As in ADR-0161: idempotent, serialised by the plan advisory lock.                                                                                                                                                                                                                                             |
 
@@ -457,7 +457,7 @@ Logs four events mirroring ADR-0161's, under `schedule.xplan_instants_*` names.
 
 **D-6. Observability.** `deriveExternalInstants` reports a `remoteInstantMissingCount` (edges whose read
 fell back to the date, LOE and null-date edges excluded); the service logs it once per recalculation
-when non-zero. It is the population #570's trigger reads.
+when non-zero. It is the population #571's trigger reads.
 
 ### Alternatives considered
 
@@ -524,11 +524,11 @@ spec, and filing it requires the CLAUDE.md §16 line, which the build adds with 
 9. No API, DTO, web or guest change; no `VITE_` flag (ADR-0088 D1); no Playwright journey, declared
    per ADR-0081 (no user-facing entry point; the API e2e drives the real product).
 10. ADR-0212 required and reserved (§4.9).
-11. One new debt row, #570 (§4.11); #571 not used.
+11. One new debt row, #571 (§4.11); #570 went to #569's M0 (renumbered 2026-11-07).
 
 ### 4.11 New debt row (filed by plan M5)
 
-> **570. A downstream plan reads an upstream's date until that upstream is recalculated after the
+> **571. A downstream plan reads an upstream's date until that upstream is recalculated after the
 > instant release.** Status: open. The derivation falls back to the date (today's behaviour) for a remote
 > plan with no current instants. After the boot recalculation every linked plan has them; the residual
 > is a plan linked **later** to an upstream last computed before the release, recalculated alone (a
@@ -540,7 +540,7 @@ spec, and filing it requires the CLAUDE.md §16 line, which the build adds with 
 ## 5. Links
 
 - Implementation plan: [`implementation-plan.md`](./implementation-plan.md)
-- Related docs updated by this change: `docs/TECH_DEBT.md` (#565 closed, #570 filed), ADR-0212 (new),
+- Related docs updated by this change: `docs/TECH_DEBT.md` (#565 closed, #571 filed), ADR-0212 (new),
   ADR-0161 (parity-domain note), `docs/API.md:559`, `docs/ORGANISATION_EXPORT_FORMAT.md` (2.4),
   `docs/DATABASE.md` ("Re-derivation markers" table gains a fifth row), `docs/DEPLOYMENT.md` (rollback
   step), `CLAUDE.md` §16 (one line for ADR-0212).

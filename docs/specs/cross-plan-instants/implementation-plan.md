@@ -314,7 +314,7 @@ is added.
   turned red); ADR-0161's parity-domain bullet(s) note "closed by ADR-0212" (amendment line in its header
   and in CLAUDE.md §16's ADR-0161 entry); `docs/API.md:559` reworded; the derivation's docblock
   (`cross-plan-derivation.ts:54-57`) reworded to the new domain; `TECH_DEBT.md` #565 closed with the
-  third shape recorded as by design, and the stale "twenty" corrected; **#570 filed** from spec §4.11;
+  third shape recorded as by design, and the stale "twenty" corrected; **#571 filed** from spec §4.11;
   spec and plan headers to `Accepted — shipped (ADR-0212)`. Run the specialised reviews below before
   merging M4, not here.
 - **Complexity:** S
@@ -362,4 +362,4 @@ PR that touches `apps/api` (all of M1–M4).
 | `writeResults` slows on large plans                                                               | low        | low    | FC-10, same-sitting measurement.                                                                              |
 | Export format number collides with a parallel change                                              | med        | low    | Take the next minor at merge.                                                                                 |
 | Deployed population of linked plans is unknown (the seed catalogue cannot hold cross-plan links)  | certain    | low    | The boot log's `pending`/`recalculated` counts are the first measurement; recorded at M5.                     |
-| A downstream reads dates for an upstream not yet recalculated since the release                   | low        | low    | No worse than today; row #570 with a logged trigger (D-6).                                                    |
+| A downstream reads dates for an upstream not yet recalculated since the release                   | low        | low    | No worse than today; row #571 with a logged trigger (D-6).                                                    |
