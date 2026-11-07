@@ -147,8 +147,12 @@ function ofType(
   id: string,
   type: 'TASK' | 'FINISH_MILESTONE' | 'START_MILESTONE',
   cal: TwinCalendar,
+  minutes?: number,
 ): EngineActivity {
-  return type === 'TASK' ? task(id, MATRIX_TASK_DAYS, cal) : { id, type, durationMinutes: 0 };
+  if (type !== 'TASK') return { id, type, durationMinutes: 0 };
+  return minutes === undefined
+    ? task(id, MATRIX_TASK_DAYS, cal)
+    : { id, type: 'TASK', durationMinutes: minutes };
 }
 
 /** An activity placed in the single plan: its own calendar only when it is not the plan's. */
@@ -218,6 +222,7 @@ function inPlanLink(
 export function buildTwin(
   cell: CrossPlanMatrixCell,
   cals: TwinCalendars = { upstream: cell.calendar, downstream: cell.calendar },
+  remoteMinutes?: number,
 ): CrossPlanTwin {
   const up = twinCalendar(cals.upstream);
   const down = twinCalendar(cals.downstream);
@@ -246,7 +251,7 @@ export function buildTwin(
     // The single plan is the successor's (the subject's), so it takes the downstream calendar.
     const single = down;
     const anchor = task('A', FORWARD_ANCHOR_DAYS, up);
-    const predecessor = ofType('P', cell.remoteType, up);
+    const predecessor = ofType('P', cell.remoteType, up, remoteMinutes);
     const successor = ofType('S', cell.localType, down);
     const anchorEdge: EngineEdge = {
       id: 'A->P',
@@ -274,7 +279,7 @@ export function buildTwin(
   const single = up;
   const predecessor = ofType('P', cell.localType, up);
   const successor: EngineActivity = {
-    ...ofType('S', cell.remoteType, down),
+    ...ofType('S', cell.remoteType, down, remoteMinutes),
     constraintType: 'FNLT',
     constraintDate: BACKWARD_SUCCESSOR_FNLT,
   };
@@ -383,9 +388,29 @@ export interface TwinObservation {
   crossPlanDate: string;
 }
 
+/** What a run varies beyond the cell and the calendars. */
+export interface TwinOptions {
+  /**
+   * The remote task's length in working minutes, in place of `MATRIX_TASK_DAYS` whole days: the
+   * sub-day axis (ADR-0212, CQ-1 = B), where the remote finishes or starts part-way through a day.
+   */
+  remoteMinutes?: number;
+  /**
+   * Supply the derivation with the remote instants (default), or none, which is today's production and
+   * the date readers (ADR-0212 D3). `false` exists so a spec can state that an axis is NOT vacuous: it
+   * disagrees without the instants and agrees with them.
+   */
+  instants?: boolean;
+}
+
 /** Run one cell on the derivation the product runs. */
-export function runTwin(cell: CrossPlanMatrixCell, cals?: TwinCalendars): TwinObservation {
-  const twin = buildTwin(cell, cals);
+export function runTwin(
+  cell: CrossPlanMatrixCell,
+  cals?: TwinCalendars,
+  options: TwinOptions = {},
+): TwinObservation {
+  const twin = buildTwin(cell, cals, options.remoteMinutes);
+  const withInstants = options.instants ?? true;
   const single = resultOf(run(twin, twin.single), twin.subjectId);
 
   if (cell.direction === 'forward') {
@@ -398,6 +423,8 @@ export function runTwin(cell: CrossPlanMatrixCell, cals?: TwinCalendars): TwinOb
       predecessor: remoteOf(twin, twin.upstream, 'P'),
       predecessorPlacedStart: predecessor.visualEffectiveStart,
       predecessorPlacedFinish: predecessor.visualEffectiveFinish,
+      predecessorPlacedStartInstant: withInstants ? predecessor.placedStartInstant : null,
+      predecessorPlacedFinishInstant: withInstants ? predecessor.placedFinishInstant : null,
     };
     const { derived } = deriveExternalInstants({
       incoming: [incoming],
@@ -424,6 +451,8 @@ export function runTwin(cell: CrossPlanMatrixCell, cals?: TwinCalendars): TwinOb
     successor: remoteOf(twin, twin.downstream, 'S'),
     successorLateStart: successor.lateStart,
     successorLateFinish: successor.lateFinish,
+    successorLateStartInstant: withInstants ? successor.lateStartInstant : null,
+    successorLateFinishInstant: withInstants ? successor.lateFinishInstant : null,
   };
   const { derived } = deriveExternalInstants({
     incoming: [],
