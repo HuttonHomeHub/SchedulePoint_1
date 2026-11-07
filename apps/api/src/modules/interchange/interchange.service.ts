@@ -71,7 +71,11 @@ import { firstFreeImportedName, importedNameProbePrefix } from './imported-name'
 import { INTERCHANGE_IMPORT } from './interchange-permissions';
 import { INTERCHANGE_MAX_UPLOAD_BYTES } from './interchange.constants';
 import { describeMatchedResources, libraryCalendarIdsToRead } from './matched-resources';
-import { matchImportResources, type ResourceMatch } from './resource-match';
+import {
+  describeCodeMatchRateDifference,
+  matchImportResources,
+  type ResourceMatch,
+} from './resource-match';
 import type { UploadedInterchangeFile } from './uploaded-file';
 
 export { importedNameProbePrefix };
@@ -953,6 +957,19 @@ export class InterchangeService {
               'you chose to reuse the existing resource, so the file’s own rate and calendar for ' +
               'it were not imported',
           });
+        } else if (decision.via === 'code') {
+          const difference = describeCodeMatchRateDifference(
+            resource,
+            match.libraryById.get(decision.libraryId!)!,
+          );
+          if (difference !== null) {
+            resourceFindings.push({
+              kind: 'repair',
+              entity: 'resource',
+              sourceRef: resource.code ?? resource.key,
+              ...difference,
+            });
+          }
         }
         continue;
       }
@@ -1079,7 +1096,7 @@ export class InterchangeService {
   }> {
     const codes = graph.resources.map((r) => r.code).filter((c): c is string => c !== null);
     const names = graph.resources.map((r) => r.name);
-    const library =
+    const stored =
       graph.resources.length === 0
         ? []
         : await db.resource.findMany({
@@ -1090,8 +1107,22 @@ export class InterchangeService {
             },
             // `archivedAt` rides along so the CQ-4 unarchive-and-report path needs no second query;
             // `calendarId` so the file's calendar can be compared with the one the match keeps.
-            select: { id: true, code: true, name: true, archivedAt: true, calendarId: true },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              archivedAt: true,
+              calendarId: true,
+              costPerUnit: true,
+              maxUnitsPerHour: true,
+            },
           });
+    const library = stored.map((row) => ({
+      ...row,
+      // Decimal(18, 4) is exact in a double at this magnitude, and the file's figures are numbers.
+      costPerUnit: row.costPerUnit?.toNumber() ?? null,
+      maxUnitsPerHour: row.maxUnitsPerHour?.toNumber() ?? null,
+    }));
     const match = matchImportResources(graph, library, resolutions);
 
     const candidates = resourceOnlyCalendarKeys(graph);

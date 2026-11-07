@@ -19,6 +19,8 @@ const lib = (id: string, code: string, calendarId: string | null): LibraryResour
   name: `Library ${id}`,
   archivedAt: null,
   calendarId,
+  costPerUnit: null,
+  maxUnitsPerHour: null,
 });
 
 const CANDIDATES = new Set(['K1', 'K2']);

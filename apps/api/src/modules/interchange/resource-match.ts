@@ -10,6 +10,9 @@ export interface LibraryResource {
   readonly name: string;
   readonly archivedAt: Date | null;
   readonly calendarId: string | null;
+  /** The stored rate and capacity, as numbers, so a code match can say when the file's differ. */
+  readonly costPerUnit: number | null;
+  readonly maxUnitsPerHour: number | null;
 }
 
 /** What the matcher reads of a source resource. */
@@ -17,6 +20,8 @@ export interface SourceResource {
   readonly key: string;
   readonly name: string;
   readonly code: string | null;
+  readonly costPerUnit?: number | null;
+  readonly maxUnitsPerHour?: number | null;
 }
 
 /**
@@ -47,6 +52,8 @@ export interface ResourceMatch {
   readonly unresolved: ResourceCollision[];
   /** Matched archived library rows, each once, in the order the file first reached them. */
   readonly unarchive: LibraryResource[];
+  /** The library rows the decisions point at, by id, so the commit can compare what a match kept. */
+  readonly libraryById: ReadonlyMap<string, LibraryResource>;
 }
 
 /**
@@ -163,5 +170,42 @@ export function matchImportResources(
     resolvedKeyByName.set(resource.name, resource.key);
   }
 
-  return { decisions, collisions, unresolved, unarchive };
+  return {
+    decisions,
+    collisions,
+    unresolved,
+    unarchive,
+    libraryById: new Map(library.map((r) => [r.id, r] as const)),
+  };
+}
+
+/** The stored precision of `cost_per_unit` and `max_units_per_hour` (`Decimal(18, 4)`). */
+const STORED_DECIMALS = 1e4;
+
+/** A file value differs only when it gives one; "the file says nothing" is not a disagreement. */
+function differs(file: number | null | undefined, kept: number | null): boolean {
+  if (file === null || file === undefined) return false;
+  if (kept === null) return true;
+  return Math.round(file * STORED_DECIMALS) !== Math.round(kept * STORED_DECIMALS);
+}
+
+/**
+ * The finding for a source resource matched to a library row BY CODE whose rate or capacity differs
+ * from the file's (`docs/TECH_DEBT.md` #567). A match creates nothing, so the file's figures are never
+ * imported; without this the report says nothing and a re-import looks as if it updated the rate.
+ * Returns `null` when nothing differs, so a clean re-import stays quiet.
+ */
+export function describeCodeMatchRateDifference(
+  resource: SourceResource,
+  kept: LibraryResource,
+): { detail: string; reason: string } | null {
+  const parts: string[] = [];
+  if (differs(resource.costPerUnit, kept.costPerUnit)) parts.push('rate');
+  if (differs(resource.maxUnitsPerHour, kept.maxUnitsPerHour)) parts.push('capacity');
+  if (parts.length === 0) return null;
+  const what = parts.join(' and ');
+  return {
+    detail: `resource “${resource.name}” was matched by code to the existing library resource and kept its ${what}`,
+    reason: `the file’s ${what} for it differs from the library’s and was not imported`,
+  };
 }
