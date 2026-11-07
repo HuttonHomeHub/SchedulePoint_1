@@ -5365,3 +5365,33 @@ claims in its own brief — most usefully that the band has a golden paint log t
 none; `paint.wbs-band.test.ts` is its first paint-level test) and that it appears in the screenshot
 harness (it does not: `wbsBand` is absent from `DEFAULT_VIEW_TOGGLES`, so the band has never been
 photographed by anything).
+
+## 2026-11-07 — The ten Dependabot bumps are taken together, at the versions Dependabot proposed
+
+**What was decided.** #1246–#1255 land as one change off `main`, the way #731 and #807–#816 did
+(product-owner approval, 2026-11-07): `@nestjs/{common,core,platform-express,testing}` 12.3.2 with
+`@nestjs/swagger` 12.0.5 (#1246 and #1248 together, so Nest stays on one version) and `@nestjs/cli`
+12.0.11, `typescript-eslint` 8.72.1, `@tanstack/react-virtual` 3.14.24, `@hookform/resolvers` 6.0.2,
+`better-auth` 1.7.14 (api and web), `@tanstack/react-query` 5.105.0, `nodemailer` 10.3.1,
+`react-hook-form` 7.91.0 and `@playwright/test` 1.64.1.
+
+**Held to the proposed versions.** The ten were installed pinned exactly, then the carets were
+restored and the install re-run, so the lockfile keeps the proposed versions and the specifiers are
+Dependabot's. The transitive set moved with them as in the PRs' own lockfiles (`multer` 2.5.0,
+`file-type` 22.2.0, `@tokenizer/inflate` 0.5.2, `@better-auth/utils` 0.5.1, `@better-fetch/fetch`
+1.3.3, `@tanstack/virtual-core` 3.19.9, `query-core` 5.105.0); `strtok3` resolved to 10.7.0 where the
+PR lockfile had 10.6.3, a transitive of `file-type` that no approved bump names.
+
+**Claims re-read, not re-stamped.** Every claim on the ten bumped packages with a registered
+citation (75 of the 171) was compared block by block against the old tarball (`npm pack <pkg>@<old>`):
+54 are byte-identical and 21 moved or changed. Seventeen blocks are byte-identical at new line numbers,
+and their ranges are updated. Two blocks changed and were re-read: `better-auth`'s
+`resetPassword` now hashes into a local before `resetCredentialPassword` (same order, same effect), and
+`requestPasswordReset`'s expiry reads `|| 3600` rather than `|| 3600 * 1` (still one hour) — so the
+R5 anchor and the `reset-link-fragment` spec's table cell now quote the new text. `react-hook-form`'s
+`updateValidAndValue` gained guards around the same `setFieldValue(name, defaultValue)` call the
+activity-editor-seeding spec cites, so its range is re-cut and the sentence still holds.
+`@playwright/test` 1.64.1 still launches the container's Chromium at `/opt/pw-browsers/chromium`
+(`PLAYWRIGHT_CHROMIUM_PATH`), measured with a one-off `chromium.launch` and no install.
+
+**No changeset**, as with #731: nothing a user sees changes, so no release is cut for it.

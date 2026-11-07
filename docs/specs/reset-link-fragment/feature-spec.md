@@ -128,7 +128,7 @@ Some already exist (`password.mjs:83` → `82`, `:50` → `49`, `:75` → `74`);
 | R2  | `dist/api/routes/password.mjs`          | 92-93, 125-127 | `GET /reset-password/:token`; lookup, no consume; `ctx.redirect(… { token })`      |
 | R3  | `dist/api/routes/password.mjs`          | 77, 154        | both key `reset-password:${token}` — same token                                    |
 | R4  | `dist/api/middlewares/origin-check.mjs` | 76             | `if (!url) return;` — absent `redirectTo` passes                                   |
-| R5  | `dist/api/routes/password.mjs`          | 73             | `resetPasswordTokenExpiresIn \|\| 3600 * 1`                                        |
+| R5  | `dist/api/routes/password.mjs`          | 73             | `resetPasswordTokenExpiresIn \|\| 3600`                                            |
 | R6  | `dist/api/routes/password.mjs`          | 150, 156, 159  | `INVALID_TOKEN` / `USER_NOT_FOUND` codes on POST                                   |
 
 ## 5. Testing
