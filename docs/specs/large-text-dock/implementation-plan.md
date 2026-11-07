@@ -88,7 +88,7 @@ M0 measures and changes no product code. It decides, by the rule in T0.2, what M
      - H3 fails at 15 rem and holds at 12 rem → 12 rem, with the reason recorded.
      - H3 fails at both → R2 if it passes the same tests and moves no fixed element. Otherwise **stop** and return to the owner with the readings.
      - H1 fails (the faithful route is broken too) → **stop**. The remedy must address `squat` itself, so the spec is revised before building.
-  3. If the foot row is below the window at rest in the scrolling form, and Q2 = A, file **#572** with a trigger ("a report of a missed strip at large text, or the next change to the shell's scroll rule").
+  3. If the foot row is below the window at rest in the scrolling form, and Q2 = A, file **#570** with a trigger ("a report of a missed strip at large text, or the next change to the shell's scroll rule").
   4. Record the smallest 100 % body and the floor's margin against it, in both pointers.
 
 ---
@@ -158,7 +158,7 @@ M0 measures and changes no product code. It decides, by the rule in T0.2, what M
 
 ##### Task T1.3: close #569, record, changeset
 
-- **Description:** Close #569 citing M0's record and the journey. File #572 and #573 only if their conditions in T0.2 are met. These are the only numbers this work may use.
+- **Description:** Close #569 citing M0's record and the journey. File #570 and #573 only if their conditions in T0.2 are met. These are the only numbers this work may use.
 - **Complexity:** S
 - **Dependencies:** T1.1, T1.2
 - **Risks:** none.

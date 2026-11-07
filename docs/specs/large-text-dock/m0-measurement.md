@@ -56,11 +56,11 @@
    - **R1 at 12 rem, plus a fix to the Explorer rail so the shell stops overflowing at 100 %.** That is a product change outside
      this epic's scope, and it leaves the coarse selection bar's residual.
 
-### Foot row below the window at rest (#572's condition)
+### Foot row below the window at rest (#570's condition)
 
 In **every** 200 % state, both routes and both pointers, the foot row is below the window at rest (`footBelowWindow` true; fine
 `footTop` 670 to 1005, coarse 702 to 1261, against 600). The same is true today under CDP 200 %, which the product ships. With
-Q2 = A, #572 is filed with a trigger.
+Q2 = A, #570 is filed with a trigger.
 
 ## Readings
 

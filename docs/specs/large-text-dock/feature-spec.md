@@ -314,7 +314,7 @@ None.
 5. No flag (ADR-0088 D1). Entry point: none new. The surface is the existing foot bar, reached from any plan, and the journey drives it (ADR-0081).
 6. Two PRs: M0 (measure), then M1 (build).
 7. New register rows, filed only if their condition is met:
-   - **#572**, "A strip that arrives while the frame is scrolled to the band lands below the window". Filed only if M0 reads the foot row below the window at rest, and Q2 = A.
+   - **#570**, "A strip that arrives while the frame is scrolled to the band lands below the window". Filed only if M0 reads the foot row below the window at rest, and Q2 = A.
    - **#573**, "An inline root size (user style sheet) covers the foot bar". Filed only if Q1 = A.
 8. Nothing requires the owner to test on a device: every reading is taken in the container's Chromium, and the journeys run in CI.
 
@@ -323,4 +323,4 @@ None.
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- Related docs updated by this change: `docs/TECH_DEBT.md` (#569 closed; #572 / #573 if their conditions are met), `docs/adr/0213-…` and its CLAUDE.md §16 line (Q1 = B), `app-shell.tsx` and `Deck.tsx` docblocks, `conflict-reason.spec.ts` docblock, `docs/specs/large-text-dock/m0-measurement.md` (new, M0).
+- Related docs updated by this change: `docs/TECH_DEBT.md` (#569 closed; #570 / #573 if their conditions are met), `docs/adr/0213-…` and its CLAUDE.md §16 line (Q1 = B), `app-shell.tsx` and `Deck.tsx` docblocks, `conflict-reason.spec.ts` docblock, `docs/specs/large-text-dock/m0-measurement.md` (new, M0).

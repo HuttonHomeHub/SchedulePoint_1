@@ -9416,7 +9416,7 @@ At that size and text scale the command rows grow until they fill the viewport a
 
 **Next:** decide with ui-architect whether the foot row, or the toolbar, yields at the floor under a large text size (a toolbar that scrolls, or a dock that is not covered), then restore the pointer hit-test in `probeStrip`. **Trigger:** a report of an unreachable strip at large text, the next change to the workspace's vertical budget (ADR-0092, ADR-0180), or a second journey that needs a pointer on a dock strip at 200 %.
 
-### 572. A strip that arrives while the frame is scrolled to the band lands below the window
+### 570. A strip that arrives while the frame is scrolled to the band lands below the window
 
 **Status:** open · **Verified:** 2026-11-07, by `docs/specs/large-text-dock/m0-measurement.md` (M0 of #569): at 1024 × 600 under a 200 % root size, by either route and in both pointers, the foot row sits **below the window at rest** (`footTop` 670 to 1261 px against a 600 px window), because the band above it is 283 to 931 px tall. Under CDP 200 % that is how the shell ships today (`squat` makes the shell scroll above a full-viewport `<main>`)
 
