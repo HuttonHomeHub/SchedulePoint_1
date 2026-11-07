@@ -807,6 +807,41 @@ one recalculation. Each API replica runs the same pass, so a plan can be recalcu
 is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
 deploy would repeat the whole re-derivation unasked.
 
+### Rolling back past the cross-plan instants release
+
+That release (`docs/specs/cross-plan-instants/`, `docs/TECH_DEBT.md` #565, ADR-0212) stores four exact
+working instants per activity and a freshness stamp per plan, and makes a cross-plan link read them
+instead of the remote date. The columns arrive in `20261107120000_schedule_instants`; the read arrives
+with `20261107120100_cross_plan_instants_marker`, which has **no statement**: its only product is its
+`_prisma_migrations` row, and at the first boot `CrossPlanInstantRederiveService` recalculates once every
+live linked plan whose `schedule_computed_at` is earlier than that row's `finished_at`, upstream first.
+Both migrations are forward-only; there is nothing to reverse in the schema.
+
+**Stale instants need no step.** A previous image's recalculation moves `schedule_computed_at` and leaves
+the instants and `schedule_instants_computed_at` behind, so the pair stops matching and the instant-reading
+image falls back to the date for that plan (`trustedInstantMinutes`, ADR-0212 D4). **The marker row does
+need one**, for the reason every marker in this file does: the previous image does not remove it, every
+plan it recalculates is stamped after `finished_at` with old-read dates, and a roll-forward finds the row
+applied and skips them. If the step is forgotten the plans keep today's behaviour, the date read, until their
+next recalculation. They never get a wrong instant.
+
+Roll back in this order:
+
+1. Stop the API container (leave the database running).
+2. Delete the marker row:
+   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261107120100_cross_plan_instants_marker';"`
+3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
+4. Recalculate the linked plans people are working in: their stored dates were computed under the new read
+   and stay so until each plan's next recalculation.
+
+**What the first boot after the release costs and does.** It recalculates every live plan that is an
+endpoint of a cross-plan link, one plan at a time, upstream first within each organisation, in the
+background and never awaited. Some linked dates move **earlier** and some upstream work **regains float**:
+the dates now equal what the same logic gives in one plan. The log line `schedule.xplan_instants_rederived`
+carries `pending` and `recalculated`, which is the first measurement of how many linked plans a host has.
+Each API replica runs the same pass; that is harmless (idempotent, serialised by the plan lock) and the
+second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset".
+
 ### Rolling back past the progressed-predecessor release
 
 That release (`docs/specs/progressed-predecessor-visual/`, `docs/TECH_DEBT.md` #421) changes how the

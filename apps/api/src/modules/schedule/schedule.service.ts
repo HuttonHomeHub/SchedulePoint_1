@@ -146,6 +146,7 @@ import {
   type ScheduleEdgeRow,
 } from './schedule.repository';
 import { computeStaleness } from './staleness';
+import { trustedInstantMinutes } from './stored-instant';
 
 /** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure EV read (the baselines `day` helper). */
 function day(value: Date | null): string | null {
@@ -1856,10 +1857,16 @@ export class ScheduleService {
           predecessorPlacedFinish: e.predecessorPlacedFinish
             ? formatCalendarDate(e.predecessorPlacedFinish)
             : null,
-          // No instant is stored until the schedule write keeps them (ADR-0212 M2) and the read is
-          // switched on (M4): null makes the derivation read the date exactly as it always has.
-          predecessorPlacedStartInstant: null,
-          predecessorPlacedFinishInstant: null,
+          // The remote activity's stored instants, trusted only while its plan's freshness stamps
+          // agree (ADR-0212 D3/D4); null reads the date beside it exactly as it always has.
+          predecessorPlacedStartInstant: trustedInstantMinutes(
+            e.predecessorPlacedStartInstant,
+            e.predecessor,
+          ),
+          predecessorPlacedFinishInstant: trustedInstantMinutes(
+            e.predecessorPlacedFinishInstant,
+            e.predecessor,
+          ),
         });
       }
       const outgoing: OutgoingCrossPlanEdge[] = [];
@@ -1882,8 +1889,14 @@ export class ScheduleService {
           successorLateFinish: e.successorLateFinish
             ? formatCalendarDate(e.successorLateFinish)
             : null,
-          successorLateStartInstant: null,
-          successorLateFinishInstant: null,
+          successorLateStartInstant: trustedInstantMinutes(
+            e.successorLateStartInstant,
+            e.successor,
+          ),
+          successorLateFinishInstant: trustedInstantMinutes(
+            e.successorLateFinishInstant,
+            e.successor,
+          ),
         });
       }
       // This plan's activities as the bound functions need them: the port each SCHEDULES on (the
@@ -1907,6 +1920,19 @@ export class ScheduleService {
       });
       for (const [id, instant] of result.derived) derivedExternalByActivity.set(id, instant);
       crossPlanUpstreamMissingCount = result.upstreamMissingCount;
+      // The population #570's trigger reads (ADR-0212 D-6): edges that fell back to a date because the
+      // remote plan has no current instants. Logged only when there is one, so a steady state is silent.
+      if (result.remoteInstantMissingCount > 0) {
+        this.logger.info(
+          {
+            event: 'schedule.xplan_remote_instant_missing',
+            organizationId,
+            planId: plan.id,
+            remoteInstantMissingCount: result.remoteInstantMissingCount,
+          },
+          'cross-plan edges read a remote date because no current instant is stored',
+        );
+      }
     }
 
     const activities = activityRows.map((r) => {

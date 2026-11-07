@@ -59,7 +59,17 @@ const remoteEndpointSelect = {
   durationMinutes: true,
   calendarId: true,
   planId: true,
-  plan: { select: { calendarId: true, plannedStart: true } },
+  // The two freshness stamps ride along so the caller can tell whether the remote plan's stored
+  // instants are the ones its last recalculation wrote (ADR-0212 D4). No extra query: the plan is
+  // already joined for its calendar and data date.
+  plan: {
+    select: {
+      calendarId: true,
+      plannedStart: true,
+      scheduleComputedAt: true,
+      scheduleInstantsComputedAt: true,
+    },
+  },
 } as const;
 
 /** One remote endpoint, flattened. `planDataDate` is the remote plan's data date. */
@@ -72,6 +82,13 @@ export interface CrossPlanRemoteEndpointRow {
   planId: string;
   planCalendarId: string | null;
   planDataDate: Date;
+  /**
+   * The remote plan's two freshness stamps. Its stored instants are the ones its last recalculation
+   * wrote only when both are set and EQUAL (ADR-0212 D4: an older image's recalculation moves the
+   * first and leaves the second behind). The judgement is the service's; the repository reports.
+   */
+  planScheduleComputedAt: Date | null;
+  planInstantsComputedAt: Date | null;
 }
 
 const toRemoteEndpoint = (e: {
@@ -80,7 +97,12 @@ const toRemoteEndpoint = (e: {
   durationMinutes: number;
   calendarId: string | null;
   planId: string;
-  plan: { calendarId: string | null; plannedStart: Date };
+  plan: {
+    calendarId: string | null;
+    plannedStart: Date;
+    scheduleComputedAt: Date | null;
+    scheduleInstantsComputedAt: Date | null;
+  };
 }): CrossPlanRemoteEndpointRow => ({
   id: e.id,
   type: e.type,
@@ -89,6 +111,8 @@ const toRemoteEndpoint = (e: {
   planId: e.planId,
   planCalendarId: e.plan.calendarId,
   planDataDate: e.plan.plannedStart,
+  planScheduleComputedAt: e.plan.scheduleComputedAt,
+  planInstantsComputedAt: e.plan.scheduleInstantsComputedAt,
 });
 
 /**
@@ -129,6 +153,13 @@ export interface IncomingCrossPlanEdgeRow {
   predecessor: CrossPlanRemoteEndpointRow;
   predecessorPlacedStart: Date | null;
   predecessorPlacedFinish: Date | null;
+  /**
+   * The exact instants those dates are dated from (`visual_effective_*_instant`), as stored: a
+   * `timestamptz` that is the engine's absolute minute read as UTC. Null until a recalculation has
+   * written them. Whether they are current is `predecessor`'s freshness stamps' to say (ADR-0212 D4).
+   */
+  predecessorPlacedStartInstant: Date | null;
+  predecessorPlacedFinishInstant: Date | null;
 }
 
 /**
@@ -155,6 +186,9 @@ export interface OutgoingCrossPlanEdgeRow {
   successor: CrossPlanRemoteEndpointRow;
   successorLateStart: Date | null;
   successorLateFinish: Date | null;
+  /** The exact instants the late dates are dated from (`late_*_instant`), as above. */
+  successorLateStartInstant: Date | null;
+  successorLateFinishInstant: Date | null;
 }
 
 /**
@@ -296,6 +330,8 @@ export class CrossPlanDependencyRepository {
           select: {
             visualEffectiveStart: true,
             visualEffectiveFinish: true,
+            visualEffectiveStartInstant: true,
+            visualEffectiveFinishInstant: true,
             ...remoteEndpointSelect,
           },
         },
@@ -309,6 +345,8 @@ export class CrossPlanDependencyRepository {
       predecessor: toRemoteEndpoint(r.predecessor),
       predecessorPlacedStart: r.predecessor.visualEffectiveStart,
       predecessorPlacedFinish: r.predecessor.visualEffectiveFinish,
+      predecessorPlacedStartInstant: r.predecessor.visualEffectiveStartInstant,
+      predecessorPlacedFinishInstant: r.predecessor.visualEffectiveFinishInstant,
     }));
   }
 
@@ -330,7 +368,15 @@ export class CrossPlanDependencyRepository {
         type: true,
         lagMinutes: true,
         lagCalendar: true,
-        successor: { select: { lateStart: true, lateFinish: true, ...remoteEndpointSelect } },
+        successor: {
+          select: {
+            lateStart: true,
+            lateFinish: true,
+            lateStartInstant: true,
+            lateFinishInstant: true,
+            ...remoteEndpointSelect,
+          },
+        },
       },
     });
     return rows.map((r) => ({
@@ -341,6 +387,8 @@ export class CrossPlanDependencyRepository {
       successor: toRemoteEndpoint(r.successor),
       successorLateStart: r.successor.lateStart,
       successorLateFinish: r.successor.lateFinish,
+      successorLateStartInstant: r.successor.lateStartInstant,
+      successorLateFinishInstant: r.successor.lateFinishInstant,
     }));
   }
 

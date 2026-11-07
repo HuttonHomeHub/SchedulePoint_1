@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { PinoLogger } from 'nestjs-pino';
@@ -75,9 +75,7 @@ function harness(
 }
 
 describe('CrossPlanInstantRederiveService', () => {
-  it('is dormant: its marker migration does not exist until M4 adds it', () => {
-    // The flip is M4's: adding the folder admits plans, so this assertion goes red there and is
-    // replaced by "names a migration that exists" in the same change that switches the read on.
+  it('names a migration that exists, so the marker is not a query that can never match', () => {
     const dir = join(
       __dirname,
       '..',
@@ -87,7 +85,27 @@ describe('CrossPlanInstantRederiveService', () => {
       'migrations',
       CROSS_PLAN_INSTANTS_MIGRATION,
     );
-    expect(existsSync(join(dir, 'migration.sql'))).toBe(false);
+    expect(existsSync(join(dir, 'migration.sql'))).toBe(true);
+  });
+
+  it('names a marker migration that holds no statement: its row is its only product', () => {
+    const sql = readFileSync(
+      join(
+        __dirname,
+        '..',
+        '..',
+        '..',
+        'prisma',
+        'migrations',
+        CROSS_PLAN_INSTANTS_MIGRATION,
+        'migration.sql',
+      ),
+      'utf8',
+    );
+    const statements = sql
+      .split('\n')
+      .filter((line) => line.trim() !== '' && !line.trim().startsWith('--'));
+    expect(statements).toEqual([]);
   });
 
   it('keys the pending read on a scalar-subquery marker and states every soft-delete filter', async () => {
