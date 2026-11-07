@@ -825,6 +825,11 @@ plan it recalculates is stamped after `finished_at` with old-read dates, and a r
 applied and skips them. If the step is forgotten the plans keep today's behaviour, the date read, until their
 next recalculation. They never get a wrong instant.
 
+**The marker row is never deleted outside a rollback.** It is the boot service's only record of when the
+instant-reading image took over, and deleting it as a "reset" lets the next start re-apply the migration with a new
+`finished_at`, which makes every linked plan pending again. Skipping step 2 of the procedure below is safe, at the cost stated above: linked plans keep the
+date read until each is recalculated.
+
 Roll back in this order:
 
 1. Stop the API container (leave the database running).
