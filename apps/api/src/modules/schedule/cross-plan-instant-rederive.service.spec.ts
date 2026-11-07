@@ -35,6 +35,9 @@ interface Harness {
   logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
 }
 
+/** Plan ids whose per-plan re-check answers "no longer pending" (a peer recalculated them). */
+const NO_LONGER_PENDING = new Set<string>();
+
 function harness(
   pending: PendingCrossPlanInstantPlan[],
   edgesByOrg: Record<string, PlanCrossEdge[] | Error>,
@@ -42,7 +45,14 @@ function harness(
     Promise.resolve(true),
 ): Harness {
   const calls: string[] = [];
-  const prisma = { $queryRaw: vi.fn().mockResolvedValue(pending) } as unknown as PrismaService;
+  // The list read has an ORDER BY; the per-plan re-check is the one keyed on a single id.
+  const prisma = {
+    $queryRaw: vi.fn((strings: string[], ...values: unknown[]) =>
+      strings.join('?').includes('ORDER BY')
+        ? Promise.resolve(pending)
+        : Promise.resolve(NO_LONGER_PENDING.has(String(values[0])) ? [] : [{ '?column?': 1 }]),
+    ),
+  } as unknown as PrismaService;
   const schedule = {
     recalculateAsSystem: vi.fn((organizationId: string, planId: string) => {
       calls.push(`${organizationId}:${planId}`);
@@ -163,6 +173,23 @@ describe('CrossPlanInstantRederiveService', () => {
     );
     expect(await h.service.rederive()).toBe(2);
     expect(h.calls).toEqual([`o1:${A}`, `o1:${C}`]);
+  });
+
+  it('skips a plan a peer recalculated since the list was read, and does not count it', async () => {
+    NO_LONGER_PENDING.add('m');
+    try {
+      const h = harness(
+        [
+          { id: 'x', organizationId: 'o1' },
+          { id: 'm', organizationId: 'o1' },
+        ],
+        { o1: [edge('x', 'm')] },
+      );
+      expect(await h.service.rederive()).toBe(1);
+      expect(h.calls).toEqual(['o1:x']);
+    } finally {
+      NO_LONGER_PENDING.delete('m');
+    }
   });
 
   it('keeps going after one plan fails, logs it, and does not count it', async () => {

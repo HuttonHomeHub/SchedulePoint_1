@@ -118,6 +118,27 @@ export class CrossPlanInstantRederiveService implements OnApplicationBootstrap {
        ORDER BY p."organization_id", p."id"`;
   }
 
+  /**
+   * Whether one plan is STILL pending, by a primary-key read against the same marker. The pending list
+   * is read once up front and walked for as long as the recalculations take, during which another
+   * replica, or one of the other boot services, may already have recalculated the plan; this skips the
+   * duplicate. Racy by nature (a peer can finish between this read and our lock) and that is fine: the
+   * recalculation is idempotent, so the check only has to cut the common duplicate, not forbid it.
+   */
+  private async stillPending(planId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`
+      SELECT 1 FROM "plans" p
+       WHERE p."id" = ${planId}::uuid
+         AND p."deleted_at" IS NULL
+         AND p."schedule_computed_at" < (
+               SELECT m."finished_at" FROM "_prisma_migrations" m
+                WHERE m."migration_name" = ${CROSS_PLAN_INSTANTS_MIGRATION}
+                  AND m."finished_at" IS NOT NULL
+                  AND m."rolled_back_at" IS NULL
+             )`;
+    return rows.length > 0;
+  }
+
   /** Recalculate every pending plan, upstream first per organisation. Returns how many were done. */
   async rederive(): Promise<number> {
     const plans = await this.pendingPlans();
@@ -159,6 +180,7 @@ export class CrossPlanInstantRederiveService implements OnApplicationBootstrap {
       for (const planId of order) {
         if (!pending.has(planId)) continue;
         try {
+          if (!(await this.stillPending(planId))) continue;
           if (await this.schedule.recalculateAsSystem(organizationId, planId)) done += 1;
         } catch (error) {
           // One plan's failure (a horizon guard, an invalid graph) must not stop the rest; the plan
