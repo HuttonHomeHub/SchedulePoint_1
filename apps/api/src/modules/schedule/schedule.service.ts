@@ -1837,6 +1837,16 @@ export class ScheduleService {
           dataDate: formatCalendarDate(e.planDataDate),
         };
       };
+      const storedInstant = (
+        instant: Date | null,
+        remote: CrossPlanRemoteEndpointRow,
+      ): number | null =>
+        trustedInstantMinutes(instant, remote, (corrupt) =>
+          this.logger.warn(
+            { event: 'schedule.xplan_instant_not_whole_minute', planId: plan.id, ...corrupt },
+            'a remote stored schedule instant is not a whole minute; the date was read instead',
+          ),
+        );
       const incoming: IncomingCrossPlanEdge[] = [];
       for (const e of incomingRows) {
         incoming.push({
@@ -1859,11 +1869,11 @@ export class ScheduleService {
             : null,
           // The remote activity's stored instants, trusted only while its plan's freshness stamps
           // agree (ADR-0212 D3/D4); null reads the date beside it exactly as it always has.
-          predecessorPlacedStartInstant: trustedInstantMinutes(
+          predecessorPlacedStartInstant: storedInstant(
             e.predecessorPlacedStartInstant,
             e.predecessor,
           ),
-          predecessorPlacedFinishInstant: trustedInstantMinutes(
+          predecessorPlacedFinishInstant: storedInstant(
             e.predecessorPlacedFinishInstant,
             e.predecessor,
           ),
@@ -1889,14 +1899,8 @@ export class ScheduleService {
           successorLateFinish: e.successorLateFinish
             ? formatCalendarDate(e.successorLateFinish)
             : null,
-          successorLateStartInstant: trustedInstantMinutes(
-            e.successorLateStartInstant,
-            e.successor,
-          ),
-          successorLateFinishInstant: trustedInstantMinutes(
-            e.successorLateFinishInstant,
-            e.successor,
-          ),
+          successorLateStartInstant: storedInstant(e.successorLateStartInstant, e.successor),
+          successorLateFinishInstant: storedInstant(e.successorLateFinishInstant, e.successor),
         });
       }
       // This plan's activities as the bound functions need them: the port each SCHEDULES on (the

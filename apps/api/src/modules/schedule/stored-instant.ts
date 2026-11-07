@@ -10,12 +10,26 @@
  * instead, with no operator step. `null` makes the derivation read the date beside it exactly as it
  * always has (ADR-0212 D3), and counts the edge in `remoteInstantMissingCount`.
  *
- * Throws on a value that is not a whole minute: the column is written from an `int[]`, so a fraction
- * means a different writer, and a wrong bound is worse than a refused recalculation.
+ * A value that is not a whole minute is read as missing too, and reported through `onNotWholeMinute`:
+ * the column is written from an `int[]`, so a fraction means a different writer, but it is ANOTHER
+ * plan's column, and throwing would fail this plan's whole recalculation (a tenant-visible 500) over
+ * data its own planner cannot see or fix. The date reading is the safe floor, exactly as for a stale
+ * stamp; the callback is how an operator learns which remote row to look at.
  */
 export function trustedInstantMinutes(
   instant: Date | null,
-  plan: { planScheduleComputedAt: Date | null; planInstantsComputedAt: Date | null },
+  plan: {
+    /** The remote activity, named in the report; not part of the stamp rule. */
+    id: string;
+    planId: string;
+    planScheduleComputedAt: Date | null;
+    planInstantsComputedAt: Date | null;
+  },
+  onNotWholeMinute: (corrupt: {
+    remotePlanId: string;
+    remoteActivityId: string;
+    instant: string;
+  }) => void,
 ): number | null {
   if (!instant) return null;
   const { planScheduleComputedAt: computedAt, planInstantsComputedAt: instantsAt } = plan;
@@ -23,7 +37,12 @@ export function trustedInstantMinutes(
   if (instantsAt.getTime() !== computedAt.getTime()) return null;
   const minutes = instant.getTime() / 60_000;
   if (!Number.isInteger(minutes)) {
-    throw new Error(`A stored schedule instant is not a whole minute (${instant.toISOString()}).`);
+    onNotWholeMinute({
+      remotePlanId: plan.planId,
+      remoteActivityId: plan.id,
+      instant: instant.toISOString(),
+    });
+    return null;
   }
   return minutes;
 }
