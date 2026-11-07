@@ -25,6 +25,7 @@ export * from './mspdi-calendar.js';
 export * from './mspdi-adapter.js';
 export * from './import-graph.js';
 export * from './mapper.js';
+export * from './library-match.js';
 export * from './validate.js';
 export * from './import-xer.js';
 export * from './import-mspdi.js';

@@ -1,7 +1,7 @@
 # Implementation Plan: An import does not create a calendar that only a reused resource would hold
 
 - **Feature spec:** [`./spec.md`](./spec.md)
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 use the library crew as it is and say in the report that the file's hours differ; Q3 no clean-up of copies earlier imports left (a bulk tool gets its own spec if wanted). Q2 was taken by the session as the recommended default: a crew calendar also used by activities stays in the shared library (today's behaviour), with a follow-up row.
+- **Status:** Accepted — shipped ([ADR-0208](../../adr/0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md) D7). Approved by the product owner, 2026-11-01, every recommended answer: Q1 use the library crew as it is and say in the report that the file's hours differ; Q3 no clean-up of copies earlier imports left (a bulk tool gets its own spec if wanted). Q2 was taken by the session as the recommended default: a crew calendar also used by activities stays in the shared library (today's behaviour), with a follow-up row.
 - **Owner:** product owner (James Ewbank); built by the **builder** agent, reviewed as listed per task
 
 ## Breakdown
@@ -129,7 +129,9 @@ library crew leaves no copy of its calendar"_ (T2.4).
     (soft-deleted), is "different". Skip the read entirely when no K is a candidate.
   - `reusedCalendarCount` unchanged in meaning; add `skippedCalendarCount`. Both log lines and the audit
     `after` gain `calendarsSkipped`; add it to `audit-redactor.ts:185-196`.
-  - Confirm `calendars.createManyForImport([])` is a no-op (E17).
+  - Confirm `calendars.createManyForImport([])` is a no-op (E17). E17 is unreachable through either parser
+    (the XER adapter defaults the plan to the first calendar, and MSPDI to its project calendar), so it is
+    covered by `library-match.spec.ts` and this read, with no e2e.
 - **Complexity:** M
 - **Dependencies:** Task 1, Task 2.1
 - **Risks:** R1 (a referenced calendar left out) → `resolveCalendarId` (`:1818-1831`) fails the import;
@@ -170,7 +172,7 @@ library crew leaves no copy of its calendar"_ (T2.4).
     library crew (E4); calendar also used by an activity (E6); plan default (E7); matched + inserted
     holders (E8); same-code pair in one file (E5); library crew with no calendar (E15); library crew
     deleted between dry-run and commit, so the crew is inserted and the calendar created and bound (E13);
-    every calendar left out (E17); MSPDI with `Code` (E16); recalculation failure still compensates
+    MSPDI with `Code` (E16); recalculation failure still compensates
     exactly the created calendars (extend the existing compensation test).
   - **Red-first, one mutation each, applied and reverted, recorded in the PR body:**
     (a) count a matched resource as a holder → the inverted #554 test red;

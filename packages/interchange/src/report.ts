@@ -245,7 +245,8 @@ function clampText(value: string, max: number): string {
   return `${value.slice(0, end)}…`;
 }
 
-function clampFinding(f: ReportFinding): ReportFinding {
+/** Clamp one finding exactly as {@link boundReport} does, so a producer can recognise its own bounded output. */
+export function clampFinding(f: ReportFinding): ReportFinding {
   return {
     ...f,
     entity: clampText(f.entity, REPORT_LABEL_MAX_LENGTH),
