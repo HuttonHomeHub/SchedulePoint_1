@@ -24,6 +24,7 @@ import {
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
+import { reportCrash, setCrashReportSessionProbe } from '@/lib/crash-report';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
@@ -692,6 +693,10 @@ const routeTree = rootRoute.addChildren([
 /** Single query client shared by the app providers and the router loaders. */
 export const queryClient = createQueryClient();
 
+// The reporter asks the query cache, never the network, whether anyone is signed in: a crash on
+// the sign-in or a share-link screen has no session and must not post (it would only 401).
+setCrashReportSessionProbe(() => Boolean(queryClient.getQueryData(sessionQueryOptions.queryKey)));
+
 export const router = createRouter({
   routeTree,
   context: { queryClient },
@@ -710,6 +715,17 @@ export const router = createRouter({
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: RouteErrorScreen,
+  // Also called for a loader that rejects, so the reporter skips an `ApiFetchError` itself
+  // (`app/route-catch.test.tsx`). The route PATTERN, never `location.pathname`: a concrete path
+  // carries a customer's slug.
+  defaultOnCatch: (error, errorInfo) => {
+    reportCrash({
+      error,
+      boundary: 'route',
+      routeId: router.state.matches.at(-1)?.routeId,
+      componentStack: errorInfo?.componentStack,
+    });
+  },
   // **One "Page not found" for every address that is not a page** (`docs/TECH_DEBT.md` #459), and in
   // 'root' mode so it is the SAME picture everywhere. The library's default ('fuzzy') hands an
   // unmatched `/orgs/<slug>/nope` to the nearest matched parent, so a signed-in mistype rendered

@@ -261,12 +261,14 @@ for (const vp of WIDTHS) {
   // Error state: every panel read fails.
   const ectx = await browser.newContext({ viewport: vp });
   const ep = await openStaff(ectx, EMAIL);
-  await ep.route(/\/staff\/(health|installation|accounts|csp-reports|activity)/, (r) =>
-    r.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: { code: 'INTERNAL', message: 'boom' } }),
-    }),
+  await ep.route(
+    /\/staff\/(health|installation|accounts|csp-reports|crash-reports|activity)/,
+    (r) =>
+      r.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'INTERNAL', message: 'boom' } }),
+      }),
   );
   await ep.goto(`${BASE}/staff`);
   await ep.waitForSelector('h2:has-text("Status")', { timeout: 20000 });
@@ -279,10 +281,13 @@ for (const vp of WIDTHS) {
   // Loading state: every panel read held for 8 s.
   const lctx = await browser.newContext({ viewport: vp });
   const lp = await openStaff(lctx, EMAIL);
-  await lp.route(/\/staff\/(health|installation|accounts|csp-reports|activity)/, async (r) => {
-    await new Promise((x) => setTimeout(x, 8000));
-    await r.continue();
-  });
+  await lp.route(
+    /\/staff\/(health|installation|accounts|csp-reports|crash-reports|activity)/,
+    async (r) => {
+      await new Promise((x) => setTimeout(x, 8000));
+      await r.continue();
+    },
+  );
   await lp.goto(`${BASE}/staff`);
   await lp.waitForSelector('h2:has-text("Status")', { timeout: 20000 });
   await lp.waitForTimeout(2000);

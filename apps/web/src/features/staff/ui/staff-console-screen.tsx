@@ -14,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useProbeResults } from '@/features/perf-probe/api/probe-results';
 import { PerformanceProbePanel } from '@/features/perf-probe/ui/performance-probe-panel';
 import { useRefreshStaffPageReads } from '@/features/staff/api/refresh-page-reads';
+import { useStaffCrashReports } from '@/features/staff/api/staff-crash-reports';
 import { useStaffCspReports } from '@/features/staff/api/staff-csp-reports';
 import { useStaffHealth } from '@/features/staff/api/staff-health';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
@@ -34,6 +35,7 @@ import { AccountsPanel } from '@/features/staff/ui/accounts-panel';
 import { ActivityPanel } from '@/features/staff/ui/activity-panel';
 import { AlertingPanel } from '@/features/staff/ui/alerting-panel';
 import { ConsoleHeader } from '@/features/staff/ui/console-header';
+import { CrashReportsPanel } from '@/features/staff/ui/crash-reports-panel';
 import { DiagnosticsPanel } from '@/features/staff/ui/diagnostics-panel';
 import { InstallationPanel } from '@/features/staff/ui/installation-panel';
 import { MailPanel } from '@/features/staff/ui/mail-panel';
@@ -106,9 +108,9 @@ export function StaffConsoleScreen(): React.ReactElement {
 }
 
 /**
- * The console proper: six reads, one status, four groups.
+ * The console proper: seven reads, one status, four groups.
  *
- * **It is a component of its own so the six reads are made only for somebody the server has already
+ * **It is a component of its own so the seven reads are made only for somebody the server has already
  * said is staff.** They used to be called at the top of the screen, above the identity gate, so a
  * non-staff caller's browser asked for them too and each was refused (and recorded) — an audited
  * denial for every visit by anyone who typed the address, which is the opposite of the uniform
@@ -117,7 +119,7 @@ export function StaffConsoleScreen(): React.ReactElement {
  *
  * **The reads are called HERE and passed down as facts.** Each key is the one its panel already
  * uses, so TanStack dedupes them: two observers of a key are one request. That is the property that
- * keeps a load at six audited reads (SC-4) however many boxes read the same response — Mail and
+ * keeps a load at seven audited reads (SC-4) however many boxes read the same response — Mail and
  * Clearing old records share `health`, Version and settings and Alerts and monitoring share
  * `installation`. A second request is a second `staff.panel_read` row on every load, forever, in the
  * table that refuses `DELETE`.
@@ -131,6 +133,7 @@ function ConsoleBody({
 }): React.ReactElement {
   const health = useStaffHealth();
   const security = useStaffCspReports();
+  const crashes = useStaffCrashReports();
   const accounts = useStaffAccounts();
   const installation = useStaffInstallation();
   // The two reads the summary does not draw on but the freshness line and the load sentence do.
@@ -140,6 +143,7 @@ function ConsoleBody({
   const status = deriveConsoleStatus({
     health: { isPending: health.isPending, isError: health.isError, data: health.data },
     security: { isPending: security.isPending, isError: security.isError, data: security.data },
+    crashes: { isPending: crashes.isPending, isError: crashes.isError, data: crashes.data },
     accounts: {
       isPending: accounts.isPending,
       // A failed *Show more* leaves the rows standing and is the box's to report; the summary is
@@ -154,7 +158,7 @@ function ConsoleBody({
     },
   });
   const freshness = freshnessOf(
-    [health, security, accounts, installation, activity, probeHistory].map((query) => ({
+    [health, security, crashes, accounts, installation, activity, probeHistory].map((query) => ({
       dataUpdatedAt: query.dataUpdatedAt,
       isError: query.isError && !(query === accounts && accounts.isFetchNextPageError),
       isPending: query.isPending,
@@ -255,6 +259,7 @@ function ConsoleBody({
           <MailPanel />
           <RetentionPanel />
           <SecurityPanel />
+          <CrashReportsPanel />
           <AccountsPanel />
         </SectionGroup>
         <SectionGroup {...GROUPS.installation} backToTopHref="#staff-top">

@@ -179,9 +179,9 @@ describe('the organisation export census', () => {
     expect(censusProblems(models, EXPORT_FILES, EXCLUDED_MODELS, text)).toEqual([]);
   });
 
-  it('accounts for every model exactly once: 35 exported + 7 excluded', () => {
+  it('accounts for every model exactly once: 35 exported + 8 excluded', () => {
     expect(EXPORT_FILES).toHaveLength(35);
-    expect(EXCLUDED_MODELS).toHaveLength(7);
+    expect(EXCLUDED_MODELS).toHaveLength(8);
     expect(EXPORT_FILES.length + EXCLUDED_MODELS.length).toBe(models.length);
   });
 

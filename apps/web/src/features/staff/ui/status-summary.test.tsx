@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { StaffStatusSummary } from './status-summary';
 
+import type { CrashReports } from '@/features/staff/api/staff-crash-reports';
 import type { CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import type { StaffHealth } from '@/features/staff/api/staff-health';
 import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staff-panels';
@@ -56,6 +57,13 @@ function healthy(): ConsoleStatusInput {
   return {
     health: settled(HEALTH),
     security: settled<CspReportRow[]>([]),
+    crashes: settled<CrashReports>({
+      rows: [],
+      total: 0,
+      cap: 1000,
+      capReached: false,
+      seenLast7Days: 0,
+    }),
     accounts: settled(ACCOUNTS),
     installation: settled(INSTALLATION),
   };
@@ -94,7 +102,7 @@ describe('StaffStatusSummary', () => {
     renderSummary();
 
     const rows = screen.getAllByRole('listitem');
-    expect(rows).toHaveLength(5);
+    expect(rows).toHaveLength(6);
     expect(screen.getByRole('link', { name: 'Mail delivery' })).toBeInTheDocument();
     expect(screen.getByText('Working: none failed in the last 24 hours')).toBeInTheDocument();
   });
@@ -105,7 +113,7 @@ describe('StaffStatusSummary', () => {
       health: settled({ ...HEALTH, transportConfigured: false }),
     });
 
-    expect(screen.getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.getAllByRole('listitem')).toHaveLength(6);
   });
 
   // The verdict is a WORD, never a colour alone (WCAG 1.4.1).
@@ -132,6 +140,7 @@ describe('StaffStatusSummary', () => {
       'Mail delivery',
       'Clearing old records',
       'Browser security reports',
+      'Screen crashes',
       'Unconfirmed accounts',
       'Alerts',
     ]);

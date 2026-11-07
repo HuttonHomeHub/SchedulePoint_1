@@ -1069,3 +1069,4 @@ Not exported: `ipAddress`, `userAgent`.
 | mail delivery telemetry                 | Installation telemetry with no organisation, readable by staff only.                              |
 | browser security reports                | Installation telemetry with no organisation, readable by staff only.                              |
 | performance measurements                | Staff’s measurements of the installation, not organisation data.                                  |
+| screen crash reports                    | Installation telemetry with no organisation, readable by staff only.                              |

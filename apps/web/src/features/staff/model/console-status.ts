@@ -1,3 +1,4 @@
+import type { CrashReports } from '@/features/staff/api/staff-crash-reports';
 import type { CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import type { StaffHealth } from '@/features/staff/api/staff-health';
 import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staff-panels';
@@ -30,7 +31,14 @@ import { formatRelative } from '@/lib/relative-time';
  * ADR-0125 `?? 'HEALTHY'` lie — coalescing an unknown into "fine" — is the defect this shape exists
  * to make unwritable.
  */
-export const CHECK_IDS = ['mail', 'retention', 'security', 'accounts', 'alerting'] as const;
+export const CHECK_IDS = [
+  'mail',
+  'retention',
+  'security',
+  'crashes',
+  'accounts',
+  'alerting',
+] as const;
 
 export type CheckId = (typeof CHECK_IDS)[number];
 
@@ -90,6 +98,7 @@ export const CHECK_SECTION_ID: Record<CheckId, string> = {
   mail: 'staff-section-mail',
   retention: 'staff-section-retention',
   security: 'staff-section-security',
+  crashes: 'staff-section-crashes',
   accounts: 'staff-section-accounts',
   alerting: 'staff-section-alerting',
 };
@@ -98,6 +107,7 @@ const LABEL: Record<CheckId, string> = {
   mail: 'Mail delivery',
   retention: 'Clearing old records',
   security: 'Browser security reports',
+  crashes: 'Screen crashes',
   accounts: 'Unconfirmed accounts',
   alerting: 'Alerts',
 };
@@ -117,6 +127,7 @@ export interface QueryFacts<T> {
 export interface ConsoleStatusInput {
   health: QueryFacts<StaffHealth>;
   security: QueryFacts<CspReportRow[]>;
+  crashes: QueryFacts<CrashReports>;
   accounts: QueryFacts<StaffAccounts>;
   installation: QueryFacts<StaffInstallation>;
 }
@@ -214,6 +225,24 @@ export function deriveConsoleStatus(
       const blocked = rows.reduce((total, row) => total + row.count, 0);
       values.security = `${counted(rows.length, 'kind', 'kinds')} blocked, ${counted(blocked, 'time', 'times')}`;
       return true;
+    }),
+    /**
+     * Any crash last reported in the past 7 days is a standing condition (the owner's answer to the
+     * spec's Q2): a crash is a defect a person met, and a console that said "nothing needs
+     * attention" while people were seeing "Something went wrong" would be answering wrongly. Older
+     * rows alone are not a problem, but are not silence either, so the value says how long ago.
+     */
+    crashes: stateOf(input.crashes, (data) => {
+      if (data.seenLast7Days > 0) {
+        values.crashes = `${counted(data.seenLast7Days, 'kind', 'kinds')} in the last 7 days`;
+        return true;
+      }
+      const newest = data.rows[0];
+      values.crashes =
+        newest === undefined
+          ? 'None received'
+          : `Last crash ${formatRelative(newest.lastSeenAt, now)}`;
+      return false;
     }),
     accounts: stateOf(input.accounts, (data) => {
       if (data.unverifiedTotal === 0) {

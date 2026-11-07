@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { RouteErrorScreen, isChunkLoadFailure } from './route-error-screen';
+import { RouteErrorScreen } from './route-error-screen';
 
 const invalidate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -150,20 +150,6 @@ describe('RouteErrorScreen', () => {
         expect(screen.getByText(/temporary problem/i)).toBeInTheDocument();
         vi.restoreAllMocks();
       });
-    });
-
-    it('recognises all three engine messages and nothing else', () => {
-      expect(isChunkLoadFailure(new Error('Failed to fetch dynamically imported module: x'))).toBe(
-        true,
-      );
-      expect(isChunkLoadFailure(new Error('error loading dynamically imported module: x'))).toBe(
-        true,
-      );
-      expect(isChunkLoadFailure(new Error('Importing a module script failed.'))).toBe(true);
-      expect(isChunkLoadFailure(new Error('boom'))).toBe(false);
-      expect(isChunkLoadFailure(new Error('Request failed with status 500'))).toBe(false);
-      expect(isChunkLoadFailure(undefined)).toBe(false);
-      expect(isChunkLoadFailure('Failed to fetch dynamically imported module')).toBe(false);
     });
   });
 });

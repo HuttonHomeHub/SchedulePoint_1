@@ -658,6 +658,13 @@ built next.
   for the operator there has never been a rollback contract to expire. Two flags select an
   alternative JSX root and retire on epic-touch under a ratcheting cap; ~28 one-line guards formally
   **keep**; the rest wait on their coverage rather than on a date.
+- **Browser crash reports** — **in progress** (M1 landed on its branch 2026-11-01,
+  [ADR-0211](adr/0211-a-crash-report-is-the-screens-never-the-persons.md), Proposed; spec and plan at
+  [`docs/specs/browser-crash-reports/`](specs/browser-crash-reports/), closing `docs/TECH_DEBT.md` #551). A
+  signed-in browser reports a screen crash to `POST /api/v1/crash-reports`, which stores one cleaned,
+  deduplicated row (no person, organisation, address or full URL) and expires it 30 days after it was last
+  reported. M2 adds the reporter in the browser; M3 adds the staff console's "Screen crashes" section, which
+  is what makes any of it visible.
 
 **The argument the theme rests on**, and the reason it counts as security work rather than
 convenience: before it, every staff operation on this installation happened over `psql` and left
