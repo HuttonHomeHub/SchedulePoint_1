@@ -3,63 +3,59 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-07. The session began on 2026-11-01 (hand-off check: everything matched GitHub, `web` 0.200.7 and
-`api` 0.103.4), the owner chose **all eight** offered rows, then the session sat idle for **six days** (a builder hit a
-usage limit and the wake-up chain died with it) until the owner typed "Continue" on 2026-11-07. Everything chosen is
-merged and released as **`web` 0.201.0** and **`api` 0.104.0** (Version Packages #1243, tags `web-v0.201.0` and
-`api-v0.104.0`, Release run 42373611861). The owner's **hard rule** still stands: nothing that needs them to test,
-measure or check anything on their server or devices (a decision question is fine; a test is not). **1.0 is not cut**;
-that stays the owner's call (ADR-0190). **The P6 epic stays closed for what shipped (M0 to M4); M5 and M6 still wait for
-a real P6 export**, so do not offer them.
+**Written:** 2026-11-07 (late). The session began the same day (hand-off check: everything matched GitHub — `web`
+0.201.0 and `api` 0.104.0, Release run 42373611861, #1238–#1245 and #1256–#1259 merged, Dependabot #1246–#1255 open).
+The owner chose **all six** offered items; everything is merged and released as **`web` 0.201.1** and
+**`api` 0.105.0** (with `@repo/interchange` 0.16.2) — see "Where things stand" for the release PR and tags. The owner's
+**hard rule** still stands: nothing that needs them to test, measure or check anything on their server or devices (a
+decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190). **P6 M5 and M6
+still wait for a real P6 export**; do not offer them.
 
-## The owner's answers this session (2026-11-01)
+## The owner's answers this session (2026-11-07)
 
-- **Build:** all eight: #551 (crash reports), #554 (import calendars), #561, #211 (long-press hint), #545, #557,
-  #555, #548 + #358. Then, when #555's new tests found a real cross-plan defect (#565), **"fix it in this batch"**.
-- **#551 spec:** every recommended answer: signed-in people only; the console's top line says "Needs attention" while
-  any crash was reported in the last 7 days; the fallback shows "This problem has been reported. Reference: XXXXXX."
-  only when the report arrived; only errors that break the screen.
-- **#554 spec:** keep the library crew and say in the report that the file's hours differ; no clean-up of copies
-  earlier imports left.
-- **#211 spec:** the tip stays until dismissed, then never returns on that device; rename the sheet "Diagram/Gantt
-  shortcuts and gestures"; the Touch section is always shown.
-- **#561:** "Leave the rows as they are" (24 px; closed by decision, in `docs/DECISIONS.md`).
-- **Engineering decisions taken by the session (not asked):** #554 Q2 (a crew calendar an activity also uses stays
-  shared; row #568); the export format stays 2.3 for the new excluded `crash_reports` table; the account-menu item is
-  the neutral "Shortcuts and gestures" (the header cannot know the view; the sheets keep the owner's names); no
-  double-tap row in the Touch section (unverifiable); the tip appears on touch completion, not touch-down; the
-  crash cleaner keeps only scheme + host of a URL; the 200 %-text pointer gap is recorded (#569), not fixed here;
-  **#551 shipped as one PR** (four milestones, reviewed as a stack) rather than one PR per task.
+- **Build:** all six: the Dependabot updates, #566, #567, the reconciliation pass, #569, #565.
+- **#569 spec:** Q1 **B** — keep the foot bar reachable for _any_ way of enlarging text (user stylesheet or extension,
+  not just the browser setting); Q2 **A** — a strip that arrives while the page is scrolled up stays where it is.
+- **#565 spec:** Q1 **B** — the stored instants also fix links from work that finishes part-way through a day; Q2 **A**
+  — linked plans are recalculated once, upstream first, the first time the new version starts.
+- **Engineering decisions taken by the session (not asked):** the ten Dependabot bumps landed as one PR (#1262) at their
+  proposed versions, as the 2026-10-05 batch did, and the ten were closed as superseded; #567's finding shipped although
+  neither import adapter reads a rate today (a guard for the day one does; said plainly in #1261); #569's remedy is R2
+  (a container query on a `.shell-frame` wrapper, ADR-0213) after M0 showed R1 would expose the landing's hidden
+  overflow as a scrollbar at 100 % — ui-architect settled where the container goes; the register numbering was kept
+  contiguous by giving #569's row 570 and #565's 571; a corrupt remote instant falls back to the date with a log line
+  rather than failing the downstream recalculation (security review); the reconciliation pass's dependency-audit finding
+  is filed as #574 rather than fixed in this batch.
+- **Deliberately not done (owner rule):** #565 plan task M5-T1 asks someone to read the boot recalculation's log counts
+  (`schedule.xplan_instants_rederived`: `pending`, `recalculated`) on the deployed host. Not asked, not done.
 
 ## Where things stand
 
-- **Latest releases:** `web` **0.201.0** and `api` **0.104.0** (Version Packages #1243, `caccdc18`).
-- **This batch's PRs, in merge order:** #1238 (the three approved specs), #1239 (#545 run lock), #1240 (#557
-  redundant-link narrowing), #1241 (#561 decision), #1242 (#555 weekend twin; filed #565), #1244 (#565 part: a
-  timed cross-plan start on a zero-span activity is not re-rolled), #1245 (#548 + #358, ADR-0026 §8 amended), #1256
-  (#554, ADR-0208 D7), #1257 (#551 crash reports, ADR-0211, the `crash_reports` table), #1258 (#211 long-press hint),
-  #1243 (release).
-- **New rows:** **#565** (narrowed, open: five cross-plan cases a stored date cannot express; the fix needs instant
-  columns, i.e. a spec and database-architect — ADR-0161's deferred item), **#566** (an MSPDI report contradicts
-  itself about a resource calendar's tier), **#567** (a code-matched resource silently drops the file's rate),
-  **#568** (a crew calendar an activity also uses stays in the shared library), **#569** (at text-only 200 % in
-  1024 × 600 the toolbar covers the viewport, so no dock strip can be hit by pointer; keyboard reaches them).
-- **Closed:** #545, #548, #358, #551, #554, #555, #557, #561 (by decision); #211's long-press item (the row stays open
-  on its export-strip item, size S ×1).
-- **Dependabot #1246 to #1255** opened during the six-day gap and were **not touched**; offer them to the owner.
-- **Defects found and fixed on the way (in #1258):** the activities panel header overflowed 3 px at 1024 × 600 / 200 %;
-  dismissing any dock strip in the panel-takes-body layout dropped focus to `<body>` (fixed for every strip).
-- **The new table:** `crash_reports` (migration `20261101120000_crash_reports`) is the fourth retention table (30 days
-  after last seen). The staff console shows it as **Screen crashes**; it receives reports only from signed-in screens.
+- **Latest releases:** `web` **0.201.1**, `api` **0.105.0**, `@repo/interchange` 0.16.2 (Version Packages #1264, `da244199`, tags `web-v0.201.1` and `api-v0.105.0`, Release run 42426152434 with both image publish jobs successful).
+- **This batch's PRs, in merge order:** #1260 (#566 MSPDI tier wording), #1261 (#567 code-match rate finding), #1262
+  (Dependabot #1246–#1255 combined), #1263 (#565 M0 spec + predictions), #1265 (#569 M0 measurement), #1266 (#565 M1
+  engine instants), #1267 (#565 M2 schema: four `TIMESTAMPTZ(3)` instants on `activities` +
+  `plans.schedule_instants_computed_at`, export 2.4), #1268 (#565 M3 boot recalculation, dormant), #1269 (#565 M4 the
+  read switched on + marker migration), #1270 (#565 M5 ADR-0212 Accepted, #565 closed, #571 filed), #1271 (#569 M1,
+  ADR-0213 Accepted), #1272 (reconciliation pass), #1264 (release), then this hand-off.
+- **New ADRs:** **ADR-0212** (a plan keeps the instant beside the date; cross-plan links read it) and **ADR-0213** (the
+  shell asks its own frame whether it is short) — both Accepted.
+- **New migrations:** `20261107120000_schedule_instants`, `20261107120100_cross_plan_instants_marker` (statement-free;
+  keys the once-only boot recalculation). Rollback steps are in `docs/DEPLOYMENT.md` ("Rolling back past the cross-plan
+  instants release").
+- **Closed:** #565, #566, #567, #569. **New rows:** **#570** (a strip that arrives while the frame is scrolled up lands
+  below the window; Q2 A), **#571** (a downstream plan reads an upstream's date until that upstream is recalculated after
+  the release), **#572** (the landing is taller than the window at 100 % text, hidden by the shell's overflow), **#573**
+  (a corner of the coarse selection bar is covered at 100 %), **#574** (the production dependency audit was never
+  recorded; `body-parser` 2.3.0 is on the API request path, fixed in 2.4.0).
+- **Dependabot #1246–#1255:** merged as #1262 and closed.
 
-## The reconciliation pass (2026-10-31)
+## The reconciliation pass (2026-11-07)
 
-Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md`. Found wrong and fixed: the silent export loss (#1223); every
-reviewer agent ignorant of codes, and `security-reviewer.md`'s guest rule false for a code-grouped plan (five agents now
-carry the codes invariants); ROADMAP's ADR-0207 still "ships with the next release"; `DATABASE.md`'s soft-delete model
-count (21 → 23); `PROJECT_BRIEF.md` calling codes a follow-on; two `scripts/surface-contract.json` `gap` rows for dialogs
-that shipped. Rows #74, #279, #549, #552, #557 and #562 corrected in place; none resolved. **Pointer drift recorded, not
-fixed:** #121, #202, #211, #263, #320, #358, #366, #560 (#560 has since been closed, #1230; the other seven were re-pointed by #1232). **Not run:** step 5a (the clone is shallow).
+Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md` (PR #1272). Fixed: `security-reviewer.md` now knows ADR-0211's
+crash reports; `ui-architect.md`'s stale #548 sentence; `ARCHITECTURE.md` §10's three swept tables (four); `CLAUDE.md`
+§17's staff panel count (nine); seven register pointers (#105, #117, #118b, #257, #264, #342, #517). Recorded, not fixed:
+`pnpm audit --prod` (now #574). **Not run:** step 5a (the clone is shallow).
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -134,6 +130,9 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
   #563 not taken.
 - 2026-11-01: build all eight (#551, #554, #561, #211, #545, #557, #555, #548 + #358) and fix #565 in the batch; the
   three specs with every recommended answer; #561 "leave the rows as they are".
+- 2026-11-07 (batch 2): build all six (Dependabot, #566, #567, reconciliation, #569, #565); #569 Q1 B (any way of
+  enlarging text) and Q2 A (an arriving strip stays put); #565 Q1 B (part-day finishes too) and Q2 A (recalculate linked
+  plans once at first start).
 
 ## Parked by the owner — keep, do not raise
 
@@ -214,19 +213,32 @@ owner returns to one, the steps are ready:
 
 ## Suggested next
 
-**The P6 epic is closed for what shipped.** Nothing in it is buildable until a real P6 export with activity codes
-arrives (M5 keeps them on import; M6 writes them to an XER, with the reader released first, ADR-0156 D9).
-
 - Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
-- **Worth offering:** **#565**'s remaining cases (a spec and database-architect: store the instant a cross-plan link
-  reads); **#569** (the 200 %-text toolbar covering the dock; needs a spec, it is a layout change); **#566** and
-  **#567** (small import fixes); the **Dependabot PRs #1246 to #1255**.
-- **#562**, **#563** and **#568** stay on their own triggers.
-- The next reconciliation pass is due now (an epic boundary; last full pass 2026-10-31).
+- **Worth offering:** **#574** (take `body-parser` 2.4.0 with its dependency claims re-read — small; making the audit a
+  gate needs a spec); any Dependabot PRs that have opened since; **#572** and **#573** are small UI follow-ups with
+  triggers, offer only if the owner wants polish.
+- **#562**, **#563**, **#568**, **#570** and **#571** stay on their own triggers.
+- The next reconciliation pass is due at the next epic boundary (last full pass 2026-11-07).
 
 Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
 ## Environment notes a new session would otherwise rediscover
+
+- **2026-11-07 (batch 2) lessons:**
+  - **Stack dependent branches and prove the tree, not the SHA.** Each stacked PR was rebased with `git rebase --onto
+origin/main <old-base>` after its parent squash-merged; comparing `git rev-parse HEAD^{tree}` with the tree that
+    `pnpm prepush` passed on showed the code was byte-identical, so the gate did not need re-running. A tree that differs
+    (e.g. a banner-count conflict) needs a fresh prepush.
+  - **A reused prepush worktree can hold two versions of a package** after a lockfile change; `check:claims` then
+    refuses ("more than one copy in the store") and a vitest cache dir can race. Delete `node_modules` and reinstall.
+  - **Give `pnpm prepush` a long background timeout** (it takes 20–40 minutes in this container); 10 minutes kills it
+    mid-test.
+  - **Builders on the database** each used their own database on the shared Postgres (`app_m2`, `app_m3`, `app_m4`)
+    and ran API e2e directly with vitest, leaving `app_test` and `scripts/e2e-local.sh` to the one journey runner — no
+    collisions all session.
+  - **`e2e-swimlanes/support.ts` hardcodes the seeder URL `http://localhost:3000`**; run that suite with the API on 3000.
+    `overview.spec.ts`'s first test needs `--timeout=180000` in this container (it passes in ~32 s against a 30 s limit).
+  - **The previous hand-off's branch name was reused** (`docs/handoff-2026-11-07`, already merged); pick a fresh name.
 
 - **2026-11-01/07 lessons:**
   - **Too many parallel agents starve the machine.** With 8 to 11 agents at once, every `pnpm prepush` hit 5 s test
