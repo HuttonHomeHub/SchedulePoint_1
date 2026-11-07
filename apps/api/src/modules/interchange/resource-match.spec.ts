@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  describeCodeMatchRateDifference,
   findResourceCollisions,
   matchImportResources,
   type LibraryResource,
@@ -17,7 +18,15 @@ const lib = (
   name: string,
   code: string | null = null,
   archivedAt: Date | null = null,
-): LibraryResource => ({ id, name, code, archivedAt, calendarId: null });
+): LibraryResource => ({
+  id,
+  name,
+  code,
+  archivedAt,
+  calendarId: null,
+  costPerUnit: null,
+  maxUnitsPerHour: null,
+});
 
 const match = (
   resources: SourceResource[],
@@ -156,6 +165,47 @@ describe('matchImportResources — archived library rows', () => {
   it('does not report an active library row', () => {
     const m = match([src('R1', 'Crane', 'CR')], [lib('L1', 'Crane', 'CR')]);
     expect(m.unarchive).toEqual([]);
+  });
+});
+
+describe('describeCodeMatchRateDifference (#567)', () => {
+  const kept = (cost: number | null, units: number | null): LibraryResource => ({
+    ...lib('L1', 'Crane', 'CR'),
+    costPerUnit: cost,
+    maxUnitsPerHour: units,
+  });
+  const file = (cost: number | null, units: number | null): SourceResource => ({
+    ...src('R1', 'Crane', 'CR'),
+    costPerUnit: cost,
+    maxUnitsPerHour: units,
+  });
+
+  it('says nothing when the rate and capacity match', () => {
+    expect(describeCodeMatchRateDifference(file(55, 2), kept(55, 2))).toBeNull();
+  });
+
+  it('says nothing when the file gives no value, or differs only past the stored precision', () => {
+    expect(describeCodeMatchRateDifference(file(null, null), kept(55, 2))).toBeNull();
+    expect(describeCodeMatchRateDifference(file(55.00001, 2), kept(55, 2))).toBeNull();
+  });
+
+  it('names the rate when only the rate differs', () => {
+    const d = describeCodeMatchRateDifference(file(60, 2), kept(55, 2));
+    expect(d?.detail).toContain('kept its rate');
+    expect(d?.detail).not.toContain('capacity');
+  });
+
+  it('names the capacity, and both when both differ', () => {
+    expect(describeCodeMatchRateDifference(file(55, 3), kept(55, 2))?.detail).toContain(
+      'kept its capacity',
+    );
+    expect(describeCodeMatchRateDifference(file(60, 3), kept(55, 2))?.detail).toContain(
+      'kept its rate and capacity',
+    );
+  });
+
+  it('counts a file value against a library row with none as a difference', () => {
+    expect(describeCodeMatchRateDifference(file(60, null), kept(null, null))).not.toBeNull();
   });
 });
 
