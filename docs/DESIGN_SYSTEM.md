@@ -381,10 +381,11 @@ flush with the edge or under the fade; `max-lg:deck-edge-fade`, a mask whose two
 by the scroll position (`animation-timeline: scroll(self inline)`), so a reader sees the line goes on
 even where overlay scrollbars hide; and `usePopoverPanel` / `Menu`'s viewport clamp for an overlay
 opened from a half-scrolled trigger. A short-but-wide window (1280 × 600) keeps its two rows (CQ-3).
-**`squat`** (`@custom-variant squat`, `(width < 64rem) and (height <= 26rem)`, pinned in
-`lib/breakpoints.ts`) is narrow **and** short: the shell itself scrolls and the band scrolls away, so
-a 640 × 360 or 320 × 256 window (or a 1280 × 800 window at text-only 200 %, which is 40 × 25 rem)
-reaches the foot row by scrolling to it. `xs` (26 rem) is the narrower step the app header uses to
+**`squat`** (`@custom-variant squat`, a container query `(width < 64rem) and (height <= 26rem)` on the shell
+frame `.shell-frame`, named `app-shell`; pinned in `lib/breakpoints.ts`, ADR-0213) is narrow **and** short: the
+shell itself scrolls and the band scrolls away, so a 640 × 360 or 320 × 256 window (or a 1280 × 800 window at
+text-only 200 %, which is 40 × 25 rem) reaches the foot row by scrolling to it. Its `rem` is the root size in
+force, so a browser text-size setting and a user style sheet's `html { font-size: 200% }` both answer. `xs` (26 rem) is the narrower step the app header uses to
 drop its plan identity under the brand.
 
 **The "Diagram viewport" cluster** (toolbar-redesign M4) is a `toolbarCardVariants` card at the diagram's

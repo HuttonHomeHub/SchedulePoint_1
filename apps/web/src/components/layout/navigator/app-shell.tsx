@@ -139,6 +139,15 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                   scroller and the workspace lays out as it does in any window — the reader scrolls
                   to it. Wide windows never reach this, whatever their height (CQ-3).
 
+                  **`squat` is answered by the frame around this grid** (`.shell-frame`, a size
+                  container exactly the window high; ADR-0213), in the root size in force. It was a
+                  media query, which answers `rem` at the browser's 16 px and so never saw a user
+                  style sheet's `html { font-size: 200% }`: the band held a window it could not fit
+                  and covered every foot-bar strip (#569). The frame is a dedicated wrapper, never
+                  `#root`; the `Sheet` below stays its sibling, and the skip link stays this grid's
+                  first child, so it is still the first focusable thing (WCAG 2.4.1). A `squat:`
+                  class outside the frame never matches; `app-shell.structural.test.ts` pins the one consumer.
+
                   **`squat:overflow-y-auto` must beat `overflow-hidden` on the same element, and
                   it does so only by CSS source order** (equal specificity, the variant emitted
                   later). Nothing in the class list says so, and a reorder of the stylesheet would
@@ -147,8 +156,9 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
 
                   The way back to a band that has scrolled away is the foot strip or keyboard focus;
                   the wheel over the canvas does not scroll the shell (`docs/TECH_DEBT.md` #477). */}
-              <div className="squat:grid-rows-[auto_auto_100dvh_auto] squat:overflow-y-auto relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
-                {/* **The skip link** — the first focusable thing in the document, and the only
+              <div className="shell-frame">
+                <div className="squat:grid-rows-[auto_auto_100dvh_auto] squat:overflow-y-auto relative grid h-dvh grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden">
+                  {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
                     It stays load-bearing after the rail's deletion, with a different traversal to
                     bypass: a keyboard user now tabs the band's header row and then the Explorer's
@@ -160,14 +170,14 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                     must be reachable, not decorative, and `not-sr-only` restores a real box the
                     moment it takes focus. Absolutely positioned so revealing it cannot reflow the
                     grid under the reader's cursor. */}
-                <a
-                  href="#main"
-                  className="bg-primary text-primary-foreground focus-visible:ring-ring sr-only absolute top-2 left-2 z-50 rounded-md px-3 py-2 text-sm font-medium focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  Skip to main content
-                </a>
+                  <a
+                    href="#main"
+                    className="bg-primary text-primary-foreground focus-visible:ring-ring sr-only absolute top-2 left-2 z-50 rounded-md px-3 py-2 text-sm font-medium focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    Skip to main content
+                  </a>
 
-                {/* **Row 1 — the viewport banner's seat** (ADR-0179). An `auto` row, so with no banner
+                  {/* **Row 1 — the viewport banner's seat** (ADR-0179). An `auto` row, so with no banner
                     it is zero high and every screen keeps the frame it had; with one, the grid
                     below it simply starts lower. It sits INSIDE this grid, after the skip link and
                     never before `<AppShell/>`, for two reasons: the shell is `h-dvh` with
@@ -175,9 +185,9 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                     window, and the skip link must remain the first focusable thing in the document
                     (WCAG 2.4.1). The content is the notice's, handed in as a prop because it owns
                     the state; this file only owns the seat. */}
-                <div className="col-span-2 col-start-1 row-start-1">{banner}</div>
+                  <div className="col-span-2 col-start-1 row-start-1">{banner}</div>
 
-                {/* **Row 3, column 1 — the docked Project Explorer** (workspace redesign M3-T1).
+                  {/* **Row 3, column 1 — the docked Project Explorer** (workspace redesign M3-T1).
                     It replaces the 48 px icon rail that spanned all three rows, and the swap is
                     the milestone: the rail's four jobs were the brand, the organisation switcher,
                     the six destinations and the account chip — all of them identity or navigation,
@@ -193,13 +203,13 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
 
                     Hidden below `lg`, where the `Sheet` at the foot of this file is the Explorer
                     and always has been. */}
-                {explorerAvailable ? (
-                  <div className="col-start-1 row-start-3 hidden min-h-0 shrink-0 lg:flex">
-                    <ExplorerColumn orgSlug={orgSlug} expansion={expansion} prefs={explorer} />
-                  </div>
-                ) : null}
+                  {explorerAvailable ? (
+                    <div className="col-start-1 row-start-3 hidden min-h-0 shrink-0 lg:flex">
+                      <ExplorerColumn orgSlug={orgSlug} expansion={expansion} prefs={explorer} />
+                    </div>
+                  ) : null}
 
-                {/* Row 2, BOTH COLUMNS — the command band. §4a solved by geometry, and now
+                  {/* Row 2, BOTH COLUMNS — the command band. §4a solved by geometry, and now
                     trivially: every column that can change width is inside the span, so resizing
                     the Explorer and folding it redistribute width *within* the band and change it
                     by exactly zero. Under the icon rail this had to be `2–3` and rely on column 1
@@ -210,14 +220,14 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                     that floated the band as a card on the gradient is a knowing reversal — the
                     product owner who approved the frame asked for it back, edge to edge. The 12 px
                     the margins spent on ground now belongs to the surfaces. */}
-                <ChromeBandRow
-                  rowsSlotRef={rowsSlotRef}
-                  identitySlotRef={identitySlotRef}
-                  modeSlotRef={modeSlotRef}
-                  className="col-span-2 col-start-1 row-start-2"
-                />
+                  <ChromeBandRow
+                    rowsSlotRef={rowsSlotRef}
+                    identitySlotRef={identitySlotRef}
+                    modeSlotRef={modeSlotRef}
+                    className="col-span-2 col-start-1 row-start-2"
+                  />
 
-                {/* Row 3, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
+                  {/* Row 3, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
                     shell; `overflow-auto` gives screens taller than the viewport somewhere to go,
                     so the band and the rail stay put while the content moves.
 
@@ -225,15 +235,15 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                     actually move focus: without it the browser scrolls to the element and leaves
                     focus where it was, so the next Tab resumes inside the rail — the failure the
                     link exists to fix, silently reintroduced. */}
-                <main
-                  id="main"
-                  tabIndex={-1}
-                  className="col-start-2 row-start-3 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
-                >
-                  <Outlet />
-                </main>
+                  <main
+                    id="main"
+                    tabIndex={-1}
+                    className="col-start-2 row-start-3 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
+                  >
+                    <Outlet />
+                  </main>
 
-                {/* Row 4, both columns — **the plan status bar** (ADR-0099 D5). It mirrors
+                  {/* Row 4, both columns — **the plan status bar** (ADR-0099 D5). It mirrors
                     the command band above: same span, for the same reason and with the same
                     geometry.
 
@@ -241,11 +251,12 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                     nothing into it is a zero-height row and keeps exactly the frame it had. That is
                     the same content-driven-height property M2 built this grid for, and it is why
                     twelve non-plan screens need no opt-out. */}
-                <ChromeSlot
-                  slotRef={statusSlotRef}
-                  name="status"
-                  className="border-border col-span-2 col-start-1 row-start-4 border-t"
-                />
+                  <ChromeSlot
+                    slotRef={statusSlotRef}
+                    name="status"
+                    className="border-border col-span-2 col-start-1 row-start-4 border-t"
+                  />
+                </div>
               </div>
 
               {/* Below lg: the rail as an off-canvas drawer. Gated on the same fact as the pinned

@@ -350,4 +350,32 @@ describe('AppShell', () => {
     expect(main).toHaveAttribute('id', 'main');
     expect(main).toHaveAttribute('tabindex', '-1');
   });
+
+  /**
+   * **`squat` is a container query on the shell frame (ADR-0213), so the grid that carries the
+   * `squat:` classes must sit inside it.** jsdom has no containers, so this reads the structure: a
+   * grid moved out of the frame would never match `squat` and the band would hold a window it cannot
+   * fit again, with every unit suite green (#569). R1's scrolling-shell form was not built, so the
+   * grid keeps `overflow-hidden` at every other size, which is what leaves the landing's own
+   * overflow as hidden as it always was. That `squat:` has no consumer outside the frame is pinned by
+   * `app-shell.structural.test.ts`.
+   */
+  it('sits the squat grid inside the shell frame and leaves its 100 % overflow rule alone', () => {
+    renderShell();
+    const grid = screen.getByRole('link', { name: 'Skip to main content' }).parentElement!;
+    expect(grid.className).toContain('squat:grid-rows-[auto_auto_100dvh_auto]');
+    expect(grid.className).toContain('squat:overflow-y-auto');
+    expect(grid.parentElement).toHaveClass('shell-frame');
+    expect(grid).toHaveClass('h-dvh', 'overflow-hidden');
+    expect(grid).not.toHaveClass('overflow-y-auto');
+    expect(grid).not.toHaveClass('overflow-x-hidden');
+  });
+
+  it('keeps the frame to the grid: the Explorer sheet is its sibling, not inside it', () => {
+    renderShell();
+    const frame = screen.getByRole('link', { name: 'Skip to main content' }).parentElement!
+      .parentElement!;
+    expect(frame).toHaveClass('shell-frame');
+    expect(frame.children).toHaveLength(1);
+  });
 });

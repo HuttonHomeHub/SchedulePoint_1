@@ -230,10 +230,11 @@ for (const pointer of ['fine', 'coarse'] as const) {
      *
      * The text is enlarged by the root's `font-size`, which is the route that leaves `sm:` matching and
      * so the only one that reaches the floor (`m0-measurement.md`: a text-only default-font change moves
-     * the media queries too, and reads clean on both pointers). The selection is made at 100 % first,
-     * because the 200 % command band takes the whole 1024 x 600 window and the listbox cannot take
-     * focus under it. Only the HORIZONTAL axis is asserted: the vertical clip in that same state is
-     * the band's, not the floor's.
+     * the media queries too, and reads clean on both pointers). The selection is still made at 100 % first, which is
+     * harmless: since #569 the shell scrolls the band away above a full-window body under this route
+     * too (`squat` is answered by the shell frame in the root size in force, ADR-0213), so the listbox
+     * is reachable at 200 % either way. Only the HORIZONTAL axis is asserted: vertical reach at large
+     * text is `e2e-toolbar/touch-gestures.spec.ts`'s.
      */
     test('200 % root text never pushes the foot row or the bar sideways past the window', async () => {
       test.setTimeout(120_000);
