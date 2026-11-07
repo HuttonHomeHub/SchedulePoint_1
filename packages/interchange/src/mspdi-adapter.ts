@@ -363,16 +363,20 @@ export function adaptMspdiToCanonical(
     // MSPDI has no equivalent of P6's `clndr_type`: an MSPDI file is ONE project, and its
     // `<Calendar>` carries only `IsBaseCalendar`/`BaseCalendarUID` — calendar *inheritance*
     // (which calendar this one derives from), not an organisation-vs-project TIER. So every MSP
-    // calendar imports project-local, which is also the safe default. Reported once per file, not
-    // per calendar, because it is a property of the format rather than of any one row.
+    // calendar imports project-local, which is also the safe default. The one exception is made
+    // downstream: a calendar an imported resource holds is forced to the shared library by the
+    // mapper (`resourceTierFinding`, ADR-0053 §2), which says so for that calendar. This sentence
+    // names the exception rather than deciding it, so it stays true whether or not a resource holds
+    // one. Reported once per file, not per calendar, because it is a property of the format rather
+    // than of any one row.
     findings.push({
       kind: 'approximation',
       entity: 'calendar',
       sourceRef: null,
       detail:
-        'every calendar was created in this project (project scope); promote any you want shared to the organisation library',
+        'calendars were created in this project (project scope), except a calendar an imported resource holds, which goes to the shared organisation library; promote any other you want shared to the organisation library',
       reason:
-        'MSPDI carries no organisation-vs-project calendar tier (no P6 clndr_type equivalent, ADR-0053 §5)',
+        'MSPDI carries no organisation-vs-project calendar tier (no P6 clndr_type equivalent, ADR-0053 §5); a resource is organisation-global, so its calendar is the exception (ADR-0053 §2)',
     });
   }
 
