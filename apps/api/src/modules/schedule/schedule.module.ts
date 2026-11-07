@@ -7,6 +7,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
+import { CrossPlanInstantRederiveService } from './cross-plan-instant-rederive.service';
 import { CrossPlanRederiveService } from './cross-plan-rederive.service';
 import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
 import { FinishMilestoneRederiveService } from './finish-milestone-rederive.service';
@@ -46,6 +47,9 @@ import { ScheduleService } from './schedule.service';
   // Pass 2 wrote, and of the plans downstream of them (#421, spec §4.4).
   // MilestoneRederiveService: the one-shot boot recalculation of plans holding a zero-span activity (or
   // linked to one) computed under the old calendar snap (#539, ADR-0207).
+  // CrossPlanInstantRederiveService: the one-shot boot recalculation, upstream first, of linked plans so
+  // the stored instants exist before a downstream reads them (ADR-0212 D5). Dormant until its marker
+  // migration lands (M4).
   providers: [
     ScheduleService,
     ScheduleRepository,
@@ -54,6 +58,7 @@ import { ScheduleService } from './schedule.service';
     CrossPlanRederiveService,
     ProgressedVisualRederiveService,
     MilestoneRederiveService,
+    CrossPlanInstantRederiveService,
   ],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
