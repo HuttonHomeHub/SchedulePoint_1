@@ -2126,8 +2126,8 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
 
 Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
 When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
-it as stale (ADR-0155 D9). Four boot services now recalculate such plans once, and each is
-keyed on a migration's `finished_at`:
+it as stale (ADR-0155 D9). Five boot services now recalculate such plans once, and each is
+keyed on a migration's `finished_at` (the fifth's migration lands in M4, so it admits no plan yet):
 
 | Service                           | Marker migration                                        | Has DDL/data |
 | --------------------------------- | ------------------------------------------------------- | ------------ |
@@ -2135,6 +2135,7 @@ keyed on a migration's `finished_at`:
 | `CrossPlanRederiveService`        | `20260926120000_cross_plan_lag_working_minutes`         | yes          |
 | `ProgressedVisualRederiveService` | `20260930120000_progressed_predecessor_visual_marker`   | **no**       |
 | `MilestoneRederiveService`        | `20261026120000_milestone_cross_calendar_marker`        | **no**       |
+| `CrossPlanInstantRederiveService` | `20261107120100_cross_plan_instants_marker`             | **no**       |
 
 - **Why `finished_at` is the right key.** `docker-entrypoint.sh` runs `prisma migrate deploy`
   before `node dist/main.js`, in the image that carries the engine change (ADR-0018). So the row
@@ -2153,6 +2154,12 @@ keyed on a migration's `finished_at`:
 - **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
   `finished_at`, and every matching plan computed before then would be recalculated again. That is
   harmless but unrequested.
+- **The cross-plan instants marker (ADR-0212 D5, `CrossPlanInstantRederiveService`).** Same shape, no
+  statement. A plan is pending when it is live, has a data date, was computed before the marker and is an
+  endpoint of a live cross-plan link in either direction, so the upstream writes its instants before the
+  downstream reads them. It is keyed on `20261107120100_cross_plan_instants_marker`, whose folder lands
+  with the read in M4. Until then the scalar subquery is `NULL` and the service admits nothing, which is
+  the fail-closed rule doing its job rather than a bug. A rollback of the image must delete that row.
 - **The #421 pending read, measured** (PostgreSQL 16.13, all `72 migrations` applied, 10
   organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
   plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
