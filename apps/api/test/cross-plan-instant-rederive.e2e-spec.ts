@@ -11,13 +11,15 @@ import type { PrismaService } from '../src/prisma/prisma.service';
 import { clearDomainData } from './audit-reset';
 
 /**
- * **Cross-plan instants M3 — the boot re-derivation recalculates a linked chain once, upstream first,
+ * **Cross-plan instants M3/M4 — the boot re-derivation recalculates a linked chain once, upstream first,
  * and fills every plan's instants** (ADR-0212 D5). Against a real database, because the pending query
  * reads `_prisma_migrations` and the order's effect is only visible through the real staleness read.
  *
- * **The marker row is inserted by the test.** M3 ships the service dormant: the migration it keys on does
- * not exist until M4, so with no row the service must admit nothing (the first case pins that), and the
- * other cases insert a row of that name, as the migration's own application would.
+ * **The marker is the migration's own row.** `20261107120100_cross_plan_instants_marker` has no statement,
+ * so `prisma migrate deploy` leaves exactly the `_prisma_migrations` row the service keys on (M3 shipped
+ * the service dormant and inserted a stand-in row here; M4 adds the migration, so the stand-in is gone).
+ * The first case takes the row away, and rolls it back, to pin the fail-closed rule the other four
+ * precedents rely on.
  *
  * **The fixture, and why it discriminates** (the #385 fixture, ADR-0161 D8). Three plans in a chain
  * `Upstream → Middle → Downstream`, one activity each, linked FS across plans. They are CREATED downstream
@@ -55,24 +57,32 @@ describe.skipIf(!hasDatabase)('cross-plan instant boot re-derivation (e2e)', () 
   let prisma: PrismaService;
   let rederive: CrossPlanInstantRederiveService;
 
-  /** Insert the marker row M4's migration will leave, as `prisma migrate deploy` would. */
-  async function insertMarker(): Promise<Date> {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "_prisma_migrations" ("id", "checksum", "migration_name", "started_at", "finished_at", "applied_steps_count")
-       VALUES (gen_random_uuid()::text, repeat('0', 64), $1, now(), now(), 1)`,
-      MARKER,
-    );
+  /** The marker migration's own `finished_at`, as `prisma migrate deploy` recorded it. */
+  async function markerFinishedAt(): Promise<Date> {
     const rows = await prisma.$queryRaw<{ finishedAt: Date }[]>`
       SELECT "finished_at" AS "finishedAt" FROM "_prisma_migrations"
-       WHERE "migration_name" = ${MARKER}`;
+       WHERE "migration_name" = ${MARKER}
+         AND "finished_at" IS NOT NULL AND "rolled_back_at" IS NULL`;
+    expect(rows).toHaveLength(1);
     return rows[0]!.finishedAt;
   }
 
-  async function deleteMarker(): Promise<void> {
+  /** Run `body` with the marker row renamed away, restoring it whatever happens. */
+  async function withMarkerRow(set: string, body: () => Promise<void>): Promise<void> {
     await prisma.$executeRawUnsafe(
-      `DELETE FROM "_prisma_migrations" WHERE "migration_name" = $1`,
-      MARKER,
+      `UPDATE "_prisma_migrations" SET ${set} WHERE "migration_name" = '${MARKER}'`,
     );
+    try {
+      await body();
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "_prisma_migrations" SET "migration_name" = '${MARKER}', "rolled_back_at" = NULL
+          WHERE "migration_name" = '${MARKER}-away'`,
+      );
+      await prisma.$executeRawUnsafe(
+        `UPDATE "_prisma_migrations" SET "rolled_back_at" = NULL WHERE "migration_name" = '${MARKER}'`,
+      );
+    }
   }
 
   const backdate = (planIds: string[]) =>
@@ -100,11 +110,9 @@ describe.skipIf(!hasDatabase)('cross-plan instant boot re-derivation (e2e)', () 
 
   beforeEach(async () => {
     await clearDomainData(prisma);
-    await deleteMarker();
   });
 
   afterAll(async () => {
-    await deleteMarker();
     await clearDomainData(prisma);
     await app?.close();
   });
@@ -195,21 +203,21 @@ describe.skipIf(!hasDatabase)('cross-plan instant boot re-derivation (e2e)', () 
     };
   }
 
-  it('is dormant while its marker migration has no row: stale linked plans are not pending', async () => {
+  it('fails closed: with no marker row, or a rolled-back one, stale linked plans are not pending', async () => {
     const s = await seed();
     const all = [s.plans.upstream, s.plans.middle, s.plans.downstream];
     await s.programme(s.plans.downstream);
     await backdate(all);
-    expect(await rederive.pendingPlans()).toEqual([]);
-    expect(await rederive.rederive()).toBe(0);
+    expect((await rederive.pendingPlans()).map((p) => p.id).sort()).toEqual([...all].sort());
 
-    // A rolled-back row admits nothing either: fail closed, as the four precedents do.
-    await insertMarker();
-    await prisma.$executeRawUnsafe(
-      `UPDATE "_prisma_migrations" SET "rolled_back_at" = now() WHERE "migration_name" = $1`,
-      MARKER,
-    );
-    expect(await rederive.pendingPlans()).toEqual([]);
+    await withMarkerRow(`"migration_name" = '${MARKER}-away'`, async () => {
+      expect(await rederive.pendingPlans()).toEqual([]);
+      expect(await rederive.rederive()).toBe(0);
+    });
+    await withMarkerRow(`"rolled_back_at" = now()`, async () => {
+      expect(await rederive.pendingPlans()).toEqual([]);
+    });
+    expect((await rederive.pendingPlans()).map((p) => p.id).sort()).toEqual([...all].sort());
   });
 
   it('recalculates a chain once, upstream first, fills the instants and leaves nothing stale', async () => {
@@ -225,7 +233,7 @@ describe.skipIf(!hasDatabase)('cross-plan instant boot re-derivation (e2e)', () 
       `UPDATE "plans" SET "schedule_instants_computed_at" = NULL WHERE "id" = ANY($1::uuid[])`,
       all,
     );
-    const markerFinished = await insertMarker();
+    const markerFinished = await markerFinishedAt();
     expect(
       (await rederive.pendingPlans()).map((p) => p.id).sort(),
       'all three are pending: each touches a live cross-plan edge and predates the marker',
@@ -274,7 +282,6 @@ describe.skipIf(!hasDatabase)('cross-plan instant boot re-derivation (e2e)', () 
     await s.makeActivity(unlinked, 'Alone');
     await s.programme(unlinked);
     await backdate([unlinked, s.plans.upstream, s.plans.middle]);
-    await insertMarker();
     expect((await rederive.pendingPlans()).map((p) => p.id).sort()).toEqual(
       [s.plans.upstream, s.plans.middle].sort(),
     );

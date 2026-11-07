@@ -129,6 +129,8 @@ function remoteEndpoint(
     planId: 'REMOTE_PLAN',
     planCalendarId: null,
     planDataDate: new Date('2026-01-01T00:00:00.000Z'),
+    planScheduleComputedAt: null,
+    planInstantsComputedAt: null,
     ...over,
   };
 }
@@ -484,6 +486,76 @@ describe('ScheduleService.recalculate', () => {
     expect(summary.externalDrivenCount).toBe(1);
     const logged = logger.info.mock.calls.at(-1)?.[0] as { crossPlanUpstreamMissingCount: unknown };
     expect(logged.crossPlanUpstreamMissingCount).toBe(0);
+  });
+
+  describe('the stored remote instant is read only while its plan says it is current (ADR-0212 D3/D4)', () => {
+    const STAMP = new Date('2026-02-01T09:00:00.000Z');
+    /** An FS edge whose upstream PLACED finish DATE is 01-10 but whose instant is 06:00 that day. */
+    function incomingFrom(remote: Partial<CrossPlanRemoteEndpointRow>, instant: Date | null) {
+      return [
+        {
+          successorId: 'A',
+          type: 'FS',
+          lagMinutes: 0,
+          lagCalendar: 'PROJECT_DEFAULT',
+          predecessor: remoteEndpoint(remote),
+          predecessorPlacedStart: new Date('2026-01-08T00:00:00.000Z'),
+          predecessorPlacedFinish: new Date('2026-01-10T00:00:00.000Z'),
+          predecessorPlacedStartInstant: instant,
+          predecessorPlacedFinishInstant: instant,
+        },
+      ];
+    }
+    const instant = new Date('2026-01-10T06:00:00.000Z');
+
+    beforeEach(() => {
+      schedule.loadActivities.mockResolvedValue([activityRow('A', 3)]);
+      crossPlan.countActiveForPlan.mockResolvedValue(1);
+    });
+
+    it('starts at the stored instant, not at the end of the date, when the stamps agree', async () => {
+      crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue(
+        incomingFrom({ planScheduleComputedAt: STAMP, planInstantsComputedAt: STAMP }, instant),
+      );
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+      expect(results.find((r) => r.activityId === 'A')!.earlyStart).toBe('2026-01-10');
+      const missing = logger.info.mock.calls.filter(
+        ([o]) => (o as { event?: string }).event === 'schedule.xplan_remote_instant_missing',
+      );
+      expect(missing).toHaveLength(0);
+    });
+
+    it('falls back to the date, and logs the edge, when the stamps differ (an older image wrote the plan)', async () => {
+      crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue(
+        incomingFrom(
+          {
+            planScheduleComputedAt: new Date(STAMP.getTime() + 1000),
+            planInstantsComputedAt: STAMP,
+          },
+          instant,
+        ),
+      );
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+      expect(results.find((r) => r.activityId === 'A')!.earlyStart).toBe('2026-01-11');
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'schedule.xplan_remote_instant_missing',
+          remoteInstantMissingCount: 1,
+        }),
+        expect.any(String),
+      );
+    });
+
+    it('falls back to the date when the remote plan never kept instants', async () => {
+      crossPlan.loadIncomingWithPredecessorDates.mockResolvedValue(
+        incomingFrom({ planScheduleComputedAt: STAMP, planInstantsComputedAt: null }, instant),
+      );
+      await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+      const [, , results] = schedule.writeResults.mock.calls[0] as [string, string, EngineResult[]];
+      expect(results.find((r) => r.activityId === 'A')!.earlyStart).toBe('2026-01-11');
+    });
   });
 
   it('composes the derived bound with the M1 column by later-of, and later drives (§30.1/§30.5)', async () => {

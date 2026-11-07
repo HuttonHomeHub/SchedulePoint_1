@@ -13,9 +13,10 @@ import { ScheduleService } from './schedule.service';
  * `_prisma_migrations.finished_at` is the instant the instant-reading image took over on the host, and
  * is this service's marker (docs/DATABASE.md "Re-derivation markers"). No date is written into this file.
  *
- * **The migration does not exist yet, on purpose (M3).** Until M4 adds the folder, the scalar subquery
- * below is `NULL`, `x < NULL` admits no plan, and the service is dormant — fail-closed, by the same rule
- * that makes a rolled-back marker admit nothing.
+ * Fail-closed: with no row, or a rolled-back one, the scalar subquery below is `NULL`, `x < NULL` admits
+ * no plan, and the service does nothing. It was shipped that way for one milestone (M3), before this
+ * migration existed, and the unit spec's "names a migration that exists" case is what holds it to the
+ * file now.
  */
 export const CROSS_PLAN_INSTANTS_MIGRATION = '20261107120100_cross_plan_instants_marker';
 
