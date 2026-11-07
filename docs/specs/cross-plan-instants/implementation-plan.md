@@ -178,7 +178,7 @@ control.
 
 - **Description:** run **database-architect** on spec §4.4: column names and types for D-DB-1, the D-4
   freshness marker's shape and home (D-DB-2), no backfill (D-DB-3), any CHECK, the `unnest` append order,
-  and the rollback consequence. Output to `m2/migration-design.md`. Re-run if it returns nothing
+  and the rollback consequence. Output to `m2-schema-design.md`. Re-run if it returns nothing
   (CLAUDE.md §19.3).
 - **Complexity:** S
 - **Dependencies:** M1-T1

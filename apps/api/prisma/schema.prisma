@@ -1102,6 +1102,22 @@ model Plan {
   /// filtered or sorted across plans — the `scheduleComputedAt` precedent. No CHECK: the one
   /// candidate (`>= created_at`) compares two clocks and guards nothing a reader relies on.
   scheduleInputsChangedAt               DateTime                @default(now()) @map("schedule_inputs_changed_at") @db.Timestamptz(3)
+  /// The instant this plan's activity INSTANT columns were last written (ADR-0212 D4; cross-plan-instants
+  /// m2-schema-design.md B1). ENGINE-OWNED: stamped `now()` by `stampScheduleComputedAt` in the SAME
+  /// statement as `schedule_computed_at`, so a current recalculation always leaves the two EQUAL. A
+  /// reader trusts a plan's `*_instant` columns only when this is non-null and equals
+  /// `scheduleComputedAt`. An image that predates the instants advances the cursor without this, so its
+  /// plans read as "instants not current" and the cross-plan derivation falls back to the date (FC-5,
+  /// FC-8). That is the whole rollback safety, with no operator step.
+  ///
+  /// NULLABLE, NO DEFAULT, no backfill: NULL is "never written by an instant-aware recalculation".
+  /// Never accepted from a DTO; touches no version/updated_at/updated_by (ADR-0022). CHECK
+  /// ck_plans_schedule_instants_requires_cursor (raw SQL, migration only). Deliberately NO `<=`/equality
+  /// CHECK: the cursor can move backwards when two recalculations queue on the plan lock, and such a
+  /// CHECK would fail an older image's recalculation during a rollback. No index: read with its own
+  /// plan row (via the cross-plan include and the export), never filtered or sorted across plans (the
+  /// scheduleComputedAt precedent).
+  scheduleInstantsComputedAt            DateTime?               @map("schedule_instants_computed_at") @db.Timestamptz(3)
   /// Where this plan's swimlanes come from (swimlanes schema-design §3.2). NOT NULL DEFAULT 'NONE',
   /// true of every plan that predates the feature. NOT a scheduling input (`NOT_INPUT` in
   /// PLAN_FIELD_CLASS): a source write must not stamp schedule_inputs_changed_at. It goes through
@@ -1671,6 +1687,38 @@ model Activity {
   //     user-edit path wrote this engine column, which ADR-0022 forbids. NO index — read only in the
   //     plan-scoped activity load; no predicate or ORDER BY targets it.
   derivedDurationMinutes Int? @map("derived_duration_minutes")
+
+  // SCHEDULE INSTANTS: the exact engine instant each of four stored DATES is dated from (ADR-0212;
+  // cross-plan-instants spec §4.4 D-DB-1, m2-schema-design.md A1–A6). Read ONLY by the cross-plan
+  // derivation: forward reads the predecessor's visual_effective_* pair, backward the successor's late_*
+  // pair (cross-plan-basis.structural.spec.ts pins that asymmetry). The early pair is deliberately
+  // absent: nothing across a link reads it (ADR-0148 M-H).
+  //   * UNIT: the engine's absolute minute (ADR-0037, instantToAbsMinutes): civil time with NO zone, held
+  //     as if UTC, the external_early_start precedent. `Date.getTime() / 60000` IS the engine value.
+  //     Written from int minutes as `timestamptz 'epoch' + make_interval(mins => …)`, so the session
+  //     TimeZone never touches it.
+  //   * FINISH instants are the EXCLUSIVE end boundary the engine computes (the instant work stops),
+  //     not the inclusive last day the finish DATE shows. On a 24-hour calendar that is the next
+  //     midnight.
+  //   * They can legitimately DISAGREE with their date: an actual date (the date is the actual), a
+  //     typed finish-milestone placement (ADR-0207 D2), and the finish-milestone late clamp
+  //     (`lateDayOf`, compute.ts). The instant is what the engine used for logic, which is what one
+  //     plan reads.
+  //   * ENGINE-OWNED: written ONLY by `writeResults`' batched unnest UPDATE for EVERY activity type, in
+  //     the statement that writes the dates. NEVER from a DTO; NEVER touching
+  //     version/updated_at/updated_by (ADR-0022).
+  //   * TRUSTED ONLY WHEN plans.schedule_instants_computed_at = plans.schedule_computed_at (see Plan).
+  //     NULL = not written since the columns landed; read the date (FC-5). No backfill (needs the
+  //     engine).
+  //   * CHECK ck_activities_schedule_instants_all_or_none_with_dates (raw SQL, migration only): all
+  //     four NULL, or all four set with their four dates set. No ordering CHECK: the dates tolerate a
+  //     progressed inversion and so must these.
+  //   * NO index: only projected through the cross-plan includes (reached by primary key) and the
+  //     export. No predicate or ORDER BY targets them.
+  visualEffectiveStartInstant  DateTime? @map("visual_effective_start_instant") @db.Timestamptz(3)
+  visualEffectiveFinishInstant DateTime? @map("visual_effective_finish_instant") @db.Timestamptz(3)
+  lateStartInstant             DateTime? @map("late_start_instant") @db.Timestamptz(3)
+  lateFinishInstant            DateTime? @map("late_finish_instant") @db.Timestamptz(3)
 
   // Housekeeping (as Project/Plan): TEXT audit ids (Better Auth ids are TEXT),
   // optimistic-lock version, soft delete + restore-batch correlation.

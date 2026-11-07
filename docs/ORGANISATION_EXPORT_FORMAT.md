@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `2.3`
+- **Version:** `2.4`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -94,7 +94,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "2.3",
+  "formatVersion": "2.4",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,6 +145,16 @@ version.
 
 Changes since `1.0`:
 
+- **`2.4`** — five appended columns. `activities.visualEffectiveStartInstant`, `.visualEffectiveFinishInstant`,
+  `.lateStartInstant` and `.lateFinishInstant` hold the exact working instant each of those four dates is
+  calculated from. Each is written in the plan's own clock time in UTC form, and no time-zone conversion
+  applies (as for `externalEarlyStart`). A finish instant is the moment work stops, not the inclusive
+  last day the date column shows. An instant can differ from its date where the date is an actual, a
+  placed finish milestone, or a finish milestone whose late date is held at its early date.
+  `plans.scheduleInstantsComputedAt` says when the instants were written. A plan's instants are from
+  the calculation that wrote its dates only when this value equals `scheduleComputedAt`. When it is
+  empty or different, ignore them. All five are empty for a plan not calculated since they were added.
+  Nothing is renamed or retyped, so a reader written for `2.3` reads `2.4`.
 - **`2.3`** — swimlanes made from activity codes, the codes themselves. Four new files, `code-types`,
   `code-values`, `code-value-assignments` and `code-swimlane-lanes`, and six appended columns:
   `plans.swimlaneCodeTypeId`, `baselines.swimlaneCodeTypeId`, `baselines.codeSnapshotLevel` and
@@ -367,41 +377,42 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/plans.json` and `csv/plans.csv`.
 
-| Column                                  | Type    | Notes                                                      |
-| --------------------------------------- | ------- | ---------------------------------------------------------- |
-| `id`                                    | text    |                                                            |
-| `organizationId`                        | text    |                                                            |
-| `projectId`                             | text    |                                                            |
-| `name`                                  | text    |                                                            |
-| `description`                           | text    |                                                            |
-| `status`                                | enum    |                                                            |
-| `progressRecalcMode`                    | enum    |                                                            |
-| `useExpectedFinishDates`                | boolean |                                                            |
-| `criticalPathDefinition`                | enum    |                                                            |
-| `criticalFloatThresholdMinutes`         | int     | minutes                                                    |
-| `totalFloatMode`                        | enum    |                                                            |
-| `makeOpenEndsCritical`                  | boolean |                                                            |
-| `levelResources`                        | boolean |                                                            |
-| `levelWithinFloatOnly`                  | boolean |                                                            |
-| `ignoreExternalRelationships`           | boolean |                                                            |
-| `eacMethod`                             | enum    |                                                            |
-| `currencyCode`                          | text    |                                                            |
-| `plannedStart`                          | date    |                                                            |
-| `calendarId`                            | text    |                                                            |
-| `scheduleComputedAt`                    | instant |                                                            |
-| `scheduleCriticalPathDefinition`        | enum    |                                                            |
-| `scheduleCriticalFloatThresholdMinutes` | int     | minutes                                                    |
-| `scheduleTotalFloatMode`                | enum    |                                                            |
-| `scheduleMakeOpenEndsCritical`          | boolean |                                                            |
-| `scheduleInputsChangedAt`               | instant |                                                            |
-| `createdAt`                             | instant |                                                            |
-| `updatedAt`                             | instant |                                                            |
-| `createdBy`                             | text    |                                                            |
-| `updatedBy`                             | text    |                                                            |
-| `deletedAt`                             | instant |                                                            |
-| `swimlaneSource`                        | enum    | since 2.1                                                  |
-| `swimlaneWbsLevel`                      | int     | 1 to 3 when the source is WBS, else empty; since 2.1       |
-| `swimlaneCodeTypeId`                    | text    | the code type, when the source is ACTIVITY_CODE; since 2.3 |
+| Column                                  | Type    | Notes                                                                                                  |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
+| `id`                                    | text    |                                                                                                        |
+| `organizationId`                        | text    |                                                                                                        |
+| `projectId`                             | text    |                                                                                                        |
+| `name`                                  | text    |                                                                                                        |
+| `description`                           | text    |                                                                                                        |
+| `status`                                | enum    |                                                                                                        |
+| `progressRecalcMode`                    | enum    |                                                                                                        |
+| `useExpectedFinishDates`                | boolean |                                                                                                        |
+| `criticalPathDefinition`                | enum    |                                                                                                        |
+| `criticalFloatThresholdMinutes`         | int     | minutes                                                                                                |
+| `totalFloatMode`                        | enum    |                                                                                                        |
+| `makeOpenEndsCritical`                  | boolean |                                                                                                        |
+| `levelResources`                        | boolean |                                                                                                        |
+| `levelWithinFloatOnly`                  | boolean |                                                                                                        |
+| `ignoreExternalRelationships`           | boolean |                                                                                                        |
+| `eacMethod`                             | enum    |                                                                                                        |
+| `currencyCode`                          | text    |                                                                                                        |
+| `plannedStart`                          | date    |                                                                                                        |
+| `calendarId`                            | text    |                                                                                                        |
+| `scheduleComputedAt`                    | instant |                                                                                                        |
+| `scheduleCriticalPathDefinition`        | enum    |                                                                                                        |
+| `scheduleCriticalFloatThresholdMinutes` | int     | minutes                                                                                                |
+| `scheduleTotalFloatMode`                | enum    |                                                                                                        |
+| `scheduleMakeOpenEndsCritical`          | boolean |                                                                                                        |
+| `scheduleInputsChangedAt`               | instant |                                                                                                        |
+| `createdAt`                             | instant |                                                                                                        |
+| `updatedAt`                             | instant |                                                                                                        |
+| `createdBy`                             | text    |                                                                                                        |
+| `updatedBy`                             | text    |                                                                                                        |
+| `deletedAt`                             | instant |                                                                                                        |
+| `swimlaneSource`                        | enum    | since 2.1                                                                                              |
+| `swimlaneWbsLevel`                      | int     | 1 to 3 when the source is WBS, else empty; since 2.1                                                   |
+| `swimlaneCodeTypeId`                    | text    | the code type, when the source is ACTIVITY_CODE; since 2.3                                             |
+| `scheduleInstantsComputedAt`            | instant | when the activities' instants were written; current only when equal to `scheduleComputedAt`; since 2.4 |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -409,72 +420,76 @@ Not exported: `version`, `deleteBatchId`.
 
 Rows: every row of the organisation. Files `json/activities.json` and `csv/activities.csv`.
 
-| Column                     | Type    | Notes                                                 |
-| -------------------------- | ------- | ----------------------------------------------------- |
-| `id`                       | text    |                                                       |
-| `organizationId`           | text    |                                                       |
-| `planId`                   | text    |                                                       |
-| `code`                     | text    |                                                       |
-| `name`                     | text    |                                                       |
-| `description`              | text    |                                                       |
-| `type`                     | enum    |                                                       |
-| `durationMinutes`          | int     | minutes                                               |
-| `calendarId`               | text    |                                                       |
-| `constraintType`           | enum    |                                                       |
-| `constraintDate`           | date    |                                                       |
-| `secondaryConstraintType`  | enum    |                                                       |
-| `secondaryConstraintDate`  | date    |                                                       |
-| `externalEarlyStart`       | instant |                                                       |
-| `externalLateFinish`       | instant |                                                       |
-| `durationType`             | enum    |                                                       |
-| `laneIndex`                | int     | diagram row number; 0 is the first row                |
-| `scheduleAsLateAsPossible` | boolean |                                                       |
-| `levelingPriority`         | int     | lower number = higher priority; empty = no preference |
-| `status`                   | enum    |                                                       |
-| `percentComplete`          | int     | whole percent, 0 to 100                               |
-| `actualStart`              | date    |                                                       |
-| `actualFinish`             | date    | inclusive last day                                    |
-| `remainingDurationMinutes` | int     | minutes                                               |
-| `suspendDate`              | date    |                                                       |
-| `resumeDate`               | date    |                                                       |
-| `expectedFinish`           | date    | inclusive last day                                    |
-| `percentCompleteType`      | enum    |                                                       |
-| `physicalPercentComplete`  | int     | whole percent, 0 to 100                               |
-| `budgetedExpense`          | bigint  |                                                       |
-| `actualExpense`            | bigint  |                                                       |
-| `accrualType`              | enum    |                                                       |
-| `parentId`                 | text    |                                                       |
-| `earlyStart`               | date    |                                                       |
-| `earlyFinish`              | date    | inclusive last day                                    |
-| `lateStart`                | date    |                                                       |
-| `lateFinish`               | date    | inclusive last day                                    |
-| `totalFloatDays`           | int     | working days                                          |
-| `freeFloatDays`            | int     | working days                                          |
-| `isCritical`               | boolean |                                                       |
-| `isNearCritical`           | boolean |                                                       |
-| `constraintViolated`       | boolean |                                                       |
-| `externalDriven`           | boolean |                                                       |
-| `loeNoSpan`                | boolean |                                                       |
-| `resourceDriverMissing`    | boolean |                                                       |
-| `visualStart`              | date    |                                                       |
-| `visualEffectiveStart`     | date    |                                                       |
-| `visualEffectiveFinish`    | date    | inclusive last day                                    |
-| `visualConflict`           | boolean |                                                       |
-| `visualDriftDays`          | int     | days                                                  |
-| `visualConflictReason`     | enum    |                                                       |
-| `remainingFloatDays`       | int     | working days                                          |
-| `leveledStart`             | date    |                                                       |
-| `leveledFinish`            | date    | inclusive last day                                    |
-| `levelingDelayMinutes`     | int     | minutes                                               |
-| `levelingWindowExceeded`   | boolean |                                                       |
-| `selfOverAllocated`        | boolean |                                                       |
-| `createdAt`                | instant |                                                       |
-| `updatedAt`                | instant |                                                       |
-| `createdBy`                | text    |                                                       |
-| `updatedBy`                | text    |                                                       |
-| `deletedAt`                | instant |                                                       |
-| `derivedDurationMinutes`   | int     | minutes; summary and level-of-effort only (since 1.1) |
-| `swimlaneId`               | text    | hand-made swimlane, empty for none (since 2.1)        |
+| Column                         | Type    | Notes                                                                                      |
+| ------------------------------ | ------- | ------------------------------------------------------------------------------------------ |
+| `id`                           | text    |                                                                                            |
+| `organizationId`               | text    |                                                                                            |
+| `planId`                       | text    |                                                                                            |
+| `code`                         | text    |                                                                                            |
+| `name`                         | text    |                                                                                            |
+| `description`                  | text    |                                                                                            |
+| `type`                         | enum    |                                                                                            |
+| `durationMinutes`              | int     | minutes                                                                                    |
+| `calendarId`                   | text    |                                                                                            |
+| `constraintType`               | enum    |                                                                                            |
+| `constraintDate`               | date    |                                                                                            |
+| `secondaryConstraintType`      | enum    |                                                                                            |
+| `secondaryConstraintDate`      | date    |                                                                                            |
+| `externalEarlyStart`           | instant |                                                                                            |
+| `externalLateFinish`           | instant |                                                                                            |
+| `durationType`                 | enum    |                                                                                            |
+| `laneIndex`                    | int     | diagram row number; 0 is the first row                                                     |
+| `scheduleAsLateAsPossible`     | boolean |                                                                                            |
+| `levelingPriority`             | int     | lower number = higher priority; empty = no preference                                      |
+| `status`                       | enum    |                                                                                            |
+| `percentComplete`              | int     | whole percent, 0 to 100                                                                    |
+| `actualStart`                  | date    |                                                                                            |
+| `actualFinish`                 | date    | inclusive last day                                                                         |
+| `remainingDurationMinutes`     | int     | minutes                                                                                    |
+| `suspendDate`                  | date    |                                                                                            |
+| `resumeDate`                   | date    |                                                                                            |
+| `expectedFinish`               | date    | inclusive last day                                                                         |
+| `percentCompleteType`          | enum    |                                                                                            |
+| `physicalPercentComplete`      | int     | whole percent, 0 to 100                                                                    |
+| `budgetedExpense`              | bigint  |                                                                                            |
+| `actualExpense`                | bigint  |                                                                                            |
+| `accrualType`                  | enum    |                                                                                            |
+| `parentId`                     | text    |                                                                                            |
+| `earlyStart`                   | date    |                                                                                            |
+| `earlyFinish`                  | date    | inclusive last day                                                                         |
+| `lateStart`                    | date    |                                                                                            |
+| `lateFinish`                   | date    | inclusive last day                                                                         |
+| `totalFloatDays`               | int     | working days                                                                               |
+| `freeFloatDays`                | int     | working days                                                                               |
+| `isCritical`                   | boolean |                                                                                            |
+| `isNearCritical`               | boolean |                                                                                            |
+| `constraintViolated`           | boolean |                                                                                            |
+| `externalDriven`               | boolean |                                                                                            |
+| `loeNoSpan`                    | boolean |                                                                                            |
+| `resourceDriverMissing`        | boolean |                                                                                            |
+| `visualStart`                  | date    |                                                                                            |
+| `visualEffectiveStart`         | date    |                                                                                            |
+| `visualEffectiveFinish`        | date    | inclusive last day                                                                         |
+| `visualConflict`               | boolean |                                                                                            |
+| `visualDriftDays`              | int     | days                                                                                       |
+| `visualConflictReason`         | enum    |                                                                                            |
+| `remainingFloatDays`           | int     | working days                                                                               |
+| `leveledStart`                 | date    |                                                                                            |
+| `leveledFinish`                | date    | inclusive last day                                                                         |
+| `levelingDelayMinutes`         | int     | minutes                                                                                    |
+| `levelingWindowExceeded`       | boolean |                                                                                            |
+| `selfOverAllocated`            | boolean |                                                                                            |
+| `createdAt`                    | instant |                                                                                            |
+| `updatedAt`                    | instant |                                                                                            |
+| `createdBy`                    | text    |                                                                                            |
+| `updatedBy`                    | text    |                                                                                            |
+| `deletedAt`                    | instant |                                                                                            |
+| `derivedDurationMinutes`       | int     | minutes; summary and level-of-effort only (since 1.1)                                      |
+| `swimlaneId`                   | text    | hand-made swimlane, empty for none (since 2.1)                                             |
+| `visualEffectiveStartInstant`  | instant | exact working instant `visualEffectiveStart` is calculated from; since 2.4                 |
+| `visualEffectiveFinishInstant` | instant | the moment work stops, not the inclusive last day `visualEffectiveFinish` shows; since 2.4 |
+| `lateStartInstant`             | instant | exact working instant `lateStart` is calculated from; since 2.4                            |
+| `lateFinishInstant`            | instant | the moment work stops, not the inclusive last day `lateFinish` shows; since 2.4            |
 
 Not exported: `version`, `deleteBatchId`.
 
