@@ -1,5 +1,11 @@
 # @repo/interchange
 
+## 0.16.2
+
+### Patch Changes
+
+- [#1260](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1260) [`dc6b7e7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dc6b7e722b85734eb524f53ce60892408b0c5057) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the MSPDI import report say that a calendar an imported resource holds goes to the shared organisation library, instead of saying every calendar was created in the project.
+
 ## 0.16.1
 
 ### Patch Changes

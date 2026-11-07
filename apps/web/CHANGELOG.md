@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.201.1
+
+### Patch Changes
+
+- [#1271](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1271) [`ff46dfc`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ff46dfcab88faa994543a1b826782ecdcf53d328) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Under large text in a small window, the bar at the foot of a plan is no longer covered by the toolbar, whichever way the text was enlarged; the page scrolls instead.
+- Updated dependencies [[`dc6b7e7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dc6b7e722b85734eb524f53ce60892408b0c5057)]:
+  - @repo/interchange@0.16.2
+
 ## 0.201.0
 
 ### Minor Changes

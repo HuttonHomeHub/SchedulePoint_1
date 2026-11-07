@@ -1,5 +1,23 @@
 # @repo/api
 
+## 0.105.0
+
+### Minor Changes
+
+- [#1267](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1267) [`5ab4811`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5ab4811ce9ac8c7f21a2c9fc37dcb42b4360c242) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Organisation export format 2.4: each activity now carries the exact working instant behind its placed and late dates, and each plan says when those instants were written. Nothing is renamed, so a reader written for 2.3 reads 2.4.
+
+- [#1269](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1269) [`204c5f7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/204c5f7f98ab99cfe75f217ca11b74459b2df697) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Linked plans now give the dates the same logic gives in one plan. Where two plans meet at a milestone next to weekend work, or at work that finishes part-way through a day, the downstream work starts when the upstream work actually hands over, and the upstream work keeps the float it has in one plan. Some downstream dates move earlier and some upstream work regains float. One case moves later: a hand-placed finish milestone upstream now hands over at the end of its typed day, as it does in one plan. Linked plans are recalculated once, upstream first, when the update starts, so the corrected dates appear without anyone pressing recalculate.
+
+### Patch Changes
+
+- [#1261](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1261) [`68c4391`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/68c43916de34a51c2e2013315ecf67a383259e47) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import now says so when a resource matched by code keeps the library's rate or capacity because the file's differs, and stays quiet when they agree.
+
+- [#1260](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1260) [`dc6b7e7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dc6b7e722b85734eb524f53ce60892408b0c5057) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Make the MSPDI import report say that a calendar an imported resource holds goes to the shared organisation library, instead of saying every calendar was created in the project.
+
+- [#1269](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1269) [`204c5f7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/204c5f7f98ab99cfe75f217ca11b74459b2df697) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A constraint dated so far ahead that the schedule cannot hold the resulting date is now refused with a clear `SCHEDULE_DATE_OUT_OF_RANGE` message (HTTP 422) instead of an opaque server error.
+- Updated dependencies [[`dc6b7e7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/dc6b7e722b85734eb524f53ce60892408b0c5057)]:
+  - @repo/interchange@0.16.2
+
 ## 0.104.0
 
 ### Minor Changes
