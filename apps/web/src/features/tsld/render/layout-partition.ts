@@ -10,7 +10,7 @@
  * the interface the feature exists to show.
  *
  * Pure and render-layer only: it names a swimlane by an opaque key and imports nothing from the
- * swimlanes feature (ADR-0026 D8).
+ * swimlanes feature (ADR-0026 §8).
  */
 export interface LayoutPartition {
   /** Activity id → swimlane key. An id with no entry is grouped with every other such id. */

@@ -1,9 +1,10 @@
-import type {
-  ActivitySummary,
-  ActivityType,
-  BaselineVarianceRow,
-  DependencySummary,
-  DependencyType,
+import {
+  ACTIVITY_TYPE_LABELS,
+  type ActivitySummary,
+  type ActivityType,
+  type BaselineVarianceRow,
+  type DependencySummary,
+  type DependencyType,
 } from '@repo/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
@@ -115,11 +116,6 @@ import { gutterSwimlanesFrom, type GutterActions } from '../render/swimlane-gutt
 import { makeWorkingDayPredicate, type WorkingDayCalendar } from '../render/time-scale';
 import { toRenderEdges, type BarDateSource } from '../render/to-render-model';
 import { useThemeVersion } from '../render/use-theme-version';
-import {
-  SelectionActionsBar,
-  type SelectionBarContext,
-  type SelectionCanvasContext,
-} from '../toolbar/selection-actions';
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 import { useRecalcOutcomeAnnouncer } from '../use-recalc-outcome-announcer';
 
@@ -147,12 +143,16 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
-import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
-import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+  type SelectionCanvasContext,
+} from '@/features/plan-actions/selection-actions';
 import { wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
+import type { ScopeGate } from '@/lib/scope-gate';
 import { cn } from '@/lib/utils';
 
 /** Fixed screen anchor for the keyboard (`n`) create popover — a stable top-left corner, since a
@@ -327,7 +327,7 @@ export interface TsldPanelProps {
    * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
    */
   scheduleRefusal?: (action: string) => string | null;
-  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 D8). Its presence + the
+  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence + the
    * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
@@ -358,8 +358,9 @@ export interface TsldPanelProps {
    * the "lit but inert" shape this repo has now found at four consecutive enablement passes — from
    * being expressible at all.
    *
-   * `features/tsld` imports no other feature (ADR-0026 D8), so the panel takes the operations as
-   * plain functions and never reaches for a hook.
+   * The host owns the mutations and the command stack (ADR-0026 §8 lists the few features the
+   * panel does import), so the panel takes the operations as plain functions and never reaches for
+   * a hook.
    */
   bulk?: TsldBulkOperations | undefined;
   /**
@@ -442,14 +443,14 @@ export interface TsldPanelProps {
    * on the docked {@link SelectionActionsBar}. */
   onOpenLogic?: (activity: ActivitySummary) => void;
   /** Open the edit dialog for an activity — the **floating selection bar**'s Edit action (ADR-0031).
-   * The host owns the dialog so this feature imports no other feature (ADR-0026 D8); its presence
+   * The host owns the dialog, which lives in `features/activities` (ADR-0026 §8); its presence
    * (with {@link onDeleteActivity}) mounts the bar over the selected bar. */
   onEditActivity?: (activity: ActivitySummary) => void;
   /** Delete an activity (host-owned confirm) — the docked selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
    * Dissolve the selected WBS summary — remove the grouping and keep the work
-   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 D8).
+   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 §8).
    * Optional: absent ⇒ the action is inert, and the `dissolve` item is itself flag-gated in
    * {@link selectionActionItems} and hidden for a non-summary selection, so flag-off is
    * byte-for-byte.
@@ -464,7 +465,7 @@ export interface TsldPanelProps {
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
-   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 D8). Optional:
+   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 §8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
    * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
   onResources?: (activity: ActivitySummary) => void;
@@ -1130,8 +1131,8 @@ export function TsldPanel({
 
   /**
    * The pinned WBS band (ADR-0063). Derived HERE rather than inside the canvas because
-   * `features/tsld` imports no other feature (ADR-0026 D8) and the group model lives in
-   * `features/wbs` — the host composes the two. `null` when the toggle is off, which is what makes
+   * the canvas imports no other feature (ADR-0026 §8) and the group model lives in
+   * `features/wbs` — the panel composes the two. `null` when the toggle is off, which is what makes
    * `wbsBandHeightPx` 0, `measure()` subtract nothing and no band canvas mount.
    *
    * `wbsBandHeightPx` is derived once and used by BOTH the canvas (its reservation) and the create

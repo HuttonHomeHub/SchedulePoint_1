@@ -36,7 +36,7 @@ export { todayDayFraction } from './render/time-scale';
 /**
  * The WBS band's pure geometry constants (ADR-0063). Exported for `features/wbs`, which owns the
  * band's *content* derivation and needs to know how tall the band that shows it will be — the one
- * allowed direction across this seam (D8 forbids `tsld → other feature`, not the reverse).
+ * allowed direction across this seam (ADR-0026 §8 keeps the canvas free of other features, and the reverse is not restricted).
  */
 export {
   isWithinBandDepth,

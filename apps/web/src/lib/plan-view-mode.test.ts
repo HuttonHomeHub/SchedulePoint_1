@@ -6,7 +6,7 @@ import {
   PLAN_VIEW_MODE_LABELS,
   parsePlanViewMode,
   planViewModeSearch,
-} from './view-mode';
+} from './plan-view-mode';
 
 describe('parsePlanViewMode', () => {
   it('reads the two known views', () => {

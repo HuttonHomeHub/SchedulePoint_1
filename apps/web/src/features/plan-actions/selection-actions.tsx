@@ -53,7 +53,6 @@ import {
   TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
-import type { ScopeGate } from '@/features/activities/lib/activity-editor-gating';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
@@ -67,6 +66,7 @@ import {
   type ConflictKey,
 } from '@/features/tsld/render/conflicts';
 import type { LogicPathMode } from '@/features/tsld/render/logic-path';
+import type { ScopeGate } from '@/lib/scope-gate';
 import { cn } from '@/lib/utils';
 
 /** The write right a code panel shades itself with: the pen's, as the item beside it shows it. */

@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 /**
  * **The object bar's `Notes` item** (`docs/specs/object-bar-defects/` M2).

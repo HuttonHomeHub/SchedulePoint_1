@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { ADD_KIND_ENTRIES, LINK_KIND_ENTRIES } from './promotion-entries';
-import { selectionActionItems } from './selection-actions';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
+
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**
  * **Exactly four controls are MODAL tools and exactly one is the PEN, and the product says which**

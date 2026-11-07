@@ -1,7 +1,12 @@
 // `DEPENDENCY_TYPES` is the canonical set the Prisma enum mirrors; `DEPENDENCY_TYPE_LABELS` is the
 // wording the Logic panel already uses. Taking the set from the domain and the words from the shared
 // labels is what stops this surface and that one describing the product differently.
-import { DEPENDENCY_TYPES, SWIMLANE_LIMIT, type DependencyType } from '@repo/types';
+import {
+  ACTIVITY_TYPE_LABELS,
+  DEPENDENCY_TYPES,
+  SWIMLANE_LIMIT,
+  type DependencyType,
+} from '@repo/types';
 import {
   AlignVerticalSpaceAround,
   BookOpen,
@@ -137,7 +142,6 @@ import {
   TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
-import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import {
   CONFLICT_READOUT_ICON,

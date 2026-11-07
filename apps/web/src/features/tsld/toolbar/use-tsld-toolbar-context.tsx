@@ -42,7 +42,7 @@ import {
   CANVAS_RESOURCE_VIEW_ENABLED,
   EXPORT_PRINT_ENABLED,
 } from '@/config/env';
-import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
+import { printGanttSchedule } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
   EXPORT_FORMAT_LABELS,
@@ -61,6 +61,7 @@ import type { BarDateSource } from '@/lib/bar-dates';
 import { CodeColumnsUnavailableError } from '@/lib/code-columns';
 import { downloadBlob } from '@/lib/download-blob';
 import { formatCalendarDate } from '@/lib/format-date';
+import { DEFAULT_PLAN_VIEW_MODE, type PlanViewMode } from '@/lib/plan-view-mode';
 
 /** The plan-chrome dialogs the toolbar's overflow opens (owned by the workspace). */
 export type PlanDialogKind =

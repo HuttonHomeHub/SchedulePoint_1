@@ -16,4 +16,4 @@ export {
   parsePlanViewMode,
   planViewModeSearch,
   type PlanViewMode,
-} from './view-mode';
+} from '@/lib/plan-view-mode';

@@ -14,9 +14,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   RESOURCES_ENABLED: false,
 }));
 
-import type { SelectionBarContext } from './selection-actions';
+import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 
-const { SelectionActionsBar } = await import('./selection-actions');
+const { SelectionActionsBar } = await import('@/features/plan-actions/selection-actions');
 
 function ctx(): SelectionBarContext {
   return {

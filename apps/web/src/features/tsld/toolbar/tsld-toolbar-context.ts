@@ -9,13 +9,13 @@ import type { TsldViewToggles } from '../render/paint';
 import type { ZoomLevel } from '../render/render-model';
 
 import type { PromotionState } from '@/components/ui/toolbar/toolbar-promotion';
-import type { PlanViewMode } from '@/features/gantt';
 import type { ResizableColumnKey } from '@/features/gantt/layout/column-widths';
 import type { GanttColumnKey } from '@/features/gantt/model/gantt-view-state';
 import type { InterchangeExportFormat } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
 import type { HistoryEntries } from '@/features/undo-redo';
 import type { CodeColumn, CodeColumnsChoice } from '@/lib/code-columns';
+import type { PlanViewMode } from '@/lib/plan-view-mode';
 
 /**
  * The context the TSLD toolbar registry ({@link tsldToolbarItems}) reads and commands (ADR-0031).

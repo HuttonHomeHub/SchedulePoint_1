@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 /**
  * **The remedy as a planner meets it** (ADR-0094 M4-T2).

@@ -106,6 +106,7 @@ import {
   buildSelectionBarContext,
   type SelectionContextInput,
 } from '@/features/plan-actions/build-selection-context';
+import { clearVisualPlacementGate } from '@/features/plan-actions/conflict-remedy';
 import { defaultMilestoneType } from '@/features/plan-actions/make-milestone-gate';
 import { MakeMilestoneDialog } from '@/features/plan-actions/MakeMilestoneDialog';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
@@ -152,7 +153,6 @@ import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
 import { makeWorkingDayPredicate } from '@/features/tsld/render/time-scale';
 import type { CommandClass } from '@/features/tsld/toolbar/canvas-directed-commands';
-import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { DiagramViewportCluster } from '@/features/tsld/toolbar/diagram-viewport-cluster';
 import {
   ALL_PROMOTION_ENTRIES,

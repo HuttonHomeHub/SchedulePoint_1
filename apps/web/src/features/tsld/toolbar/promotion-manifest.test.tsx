@@ -5,7 +5,6 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MENUS, readDeck, type Reading } from './promotion-test-support';
-import { selectionActionItems } from './selection-actions';
 import { makeTsldToolbarContext } from './test-helpers';
 import { ALL_PROMOTION_ENTRIES } from './tsld-toolbar-items';
 
@@ -14,6 +13,7 @@ import {
   type PromotionPointer,
   type PromotionStage,
 } from '@/components/ui/toolbar/toolbar-promotion';
+import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 // Every flag the entries and menus read, pinned ON: this suite is the manifest of the full build, and
 // a flag-off command is on neither the bar nor a menu (the entry's `isVisible`), which the flag-off

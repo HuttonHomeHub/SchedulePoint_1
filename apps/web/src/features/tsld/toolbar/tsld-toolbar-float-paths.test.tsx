@@ -1,10 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
 import { makeTsldToolbarContext } from './test-helpers';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
 /**

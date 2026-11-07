@@ -4,8 +4,8 @@ import {
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
 } from '@/config/env';
-import type { PlanViewMode } from '@/features/gantt/view-mode';
 import { isApplePlatform } from '@/features/undo-redo';
+import type { PlanViewMode } from '@/lib/plan-view-mode';
 
 interface Shortcut {
   keys: string;
