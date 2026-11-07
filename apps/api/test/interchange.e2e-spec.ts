@@ -1586,6 +1586,38 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     expect(secondDriving?.resourceId).toBe(firstDriving?.resourceId);
   });
 
+  // #567: a code match keeps the library's rate; the finding appears only when the file gives a
+  // different one. Neither shipped adapter reads a rate yet (the file always gives none), so the
+  // differing-rate wording is pinned by `resource-match.spec.ts`, and this pins the quiet half: a
+  // re-import onto a library row that holds a rate and capacity writes no such finding.
+  it('writes no rate finding when a code match is re-imported from a file that gives no rate (#567)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const firstProjectId = await makeProject(actor);
+    await actor.agent
+      .post(commitUrl(firstProjectId))
+      .attach('file', Buffer.from(resourceOnlyXer(), 'utf8'), 'resourced.xer')
+      .expect(201);
+    await prisma.resource.updateMany({
+      where: { organizationId: orgId, code: 'CREW-A', deletedAt: null },
+      data: { costPerUnit: 55, maxUnitsPerHour: 2 },
+    });
+
+    const res = await actor.agent
+      .post(commitUrl(await makeSecondProject(actor)))
+      .attach('file', Buffer.from(resourceOnlyXer(), 'utf8'), 'resourced.xer')
+      .expect(201);
+
+    expect(
+      (res.body.data.report.repairs as { detail: string }[]).filter((r) =>
+        r.detail.includes('matched by code'),
+      ),
+    ).toEqual([]);
+    const crew = await prisma.resource.findFirst({
+      where: { organizationId: orgId, code: 'CREW-A', deletedAt: null },
+    });
+    expect(Number(crew?.costPerUnit)).toBe(55);
+  });
+
   // ---- Resource-name collisions: ask, never guess -------------------------
 
   /**
