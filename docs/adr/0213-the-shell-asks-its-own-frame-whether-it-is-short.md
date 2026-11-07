@@ -1,7 +1,6 @@
 # ADR-0213: The shell asks its own frame whether it is short, in the text the reader has
 
-- **Status:** Proposed. Moves to Accepted when the large-text-dock M1 pull request merges with the
-  product owner's approval.
+- **Status:** Accepted. It ships in the large-text-dock M1 pull request with its implementation.
 - **Date:** 2026-11-07
 - **Deciders:** Product owner (spec questions, 2026-11-07: Q1 B, guarantee the foot bar for any way of
   enlarging text; Q2 A, leave a strip that arrives off-screen in place) and Claude Code (ui-architect,
@@ -102,11 +101,16 @@ We will make the shell ask its own frame, not the window's media features, wheth
   the topmost modal dialog, and `Dialog`, `Sheet` and the viewport notice are `showModal()` dialogs in the
   top layer, whose containing block is the initial containing block. M1 measures five overlays with and
   without the container to confirm it.
+- **The frame is now the containing block for any in-frame `position: fixed` element.** That is fine today
+  because the frame is the window's box at the origin and does not scroll; a future in-frame fixed overlay
+  must know it, since the element would position against the frame and not the viewport.
 - **A new `squat:` consumer must sit inside the frame**, and the structural test makes that a visible edit.
 - **The frame's height is load-bearing.** Losing `height: 100dvh` makes `squat` fire in every narrow window;
   a structural test and the narrow-shell journey guard it.
 - **Browsers without size container queries** (before Chromium 105, Safari 16, Firefox 110) never match
-  `squat`; they are outside the supported envelope.
+  `squat`; they are outside the supported envelope. Evidence that the envelope covers them:
+  `docs/PROJECT_BRIEF.md` §16 (Deployment) names the latest two versions of Chrome, Edge, Firefox and Safari,
+  all well past those minimums.
 - **Follow-ups:** none required. If another media variant is ever found to decide reach under a user style
   sheet, D5 is where that decision starts.
 
