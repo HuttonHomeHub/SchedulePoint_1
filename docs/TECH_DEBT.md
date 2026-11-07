@@ -4818,12 +4818,22 @@ ScheduleHealthPanel.tsx:364-365`) and nothing in `HealthPrintDocument.tsx`
 **Status:** open · **Verified:** 2026-10-31, by opening every `path:line` in the re-read notes below (the documented gesture is `docs/UX_STANDARDS.md:111-113`, the undo/redo pair's `useTooltip({` is `tsld-toolbar-items.tsx:2648`, `<PlanShortcutsHelp` is `plan-workspace-toolbar.tsx:2724`, the `markerRow` default is `render-export-image.ts:344`, the reservation case is `export-image.test.ts:353-368`) · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
-long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
+long-press listener cleanup, both landed with the pass; and on 2026-11-01 the first item below was
+**closed** by `docs/specs/long-press-hint/`, whose journey is `e2e-toolbar/touch-gestures.spec.ts`
+— the `path:line` notes under that item are the history of the finding and were not re-opened) ·
+**Size:** S ×1 · **Owner:** web
 
-Three suggestions judged real and filed rather than quietly dropped; **two survive** — the third
-closed on 2026-08-31 and the size beside this line still said three until 2026-09-09:
+Three suggestions judged real and filed rather than quietly dropped; **one survives** — the third
+closed on 2026-08-31, the first on 2026-11-01, and the size beside this line still said three
+until 2026-09-09:
 
-- **The touch long-press has no visible affordance and no documentation a user would find** (ux).
+- ~~**The touch long-press has no visible affordance and no documentation a user would find** (ux).~~
+  **CLOSED 2026-11-01** (`docs/specs/long-press-hint/`, owner-approved). The help sheet is now
+  "Diagram/Gantt shortcuts and gestures" with an always-shown Touch section (account-menu item:
+  "Shortcuts and gestures"), and the first completed finger touch in a plan raises a one-time
+  strip in the dock — "Press and hold an icon button to see its name. A tap still presses it." —
+  that stays until dismissed and then never returns on that device. The finding below is kept as
+  history.
   `useTooltip`'s 500 ms long-press names an icon-only control without firing it, and nothing in
   the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
   as before), so this is an unadvertised affordance rather than a defect; the right home is
@@ -9411,3 +9421,11 @@ A source resource matched to a library row by code keeps the library row's rate 
 When a calendar is held by a resource that is matched and is also named by an activity, ADR-0208 D7 still creates it, and at the shared `ORG` tier the mapper chose because a resource held it. Once the crew is matched only the project's activities use it, so the project would be the tidier home. Moving it changes where imported calendars live and which existing calendars an import can reuse (reuse is per tier), so it was left out of #554 on the product owner's decision.
 
 **Next:** decide whether the mapper's tier choice should wait for the match, or whether the persisting layer should create such a calendar at `PROJECT`. It needs a spec (ADR-0105) because it changes which calendars an import reuses. **Trigger:** a report of project-specific calendars cluttering the shared library after re-imports, or the next change to calendar tiering on import.
+
+### 569. At text-only 200 % in a 1024 × 600 window the toolbar covers the viewport, so no dock strip can be pressed with a pointer
+
+**Status:** open · **Verified:** 2026-11-01, by `e2e-toolbar/touch-gestures.spec.ts` at 1024 × 600 with `document.documentElement.style.fontSize = '200%'` (the long-press hint's journey, `docs/specs/long-press-hint/`): the touch-gesture strip was present and visible, and every `elementFromPoint` probe at the centre and four corners of both of its buttons returned a toolbar element
+
+At that size and text scale the command rows grow until they fill the viewport and sit over the foot row, where `CanvasDock` renders every transient strip. The strips are still in the DOM, still visible to the locator and still reachable by Tab, so WCAG 1.4.4 (no loss of function) holds through the keyboard, but a pointer or a finger meets the toolbar instead. This is a property of the workspace, not of the touch tip: it affects every dock strip (conflict, history, mode, layout-resolved, empty, Arrange offer, placement-migration, touch-hint), and the journey now asserts keyboard reach rather than a pointer hit at that scale. No suite's screenshots record it, because none sets 200 % text at the floor.
+
+**Next:** decide with ui-architect whether the foot row, or the toolbar, yields at the floor under a large text size (a toolbar that scrolls, or a dock that is not covered), then restore the pointer hit-test in `probeStrip`. **Trigger:** a report of an unreachable strip at large text, the next change to the workspace's vertical budget (ADR-0092, ADR-0180), or a second journey that needs a pointer on a dock strip at 200 %.

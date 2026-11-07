@@ -1,6 +1,6 @@
 # Feature Spec: Telling a touch user about press-and-hold
 
-- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown. — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-11-01, every recommended answer: Q1 the tip stays until dismissed, then never returns on that device; Q2 rename the sheet "Diagram shortcuts and gestures" / "Gantt shortcuts and gestures" (account menu too); Q3 the Touch section is always shown.; shipped — built on `feat/touch-gestures-sheet` and `feat/touch-gesture-tip` (PR number to be filled at merge; no ADR was proposed, so the header stays Approved).
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank (product owner)
 - **Date:** 2026-11-01
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #211, first surviving item ("The touch long-press has no visible affordance and no documentation a user would find")
@@ -58,7 +58,7 @@ The persona is the owner's own case: a Surface Pro used by finger, with and with
 
 ### User journeys
 
-**Happy path.** Open a plan → touch anything in the workspace (a bar, a toolbar glyph, the canvas) → whatever that touch does happens as before → a strip appears in the foot row: _"Press and hold a button to see its name. A tap still presses it."_ with **Touch gestures** and **✕ Dismiss this tip** → press **Touch gestures** → the help sheet opens and shows the **Touch** section → close it → press ✕ → the strip goes and focus lands on the plan surface. It does not come back on this device.
+**Happy path.** Open a plan → touch anything in the workspace (a bar, a toolbar glyph, the canvas) → whatever that touch does happens as before → a strip appears in the foot row: _"Press and hold an icon button to see its name. A tap still presses it."_ with **Touch gestures** and **✕ Dismiss this tip** → press **Touch gestures** → the help sheet opens and shows the **Touch** section → close it → press ✕ → the strip goes and focus lands on the plan surface. It does not come back on this device.
 
 **Alternates.**
 
@@ -93,7 +93,7 @@ Three **critical** questions for the owner are at the end of this document (§6)
 
 > **US-1 — the tip** — As any member who opens a plan on a touchscreen, I want to be told once that holding a button shows its name, so that the icon-only controls stop being a guessing game.
 >
-> - **Given** a plan workspace is open and this browser profile has not dismissed the tip, **when** a `pointerdown` with `pointerType === 'touch'` lands anywhere in the document, **then** the touch does exactly what it did before (it is observed in the capture phase, never prevented or stopped), and a strip appears in the dock reading _"Press and hold a button to see its name. A tap still presses it."_
+> - **Given** a plan workspace is open and this browser profile has not dismissed the tip, **when** a touch (`pointerType === 'touch'`) completes anywhere in the document, observed on its `pointerup` and shown one animation frame later so the strip never moves the press it answers, **then** the touch does exactly what it did before (it is observed in the capture phase, never prevented or stopped), and a strip appears in the dock reading _"Press and hold an icon button to see its name. A tap still presses it."_
 > - **Given** the same, **when** the press is `pointerType` `'mouse'` or `'pen'`, **then** nothing appears. The stylus is excluded because `useTooltip`'s long-press is touch-only (`tooltip.tsx:443`), so the tip would teach a stylus a gesture it does not have.
 > - **Given** the strip is showing, **when** a conflict, an undo/redo result, an armed tool, an overlap notice, the empty-plan notice, the Arrange offer or the migration notice wants the dock, **then** that strip shows and the tip waits (the lowest rung, §4.4).
 > - **Given** the strip is showing, **when** the planner presses **Touch gestures**, **then** the help sheet for the current view opens, the strip stays, and on close focus returns to **Touch gestures**. `Dialog` is a native `<dialog>` (`components/ui/dialog.tsx:10-17`) and adds no restore logic of its own, so this rests on the browser's close behaviour. The journey asserts it rather than this spec assuming it.
@@ -124,7 +124,8 @@ Three **critical** questions for the owner are at the end of this document (§6)
 - **Plan switch**: the hook lives in the workspace host, which does not remount on a plan change (`plan-workspace-toolbar.tsx:1224-1227`). `due` carries over, which is right, because the tip is about the device and not the plan.
 - **Two tabs**: each tab reads storage at mount. Dismissing in one does not hide it live in the other until that tab reloads. Accepted; it is a courtesy strip.
 - **1024 × 600, coarse**: the dock outlet wraps rather than clipping (`canvas-dock.tsx:80-88`). Its floors are capped at `min(…, 100%)` (`:125-132`), so the strip takes its own line where the facts are wide. That cost is the same one every dock strip already pays. It is recorded by the journey, not assumed.
-- **200 % text** (WCAG 1.4.4): covered by the same outlet rules (`canvas-dock.tsx:125-132`). The journey adds a text-only 200 % reading of the strip at 1024.
+- **200 % text** (WCAG 1.4.4): covered by the same outlet rules (`canvas-dock.tsx:125-132`). The journey adds a text-only 200 % reading of the strip at 1024. **Measured while building:** at text-only 200 % in 1024 × 600 the toolbar covers the viewport and no dock strip can be pressed by a pointer, which is a workspace condition and not this tip's (`docs/TECH_DEBT.md` #569). The journey therefore asserts at that scale that Tab from the plan surface reaches both buttons, and keeps the pointer hit-test at 100 %.
+- **An empty diagram plan shows no tip.** The diagram's dock is mounted only once there is something to draw, so a first touch on a plan with no activities raises nothing there. Accepted by the product owner on 2026-11-01: the touch is still observed, so the tip is due and shows as soon as the dock mounts, and the help sheet lists the gesture regardless.
 
 ### 2.4 Permissions
 
@@ -254,7 +255,7 @@ flowchart TD
   C -- finger --> D[Press does what it always did]
   D --> E{Dock row free?}
   E -- no, another strip --> E
-  E -- yes --> F["Strip: Press and hold a button to see its name. A tap still presses it."]
+  E -- yes --> F["Strip: Press and hold an icon button to see its name. A tap still presses it."]
   F --> G[Touch gestures] --> H[Sheet opens at Touch section] --> F
   F --> I[Dismiss this tip] --> J[Strip gone for good; focus on plan surface]
 ```
@@ -331,7 +332,7 @@ _Alternative:_ show it only on a device where a finger has been used in the prod
 1. The trigger is the first `pointerType === 'touch'` press anywhere while a plan is open. A stylus and a mouse never trigger it (ADR-0177 D1; `tooltip.tsx:443`).
 2. Storage: the existing `schedulepoint-hints` localStorage key, entry `touch-gestures` (device-local, fail-open). No new key, nothing server-side, no schema.
 3. Placement: the dock, lowest rung, in both views. It never overlays the scene, never takes focus on mount, and has no live-region role (ADR-0132 condition).
-4. Copy: "Press and hold a button to see its name. A tap still presses it." / **Touch gestures** / "Dismiss this tip". The ux-reviewer may tune the words; the gestures may not change without code evidence.
+4. Copy: "Press and hold an icon button to see its name. A tap still presses it." / **Touch gestures** / "Dismiss this tip". The ux-reviewer may tune the words; the gestures may not change without code evidence.
 5. **Touch gestures** opens the sheet for the current view and leaves the strip up. Only ✕ marks it seen. Focus goes to the plan surface on dismiss.
 6. The Touch section lists only gestures the code implements (§2.5). No canvas gestures unless M1-T1 finds one.
 7. Plan workspace only. The Explorer's long-press is listed in the sheet but triggers no tip on the Clients/Projects screens.

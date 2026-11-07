@@ -26,6 +26,23 @@ since #558. Growing them measured 462 px for the Diagram panel, 42 px over the b
 decision and its number is in the Closed ledger. Reopen only on a mis-tap report on either group, and then
 with the bar decision taken at the same time.
 
+## 2026-11-01 — A finger user is told about press-and-hold, once (long-press hint, TECH_DEBT #211)
+
+**Decided** (spec `docs/specs/long-press-hint/`, owner-approved with every recommended answer):
+the tip stays until dismissed and then never returns on that device (`schedulepoint-hints`, key
+`touch-gestures`); the help sheet is renamed "Diagram shortcuts and gestures" / "Gantt shortcuts
+and gestures"; the Touch section is always shown.
+
+**Taken while building, on review:** the account-menu item is the neutral "Shortcuts and gestures"
+(it opens either view's sheet); the tooltip row and the tip both say "icon button", because that is
+what the long-press names; there is no double-tap row, since nothing double-taps in the diagram; and
+the tip is raised when the first touch **completes** (`pointerup`, then one animation frame), not on
+`pointerdown`, so the strip never changes the layout under the press that summons it. The trigger
+keys on `pointerType` (ADR-0177 D1), not a media query.
+
+**Consequence:** touching journeys that measure geometry before their first tap acknowledge the tip
+with `acknowledgeTouchHint` (`apps/web/e2e-support/test.ts`). No flag, no schema, no API.
+
 ---
 
 ## 2026-11-01 — Browser crash reports shipped (ADR-0211), and what building it corrected

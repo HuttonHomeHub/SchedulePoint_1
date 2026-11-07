@@ -12,7 +12,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
 /**
@@ -31,6 +31,7 @@ import { recalculate } from '../e2e-support/toolbar';
  */
 
 test.use({ hasTouch: true });
+test.beforeEach(async ({ page }) => acknowledgeTouchHint(page));
 test.describe.configure({ mode: 'serial' });
 
 interface ActivityRow {

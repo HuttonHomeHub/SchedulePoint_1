@@ -34,6 +34,23 @@ describe('focusOutsideInert', () => {
     expect(document.activeElement?.id).toBe('expand');
   });
 
+  it("prefers the panel's toggle to a notice strip's button in the foot row", () => {
+    // **Red** against the bar's-first-button fallback: the strip's own Dismiss button is first in the
+    // row and unmounts with the strip, so focus landed on <body> (the touch tip's dismiss, #211).
+    mount(`<div data-activities-bar>
+      <div><button id="dismiss">Dismiss</button></div>
+      <button id="toggle" data-activities-toggle>Collapse</button></div>`);
+    focusOutsideInert(null);
+    expect(document.activeElement?.id).toBe('toggle');
+  });
+
+  it('keeps a reachable listbox even when the toggle is present', () => {
+    mount(`<ul role="listbox" tabindex="0" id="lb"></ul>
+      <div data-activities-bar><button id="toggle" data-activities-toggle>Collapse</button></div>`);
+    focusOutsideInert(document.getElementById('lb'));
+    expect(document.activeElement?.id).toBe('lb');
+  });
+
   it('falls back when there is no target at all', () => {
     mount('<div data-activities-bar><button id="expand">Expand</button></div>');
     focusOutsideInert(null);

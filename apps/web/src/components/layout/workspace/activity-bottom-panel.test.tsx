@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -85,5 +88,22 @@ describe('PlanActivitiesFootRow', () => {
     // collapsed bar ever stops rendering the shared row, the facts and the dock move again.
     expect(document.querySelector('[data-activities-bar]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Expand activities panel' })).toBeInTheDocument();
+  });
+});
+
+describe('the focus-fallback contract with focus-reachable.ts', () => {
+  it('marks the Expand toggle', () => {
+    render(<ActivityPanelCollapsedBar onExpand={vi.fn()} />);
+    expect(
+      screen
+        .getByRole('button', { name: 'Expand activities panel' })
+        .hasAttribute('data-activities-toggle'),
+    ).toBe(true);
+  });
+
+  it('marks both toggles in the source, so the Collapse toggle cannot lose it unseen', () => {
+    // The expanded panel is too heavy to mount for one attribute, so this reads the file.
+    const source = readFileSync(join(import.meta.dirname, 'activity-bottom-panel.tsx'), 'utf8');
+    expect(source.match(/^\s+data-activities-toggle$/gm)).toHaveLength(2);
   });
 });

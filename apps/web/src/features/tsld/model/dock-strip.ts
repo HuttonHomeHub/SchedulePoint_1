@@ -9,6 +9,7 @@ export type DockStrip =
   | 'empty'
   | 'arrange-offer'
   | 'placement-migration'
+  | 'touch-hint'
   | null;
 
 /** What the precedence is decided from. Booleans, so the rule has no opinion about their sources. */
@@ -29,6 +30,11 @@ export interface DockStripInput {
    * flag, because this function decides precedence and has no business knowing how many.
    */
   readonly hasPlacementMigrationNotice: boolean;
+  /**
+   * Whether a finger has pressed this workspace and the reader has not dismissed the one-time
+   * touch tip (`docs/specs/long-press-hint/`). Precedence only; the sentence is the host's.
+   */
+  readonly hasTouchGestureHint: boolean;
   /**
    * Whether a press of `Arrange` would move anything on this plan AND this reader could take the
    * offer AND they have not dismissed it. One boolean for the same reason as its neighbour above:
@@ -156,5 +162,13 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
    * live/historical test above and not by which of them can be dismissed.
    */
   if (input.hasPlacementMigrationNotice) return 'placement-migration';
+  /**
+   * **The lowest rung of all.** It teaches a gesture and says nothing about the plan, so it can
+   * wait behind every strip above at no cost to the reader: it is dismissible, never returns once
+   * dismissed, and a finger busy with a conflict, a tool or an empty plan will see it as soon as
+   * the dock is quiet. Behind the migration notice because that one reports something
+   * irreversible and this one is a tip.
+   */
+  if (input.hasTouchGestureHint) return 'touch-hint';
   return null;
 }

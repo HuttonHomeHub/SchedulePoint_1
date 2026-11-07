@@ -198,9 +198,14 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       source.indexOf('    ) : ('),
     );
     expect(ganttBranch.length, 'could not locate the Gantt branch').toBeGreaterThan(200);
-    // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1).
+    // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1),
+    // or ahead of the touch tip, which is last of all.
     expect(
-      /\{(?:historyResultNotice\?\.node \?\? )?(?:layoutResolvedNotice \?\? )?placementMigrationNotice\}/.test(
+      /\bplacementMigrationNotice\s+\?\?\s+touchGestureHint\}/.test(ganttBranch),
+      'the Gantt view no longer renders the touch tip',
+    ).toBe(true);
+    expect(
+      /\{(?:historyResultNotice\?\.node\s+\?\?\s+)?(?:layoutResolvedNotice\s+\?\?\s+)?placementMigrationNotice(?:\s+\?\?\s+touchGestureHint)?\}/.test(
         ganttBranch,
       ),
       'the Gantt view no longer renders the placement-migration notice',
