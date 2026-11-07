@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.201.0
+
+### Minor Changes
+
+- [#1257](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1257) [`59522ea`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/59522eab42d660b282fa6a625061b0d3146076e9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add a Screen crashes section to the staff console, and flag recent crashes in its top line.
+
+- [#1257](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1257) [`59522ea`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/59522eab42d660b282fa6a625061b0d3146076e9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Report a screen crash to the server when a signed-in screen breaks, and show the person a short reference for it when the report arrived.
+
+- [#1258](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1258) [`e262b9b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e262b9bddadeae292a2b69e577150ffa271e7181) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A finger's first touch in a plan now shows a one-time tip explaining press-and-hold, with a link to the gestures list; once dismissed it never returns on that device.
+
+- [#1258](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1258) [`e262b9b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e262b9bddadeae292a2b69e577150ffa271e7181) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan help sheet is now "Diagram shortcuts and gestures" (and "Gantt shortcuts and gestures"), and lists the finger gestures under a new Touch section.
+
 ## 0.200.7
 
 ### Patch Changes

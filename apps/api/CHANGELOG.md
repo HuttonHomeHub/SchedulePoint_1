@@ -1,5 +1,19 @@
 # @repo/api
 
+## 0.104.0
+
+### Minor Changes
+
+- [#1257](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1257) [`59522ea`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/59522eab42d660b282fa6a625061b0d3146076e9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add `GET /api/v1/staff/crash-reports`, the staff read of reported screen crashes, newest first with a cap-reached flag and a seven-day count.
+
+- [#1256](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1256) [`ffd8a88`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ffd8a8868cbe22c3cb42b81d64958b3f925675f5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An import no longer creates a calendar that only reused resources would hold. When a re-imported file's crews are already in the library, the library crew is used as it is and the file's own calendar for it is not added to the shared organisation library; the review report says the calendar was not created, and whether the file's working week differed.
+
+### Patch Changes
+
+- [#1244](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1244) [`fac2fe6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fac2fe6052bbe079babf6389c284f39017c45168) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A start milestone or zero-duration task that follows a cross-plan link now starts at the instant the link gives it, as it does in one plan, instead of being moved to its own calendar's next working minute. A start milestone on a weekend calendar after weekend work in another plan no longer pushes the weekday work after it a week late. Plans with such a link are recalculated on their next recalculation.
+
+- [#1240](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1240) [`d473b18`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d473b18ad72887fdead6dbb3d4c8afaf36ae39b6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The redundant-links health check now also lists a link whose other route passes through an activity that starts together with the next one, when that activity shares the first activity's calendar. Removing the link was already shown to change no date or float; the check was withholding it.
+
 ## 0.103.4
 
 ### Patch Changes
