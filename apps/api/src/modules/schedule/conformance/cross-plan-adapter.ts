@@ -122,6 +122,16 @@ export interface ComputedDates {
    */
   placedStart: string;
   placedFinish: string;
+  /**
+   * The exact instants the placed and the late dates are dated from, as the engine reported them
+   * (ADR-0212 D1), so the derivation reads what one plan reads rather than a day. The adapter is the
+   * second producer of these four as well, with the same basis asymmetry as the dates: the forward
+   * bound reads the placed pair, the backward bound the late pair.
+   */
+  placedStartInstant: number;
+  placedFinishInstant: number;
+  lateStartInstant: number;
+  lateFinishInstant: number;
 }
 
 export interface ProgrammeSolveResult {
@@ -257,6 +267,8 @@ function incomingEdgesInto(
         predecessor: remote(locate(fixture, edge.predecessorActivityId)),
         predecessorPlacedStart: pred?.placedStart ?? null,
         predecessorPlacedFinish: pred?.placedFinish ?? null,
+        predecessorPlacedStartInstant: pred?.placedStartInstant ?? null,
+        predecessorPlacedFinishInstant: pred?.placedFinishInstant ?? null,
       };
     });
 }
@@ -283,6 +295,8 @@ function outgoingEdgesFrom(
         successor: remote(locate(fixture, edge.successorActivityId)),
         successorLateStart: succ?.lateStart ?? null,
         successorLateFinish: succ?.lateFinish ?? null,
+        successorLateStartInstant: succ?.lateStartInstant ?? null,
+        successorLateFinishInstant: succ?.lateFinishInstant ?? null,
       };
     });
 }
@@ -345,6 +359,10 @@ function absorb(
       lateFinish: result.lateFinish,
       placedStart: result.visualEffectiveStart,
       placedFinish: result.visualEffectiveFinish,
+      placedStartInstant: result.placedStartInstant,
+      placedFinishInstant: result.placedFinishInstant,
+      lateStartInstant: result.lateStartInstant,
+      lateFinishInstant: result.lateFinishInstant,
     });
     resultsByActivity.set(result.activityId, result);
   }

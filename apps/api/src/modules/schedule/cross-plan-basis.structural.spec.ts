@@ -63,6 +63,54 @@ describe('the cross-plan forward bound reads placed dates', () => {
   });
 });
 
+describe('every producer of a cross-plan edge passes the remote instants (ADR-0212)', () => {
+  /**
+   * The same two-producer argument as the placed span above, one layer on: the service (production)
+   * and the conformance adapter each build the edges the derivation reads. If only one named the
+   * instants, the harness would measure a rule the product does not run, or the product would read
+   * dates while the harness proved instants, and each side would stay internally consistent. The
+   * type already refuses an edge without the four fields; this refuses the harness that passes a
+   * literal `null` where the product passes the engine's value, and a basis that drifts between them.
+   */
+  const SERVICE = './schedule.service.ts';
+
+  it('the service names all four edge fields, on both sides of the link', () => {
+    const src = read(SERVICE);
+    for (const field of [
+      'predecessorPlacedStartInstant',
+      'predecessorPlacedFinishInstant',
+      'successorLateStartInstant',
+      'successorLateFinishInstant',
+    ]) {
+      expect(src, `${SERVICE} does not pass ${field}`).toMatch(new RegExp(`${field}:`));
+    }
+  });
+
+  it('the conformance adapter reads the placed pair forward and the late pair backward', () => {
+    const src = read(ADAPTER);
+    expect(src).toMatch(/predecessorPlacedStartInstant:\s*pred\?\.placedStartInstant/);
+    expect(src).toMatch(/predecessorPlacedFinishInstant:\s*pred\?\.placedFinishInstant/);
+    expect(src).toMatch(/successorLateStartInstant:\s*succ\?\.lateStartInstant/);
+    expect(src).toMatch(/successorLateFinishInstant:\s*succ\?\.lateFinishInstant/);
+  });
+
+  it('the adapter projects the four engine instants, never an offset', () => {
+    const src = read(ADAPTER);
+    expect(src).toMatch(/placedStartInstant:\s*result\.placedStartInstant/);
+    expect(src).toMatch(/placedFinishInstant:\s*result\.placedFinishInstant/);
+    expect(src).toMatch(/lateStartInstant:\s*result\.lateStartInstant/);
+    expect(src).toMatch(/lateFinishInstant:\s*result\.lateFinishInstant/);
+  });
+
+  it('no "placed" spelling reaches the backward instants', () => {
+    for (const path of [SERVICE, DERIVATION, ADAPTER]) {
+      expect(read(path), `${path} invents a placed LATE instant`).not.toMatch(
+        /successorPlaced\w*Instant/,
+      );
+    }
+  });
+});
+
 describe('the backward cross-plan bound is NOT renamed', () => {
   /**
    * **The negative guard, and it is the reason this file exists rather than a comment.** Verified

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { wouldCreatePlanCycle } from '../../cross-plan-dependencies/cross-plan-cycle-detector';
 import { deriveExternalInstants } from '../cross-plan-derivation';
 import { allMinutesWorkCalendar } from '../engine';
+import { instantToAbsMinutes } from '../engine/working-time-calendar';
 
 import {
   checkCrossPlanCoverage,
@@ -89,6 +90,12 @@ describe('F7 tier-2 — cross-plan differential (ADR-0035 §30.7/§30.8)', () =>
         // describe the case §30.7 tracks (a superseded upstream) rather than a placement case.
         placedStart: '2025-12-26',
         placedFinish: '2026-01-04',
+        // The instants those dates are dated from on a 24/7 calendar: a start at its day's midnight,
+        // a finish at the exclusive end of its day. Hand-written because this snapshot is hand-built.
+        placedStartInstant: instantToAbsMinutes('2025-12-26'),
+        placedFinishInstant: instantToAbsMinutes('2026-01-05'),
+        lateStartInstant: instantToAbsMinutes('2025-12-26'),
+        lateFinishInstant: instantToAbsMinutes('2026-01-05'),
       },
     ],
   ]);
@@ -289,6 +296,8 @@ describe('F7 negatives — N30–N33 (ADR-0035 §30.5–§30.6)', () => {
           },
           predecessorPlacedStart: null,
           predecessorPlacedFinish: null,
+          predecessorPlacedStartInstant: null,
+          predecessorPlacedFinishInstant: null,
         },
       ],
       outgoing: [],
