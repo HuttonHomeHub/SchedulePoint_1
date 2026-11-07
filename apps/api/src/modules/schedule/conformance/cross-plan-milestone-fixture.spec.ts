@@ -89,7 +89,12 @@ function onePlan(m: EngineActivity, longer: boolean): Map<string, EngineResult> 
 }
 
 /** The two-plan programme, solved upstream forward, downstream, then upstream backward. */
-function twoPlans(m: EngineActivity, longer: boolean, cut: Cut): Map<string, EngineResult> {
+function twoPlans(
+  m: EngineActivity,
+  longer: boolean,
+  cut: Cut,
+  instants = true,
+): Map<string, EngineResult> {
   const { activities, edges, long } = network(m, longer);
   const upIds = new Set(cut === 'M->K' ? ['A', 'W', 'M'] : ['A', 'W']);
   const byId = new Map(activities.map((a) => [a.id, a]));
@@ -152,6 +157,8 @@ function twoPlans(m: EngineActivity, longer: boolean, cut: Cut): Map<string, Eng
         predecessor: endpoint(pred),
         predecessorPlacedStart: upFirst.get(predId)!.visualEffectiveStart,
         predecessorPlacedFinish: upFirst.get(predId)!.visualEffectiveFinish,
+        predecessorPlacedStartInstant: instants ? upFirst.get(predId)!.placedStartInstant : null,
+        predecessorPlacedFinishInstant: instants ? upFirst.get(predId)!.placedFinishInstant : null,
       },
     ],
     outgoing: [],
@@ -171,6 +178,8 @@ function twoPlans(m: EngineActivity, longer: boolean, cut: Cut): Map<string, Eng
         successor: endpoint(succ),
         successorLateStart: downResults.get(succId)!.lateStart,
         successorLateFinish: downResults.get(succId)!.lateFinish,
+        successorLateStartInstant: instants ? downResults.get(succId)!.lateStartInstant : null,
+        successorLateFinishInstant: instants ? downResults.get(succId)!.lateFinishInstant : null,
       },
     ],
     m1: m1(up),
@@ -191,42 +200,30 @@ const MIDDLES: readonly [string, () => EngineActivity][] = [
 ];
 
 /**
- * **The cases where the split does NOT equal the one-plan run, and cannot without a stored instant**
- * (`docs/TECH_DEBT.md` #565). They are `it.fails`, the form the #539 fixture itself took before its fix:
- * each asserts the one-plan answer, so the case turns red the day the divergence is closed and has to be
- * flipped to a plain `it`. Each key is `middle name|cut|longer`. The "stored date cannot say" block below
- * proves the first three bullets below (the weekend start milestone and zero-duration task, and the plan-calendar finish milestone)
- * share one limit, the stored date; the fourth is the upstream plan's own finish basis.
+ * **The one case where the split does NOT equal the one-plan run, by design** (ADR-0212 D7). It is
+ * `it.fails`, the form the #539 fixture itself took before its fix: it asserts the one-plan answer, so
+ * it turns red the day the divergence is closed and has to be flipped to a plain `it`. The key is
+ * `middle name|cut|longer`.
  *
- * - A start milestone, or a zero-duration task (same date rule, ADR-0207 D3), on the weekend calendar,
- *   cut at `M → K`: one plan keeps the instant its logic gives
- *   (Monday 06-28 00:00, where the weekend work ended), so `K` starts Monday 06-28; the date the plan
- *   stores for a start milestone is the day its next working minute opens (ADR-0207 D3), Saturday 07-03,
- *   and `K` starts a week late, Monday 07-05.
- * - A finish milestone on the plan calendar, cut at `W → M` with float to spare: its late instant is
- *   Monday 07-05 08:00, stored as the Friday before; `W` and `A` lose a weekend and a week of float.
  * - A finish milestone on the weekend calendar, cut at `M → K`: `M`'s late date reads Sunday 06-27 across
- *   plans and Monday 06-28 in one plan. Not a derivation fault: the upstream plan's backward pass starts
- *   from its own project finish (Sunday 19:00, where `M` is), which the downstream bound cannot loosen.
- *   The `longer` variant, where that finish stops binding, equals one plan.
+ *   plans and Monday 06-28 in one plan. Not a stored-value fault, so no instant can change it: the
+ *   upstream plan's backward pass starts from its own project finish (Sunday 19:00, where `M` is), which
+ *   a downstream bound cannot loosen. The `longer` variant, where that finish stops binding, equals one
+ *   plan.
  *
- * #565 closed the other two of its six: a start milestone on the weekend calendar, cut at `W → M`.
+ * #565 closed the other five of its six by keeping the instant beside the date (ADR-0212): a start
+ * milestone, and a zero-duration task, on the weekend calendar cut at `M → K` (each in both variants),
+ * and a finish milestone on the plan calendar cut at `W → M` with float to spare. Before it, each read a
+ * stored date that cannot tell two instants apart (the "stored date cannot say" block below).
  */
-const DIVERGES = new Set([
-  'a finish milestone on the weekend calendar|M->K|false',
-  'a start milestone on the weekend calendar|M->K|false',
-  'a start milestone on the weekend calendar|M->K|true',
-  'a finish milestone on the plan calendar|W->M|true',
-  'a zero-duration task on the weekend calendar|M->K|false',
-  'a zero-duration task on the weekend calendar|M->K|true',
-]);
+const DIVERGES = new Set(['a finish milestone on the weekend calendar|M->K|false']);
 
 describe('the #539 fixture split across two plans equals the one-plan run (#555)', () => {
   for (const cut of ['M->K', 'W->M'] as const) {
     for (const longer of [false, true]) {
       for (const [name, build] of MIDDLES) {
         const diverges = DIVERGES.has(`${name}|${cut}|${longer}`);
-        const title = `${name}, cut at ${cut}${longer ? ', with a longer task' : ''}${diverges ? ' (#565)' : ''}`;
+        const title = `${name}, cut at ${cut}${longer ? ', with a longer task' : ''}${diverges ? ' (by design, ADR-0212 D7)' : ''}`;
         (diverges ? it.fails : it)(title, () => {
           const single = onePlan(build(), longer);
           const split = twoPlans(build(), longer, cut);
@@ -289,6 +286,44 @@ describe('the #539 fixture split across two plans equals the one-plan run (#555)
       expect(constrained.get('M')!.lateFinish).toBe('2027-07-02');
       expect(successorDriven.get('W')!.totalFloat).toBe(1440);
       expect(constrained.get('W')!.totalFloat).toBe(0);
+    });
+
+    it('the instants differ where the dates agree, and the split equals one plan for both start milestones (FC-2)', () => {
+      const pin = { constraintType: 'SNET', constraintDate: '2027-07-03' } as const;
+      const driven = () => middle('START_MILESTONE', WEEKEND_CAL);
+      const pinned = () => middle('START_MILESTONE', WEEKEND_CAL, pin);
+      const drivenRun = onePlan(driven(), false).get('M')!;
+      const pinnedRun = onePlan(pinned(), false).get('M')!;
+      // One stored date, two instants: the engine's own placed start is where they part.
+      expect(drivenRun.visualEffectiveStart).toBe(pinnedRun.visualEffectiveStart);
+      expect(pinnedRun.placedStartInstant).toBeGreaterThan(drivenRun.placedStartInstant);
+      for (const build of [driven, pinned]) {
+        const single = onePlan(build(), false);
+        const split = twoPlans(build(), false, 'M->K');
+        expect(pick(split.get('K')!)).toEqual(pick(single.get('K')!));
+        // Non-vacuity: without the instants the split is the week-off answer the date forces.
+        expect(twoPlans(build(), false, 'M->K', false).get('K')!.earlyStart).toBe('2027-07-05');
+      }
+    });
+
+    it('the instants differ where the late dates agree, and W has the float one plan gives for both finish milestones (FC-2)', () => {
+      const fnlt = { constraintType: 'FNLT', constraintDate: '2027-07-02' } as const;
+      const driven = () => middle('FINISH_MILESTONE');
+      const constrained = () => middle('FINISH_MILESTONE', undefined, fnlt);
+      const drivenRun = onePlan(driven(), true).get('M')!;
+      const constrainedRun = onePlan(constrained(), true).get('M')!;
+      expect(drivenRun.lateFinish).toBe(constrainedRun.lateFinish);
+      expect(drivenRun.lateFinishInstant).toBeGreaterThan(constrainedRun.lateFinishInstant);
+      for (const [build, float] of [
+        [driven, 1440],
+        [constrained, 0],
+      ] as const) {
+        const split = twoPlans(build(), true, 'W->M');
+        expect(split.get('W')!.totalFloat).toBe(float);
+        expect(pick(split.get('W')!)).toEqual(pick(onePlan(build(), true).get('W')!));
+      }
+      // Non-vacuity: the date alone gives the constrained milestone's float to the driven one.
+      expect(twoPlans(driven(), true, 'W->M', false).get('W')!.totalFloat).toBe(0);
     });
 
     it('a weekend finish milestone reads its own plan’s finish, which a downstream bound cannot loosen', () => {

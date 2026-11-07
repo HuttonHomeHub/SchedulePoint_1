@@ -165,5 +165,23 @@ export function levelled(plan: RandomPlan, level: typeof levelSchedule): unknown
   );
 }
 
+/**
+ * The four instants `EngineResult` gained for ADR-0212 are outputs the engine reports that these frozen
+ * hashes pre-date. They are dropped before hashing rather than the hashes being regenerated: the claim
+ * under test is that levelling moved no date, and a stripped match against the ORIGINAL hashes proves
+ * that, which a regenerated set taken from the tree under test could not (the same rule as
+ * `derivedDurationMinutes` in `level.hot-resource.parity.spec.ts`).
+ */
+const ADR_0212_INSTANTS = new Set([
+  'placedStartInstant',
+  'placedFinishInstant',
+  'lateStartInstant',
+  'lateFinishInstant',
+]);
+
 export const digest = (value: unknown): string =>
-  createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  createHash('sha256')
+    .update(
+      JSON.stringify(value, (key, v: unknown) => (ADR_0212_INSTANTS.has(key) ? undefined : v)),
+    )
+    .digest('hex');

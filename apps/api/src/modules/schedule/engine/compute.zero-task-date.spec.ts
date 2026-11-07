@@ -175,16 +175,26 @@ describe('(a) an FS-reached and an SS-reached zero-duration task at the same ins
       [edge('A', 'B'), edge('A', 'Zfs'), edge('B', 'Zss', 'SS')],
       { dataDate: DATA_DATE, calendar: FIVE_DAY },
     );
+    // The four instants a result reports (ADR-0212) are the kept instants too, so they differ for the
+    // same reason the pass-on pair does.
     const {
       activityId: _fs,
       passOnStartInstant: _fsStart,
       passOnFinishInstant: _fsFinish,
+      placedStartInstant: _fsPlacedStart,
+      placedFinishInstant: _fsPlacedFinish,
+      lateStartInstant: _fsLateStart,
+      lateFinishInstant: _fsLateFinish,
       ...zfs
     } = byId(out, 'Zfs');
     const {
       activityId: _ss,
       passOnStartInstant: _ssStart,
       passOnFinishInstant: _ssFinish,
+      placedStartInstant: _ssPlacedStart,
+      placedFinishInstant: _ssPlacedFinish,
+      lateStartInstant: _ssLateStart,
+      lateFinishInstant: _ssLateFinish,
       ...zss
     } = byId(out, 'Zss');
     expect(zss).toEqual(zfs);

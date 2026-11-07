@@ -295,6 +295,20 @@ export interface EngineResult {
    */
   passOnStartInstant: number;
   passOnFinishInstant: number;
+  /**
+   * The exact instants the stored dates a cross-plan link reads are dated from (ADR-0212 D1), as
+   * absolute instants on the engine's own axis: where the bar is drawn starts and ends (the instant
+   * `visualEffectiveStart/Finish` are dated from) and the late start and finish (the instant
+   * `lateStart/lateFinish` are dated from). The offsets above are projected onto the PLAN calendar and
+   * cannot say which instant on another calendar they came from (Friday 16:00 or the Sunday 19:00 that
+   * weekend work ended at); a day cannot either, which is the whole of #565. In memory only until the
+   * schedule write persists them (ADR-0212 D2); required like the pairs above, so a hand-built result
+   * cannot omit them and a producer cannot silently fall back to a date.
+   */
+  placedStartInstant: number;
+  placedFinishInstant: number;
+  lateStartInstant: number;
+  lateFinishInstant: number;
   lateStartOffset: number;
   lateFinishOffset: number;
   totalFloat: number;

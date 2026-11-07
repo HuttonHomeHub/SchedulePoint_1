@@ -9,6 +9,7 @@ import {
   type OutgoingCrossPlanEdge,
 } from './cross-plan-derivation';
 import { allMinutesWorkCalendar, buildWorkingTimeCalendar } from './engine';
+import { instantToAbsMinutes } from './engine/working-time-calendar';
 
 /**
  * **The derivation on instants, against a HAND-DERIVED prediction table** (#385 M2-T5,
@@ -83,6 +84,8 @@ const incoming = (over: Partial<IncomingCrossPlanEdge> = {}): IncomingCrossPlanE
   predecessor: remoteTask(),
   predecessorPlacedStart: '2026-01-07',
   predecessorPlacedFinish: '2026-01-09',
+  predecessorPlacedStartInstant: null,
+  predecessorPlacedFinishInstant: null,
   ...over,
 });
 
@@ -98,6 +101,8 @@ const outgoing = (over: Partial<OutgoingCrossPlanEdge> = {}): OutgoingCrossPlanE
   successor: remoteTask(),
   successorLateStart: '2026-02-09',
   successorLateFinish: '2026-02-11',
+  successorLateStartInstant: null,
+  successorLateFinishInstant: null,
   ...over,
 });
 
@@ -689,5 +694,207 @@ describe('deriveExternalInstants — shape & edge cases', () => {
 
   it('an activity missing from `activities` is a caller defect and throws', () => {
     expect(() => derive({ incoming: [incoming()], activities: activities({}) })).toThrow(/A/);
+  });
+});
+
+// ------------------------------------------------------------------------------------------------
+// A supplied remote instant (ADR-0212 D3, #565). Hand-derived on Standard, which walks in whole
+// calendar days Monday to Friday, with the same walking convention as the table above.
+// ------------------------------------------------------------------------------------------------
+
+const abs = (instant: string): number => instantToAbsMinutes(instant);
+
+describe('deriveExternalInstants — a supplied remote instant is the anchor', () => {
+  // The edge's stored dates say Wed 01-07 to Fri 01-09 (the defaults); the instants say the remote
+  // started Wed 09:00 and finished Thu 12:00, which no whole day reproduces.
+  const START = '2026-01-07T09:00';
+  const FINISH = '2026-01-08T12:00';
+  const withInstants = (over: Partial<IncomingCrossPlanEdge> = {}) =>
+    incoming({
+      predecessorPlacedStartInstant: abs(START),
+      predecessorPlacedFinishInstant: abs(FINISH),
+      ...over,
+    });
+
+  const FORWARD_BY_INSTANT: [string, Partial<IncomingCrossPlanEdge>, string][] = [
+    // FS and SS read the instant itself at lag 0.
+    ['FS: the finish instant itself, not the end of the finish day', {}, FINISH],
+    ['SS: the start instant itself, not the first minute of the start day', { type: 'SS' }, START],
+    // FF: Thu 12:00 walked back 3 working days: 12 h, Wed, Tue = 60 h, then 12 h of Mon.
+    [
+      'FF: the finish instant walked back by the successor duration',
+      { type: 'FF' },
+      '2026-01-05T12:00',
+    ],
+    // SF: Wed 09:00 walked back 3 days: 9 h, Tue, Mon = 57 h, then 15 h back through the weekend.
+    [
+      'SF: the start instant walked back by the successor duration',
+      { type: 'SF' },
+      '2026-01-02T09:00',
+    ],
+  ];
+  for (const [name, edge, expected] of FORWARD_BY_INSTANT) {
+    it(`forward ${name}`, () => {
+      const { derived, remoteInstantMissingCount } = derive({ incoming: [withInstants(edge)] });
+      expect(derived.get('A')!.externalEarlyStart).toBe(expected);
+      expect(remoteInstantMissingCount).toBe(0);
+    });
+  }
+
+  const LATE_START = '2026-02-10T09:00';
+  const LATE_FINISH = '2026-02-11T12:00';
+  const backwardWith = (over: Partial<OutgoingCrossPlanEdge> = {}) =>
+    outgoing({
+      successorLateStartInstant: abs(LATE_START),
+      successorLateFinishInstant: abs(LATE_FINISH),
+      ...over,
+    });
+  const BACKWARD_BY_INSTANT: [string, Partial<OutgoingCrossPlanEdge>, string][] = [
+    ['FS: the late start instant itself', {}, LATE_START],
+    // SS: Tue 09:00 + 3 days = 15 h, Wed, Thu = 63 h, then 9 h of Fri.
+    [
+      'SS: the late start instant plus the predecessor duration',
+      { type: 'SS' },
+      '2026-02-13T09:00',
+    ],
+    ['FF: the late finish instant itself', { type: 'FF' }, LATE_FINISH],
+    // SF: Wed 12:00 + 3 days = 12 h, Thu, Fri = 60 h, then 12 h of the Monday after the weekend.
+    [
+      'SF: the late finish instant plus the predecessor duration',
+      { type: 'SF' },
+      '2026-02-16T12:00',
+    ],
+  ];
+  for (const [name, edge, expected] of BACKWARD_BY_INSTANT) {
+    it(`backward ${name}`, () => {
+      const { derived, remoteInstantMissingCount } = derive({ outgoing: [backwardWith(edge)] });
+      expect(derived.get('A')!.externalLateFinish).toBe(expected);
+      expect(remoteInstantMissingCount).toBe(0);
+    });
+  }
+
+  it('a supplied instant beats the date for every remote type, a finish milestone unrolled', () => {
+    // The date would read Fri 01-09's end (Sat 00:00) or, for a finish milestone, the same; the
+    // instant Sun 19:00 is where weekend work ended, and it is the bound as it stands.
+    const SUNDAY = '2026-01-11T19:00';
+    for (const type of ['TASK', 'FINISH_MILESTONE', 'START_MILESTONE'] as const) {
+      const { derived } = derive({
+        incoming: [
+          incoming({
+            predecessor: remoteTask({ type, durationMinutes: type === 'TASK' ? 3 * DAY : 0 }),
+            predecessorPlacedFinishInstant: abs(SUNDAY),
+          }),
+        ],
+      });
+      expect(derived.get('A')!.externalEarlyStart, type).toBe(SUNDAY);
+    }
+  });
+
+  it('a supplied instant beats the date on a BACKWARD finish-milestone remote, unrolled', () => {
+    // The late date reads midnight at the end of its day for a finish milestone; the supplied late
+    // instant is Tue 02-10 at 09:00, which is the bound itself for FS (start read) and FF (finish read).
+    const milestone = remoteTask({ type: 'FINISH_MILESTONE', durationMinutes: 0 });
+    for (const type of ['FS', 'FF'] as const) {
+      const { derived, remoteInstantMissingCount } = derive({
+        outgoing: [
+          backwardWith({
+            type,
+            successor: milestone,
+            successorLateStartInstant: abs(LATE_START),
+            successorLateFinishInstant: abs(LATE_START),
+          }),
+        ],
+      });
+      expect(derived.get('A')!.externalLateFinish, type).toBe(LATE_START);
+      expect(remoteInstantMissingCount, type).toBe(0);
+    }
+  });
+
+  it('an instant with no date beside it is still read: nothing is missing and nothing is N32', () => {
+    // The two are written in one statement, so this pairing is not produced today. The instant is the
+    // more exact of the two, so it wins rather than the edge being discarded as never calculated.
+    const forward = derive({
+      incoming: [
+        incoming({
+          predecessorPlacedFinish: null,
+          predecessorPlacedFinishInstant: abs(FINISH),
+        }),
+      ],
+    });
+    expect(forward.derived.get('A')!.externalEarlyStart).toBe(FINISH);
+    expect(forward.upstreamMissingCount).toBe(0);
+    expect(forward.remoteInstantMissingCount).toBe(0);
+    const backward = derive({
+      outgoing: [
+        outgoing({ successorLateStart: null, successorLateStartInstant: abs(LATE_START) }),
+      ],
+    });
+    expect(backward.derived.get('A')!.externalLateFinish).toBe(LATE_START);
+    expect(backward.remoteInstantMissingCount).toBe(0);
+  });
+
+  it('an LOE remote contributes no bound even when it carries an instant', () => {
+    const loe = remoteTask({ type: 'LEVEL_OF_EFFORT' });
+    const { derived, upstreamMissingCount, remoteInstantMissingCount } = derive({
+      incoming: [withInstants({ predecessor: loe })],
+      outgoing: [backwardWith({ successor: loe })],
+    });
+    expect(derived.get('A')).toEqual({ externalEarlyStart: null, externalLateFinish: null });
+    expect(upstreamMissingCount).toBe(0);
+    expect(remoteInstantMissingCount).toBe(0);
+  });
+
+  it('only the anchor the edge type reads is used: a null start instant does not stop an FS', () => {
+    const { derived, remoteInstantMissingCount } = derive({
+      incoming: [incoming({ predecessorPlacedFinishInstant: abs(FINISH) })],
+    });
+    expect(derived.get('A')!.externalEarlyStart).toBe(FINISH);
+    expect(remoteInstantMissingCount).toBe(0);
+  });
+});
+
+describe('deriveExternalInstants — no supplied instant reads the date exactly as before (FC-5)', () => {
+  it('forward: null instants give the end of the finish day, and the edge is counted', () => {
+    const { derived, remoteInstantMissingCount, upstreamMissingCount } = derive({
+      incoming: [incoming()],
+    });
+    expect(derived.get('A')!.externalEarlyStart).toBe('2026-01-10T00:00');
+    expect(remoteInstantMissingCount).toBe(1);
+    expect(upstreamMissingCount).toBe(0);
+  });
+
+  it('backward: null instants give the start of the late start day, and the edge is counted', () => {
+    const { derived, remoteInstantMissingCount } = derive({ outgoing: [outgoing()] });
+    expect(derived.get('A')!.externalLateFinish).toBe('2026-02-09T00:00');
+    expect(remoteInstantMissingCount).toBe(1);
+  });
+
+  it('counts each edge that fell back, in both directions', () => {
+    const { remoteInstantMissingCount } = derive({
+      incoming: [incoming(), incoming({ type: 'SS' })],
+      outgoing: [outgoing()],
+    });
+    expect(remoteInstantMissingCount).toBe(3);
+  });
+
+  it('an instant on one edge does not hide a fallback on another', () => {
+    const { remoteInstantMissingCount } = derive({
+      incoming: [incoming({ predecessorPlacedFinishInstant: abs('2026-01-08T12:00') }), incoming()],
+    });
+    expect(remoteInstantMissingCount).toBe(1);
+  });
+
+  it('is not counted for an LOE remote or for a remote whose dates were never calculated', () => {
+    const never = derive({
+      incoming: [incoming({ predecessorPlacedStart: null, predecessorPlacedFinish: null })],
+      outgoing: [outgoing({ successorLateStart: null, successorLateFinish: null })],
+    });
+    expect(never.remoteInstantMissingCount).toBe(0);
+    expect(never.upstreamMissingCount).toBe(1);
+    const loe = derive({
+      incoming: [incoming({ predecessor: remoteTask({ type: 'LEVEL_OF_EFFORT' }) })],
+      outgoing: [outgoing({ successor: remoteTask({ type: 'LEVEL_OF_EFFORT' }) })],
+    });
+    expect(loe.remoteInstantMissingCount).toBe(0);
   });
 });

@@ -10,7 +10,7 @@ import {
   type MatrixCalendarName,
 } from './cross-plan-matrix';
 import { predictDisagreement } from './cross-plan-prediction';
-import { runTwin, type TwinCalendars } from './cross-plan-twin';
+import { runTwin, type TwinCalendars, type TwinOptions } from './cross-plan-twin';
 
 /**
  * **FC-1: a cross-plan link gives the dates the same link gives inside one plan, to the minute,
@@ -50,8 +50,13 @@ function groups(cells: CrossPlanMatrixCell[]): Map<string, CrossPlanMatrixCell[]
 }
 
 /** Assert one cell's equality, printing both answers when it fails. */
-function expectEqual(cell: CrossPlanMatrixCell, name: string, cals?: TwinCalendars): void {
-  const observed = runTwin(cell, cals);
+function expectEqual(
+  cell: CrossPlanMatrixCell,
+  name: string,
+  cals?: TwinCalendars,
+  options?: TwinOptions,
+): void {
+  const observed = runTwin(cell, cals, options);
   // Non-vacuity: the derivation produced a bound in every cell, so the comparison below is between
   // two answers and not between an answer and the data date.
   expect(observed.derivedValue, name).not.toBeNull();
@@ -145,4 +150,53 @@ it('the mixed axis pairs Standard with eight-hour, and each with the weekend cal
     'weekend>eightHour',
     'weekend>standard',
   ]);
+});
+
+/**
+ * **The sub-day axis** (ADR-0212, CQ-1 = B; ADR-0161's first parity edge). The remote task is four
+ * working hours, so it finishes (forward) or has its late start (backward) part-way through a day, and
+ * a date, which names a whole day, cannot say when. With the instants supplied every cell equals the
+ * same link inside one plan; with none supplied (today's production) the cells where the remote's
+ * instant is not the day's boundary disagree, which is what makes the axis non-vacuous. The prediction
+ * for both halves is `docs/specs/cross-plan-instants/m0/prediction.md` section 5.
+ */
+const SUB_DAY_MINUTES = 240;
+
+function subDayCells(): CrossPlanMatrixCell[] {
+  return enumerateMatrix().filter((c) => c.remoteType === 'TASK');
+}
+
+describe('ADR-0212 sub-day axis: a remote task that ends or starts mid-day (CQ-1 = B)', () => {
+  for (const [row, cells] of groups(subDayCells())) {
+    it(row, () => {
+      for (const cell of cells)
+        expectEqual(cell, cellName(cell), undefined, { remoteMinutes: SUB_DAY_MINUTES });
+    });
+  }
+
+  it('is not vacuous: with no instants the same cells disagree, and only in the predicted direction', () => {
+    let disagreeing = 0;
+    for (const cell of subDayCells()) {
+      const without = runTwin(cell, undefined, {
+        remoteMinutes: SUB_DAY_MINUTES,
+        instants: false,
+      });
+      if (without.disagreementDays === 0) continue;
+      disagreeing += 1;
+      // The date reads the end (forward) or the start (backward) of the remote's day: a forward
+      // successor starts later than in one plan, a backward predecessor finishes earlier (tighter).
+      expect(
+        cell.direction === 'forward' ? without.disagreementDays > 0 : without.disagreementDays < 0,
+        cellName(cell),
+      ).toBe(true);
+    }
+    expect(disagreeing).toBeGreaterThan(0);
+  });
+
+  it('the axis runs on the mixed calendars too', () => {
+    for (const cals of MIXED_PAIRS) {
+      for (const cell of mixedCells().filter((c) => c.remoteType === 'TASK'))
+        expectEqual(cell, mixedName(cell, cals), cals, { remoteMinutes: SUB_DAY_MINUTES });
+    }
+  });
 });

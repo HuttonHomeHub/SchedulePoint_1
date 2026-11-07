@@ -1852,6 +1852,10 @@ export class ScheduleService {
           predecessorPlacedFinish: e.predecessorPlacedFinish
             ? formatCalendarDate(e.predecessorPlacedFinish)
             : null,
+          // No instant is stored until the schedule write keeps them (ADR-0212 M2) and the read is
+          // switched on (M4): null makes the derivation read the date exactly as it always has.
+          predecessorPlacedStartInstant: null,
+          predecessorPlacedFinishInstant: null,
         });
       }
       const outgoing: OutgoingCrossPlanEdge[] = [];
@@ -1874,6 +1878,8 @@ export class ScheduleService {
           successorLateFinish: e.successorLateFinish
             ? formatCalendarDate(e.successorLateFinish)
             : null,
+          successorLateStartInstant: null,
+          successorLateFinishInstant: null,
         });
       }
       // This plan's activities as the bound functions need them: the port each SCHEDULES on (the

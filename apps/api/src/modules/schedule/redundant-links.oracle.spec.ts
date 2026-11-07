@@ -133,6 +133,12 @@ describe('the oracle can see a divergence (M0-T2)', () => {
     const excluded = new Set([
       'activityId', // the key, not an output
       'resourceDriverMissing', // an input echoed back, never moved by a link
+      // In memory only until the schedule write keeps them (ADR-0212 M2), which is when a redundant
+      // link's removal must be shown to leave them alone and these four join the compared list.
+      'placedStartInstant',
+      'placedFinishInstant',
+      'lateStartInstant',
+      'lateFinishInstant',
     ]);
     const compared = new Set<string>(COMPARED_RESULT_FIELDS);
     const unaccounted = Object.keys(result).filter((k) => !compared.has(k) && !excluded.has(k));

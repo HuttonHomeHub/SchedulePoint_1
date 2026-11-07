@@ -51,10 +51,16 @@ import { instantToAbsMinutes } from './engine/working-time-calendar';
  *    strings, `compute.ts`). A derived winner is written by `formatExternalInstant`, `YYYY-MM-DDTHH:MM`
  *    with midnight kept (D7, E12), which the engine's clamps read as the instant itself.
  *
- * What it still cannot match is stated in the spec (§1): persisted dates carry no time of day, so an
- * upstream finishing mid-day is read as the end of that day; and the forward bound reads the
- * upstream's PLACED dates in both passes (ADR-0148 M-H), where one plan feeds placements to Pass 2
- * only. The parity domain is unplaced upstreams that finish on a day boundary.
+ * **A date carries no time of day, so an edge also carries the remote's INSTANT** (ADR-0212 D3,
+ * #565). When the caller supplies the instant the remote's date is dated from, it is the bound's
+ * anchor, unread and unrolled, for every remote type: what one plan reads. When it supplies none (a
+ * plan not recalculated since the instants were kept, or one an older run wrote), the date reader
+ * runs exactly as above, and the edge is counted in `remoteInstantMissingCount`.
+ *
+ * What it still cannot match is stated in the spec (§1): the forward bound reads the upstream's
+ * PLACED dates in both passes (ADR-0148 M-H), where one plan feeds placements to Pass 2 only; and a
+ * remote read from a date has no time of day, so one with no instant is read as the end of its day.
+ * The parity domain is unplaced upstreams with instants.
  */
 
 /** The four relationship kinds a cross-plan edge can carry — structurally Prisma's `DependencyType`. */
@@ -112,6 +118,14 @@ export interface IncomingCrossPlanEdge {
    */
   predecessorPlacedStart: string | null;
   predecessorPlacedFinish: string | null;
+  /**
+   * The exact instants those two dates are dated from, as absolute minutes on the engine's axis
+   * (`EngineResult.placedStartInstant/placedFinishInstant`), or null where none is current. Null reads
+   * the date beside it exactly as before (ADR-0212 D3); withholding a stale instant is the caller's
+   * (D4), so this module never judges freshness.
+   */
+  predecessorPlacedStartInstant: number | null;
+  predecessorPlacedFinishInstant: number | null;
 }
 
 /**
@@ -130,6 +144,12 @@ export interface OutgoingCrossPlanEdge {
   /** The downstream successor's persisted late start / finish (`YYYY-MM-DD`), or null if never calculated. */
   successorLateStart: string | null;
   successorLateFinish: string | null;
+  /**
+   * The exact instants those two late dates are dated from (`EngineResult.lateStartInstant/
+   * lateFinishInstant`), or null where none is current: read as the date beside it (ADR-0212 D3).
+   */
+  successorLateStartInstant: number | null;
+  successorLateFinishInstant: number | null;
 }
 
 /** The M1 hand-entered external columns (ADR-0043) for one activity, as `YYYY-MM-DD | null`. */
@@ -178,6 +198,13 @@ export interface DeriveExternalInstantsResult {
    * "upstream never calculated" after a clean recalc.
    */
   upstreamMissingCount: number;
+  /**
+   * How many edges had a remote date and no remote instant, so the bound was read from the date and
+   * a mid-day or weekend-adjacent remote may be off by the day (ADR-0212 D6). Both directions count:
+   * a backward edge's fallback is as wrong as a forward one's. An LOE remote and a never-calculated
+   * remote (a null date: N32, or nothing) are not counted.
+   */
+  remoteInstantMissingCount: number;
 }
 
 const isLoe = (type: ActivityType): boolean => type === 'LEVEL_OF_EFFORT';
@@ -235,23 +262,37 @@ function finishMilestoneRemoteInstant(
   return lastWorking > instantToAbsMinutes(date) ? lastWorking : midnight;
 }
 
-/** The remote end's start and finish instants, or null when a date the edge type needs is null. */
+/**
+ * The remote end's start and finish instants, or null when neither a supplied instant nor a date the
+ * edge type needs is present. `fromDate` says the anchor was reconstructed from the date, the fallback
+ * the caller counts (ADR-0212 D6).
+ */
 function remoteInstants(
   remote: CrossPlanRemoteEndpoint,
   start: string | null,
   finish: string | null,
+  startInstant: number | null,
+  finishInstant: number | null,
   needs: 'start' | 'finish',
   pass: 'forward' | 'backward',
-): { start: number; finish: number } | null {
+): { start: number; finish: number; fromDate: boolean } | null {
   const date = needs === 'start' ? start : finish;
-  if (date === null) return null;
+  // A current instant IS the anchor: the instant the remote's own plan dated the stored date from, so
+  // nothing is reconstructed and nothing is rolled (ADR-0212 D3). One rule for every remote type, which
+  // is ADR-0161's "a cross-plan link is the same link in one plan".
+  const supplied = needs === 'start' ? startInstant : finishInstant;
+  if (supplied === null && date === null) return null;
   const anchor = instantToAbsMinutes(remote.dataDate);
+  // `date!` below: the early return above leaves `supplied` null only when `date` is non-null, and the
+  // `supplied !== null` branch is the one that does not read it.
   const read =
-    remote.type === 'FINISH_MILESTONE'
-      ? finishMilestoneRemoteInstant(remote.calendar, anchor, date, pass)
-      : needs === 'start'
-        ? startDateInstant(remote.calendar, date, remote.type)
-        : finishDateInstant(remote.calendar, anchor, date, remote.type, remote.durationMinutes);
+    supplied !== null
+      ? supplied
+      : remote.type === 'FINISH_MILESTONE'
+        ? finishMilestoneRemoteInstant(remote.calendar, anchor, date!, pass)
+        : needs === 'start'
+          ? startDateInstant(remote.calendar, date!, remote.type)
+          : finishDateInstant(remote.calendar, anchor, date!, remote.type, remote.durationMinutes);
   // **A zero-duration remote's late date is read as its instant, with no roll** (#539, ADR-0207 D1).
   // This once rolled such a date back onto the remote's calendar to mirror `compute.ts`, whose backward
   // pass held a zero-duration activity's late start at its calendar's pre-gap end boundary. The engine
@@ -260,11 +301,12 @@ function remoteInstants(
   // finish was already an end boundary (`finishDateInstant` rolls back from the next midnight), so the
   // roll was a no-op for it.
   const instant = read;
-  // Only the date the edge type reads is read. The other is NaN, which the bound function for that
+  const fromDate = supplied === null;
+  // Only the anchor the edge type reads is read. The other is NaN, which the bound function for that
   // type never consults (FS/FF read the finish, SS/SF the start), so a null there is not a miss.
   return needs === 'start'
-    ? { start: instant, finish: Number.NaN }
-    : { start: Number.NaN, finish: instant };
+    ? { start: instant, finish: Number.NaN, fromDate }
+    : { start: Number.NaN, finish: instant, fromDate };
 }
 
 /**
@@ -293,6 +335,7 @@ export function deriveExternalInstants(
   const derivedBackward = new Map<string, number>();
   const activityIds = new Set<string>();
   let upstreamMissingCount = 0;
+  let remoteInstantMissingCount = 0;
 
   for (const edge of input.incoming) {
     activityIds.add(edge.successorActivityId);
@@ -304,6 +347,8 @@ export function deriveExternalInstants(
       edge.predecessor,
       edge.predecessorPlacedStart,
       edge.predecessorPlacedFinish,
+      edge.predecessorPlacedStartInstant,
+      edge.predecessorPlacedFinishInstant,
       forwardAnchorOf(edge.type),
       'forward',
     );
@@ -311,6 +356,7 @@ export function deriveExternalInstants(
       upstreamMissingCount += 1;
       continue;
     }
+    if (anchors.fromDate) remoteInstantMissingCount += 1;
     const bound = forwardLowerBound(
       engineEdge(edge.type, edge.lagMinutes, edge.lagCalendar),
       anchors.start,
@@ -333,6 +379,8 @@ export function deriveExternalInstants(
       edge.successor,
       edge.successorLateStart,
       edge.successorLateFinish,
+      edge.successorLateStartInstant,
+      edge.successorLateFinishInstant,
       backwardAnchorOf(edge.type),
       'backward',
     );
@@ -343,6 +391,7 @@ export function deriveExternalInstants(
     // that is expected and transient (the downstream is solved later in the same closure), so counting
     // it here would surface a false "1 upstream never calculated" after a fully successful recalc.
     if (anchors === null) continue;
+    if (anchors.fromDate) remoteInstantMissingCount += 1;
     const bound = backwardUpperBound(
       engineEdge(edge.type, edge.lagMinutes, edge.lagCalendar),
       anchors.start,
@@ -377,7 +426,7 @@ export function deriveExternalInstants(
     });
   }
 
-  return { derived, upstreamMissingCount };
+  return { derived, upstreamMissingCount, remoteInstantMissingCount };
 }
 
 /**
