@@ -47,8 +47,18 @@ const FROZEN: Record<string, string> = {
  * regenerated: the claim under test is that LEVELLING moved no date, and a stripped match against the
  * ORIGINAL hashes proves that, which a regenerated set taken from the tree under test could not.
  */
+/**
+ * The same rule for the four instants `EngineResult` gained for ADR-0212 (`placedStartInstant` and its
+ * three siblings): outputs the hashes pre-date, dropped before hashing and never regenerated.
+ */
 const withoutDerivedDuration = (key: string, value: unknown): unknown =>
-  key === 'derivedDurationMinutes' ? undefined : value;
+  key === 'derivedDurationMinutes' ||
+  key === 'placedStartInstant' ||
+  key === 'placedFinishInstant' ||
+  key === 'lateStartInstant' ||
+  key === 'lateFinishInstant'
+    ? undefined
+    : value;
 
 describe('levelSchedule — hot-resource and scale-plan output is byte-identical to before M2.5', () => {
   const spec = scaleSpec({ activities: 2000 });

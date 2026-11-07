@@ -979,6 +979,12 @@ export function computeSchedule(
       // Pass 2's own pass-on, exposed rather than re-derived by levelling (in memory only).
       passOnStartInstant: visualPropStart.get(id)!,
       passOnFinishInstant: visualPropFinish.get(id)!,
+      // The instants the stored placed and late dates are dated from, exposed so a plan can keep them
+      // beside the dates (ADR-0212 D1). The same four values the offsets below are projected from.
+      placedStartInstant: placedStartInst,
+      placedFinishInstant: placedFinishInst,
+      lateStartInstant: lsInst,
+      lateFinishInstant: lfInst,
       lateStartOffset: offsetFromDataDate(planCalendar, dataDateAbs, lsInst),
       lateFinishOffset: offsetFromDataDate(planCalendar, dataDateAbs, lfInst),
       totalFloat,
