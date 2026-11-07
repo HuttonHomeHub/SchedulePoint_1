@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveExternalInstants, type CrossPlanRemoteEndpoint } from '../cross-plan-derivation';
+import {
+  deriveExternalInstants,
+  type CrossPlanEdgeType,
+  type CrossPlanRemoteEndpoint,
+} from '../cross-plan-derivation';
 import {
   allMinutesWorkCalendar,
   computeSchedule,
@@ -48,15 +52,16 @@ function bothWays(
   dataDate: string,
   instants: boolean,
   calendar: WorkingTimeCalendar = WEEKDAY_CAL,
+  type: CrossPlanEdgeType = 'FS',
 ): { split: EngineResult; single: EngineResult } {
   const s: EngineActivity = { id: 'S', type: 'TASK', durationMinutes: FS_DAY };
-  const single = solve([p, s], [link('P', 'S')], dataDate, calendar).get('S')!;
+  const single = solve([p, s], [link('P', 'S', type)], dataDate, calendar).get('S')!;
   const up = solve([p], [], dataDate).get('P')!;
   const { derived } = deriveExternalInstants({
     incoming: [
       {
         successorActivityId: 'S',
-        type: 'FS',
+        type,
         lagMinutes: 0,
         lagCalendar: calendar,
         predecessor: remote(p, dataDate),
@@ -78,6 +83,49 @@ function bothWays(
     dataDate,
     calendar,
   ).get('S')!;
+  return { split, single };
+}
+
+/**
+ * `P`'s late side when it reads a downstream `S` across a link, and in one plan: the backward twin of
+ * {@link bothWays}. `S` is the remote end; its late dates and instants come from its own plan's run.
+ */
+function bothWaysBackward(
+  s: EngineActivity,
+  dataDate: string,
+  instants: boolean,
+  type: CrossPlanEdgeType = 'FS',
+): { split: EngineResult; single: EngineResult } {
+  // Shorter than the remote's remaining work, so in one plan the project finish is the remote's and its
+  // late finish is not stretched to a local task's early finish.
+  const p: EngineActivity = { id: 'P', type: 'TASK', durationMinutes: 120 };
+  const single = solve([p, s], [link('P', 'S', type)], dataDate).get('P')!;
+  const down = solve([s], [], dataDate).get('S')!;
+  const { derived } = deriveExternalInstants({
+    incoming: [],
+    outgoing: [
+      {
+        predecessorActivityId: 'P',
+        type,
+        lagMinutes: 0,
+        lagCalendar: WEEKDAY_CAL,
+        successor: remote(s, dataDate),
+        successorLateStart: down.lateStart,
+        successorLateFinish: down.lateFinish,
+        successorLateStartInstant: instants ? down.lateStartInstant : null,
+        successorLateFinishInstant: instants ? down.lateFinishInstant : null,
+      },
+    ],
+    m1: new Map([['P', { externalEarlyStart: null, externalLateFinish: null }]]),
+    activities: new Map([['P', { type: 'TASK', durationMinutes: 120, calendar: WEEKDAY_CAL }]]),
+    dataDate,
+  });
+  const d = derived.get('P')!;
+  const split = solve(
+    [{ ...p, externalEarlyStart: d.externalEarlyStart, externalLateFinish: d.externalLateFinish }],
+    [],
+    dataDate,
+  ).get('P')!;
   return { split, single };
 }
 
@@ -113,6 +161,44 @@ describe('a progressed upstream (prediction section 3)', () => {
     expect(without.split.earlyStartOffset).toBe(without.single.earlyStartOffset);
     expect(withInstants.split).toEqual(without.split);
   });
+
+  it('a started task read through SS and FF hands over at its own instants', () => {
+    // Started Monday with four working hours left on Tuesday 06-15: it finishes Tuesday 12:00, and an
+    // SS successor reads its actual start (Monday 08:00), an FF one its finish less its own day.
+    const p: EngineActivity = {
+      id: 'P',
+      type: 'TASK',
+      durationMinutes: 3 * FS_DAY,
+      actualStart: '2027-06-14',
+      remainingMinutes: 240,
+    };
+    for (const type of ['SS', 'FF'] as const) {
+      const withInstants = bothWays(p, '2027-06-15', true, WEEKDAY_CAL, type);
+      expect(withInstants.split.earlyStartOffset, type).toBe(withInstants.single.earlyStartOffset);
+    }
+  });
+});
+
+describe('a progressed downstream, read backward (the late side)', () => {
+  const started: EngineActivity = {
+    id: 'S',
+    type: 'TASK',
+    durationMinutes: 3 * FS_DAY,
+    actualStart: '2027-06-14',
+    remainingMinutes: 240,
+  };
+
+  it('a started successor bounds its predecessor exactly as in one plan', () => {
+    // Parity, not discrimination: a started task's late start falls on a day boundary here, so the date
+    // read agrees too (measured: withholding the instants gives the same offset). The instants are
+    // what keeps it so for a late start that is not. The two types that read the successor's late START. An FF reads its late finish, which a lone
+    // plan clamps to its own project finish where one plan has the other's, so it is not a like pair.
+    for (const type of ['FS', 'SS'] as const) {
+      const withInstants = bothWaysBackward(started, '2027-06-15', true, type);
+      expect(withInstants.split.lateFinishOffset, type).toBe(withInstants.single.lateFinishOffset);
+      expect(withInstants.split.totalFloat, type).toBe(withInstants.single.totalFloat);
+    }
+  });
 });
 
 describe('a placed finish milestone upstream (prediction section 4)', () => {
@@ -140,8 +226,8 @@ describe('a placed finish milestone upstream (prediction section 4)', () => {
     const without = bothWays(placed('2027-06-16'), '2027-06-14', false, allMinutesWorkCalendar);
     expect(withInstants.split.earlyStartOffset).toBeGreaterThan(without.split.earlyStartOffset);
     const weekday = bothWays(placed('2027-06-16'), '2027-06-14', true);
-    expect(weekday.split.earlyStartOffset).toBe(
-      bothWays(placed('2027-06-16'), '2027-06-14', false).split.earlyStartOffset,
-    );
+    // One plan reads a placement in Pass 2 only, so its NETWORK early start is not the comparison
+    // (that is day 0); the day the successor is drawn on is.
+    expect(weekday.split.visualEffectiveStart).toBe(weekday.single.visualEffectiveStart);
   });
 });

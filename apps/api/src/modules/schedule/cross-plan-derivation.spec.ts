@@ -790,6 +790,60 @@ describe('deriveExternalInstants — a supplied remote instant is the anchor', (
     }
   });
 
+  it('a supplied instant beats the date on a BACKWARD finish-milestone remote, unrolled', () => {
+    // The late date reads midnight at the end of its day for a finish milestone; the supplied late
+    // instant is Tue 02-10 at 09:00, which is the bound itself for FS (start read) and FF (finish read).
+    const milestone = remoteTask({ type: 'FINISH_MILESTONE', durationMinutes: 0 });
+    for (const type of ['FS', 'FF'] as const) {
+      const { derived, remoteInstantMissingCount } = derive({
+        outgoing: [
+          backwardWith({
+            type,
+            successor: milestone,
+            successorLateStartInstant: abs(LATE_START),
+            successorLateFinishInstant: abs(LATE_START),
+          }),
+        ],
+      });
+      expect(derived.get('A')!.externalLateFinish, type).toBe(LATE_START);
+      expect(remoteInstantMissingCount, type).toBe(0);
+    }
+  });
+
+  it('an instant with no date beside it is still read: nothing is missing and nothing is N32', () => {
+    // The two are written in one statement, so this pairing is not produced today. The instant is the
+    // more exact of the two, so it wins rather than the edge being discarded as never calculated.
+    const forward = derive({
+      incoming: [
+        incoming({
+          predecessorPlacedFinish: null,
+          predecessorPlacedFinishInstant: abs(FINISH),
+        }),
+      ],
+    });
+    expect(forward.derived.get('A')!.externalEarlyStart).toBe(FINISH);
+    expect(forward.upstreamMissingCount).toBe(0);
+    expect(forward.remoteInstantMissingCount).toBe(0);
+    const backward = derive({
+      outgoing: [
+        outgoing({ successorLateStart: null, successorLateStartInstant: abs(LATE_START) }),
+      ],
+    });
+    expect(backward.derived.get('A')!.externalLateFinish).toBe(LATE_START);
+    expect(backward.remoteInstantMissingCount).toBe(0);
+  });
+
+  it('an LOE remote contributes no bound even when it carries an instant', () => {
+    const loe = remoteTask({ type: 'LEVEL_OF_EFFORT' });
+    const { derived, upstreamMissingCount, remoteInstantMissingCount } = derive({
+      incoming: [withInstants({ predecessor: loe })],
+      outgoing: [backwardWith({ successor: loe })],
+    });
+    expect(derived.get('A')).toEqual({ externalEarlyStart: null, externalLateFinish: null });
+    expect(upstreamMissingCount).toBe(0);
+    expect(remoteInstantMissingCount).toBe(0);
+  });
+
   it('only the anchor the edge type reads is used: a null start instant does not stop an FS', () => {
     const { derived, remoteInstantMissingCount } = derive({
       incoming: [incoming({ predecessorPlacedFinishInstant: abs(FINISH) })],

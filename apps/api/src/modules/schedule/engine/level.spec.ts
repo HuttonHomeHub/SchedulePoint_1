@@ -117,6 +117,33 @@ describe('levelSchedule — two overlapping equal activities on a single-unit re
     expect(byId.get('A')!.leveledStartInstant).toBe(dataDateAbs);
     expect(byId.get('B')!.leveledStartInstant).toBe(dataDateAbs + 2 * DAY);
   });
+
+  it('leaves every persisted date and the four instants a cross-plan link reads as computed (#565)', () => {
+    // `writeResults` persists early/late/visual-effective dates from these results and the levelled
+    // position into the separate `leveled_*` columns, and a cross-plan link reads the former
+    // (ADR-0212). The overlay is spread over the network result (`{ ...r, ...ov }`), so a delayed
+    // activity must keep its network instants beside its network dates: the instants cannot go stale
+    // against dates levelling never wrote. B is delayed two days, so a leak would show on it.
+    const { output, byId } = run([A, B], [], assignments, resources);
+    expect(byId.get('B')!.levelingDelay).toBe(2 * DAY);
+    for (const computed of output.results) {
+      const levelled = byId.get(computed.activityId)!;
+      for (const key of [
+        'earlyStart',
+        'earlyFinish',
+        'lateStart',
+        'lateFinish',
+        'visualEffectiveStart',
+        'visualEffectiveFinish',
+        'placedStartInstant',
+        'placedFinishInstant',
+        'lateStartInstant',
+        'lateFinishInstant',
+      ] as const) {
+        expect(levelled[key], `${computed.activityId}.${key}`).toBe(computed[key]);
+      }
+    }
+  });
 });
 
 describe('levelSchedule — float-first vs extend (§4)', () => {

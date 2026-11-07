@@ -283,6 +283,8 @@ function remoteInstants(
   const supplied = needs === 'start' ? startInstant : finishInstant;
   if (supplied === null && date === null) return null;
   const anchor = instantToAbsMinutes(remote.dataDate);
+  // `date!` below: the early return above leaves `supplied` null only when `date` is non-null, and the
+  // `supplied !== null` branch is the one that does not read it.
   const read =
     supplied !== null
       ? supplied
