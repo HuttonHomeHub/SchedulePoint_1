@@ -5164,3 +5164,148 @@ model PerfProbeResult {
   @@index([recordedAt, id])
   @@map("perf_probe_results")
 }
+
+/// One **distinct** browser crash: a screen that threw while rendering, caught by the router's
+/// per-match boundary or by `AppErrorBoundary` (browser-crash-reports M1; `docs/TECH_DEBT.md` #551;
+/// `docs/specs/browser-crash-reports/spec.md` §4.4). The **fourth** table in the operational
+/// telemetry class (`docs/DATABASE.md` "Operational telemetry") and the closest relative of
+/// `CspReport`, whose dedupe hash, clamp and index it copies. Where it departs, the reason is that
+/// this sink is **authenticated** and its producer **answers** (`{ reference }`) rather than 204-ing.
+///
+/// **The screen's, never the person's.** A row says which screen broke, on which release, in which
+/// browser family. It holds no user, organisation, plan, project, client or activity id, no email,
+/// no IP address, no full user agent, no full or resolved URL, no query string and **no correlation
+/// id** — a correlation id joins the row to a Pino line that carries the principal id
+/// (`docs/OBSERVABILITY.md`), which would make an anonymous row attributable. That list is not a
+/// convention: `crash-reports.fields.structural.spec.ts` (plan M1-T1 step 3) reads this model's field
+/// list from the DMMF and refuses each of them, and any `*Id` other than `id`. A new column here is a
+/// privacy decision first and a schema change second.
+///
+/// **Ordinary, like the other three** (`docs/DATABASE.md` "MailEvent", "CspReport"): no trigger, no
+/// `deleted_at`, no `version`, no `created_at`/`updated_at`/`created_by`, no `organization_id` and
+/// **no foreign key at all**. The ADR-0087 sweep must be able to remove a row, and a `RESTRICT` from
+/// telemetry must never block an organisation delete. With no `deletedAt` it is outside ADR-0172's
+/// soft-delete filter gate by construction (that gate's subject is the models declaring
+/// `deletedAt DateTime?`), and the organisation export (ADR-0194) excludes it as installation
+/// telemetry with no organisation (`export-columns.ts` `EXCLUDED_MODELS`).
+///
+/// **Every CHECK here is one the producer structurally cannot violate** — the rule `csp_reports`
+/// learned the hard way (`20260809170000_csp_reports_refusable_constraints`): a constraint a browser
+/// can reach is a constraint that deletes a report. Browser input never reaches a column
+/// unnormalised. `normaliseCrashReport` and the cleaners (spec §2 "Validation rules") ship in the
+/// same API image as this migration, so producer and constraints cannot skew across a release (the
+/// web bundle can, ADR-0027, and it is not the producer). A refusal is also not silent here as it is
+/// for CSP: the response says `reference: null`. The CHECKs are the stored-row contract that the
+/// panel and the 1,000-row storage bound rely on, not a substitute for the cleaners.
+///
+/// **Service-layer obligations the database cannot enforce** (plan M1-T2):
+/// 1. **Strip U+0000 from every text value.** Postgres `text` cannot hold a NUL and refuses the whole
+///    statement (`invalid byte sequence for encoding "UTF8": 0x00`) before any CHECK runs. It is the
+///    one failure on this table that browser input alone can reach; `String(value)` of a thrown
+///    non-Error can carry one.
+/// 2. **Cap as the LAST step of each cleaner**, in UTF-16 code units or code points. Both are
+///    `>= char_length` in Postgres, so a value capped at N in JS satisfies `char_length(x) <= N` here.
+///    A redaction applied after the cap (`[email]` is longer than `a@b.c`) would not.
+/// 3. **Parse `browser_major` to at most four digits, or null.** The `User-Agent` is the caller's
+///    header; a longer digit run is out of the CHECK's range or out of int4 at bind time.
+/// 4. **Stamp both timestamps in the database** with the clamp (`csp-report.service.ts:133-147`), and
+///    run the cap check inside the same statement. `docs/DATABASE.md` "CrashReport" gives the one
+///    statement that does both.
+/// 5. **Log no content on a failed write — not `err` whole.** A CHECK violation's DETAIL is
+///    `Failing row contains (…)`, i.e. the cleaned message and stacks. Log the SQLSTATE and the
+///    constraint name only. (`csp_report.persist_failed` logs `err`; this one must not.)
+///
+/// **Non-scheduling.** The CPM engine never reads it, so this is a single additive table create and
+/// the ADR-0034 recalculation parity gate is structurally unaffected.
+model CrashReport {
+  /// UUID v7 when the producer supplies one; the raw-SQL upsert may equally use `gen_random_uuid()`
+  /// as `csp_reports` does. Nothing orders by `id` except as the tie-break after `last_seen_at`, so
+  /// its version is not load-bearing.
+  id             String   @id @default(uuid(7)) @db.Uuid
+  /// `sha256Hex(web_version ␟ boundary ␟ error_name ␟ message ␟ route_pattern ␟ top-5 frames ␟
+  /// browser)` over the STORED (cleaned) values, joined on U+001F — the `CspReport.dedupeHash`
+  /// separator lesson (a `|` join collides). A null `route_pattern` joins as the empty string, which
+  /// is unambiguous only because a stored route id is never empty
+  /// (`ck_crash_reports_route_pattern_shape`). TEXT rather than `char(64)`, and producer-computed:
+  /// this database cannot compute a strong hash in an index expression (`docs/DATABASE.md`
+  /// "CspReport"). `ck_crash_reports_dedupe_hash_shape` pins the shape, never a recomputation. The
+  /// first six hex characters, upper-cased, are the display-only `reference`: not unique by
+  /// contract, and not stored.
+  dedupeHash     String   @unique @map("dedupe_hash")
+  /// `route` (the router's per-match `CatchBoundary`, via `defaultOnCatch`) or `app`
+  /// (`AppErrorBoundary`, the last resort). TEXT plus a fail-closed value-list CHECK rather than a
+  /// Postgres enum — the `mail_events.kind` precedent: a third source (`window`, spec Q4's
+  /// alternative) is one DROP + ADD of the CHECK in one migration, where an enum label is two. The
+  /// normaliser maps anything else before the write, so no browser can reach the CHECK.
+  boundary       String
+  /// A constructor name (`TypeError`, `NonError`) or `Error` — the `mail_events.error_class` idea.
+  /// `ck_crash_reports_error_name_shape` spells the spec's `^[A-Za-z_$][\w$]{0,63}$` as explicit
+  /// ASCII ranges, because Postgres' `\w` follows the locale and JavaScript's does not.
+  errorName      String   @map("error_name")
+  /// The CLEANED message (spec §2: URLs reduced, emails, UUIDs, digit runs and quoted values
+  /// redacted), at most 300 characters. NOT NULL; a report with a name and no message stores `''`.
+  message        String
+  /// A TanStack route **id** (`/_authed/orgs/$orgSlug/plans/$planId`), never a resolved path, or
+  /// null when no match was active. This is the column most likely to leak an identifier if a
+  /// producer ever passed a pathname by mistake, so its CHECK refuses a UUID-shaped run as well as a
+  /// bad shape: a pattern never holds one. It cannot refuse a resolved org slug (`/orgs/acme/…`),
+  /// which fits the shape; reading the id from `router.state.matches` is the only guard for that.
+  routePattern   String?  @map("route_pattern")
+  /// The bundle's version string, or `unknown`. In the key on purpose: a crash that comes back after
+  /// a fix is a new row, not a merged count (spec §2 "Edge cases"). Its CHECK is a loose token shape
+  /// (`[0-9A-Za-z.+-]{1,32}`) rather than a SemVer regex, so the database is not the authority on how
+  /// a version is spelled.
+  webVersion     String   @map("web_version")
+  /// The browser FAMILY, derived by the server from `User-Agent` (`browserOf()`): `chrome`, `edge`,
+  /// `firefox`, `safari` or `other`. `other` is the catch-all, so the list is closed by construction
+  /// and its CHECK is fail-closed. The full UA is never stored.
+  browser        String
+  /// The major version, or null when the UA gave none in a parseable form. Not in the key, so
+  /// last-writer-wins through `COALESCE` (a later report cannot erase it). `0..9999`: obligation 3.
+  browserMajor   Int?     @map("browser_major")
+  /// The CLEANED stack: at most 20 frames of `fn @ path:line:col`, same-origin paths only, at most
+  /// 4,000 characters. Its top five frames are in the key; the rest is last-writer-wins through
+  /// `COALESCE`. Null for a non-Error throw.
+  stack          String?
+  /// The CLEANED React component stack: at most 20 lines and 2,000 characters. Last-writer-wins
+  /// through `COALESCE`. Null when React supplied none.
+  componentStack String?  @map("component_stack")
+  /// How many times this distinct crash was reported. INT, not BIGINT — the `CspReport.count`
+  /// argument, stronger here: the sink is authenticated and throttled at 10/min per IP, so one row
+  /// reaches int4's limit only after ~149,000 address-days on one identical fingerprint, and the
+  /// release in the key starts a new row on every deploy. BIGINT would put a `bigint` on the DTO,
+  /// which `JSON.stringify` refuses. The recommended upsert also saturates instead of overflowing.
+  count          Int      @default(1)
+  /// When this distinct crash was first and most recently reported, both stamped by the DATABASE
+  /// (`clock_timestamp()`), never by the service. `last_seen_at` is the read order, the 7-day summary
+  /// predicate and the ADR-0087 retention predicate — so a crash that is still happening never
+  /// expires, deliberately, and `first_seen_at` can be older than the period.
+  ///
+  /// `ck_crash_reports_seen_order` (`last_seen_at >= first_seen_at`) is KEPT beside the
+  /// `GREATEST(clock_timestamp(), first_seen_at)` clamp. The clamp makes it unviolable; it is true;
+  /// and it is what surfaced `csp_reports`' #311. Kept, a future statement that drops the clamp fails
+  /// the 16-way burst test instead of writing an impossible pair.
+  firstSeenAt    DateTime @default(now()) @map("first_seen_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+
+  // CHECK constraints live in the migration as raw SQL (Prisma has no CHECK syntax), with NO
+  // attribute declared for them here, so `prisma:check-drift` stays clean (TECH_DEBT #54):
+  // ck_crash_reports_dedupe_hash_shape, _boundary, _error_name_shape, _message_length,
+  // _route_pattern_shape, _web_version_shape, _browser, _browser_major, _stack_length,
+  // _component_stack_length, _count_positive and _seen_order.
+  //
+  // ONE index beyond the unique key: full, so declared here — the `csp_reports` index verbatim.
+  // Every row is in every read (no soft delete, no scope, no nullable leading column).
+  //
+  //   * (last_seen_at, id) — the staff list `ORDER BY last_seen_at DESC, id DESC LIMIT 50` (Q-c,
+  //     read backwards: both keys descend together); the 7-day summary `count(*)` and
+  //     `max(last_seen_at)` (Q-d, a range on the leading column, and the max is the backward first
+  //     tuple); the sweep's `ctid IN (SELECT ctid … WHERE last_seen_at < $cutoff ORDER BY
+  //     last_seen_at, id LIMIT 1000)` (Q-e); and the oldest-surviving read (Q-f, read forwards).
+  //
+  // The cap check (Q-b) needs NO index of its own: it is one probe of `dedupe_hash`'s unique index
+  // plus a count bounded by `LIMIT 1000`, over a table the cap itself holds near 1,000 rows. See the
+  // migration.
+  @@index([lastSeenAt, id])
+  @@map("crash_reports")
+}

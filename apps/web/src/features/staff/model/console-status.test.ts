@@ -8,6 +8,7 @@ import {
   type QueryFacts,
 } from './console-status';
 
+import type { CrashReportRow, CrashReports } from '@/features/staff/api/staff-crash-reports';
 import type { CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import type { StaffHealth } from '@/features/staff/api/staff-health';
 import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staff-panels';
@@ -58,10 +59,34 @@ function accounts(overrides: Partial<StaffAccounts> = {}): StaffAccounts {
   return { unverifiedTotal: 0, unverified: [], hasMore: false, nextCursor: null, ...overrides };
 }
 
+function crashRow(lastSeenAt: string): CrashReportRow {
+  return {
+    id: 'c1',
+    reference: 'ABCDEF',
+    boundary: 'route',
+    errorName: 'TypeError',
+    message: 'boom',
+    routePattern: '/_authed/orgs/$orgSlug/plans/$planId',
+    webVersion: '0.200.7',
+    browser: 'chrome',
+    browserMajor: 131,
+    stack: null,
+    componentStack: null,
+    count: 2,
+    firstSeenAt: lastSeenAt,
+    lastSeenAt,
+  };
+}
+
+function crashes(overrides: Partial<CrashReports> = {}): CrashReports {
+  return { rows: [], total: 0, cap: 1000, capReached: false, seenLast7Days: 0, ...overrides };
+}
+
 function allHealthy(): ConsoleStatusInput {
   return {
     health: settled(health()),
     security: settled<CspReportRow[]>([]),
+    crashes: settled(crashes()),
     accounts: settled(accounts()),
     installation: settled(installation()),
   };
@@ -93,6 +118,7 @@ describe('deriveConsoleStatus', () => {
     const mixed = derive({
       health: pending,
       security: failed,
+      crashes: pending,
       accounts: settled(accounts({ unverifiedTotal: 4 })),
       installation: settled(installation()),
     });
@@ -103,6 +129,7 @@ describe('deriveConsoleStatus', () => {
       derive({
         health: failed,
         security: failed,
+        crashes: failed,
         accounts: failed,
         installation: failed,
       }).checks.map((check) => check.id),
@@ -140,6 +167,7 @@ describe('deriveConsoleStatus', () => {
       const status = derive({
         health: pending,
         security: pending,
+        crashes: pending,
         accounts: pending,
         installation: pending,
       });
@@ -151,12 +179,13 @@ describe('deriveConsoleStatus', () => {
       const status = derive({
         health: failed,
         security: failed,
+        crashes: failed,
         accounts: failed,
         installation: failed,
       });
 
-      expect(status.sentence).toBe('5 could not be checked.');
-      expect(status.unreadableCount).toBe(5);
+      expect(status.sentence).toBe('6 could not be checked.');
+      expect(status.unreadableCount).toBe(6);
     });
 
     /** A mixed page says all three things rather than picking the loudest and hiding the rest. */
@@ -287,6 +316,58 @@ describe('deriveConsoleStatus', () => {
       expect(valueOf(derive({ ...allHealthy(), security: settled([row(1)]) }), 'security')).toBe(
         '1 kind blocked, 1 time',
       );
+    });
+
+    /**
+     * The owner's answer to the spec's Q2: any crash reported in the last 7 days is "Needs
+     * attention", and older rows alone are not. Verified red against a rule that read `rows.length`
+     * instead of the 7-day count, which flagged a table of month-old rows.
+     */
+    it('flags a crash seen in the last 7 days, and says how many kinds', () => {
+      const recent = crashRow('2026-09-14T02:00:00.000Z');
+      const one = derive({
+        ...allHealthy(),
+        crashes: settled(crashes({ rows: [recent], total: 1, seenLast7Days: 1 })),
+      });
+      expect(one.checks.find((check) => check.id === 'crashes')?.state).toBe('ATTENTION');
+      expect(one.checks.find((check) => check.id === 'crashes')?.verdictLabel).toBe(
+        'Needs attention',
+      );
+      expect(valueOf(one, 'crashes')).toBe('1 kind in the last 7 days');
+      expect(one.sentence).toBe('1 thing needs attention.');
+      expect(
+        valueOf(
+          derive({
+            ...allHealthy(),
+            crashes: settled(crashes({ rows: [recent], total: 3, seenLast7Days: 3 })),
+          }),
+          'crashes',
+        ),
+      ).toBe('3 kinds in the last 7 days');
+    });
+
+    it('is healthy when every crash is older than 7 days, and says how long ago', () => {
+      const old = crashRow('2026-09-04T03:00:00.000Z');
+      const status = derive({
+        ...allHealthy(),
+        crashes: settled(crashes({ rows: [old], total: 1, seenLast7Days: 0 })),
+      });
+      expect(status.checks.find((check) => check.id === 'crashes')?.state).toBe('HEALTHY');
+      expect(valueOf(status, 'crashes')).toBe('Last crash 1 week ago');
+      expect(status.allHealthy).toBe(true);
+    });
+
+    it('says none were received when there are no rows', () => {
+      expect(valueOf(derive(allHealthy()), 'crashes')).toBe('None received');
+    });
+
+    it('never calls a crash read that failed or is pending healthy', () => {
+      const failedStatus = derive({ ...allHealthy(), crashes: failed });
+      expect(failedStatus.checks.find((check) => check.id === 'crashes')?.state).toBe('UNREADABLE');
+      expect(valueOf(failedStatus, 'crashes')).toBe("Couldn't load. See the box below");
+      const pendingStatus = derive({ ...allHealthy(), crashes: pending });
+      expect(pendingStatus.checks.find((check) => check.id === 'crashes')?.state).toBe('PENDING');
+      expect(pendingStatus.allHealthy).toBe(false);
     });
 
     it('counts people who cannot sign in', () => {

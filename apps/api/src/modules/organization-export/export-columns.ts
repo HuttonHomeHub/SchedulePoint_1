@@ -1022,7 +1022,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
   },
 ];
 
-/** The 7 models that are not exported at all, each with why. */
+/** The 8 models that are not exported at all, each with why. */
 export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
   {
     model: 'Session',
@@ -1067,6 +1067,12 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
     label: 'performance measurements',
     table: 'perf_probe_results',
     reason: 'Staff’s measurements of the installation, not organisation data.',
+  },
+  {
+    model: 'CrashReport',
+    label: 'screen crash reports',
+    table: 'crash_reports',
+    reason: 'Installation telemetry with no organisation, readable by staff only.',
   },
 ];
 

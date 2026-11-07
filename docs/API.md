@@ -169,7 +169,8 @@ presence only; the guard alone decides whether they are good). A request under
 `@ArrayMaxSize(2000)` batch bodies — positions, placements, parents, bulk-delete — fit (the widest,
 2,000 placements, is about 356 KB). **Everything else is 64 KB**: the routes a caller with no session
 can post to (`csp-report`, `invitations/preview`), guest `share` reads, an anonymous request under
-`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff`. An over-cap
+`/organizations`, and authenticated routes outside that prefix such as `/api/v1/staff` and
+`/api/v1/crash-reports`. An over-cap
 body answers `413` with `{ "error": { "code": "PAYLOAD_TOO_LARGE", … } }`; before #407 it answered
 an opaque 500. Because the parser cannot validate a credential, a junk cookie still buys the 512 KB
 read before the 401. Multipart uploads are a separate cap (the interchange upload cap, see
@@ -2042,8 +2043,8 @@ data is a compile error. Three properties follow, and they are unlike the rest o
   census assertion derives this from the path, so a staff route added later is covered the day it
   is written.
 - **Tighter throttling than the global limit** — 30 requests a minute, declared once on the
-  controller. Declared once, but **counted per route handler**, so the ceiling across the eight
-  staff routes is 240 a minute rather than 30 (`docs/TECH_DEBT.md` #315). That matters here because
+  controller. Declared once, but **counted per route handler**, so the ceiling across the ten
+  staff routes is 300 a minute rather than 30 (`docs/TECH_DEBT.md` #315). That matters here because
   every successful hit writes an `audit_events` row and nothing can prune that table.
 
 `POST /api/v1/staff/probe-results` is the surface's **first write** (ADR-0086 D6 claims one already
@@ -2127,6 +2128,53 @@ What it replaces is `docker compose exec db psql` on the host — wider, unaudit
 unreachable by the person who needs the number. Like every route here it writes one
 `staff.panel_read` row naming the panel and never its contents, and it is throttled at the
 controller's 30 / 60 s per handler.
+
+### Browser crash reports (ADR-0211)
+
+`POST /api/v1/crash-reports` is where a signed-in browser reports a screen crash. It is the one
+route here that is **authenticated but has no organisation scope and no role check**, like
+`GET /api/v1/me`: any valid session may post, no field of the principal is read, and none is stored.
+An anonymous request answers `401`, so a crash on a sign-in or share-link screen is not reported.
+
+```text
+Request   { name?, message?, stack?, componentStack?, routeId?, boundary?: 'route' | 'app', webVersion? }
+Response  200 { "data": { "reference": "7F3A9C" | null } }
+          401 no session · 429 more than 10 a minute from one address (the throttler keys on `req.ip`)
+          400 unparseable JSON, `null` or a bare string · 413 over 64 KB (both answered before auth)
+```
+
+- **Deliberately `200` for any body that parses, and `200` does not mean stored.** The caller is a crashed screen that cannot act on a `422`,
+  and one rejected field would lose the whole report, so the body is normalised and dropped rather than
+  validated. `reference: null` means nothing was stored or counted: the body was unusable, the table
+  already holds its 1,000 distinct crashes (a repeat of a stored crash still counts), or the write
+  failed. A client must show a reference only when it is non-null.
+- **Cleaned on the server before it is written.** In the message, a URL is reduced to scheme and host
+  (a path is where a customer's slug lives), and a rooted path, a host-with-path, any token carrying a
+  query, a regular-expression literal, an email (any script), a UUID, a digit run of four or more (any
+  script) and a quoted value are replaced; frames keep a same-origin path and nothing else. What it
+  cannot recognise survives: an unquoted single word in a third-party message. The browser family and major version come from the `User-Agent` header, which is never stored,
+  and no user, organisation, address or correlation id is stored at all. The reference is the first six
+  hex characters of the dedupe hash: display only, not unique by contract.
+- **Unaudited** (`BROWSER_TELEMETRY` in the audit census), and absent from the organisation export.
+
+`GET /api/v1/staff/crash-reports` is the read: a **staff** route (uniform `404` for anyone else, the
+controller's 30 / 60 s per handler, and one `staff.panel_read` row naming the panel `crashes` and never
+its contents). It is the Screen crashes panel in the console's Conditions group.
+
+```text
+Response  200 { "data": CrashReportRow[], "meta": { total, cap, capReached, seenLast7Days } }
+CrashReportRow { id, reference, boundary, errorName, message, routePattern, webVersion, browser,
+                 browserMajor, stack, componentStack, count, firstSeenAt, lastSeenAt }
+```
+
+- **Newest first, at most 50 rows**, by `last_seen_at` then `id` on the table's one index. `total` is
+  every stored crash and `seenLast7Days` the number last reported within seven days, which drives the
+  console's "Needs attention".
+- **`capReached` means new kinds of crash are not being recorded.** At 1,000 distinct rows a new
+  fingerprint is dropped until old ones expire after 30 days; a repeat of a stored one still counts.
+  The panel says so in words, because a full table otherwise looks like a quiet one.
+- **An empty list means nothing arrived, not that nothing happened:** signed-out and share-link screens
+  are not reported.
 
 ## Pagination, filtering, sorting
 

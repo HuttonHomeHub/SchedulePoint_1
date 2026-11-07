@@ -335,6 +335,7 @@ describe('tableLabel', () => {
     expect(tableLabel('csp_reports')).toBe('Policy violation reports');
     expect(tableLabel('mail_events')).toBe('Mail events');
     expect(tableLabel('perf_probe_results')).toBe('Performance readings');
+    expect(tableLabel('crash_reports')).toBe('Screen crash reports');
   });
 
   // Totality against the shared list, so a fourth table fails here at once rather than printing as a

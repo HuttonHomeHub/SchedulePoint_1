@@ -121,8 +121,8 @@ describe('each panel draws its settled shape while its read is held (loading-ske
 
 /**
  * **The audit cost is a unit-test property here as well as a journey one** (SC-4, SC-5). Every one
- * of these reads writes a `staff.panel_read` row to a table that refuses `DELETE`, so "six per load,
- * six per Refresh, and never Diagnostics" is asserted by counting the requests the real hooks make,
+ * of these reads writes a `staff.panel_read` row to a table that refuses `DELETE`, so "seven per load,
+ * seven per Refresh, and never Diagnostics" is asserted by counting the requests the real hooks make,
  * with the real cache, rather than by reading the code and believing it.
  */
 const ME = { email: 'ops@schedulepoint.test', dualHatted: false };
@@ -163,6 +163,13 @@ function answerStaff(path: string): Promise<unknown> {
   if (path.endsWith('/staff/me')) return Promise.resolve(ME);
   if (path === '/staff/health') return Promise.resolve(HEALTH);
   if (path === '/staff/csp-reports') return Promise.resolve([]);
+  // `apiFetchEnvelope` is mocked onto the same function, so this read answers the envelope too.
+  if (path === '/staff/crash-reports') {
+    return Promise.resolve({
+      data: [],
+      meta: { total: 0, cap: 1000, capReached: false, seenLast7Days: 0 },
+    });
+  }
   if (path === '/staff/installation') return Promise.resolve(INSTALLATION);
   if (path === '/staff/activity') return Promise.resolve([]);
   // `apiFetchEnvelope` is mocked onto the same function, so this read answers the envelope.
@@ -187,9 +194,10 @@ function answerStaff(path: string): Promise<unknown> {
 }
 
 const count = (path: string): number => apiFetch.mock.calls.filter(([p]) => p === path).length;
-const SIX = [
+const SEVEN = [
   '/staff/health',
   '/staff/csp-reports',
+  '/staff/crash-reports',
   '/staff/accounts',
   '/staff/installation',
   '/staff/activity',
@@ -201,14 +209,14 @@ describe('the grouped console', () => {
     apiFetch.mockImplementation(answerStaff);
   });
 
-  it('reads each of the six once on load, and never runs diagnostics', async () => {
+  it('reads each of the seven once on load, and never runs diagnostics', async () => {
     mount();
     await screen.findByRole('heading', { name: 'Conditions' });
     await waitFor(() => {
       expect(screen.getByText(/Read at/)).toBeInTheDocument();
     });
 
-    for (const path of SIX) expect(count(path), path).toBe(1);
+    for (const path of SEVEN) expect(count(path), path).toBe(1);
     expect(count('/staff/diagnostics')).toBe(0);
   });
 
@@ -260,11 +268,11 @@ describe('the grouped console', () => {
   });
 
   /**
-   * Refresh is six reads, however far the accounts list had been paged: an infinite query refetches
+   * Refresh is seven reads, however far the accounts list had been paged: an infinite query refetches
    * every page it holds, so without sending it back to page one a reader who pressed Show more would
-   * make seven reads for one press. Verified red against a bare `refetchQueries` (accounts: 4).
+   * make eight reads for one press. Verified red against a bare `refetchQueries` (accounts: 4).
    */
-  it('refreshes exactly the six, with the accounts list back on its first page', async () => {
+  it('refreshes exactly the seven, with the accounts list back on its first page', async () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
     await screen.findByText('All 3 are shown.');
@@ -278,7 +286,7 @@ describe('the grouped console', () => {
       expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
     });
 
-    for (const path of SIX) expect(count(path), path).toBe(path === '/staff/accounts' ? 2 : 2);
+    for (const path of SEVEN) expect(count(path), path).toBe(path === '/staff/accounts' ? 2 : 2);
     expect(count('/staff/accounts?cursor=c2')).toBe(1);
     expect(count('/staff/diagnostics')).toBe(0);
     expect(await screen.findByRole('button', { name: 'Show more' })).toBeInTheDocument();

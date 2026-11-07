@@ -6,7 +6,7 @@ import { useRefreshStaffPageReads } from '@/features/staff/api/refresh-page-read
 import { STAFF_PAGE_READS } from '@/features/staff/model/page-reads';
 
 /**
- * One press is six audited reads whatever state the UI was in. Verified red against a bare
+ * One press is seven audited reads whatever state the UI was in. Verified red against a bare
  * `refetchQueries`, whose default is to cancel the request in flight and start another: two
  * overlapping calls then made twelve reads.
  */

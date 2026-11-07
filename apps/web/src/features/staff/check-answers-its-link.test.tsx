@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import type { CrashReports } from '@/features/staff/api/staff-crash-reports';
 import type { CspReportRow } from '@/features/staff/api/staff-csp-reports';
 import type { StaffHealth } from '@/features/staff/api/staff-health';
 import type { StaffAccounts, StaffInstallation } from '@/features/staff/api/staff-panels';
@@ -40,6 +41,7 @@ const SUBJECT: Record<CheckId, RegExp> = {
   mail: /mail/i,
   retention: /clearing old records/i,
   security: /security reports/i,
+  crashes: /screen crashes/i,
   accounts: /unconfirmed accounts/i,
   // The two switches and the `How to fix` that names the settings, which is what an operator has
   // come to read.
@@ -51,6 +53,7 @@ const SECTION_HEADING: Record<string, string> = {
   'staff-section-mail': 'Mail',
   'staff-section-retention': 'Clearing old records',
   'staff-section-security': 'Browser security reports',
+  'staff-section-crashes': 'Screen crashes',
   'staff-section-accounts': 'Unconfirmed accounts',
   'staff-section-alerting': 'Alerts and monitoring',
 };
@@ -96,6 +99,13 @@ const settled = <T,>(data: T) => ({ isPending: false, isError: false, data });
 const UNHEALTHY: ConsoleStatusInput = {
   health: settled(HEALTH),
   security: settled<CspReportRow[]>([]),
+  crashes: settled<CrashReports>({
+    rows: [],
+    total: 0,
+    cap: 1000,
+    capReached: false,
+    seenLast7Days: 0,
+  }),
   accounts: settled(ACCOUNTS),
   installation: settled(INSTALLATION),
 };

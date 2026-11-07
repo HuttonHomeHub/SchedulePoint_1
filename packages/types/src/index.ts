@@ -60,7 +60,12 @@ export interface DeletedItemsMeta extends PageMeta {
  * label map both take their vocabulary from here, so a table added to the sweep cannot compile in the
  * console until it has a name (`docs/TECH_DEBT.md` #310).
  */
-export const RETENTION_TABLE_NAMES = ['csp_reports', 'mail_events', 'perf_probe_results'] as const;
+export const RETENTION_TABLE_NAMES = [
+  'csp_reports',
+  'mail_events',
+  'perf_probe_results',
+  'crash_reports',
+] as const;
 
 export type RetentionTableName = (typeof RETENTION_TABLE_NAMES)[number];
 

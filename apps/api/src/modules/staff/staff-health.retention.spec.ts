@@ -27,6 +27,7 @@ function build(
     oldestCsp?: Date | null;
     oldestMail?: Date | null;
     oldestProbe?: Date | null;
+    oldestCrash?: Date | null;
   } = {},
 ) {
   const prisma = {
@@ -63,6 +64,15 @@ function build(
         ),
       ),
     },
+    crashReport: {
+      findFirst: vi.fn(() =>
+        Promise.resolve(
+          options.oldestCrash === undefined || options.oldestCrash === null
+            ? null
+            : { lastSeenAt: options.oldestCrash },
+        ),
+      ),
+    },
   } as unknown as PrismaService;
 
   const config = {
@@ -73,6 +83,7 @@ function build(
     retentionCspReportsDays: 30,
     retentionMailEventsDays: 365,
     retentionPerfProbeDays: 365,
+    retentionCrashReportsDays: 30,
     retentionSweepIntervalMinutes: 60,
   } as unknown as AppConfigService;
 
@@ -96,6 +107,7 @@ describe('StaffHealthService retention', () => {
       'csp_reports',
       'mail_events',
       'perf_probe_results',
+      'crash_reports',
     ]);
     expect(retention.enabled).toBe(true);
     expect(retention.intervalMinutes).toBe(60);
@@ -108,12 +120,13 @@ describe('StaffHealthService retention', () => {
     // principle is that the answer is derived from the data rather than from the sweep's own
     // bookkeeping. Both branches typechecked and nothing failed.
     //
-    // Three distinct dates, so a swapped or defaulted branch cannot coincide with the right answer.
+    // Four distinct dates, so a swapped or defaulted branch cannot coincide with the right answer.
     // Verified red against the ternary: `perf_probe_results` came back with the mail date.
     const oldestCsp = new Date('2026-01-01T00:00:00.000Z');
     const oldestMail = new Date('2026-02-02T00:00:00.000Z');
     const oldestProbe = new Date('2026-03-03T00:00:00.000Z');
-    const { service } = build({ oldestCsp, oldestMail, oldestProbe });
+    const oldestCrash = new Date('2026-04-04T00:00:00.000Z');
+    const { service } = build({ oldestCsp, oldestMail, oldestProbe, oldestCrash });
 
     const { retention } = await service.read();
 
@@ -122,6 +135,9 @@ describe('StaffHealthService retention', () => {
     );
     expect(retention.tables.find((t) => t.table === 'mail_events')?.oldestAt).toBe(
       oldestMail.toISOString(),
+    );
+    expect(retention.tables.find((t) => t.table === 'crash_reports')?.oldestAt).toBe(
+      oldestCrash.toISOString(),
     );
     expect(retention.tables.find((t) => t.table === 'perf_probe_results')?.oldestAt).toBe(
       oldestProbe.toISOString(),
