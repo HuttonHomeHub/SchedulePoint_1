@@ -560,7 +560,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0158** _(Accepted)_ — A link leaves and enters at its node → [`0158-a-link-leaves-and-enters-at-its-node.md`](docs/adr/0158-a-link-leaves-and-enters-at-its-node.md)
 - **ADR-0159** _(Accepted)_ — A route reads the text it is drawn beside, and a two-way track splits at its node → [`0159-a-route-reads-the-text-it-is-drawn-beside.md`](docs/adr/0159-a-route-reads-the-text-it-is-drawn-beside.md)
 - **ADR-0160** _(Accepted; converse rule built 2026-10-22 as `check:ci-roster` R9–R13)_ — A gate CI runs is a gate prepush runs → [`0160-a-gate-ci-runs-is-a-gate-prepush-runs.md`](docs/adr/0160-a-gate-ci-runs-is-a-gate-prepush-runs.md)
-- **ADR-0161** _(Accepted)_ — A cross-plan link is the same link in one plan → [`0161-a-cross-plan-link-is-the-same-link-in-one-plan.md`](docs/adr/0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)
+- **ADR-0161** _(Accepted; amended by ADR-0212)_ — A cross-plan link is the same link in one plan → [`0161-a-cross-plan-link-is-the-same-link-in-one-plan.md`](docs/adr/0161-a-cross-plan-link-is-the-same-link-in-one-plan.md)
 - **ADR-0162** _(Accepted; D3 amended by ADR-0207)_ — A zero-duration task keeps its date, is reported, and converts without moving the schedule → [`0162-a-zero-duration-task-keeps-its-date.md`](docs/adr/0162-a-zero-duration-task-keeps-its-date.md)
 - **ADR-0163** _(Accepted)_ — A guest sees the plan as placed → [`0163-a-guest-sees-the-plan-as-placed.md`](docs/adr/0163-a-guest-sees-the-plan-as-placed.md)
 - **ADR-0164** _(Accepted)_ — A lint warning is a failure, and a gate has no pass-with-findings outcome → [`0164-a-lint-warning-is-a-failure.md`](docs/adr/0164-a-lint-warning-is-a-failure.md)
@@ -614,7 +614,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0209** _(Accepted; amends ADR-0050's notes mapping row)_ — An imported note is the importer's, and a SchedulePoint note travels as text under its own topic → [`0209-an-imported-note-is-the-importers.md`](docs/adr/0209-an-imported-note-is-the-importers.md)
 - **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
 - **ADR-0211** _(Accepted)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
-- **ADR-0212** _(Proposed; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
+- **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

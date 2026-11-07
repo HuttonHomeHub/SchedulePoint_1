@@ -235,4 +235,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0209](0209-an-imported-note-is-the-importers.md)                                               | An imported note is the importer's                                                         | Accepted           |
 | [0210](0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)              | An activity code is plan data                                                              | Accepted           |
 | [0211](0211-a-crash-report-is-the-screens-never-the-persons.md)                                 | A crash report is the screen's, never the person's                                         | Proposed           |
-| [0212](0212-a-plan-keeps-the-instant-beside-the-date.md)                                        | A plan keeps the instant beside the date, and a cross-plan link reads it                   | Proposed           |
+| [0212](0212-a-plan-keeps-the-instant-beside-the-date.md)                                        | A plan keeps the instant beside the date, and a cross-plan link reads it                   | Accepted           |

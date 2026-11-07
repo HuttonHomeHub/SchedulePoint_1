@@ -10,6 +10,9 @@
   ADR-0043 (an external value may carry a time, and is then an instant, in both directions),
   ADR-0068 §4 (cross-plan lags now convert on write), ADR-0148 (the placed basis stays) and ADR-0155
   (its date readers are reused, not changed).
+- **Amended by:** [ADR-0212](./0212-a-plan-keeps-the-instant-beside-the-date.md) (2026-11-07): the
+  deferred "instant columns on `activities`" below are done there, closing the sub-day and zero-span
+  edges; the text below is kept as written.
 - **Spec:** [`docs/specs/cross-plan-day-boundary/`](../specs/cross-plan-day-boundary/feature-spec.md)
   (`docs/TECH_DEBT.md` #385)
 
@@ -146,7 +149,7 @@ the in-plan twin's**, to the minute, within the parity domain. That is not ADR-0
 - **Sub-day upstream finishes.** Persisted dates are whole days (E15), so an upstream finishing at
   12:00 is read as the end of that day's working time: never earlier than in one plan, at most one
   upstream working day later. Exact parity needs instant columns on `activities`; deferred, with a
-  trigger.
+  trigger. _Done by ADR-0212 (2026-11-07): the columns exist and the derivation reads them._
 - **Placed upstreams.** ADR-0148 M-H feeds the upstream's **placed** dates to both engine passes on
   purpose, where one plan uses them in Pass 2 only. Not reopened; a placed upstream gets the corrected
   day rule and lag on its placed dates.
@@ -155,7 +158,7 @@ the in-plan twin's**, to the minute, within the parity domain. That is not ADR-0
   cannot always recover the instant: the same stored date arises from instants a weekend apart on
   another calendar (`cross-plan-milestone-fixture.spec.ts`, "what a stored date cannot say"). Exact
   parity needs the instant persisted, the same deferred columns as the first edge (`docs/TECH_DEBT.md`
-  #565). What the derivation controls is fixed (2026-11-01): a **timed** external early start on a
+  #565, done by ADR-0212 on 2026-11-07, except the third shape, which stays by design: D7). What the derivation controls is fixed (2026-11-01): a **timed** external early start on a
   zero-span activity is the instant itself, not rolled onto its calendar (`externalStartInstant`).
 - **Progress-mode tie dropping and expected-finish resizing**, which need state the derivation does
   not have. Filed.

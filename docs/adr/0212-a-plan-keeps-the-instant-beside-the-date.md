@@ -1,6 +1,6 @@
 # ADR-0212: A plan keeps the instant beside the date, and a cross-plan link reads it
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-07; shipped in M1 to M4, the read switched on in M4)
 - **Date:** 2026-11-07
 - **Deciders:** Product owner (spec approved 2026-11-07: Q1 B, milestones and part-day finishes both;
   Q2 A, linked plans recalculated once at first start)
@@ -96,8 +96,20 @@ cases.
 - One more boot service, the fifth of its kind. Rollback deletes the marker row (ADR-0207 D6) and needs
   nothing else because of D4.
 - The remaining parity edges are placed upstreams and progress-mode tie dropping (ADR-0161).
-- Until the schema milestone lands, production passes `null` for every remote instant and nothing a planner
-  sees changes. Status stays Proposed until the read is switched on and measured.
+- The read is switched on: production supplies the persisted instants, and a plan whose remote ends have none
+  reads the date as before (D3, D4). A plan linked later to an upstream last computed before the release
+  keeps reading that date until the upstream is recalculated (`docs/TECH_DEBT.md` #571).
+- The third shape (D7) stays by design: a finish milestone on the weekend calendar, cut at `M -> K`, is the
+  upstream plan's own finish basis, and the upstream plan alone gives the same date.
+
+## Verification
+
+Each witness was shown red against the defect before it was accepted (`docs/specs/cross-plan-instants/m1/red-run.md`):
+the five `it.fails` cases of `cross-plan-milestone-fixture.spec.ts` turned plain `it` and failed with the
+instants forced off (`5 failed | 23 passed | 1 expected fail`), and a mutation making `remoteInstants`
+ignore a supplied instant failed 55 cases across `cross-plan-derivation.spec.ts` and `conformance/`, the
+same five among them and nothing else. The engine's output was identical field for field, with the four new
+fields removed, over 15,588 engine runs (Parity above).
 
 ## Alternatives considered
 
