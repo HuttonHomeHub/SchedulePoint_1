@@ -470,3 +470,31 @@ describe('adaptMspdiToCanonical — task notes', () => {
     expect(noteFindings(findings)).toEqual([]);
   });
 });
+
+describe('adaptMspdiToCanonical — calendar tier finding (#566)', () => {
+  const tierFinding = (findings: ReportFinding[]) =>
+    findings.find(
+      (f) => f.entity === 'calendar' && f.sourceRef === null && f.detail.includes('project scope'),
+    );
+  const tasks: MspdiTaskSpec[] = [
+    { uid: '1', id: '1', name: 'A', duration: 'PT8H0M0S', outlineLevel: 1 },
+  ];
+
+  it('names the shared-library exception when a resource holds a calendar', () => {
+    const { findings } = adaptOk({
+      ...BASE,
+      resources: [{ uid: '1', name: 'Crew', type: '1', calendarUid: 'C1' }],
+      tasks,
+    });
+    expect(tierFinding(findings)?.detail).toBe(
+      'calendars were created in this project (project scope), except a calendar an imported resource holds, which goes to the shared organisation library; promote any other you want shared to the organisation library',
+    );
+  });
+
+  it('stays true, and no longer claims every calendar is project-local, when none is held', () => {
+    const { findings } = adaptOk({ ...BASE, tasks });
+    const detail = tierFinding(findings)?.detail;
+    expect(detail).toContain('except a calendar an imported resource holds');
+    expect(detail).not.toContain('every calendar was created');
+  });
+});

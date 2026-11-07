@@ -372,6 +372,13 @@ states the tier faithfully; the _receiving_ tenant decides whether a foreign fil
 **MSPDI has no equivalent** — `IsBaseCalendar`/`BaseCalendarUID` express calendar _inheritance_, not an
 org-vs-project tier — so MSPDI import is always PROJECT and MSPDI export reports the tier as a **drop**.
 
+> **Amended 2026-11-07 (`docs/TECH_DEBT.md` #566, closed).** "MSPDI import is always PROJECT" is
+> wrong in one case and was never true of what the mapper does: a calendar an imported resource holds
+> is forced to `ORG` by rule 1 above, for MSPDI as for XER, because a resource is organisation-global
+> (§2). The MSPDI adapter's report sentence now names that exception. What an import creates is
+> unchanged; the sentence above is kept as written because it is the reason the format-level finding
+> exists at all.
+
 > **Amended 2026-10-26 by [ADR-0208](0208-an-import-reuses-a-calendar-it-would-have-copied-exactly.md):
 > an import now REUSES a calendar when a copy would differ only in its name** (identical hours per day,
 > shifts and exceptions, and the file's name or the importer's own `(imported …)` variant of it). A name
