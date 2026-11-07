@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -949,6 +949,10 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     test.describe(`the row menu is reachable by a ${pointer} pointer with the panel expanded`, () => {
       test.use({ hasTouch: pointer === 'coarse' });
 
+      // The first tap would raise the touch tip in the canvas dock (ADR-0081's seam, `docs/specs/long-press-hint/`);
+      // this block measures the panel's geometry and then taps, so it starts with the tip acknowledged.
+      test.beforeEach(async ({ page }) => acknowledgeTouchHint(page));
+
       // `docs/TECH_DEBT.md` #466: the pane bar said to cover the row's `⋯` went with the single-pane
       // layout (ADR-0181), and nothing sits over a row now. 320 is read at 320 x 1200 because the
       // shell's chrome is 603 px tall there and a shorter window leaves the table too little height
@@ -1676,6 +1680,10 @@ test.describe('the scrolling line: focus, the edge cue and menus (toolbar-redesi
   for (const pointer of ['fine', 'coarse'] as const) {
     test.describe(`a menu from a half-scrolled trigger, ${pointer} pointer`, () => {
       test.use({ hasTouch: pointer === 'coarse' });
+
+      // The first tap would raise the touch tip in the canvas dock (ADR-0081's seam, `docs/specs/long-press-hint/`);
+      // this block measures the panel's geometry and then taps, so it starts with the tip acknowledged.
+      test.beforeEach(async ({ page }) => acknowledgeTouchHint(page));
 
       test('Share & export and View open on screen from either edge of the line', async ({
         page,

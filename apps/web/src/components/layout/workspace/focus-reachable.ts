@@ -6,7 +6,10 @@
  * show a bar. `focus()` on a node in an inert subtree does nothing, so a restore that aimed at the
  * diagram or the Gantt grid would leave focus on <body> after the dialog that asked for it closed
  * (WCAG 2.4.3). The fallback is the first control of an open right dock, since that is what has the
- * row, and then the activities panel's own toggle in the foot row, which is never inert.
+ * row, and then the activities panel's own toggle in the foot row, which is never inert. The toggle
+ * is named by `data-activities-toggle` rather than found as the bar's first button: the bar also
+ * hosts the dock's notice strips (the touch tip, the migration notice), whose own buttons unmount
+ * with the strip a dismiss just removed — focus aimed at one of them lands on <body> a frame later.
  *
  * `reachableTarget` is the resolution and `focusOutsideInert` the focus call on top of it, split so
  * a caller that hands a target to `useContainerUnmountHandoff` can pass the element without
@@ -16,6 +19,9 @@ export function reachableTarget(target: HTMLElement | null | undefined): HTMLEle
   if (target && target.closest('[inert]') === null) return target;
   return (
     document.querySelector<HTMLElement>('[data-right-dock] button') ??
+    document.querySelector<HTMLElement>('[data-activities-toggle]') ??
+    // Deliberately defensive: the toggle above matches first in the product. This is for a foot row
+    // that renders without one, where any control in it is still better than <body>.
     document.querySelector<HTMLElement>('[data-activities-bar] button')
   );
 }

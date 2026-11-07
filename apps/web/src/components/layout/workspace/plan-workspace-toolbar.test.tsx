@@ -652,6 +652,58 @@ describe('the placement-migration notice (one-planning-surface M-I)', () => {
 });
 
 /**
+ * **The touch tip reaches the dock in both views, or it reaches nobody** (`docs/specs/long-press-hint/`
+ * M2). The host builds the strip, `TsldPanel` decides whether the diagram's dock shows it, and the
+ * Gantt's own chain places it — the same three-party seam as the migration notice above.
+ */
+describe('the touch-gesture tip', () => {
+  /** A whole touch (down, up) of the given type, then long enough for the hook's frame. */
+  const press = async (pointerType: string) => {
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true });
+      Object.defineProperty(event, 'pointerType', { value: pointerType });
+      act(() => {
+        document.body.dispatchEvent(event);
+      });
+    }
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.removeItem('schedulepoint-hints');
+  });
+
+  it('is passed to the diagram only after a finger has pressed, not a mouse', async () => {
+    renderScreen();
+    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
+    expect(h.tsldProps.current?.touchGestureHint).toBeNull();
+
+    await press('mouse');
+    expect(h.tsldProps.current?.touchGestureHint).toBeNull();
+
+    await press('touch');
+    expect(h.tsldProps.current?.touchGestureHint).not.toBeNull();
+  });
+
+  it('shows in the Gantt dock after a finger, and Dismiss removes it for good', async () => {
+    h.search = { view: 'gantt' };
+    renderScreen();
+    expect(screen.queryByRole('button', { name: 'Touch gestures' })).not.toBeInTheDocument();
+
+    await press('touch');
+    expect(screen.getByRole('button', { name: 'Touch gestures' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss this tip' }));
+    expect(screen.queryByRole('button', { name: 'Touch gestures' })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('schedulepoint-hints') ?? '{}')).toMatchObject({
+      'touch-gestures': true,
+    });
+  });
+});
+
+/**
  * **The Late overlay is announced by the host, in the Gantt as well as the diagram** (#417).
  *
  * The hook that speaks it is unit-tested on its own; this is the seam the unit suite cannot see —

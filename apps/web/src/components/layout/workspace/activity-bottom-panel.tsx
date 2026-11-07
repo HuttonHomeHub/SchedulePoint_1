@@ -325,7 +325,7 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
 
             What stays here is what belongs to the PANEL rather than to the plan: its heading, its
             baseline variance, its create button and its collapse control. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
           {/* Below `lg` the table draws no code column, so the chooser would change nothing. */}
           {codeColumnsChoice ? (
             <span className="hidden lg:contents">
@@ -431,6 +431,9 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
             size="icon"
             aria-label="Collapse activities panel"
             className={FOOT_TOGGLE_CLASS}
+            // `data-activities-toggle` is a focus-fallback contract with `focus-reachable.ts`: a dismissed
+            // dock strip hands focus here, so it must stay on this button.
+            data-activities-toggle
             {...(diagramHidden ? { 'aria-describedby': hiddenNoteId } : {})}
             onClick={onCollapse}
           >
@@ -591,6 +594,8 @@ export function ActivityPanelCollapsedBar({
           size="icon"
           aria-label="Expand activities panel"
           className={FOOT_TOGGLE_CLASS}
+          // Same focus-fallback contract with `focus-reachable.ts` as the Collapse toggle.
+          data-activities-toggle
           onClick={onExpand}
         >
           <PanelBottomOpen aria-hidden="true" className="size-4" />

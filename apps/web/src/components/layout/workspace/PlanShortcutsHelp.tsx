@@ -25,7 +25,7 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
         },
       ]),
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
-  { keys: '?', action: 'Show this shortcuts help' },
+  { keys: '?', action: 'Show this help' },
   { keys: 'Esc', action: 'Disarm the current tool, cancel a gesture, or close a popover' },
 ];
 
@@ -154,7 +154,7 @@ const GANTT_READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: '↑ / ↓', action: 'Previous / next row' },
   { keys: 'Home / End', action: 'First / last row' },
   { keys: '← / →', action: 'Collapse / expand a summary row' },
-  { keys: '?', action: 'Show this shortcuts help' },
+  { keys: '?', action: 'Show this help' },
 ];
 
 const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
@@ -175,12 +175,101 @@ const GANTT_EDIT_SHORTCUTS: readonly Shortcut[] = [
   },
 ];
 
-function ShortcutList({ items }: { items: readonly Shortcut[] }): React.ReactElement {
+/**
+ * **Touch gestures — every row names a gesture the code implements, with its evidence beside it**
+ * (`docs/specs/long-press-hint/` §2.5, CLAUDE.md §19.11). The diagram canvas contributes none:
+ * `features/tsld` has no `pointerType` branch, so nothing there behaves differently for a finger
+ * than for a mouse, and a row would invent a gesture (ADR-0076).
+ */
+const TOUCH_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // `components/ui/tooltip.tsx` — `TOOLTIP_LONG_PRESS_MS`; the click a released long-press
+    // would fire is swallowed in `onClickCapture`. Worded "icon button" because every icon-only
+    // control names itself through `useTooltip` (ADR-0117); some text controls carry a tooltip
+    // too, but the sheet claims only the case that is always true.
+
+    keys: 'Press and hold an icon button',
+    action: 'See its name without pressing it. A plain tap still presses it.',
+  },
+  {
+    // `features/navigator/components/HierarchyTree.tsx` — `startLongPress` opens the row menu.
+    keys: 'Press and hold an Explorer row',
+    action: 'Open its actions',
+  },
+];
+
+/** Gantt touch rows that need no write permission: the row menu is not a plan write. */
+const GANTT_TOUCH_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // ADR-0177 D3: a touch hold fires `contextmenu`, which opens the row menu
+    // (`docs/UX_STANDARDS.md` "Row / node actions"). The handler is the row's (`GanttPanel.tsx`
+    // `onContextMenu`), and a bar sits inside the row; `TOUCH_ARM_HINT` says the same of a bar.
+    keys: 'Press and hold a row or bar',
+    action: 'Open its actions',
+  },
+];
+
+/**
+ * Gantt touch rows that only mean something where bars are editable.
+ *
+ * **"Double-tap a cell" is deliberately not listed.** `GanttCell` opens its editor on `dblclick`,
+ * but it sets no `touch-action: manipulation`, so a browser may spend the second tap on
+ * double-tap-to-zoom and never deliver the event. That could not be verified on a device, and a
+ * row for a gesture that may not work is the wrong claim ADR-0076 names. List it once the cell
+ * declares `manipulation` and a device check has passed.
+ */
+const GANTT_TOUCH_EDIT_SHORTCUTS: readonly Shortcut[] = [
+  {
+    // ADR-0177 D2: a finger's bar responds only once selected; `TOUCH_ARM_HINT` in `touch-note.ts`.
+    keys: 'Tap a bar, then drag it',
+    action: 'Move it',
+  },
+];
+
+/** One titled block of the sheet — the heading's weight is placed here once, not at every section. */
+function SheetSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * `keys` is for chords, set in mono and capped so a long one wraps at its spaces; `gesture` is for a
+ * phrase, which must wrap inside the dialog's `max-w-md` at the 1024 floor (ADR-0179). Neither may
+ * widen the dialog.
+ */
+function ShortcutList({
+  items,
+  variant = 'keys',
+}: {
+  items: readonly Shortcut[];
+  variant?: 'keys' | 'gesture';
+}): React.ReactElement {
   return (
     <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
       {items.map((s) => (
         <div key={s.keys} className="contents">
-          <dt className="text-muted-foreground font-mono whitespace-nowrap">{s.keys}</dt>
+          <dt
+            className={
+              variant === 'gesture'
+                ? // A cap on the term column so the 1fr description keeps room to wrap at 1024 px.
+                  'text-muted-foreground max-w-48'
+                : // Mono, capped, and free to wrap at spaces: a long chord ("F2 · double-click") used to be nowrap
+                  // and squeezed the description into a one-character column at 1024 px.
+                  'text-muted-foreground max-w-48 font-mono break-words'
+            }
+          >
+            {s.keys}
+          </dt>
           <dd>{s.action}</dd>
         </div>
       ))}
@@ -214,22 +303,30 @@ export function PlanShortcutsHelp({
       <Dialog
         open={open}
         onClose={onClose}
-        title="Gantt keyboard shortcuts"
-        description="Focus a row in the chart, then use these keys to navigate and edit."
+        title="Gantt shortcuts and gestures"
+        description="Focus a row in the chart, then use these keys to navigate and edit. Finger gestures are listed under Touch."
       >
         <div className="flex flex-col gap-5">
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Navigate</h3>
+          <SheetSection title="Navigate">
             <ShortcutList items={GANTT_READ_SHORTCUTS} />
-          </section>
+          </SheetSection>
           {editingEnabled ? (
-            <section className="flex flex-col gap-2">
-              <h3 className="text-sm font-semibold">Edit</h3>
+            <SheetSection title="Edit">
               <ShortcutList
                 items={[...GANTT_EDIT_SHORTCUTS, ...undoRedoShortcuts(isApplePlatform())]}
               />
-            </section>
+            </SheetSection>
           ) : null}
+          <SheetSection title="Touch">
+            <ShortcutList
+              variant="gesture"
+              items={[
+                ...TOUCH_SHORTCUTS,
+                ...GANTT_TOUCH_SHORTCUTS,
+                ...(editingEnabled ? GANTT_TOUCH_EDIT_SHORTCUTS : []),
+              ]}
+            />
+          </SheetSection>
         </div>
       </Dialog>
     );
@@ -244,21 +341,18 @@ export function PlanShortcutsHelp({
     <Dialog
       open={open}
       onClose={onClose}
-      title="Diagram keyboard shortcuts"
-      description="Focus the activity list, then use these keys to navigate and edit."
+      title="Diagram shortcuts and gestures"
+      description="Focus the activity list, then use these keys to navigate and edit. Finger gestures are listed under Touch."
     >
       <div className="flex flex-col gap-5">
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Navigate</h3>
+        <SheetSection title="Navigate">
           <ShortcutList items={READ_SHORTCUTS} />
-        </section>
-        <section className="flex flex-col gap-2">
-          <h3 className="text-sm font-semibold">Minimap (Diagram viewport ▸ Minimap)</h3>
+        </SheetSection>
+        <SheetSection title="Minimap (Diagram viewport ▸ Minimap)">
           <ShortcutList items={MINIMAP_SHORTCUTS} />
-        </section>
+        </SheetSection>
         {CANVAS_MULTI_SELECT_ENABLED ? (
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Select</h3>
+          <SheetSection title="Select">
             <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
             {/*
               **What a selection unlocks** (ADR-0090 M5, discharging the M2-T1 obligation).
@@ -284,14 +378,16 @@ export function PlanShortcutsHelp({
               <strong className="text-foreground font-medium">Isolate logic path</strong>, which act
               on what you have selected.
             </p>
-          </section>
+          </SheetSection>
         ) : null}
         {editingEnabled ? (
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-semibold">Edit</h3>
+          <SheetSection title="Edit">
             <ShortcutList items={editShortcuts} />
-          </section>
+          </SheetSection>
         ) : null}
+        <SheetSection title="Touch">
+          <ShortcutList variant="gesture" items={TOUCH_SHORTCUTS} />
+        </SheetSection>
       </div>
     </Dialog>
   );
