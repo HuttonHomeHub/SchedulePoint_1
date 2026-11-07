@@ -146,7 +146,7 @@ function ShellFrame({ banner }: { banner?: React.ReactNode }): React.ReactElemen
                   and covered every foot-bar strip (#569). The frame is a dedicated wrapper, never
                   `#root`; the `Sheet` below stays its sibling, and the skip link stays this grid's
                   first child, so it is still the first focusable thing (WCAG 2.4.1). A `squat:`
-                  class outside the frame never matches; `app-shell.test.tsx` pins the one consumer.
+                  class outside the frame never matches; `app-shell.structural.test.ts` pins the one consumer.
 
                   **`squat:overflow-y-auto` must beat `overflow-hidden` on the same element, and
                   it does so only by CSS source order** (equal specificity, the variant emitted

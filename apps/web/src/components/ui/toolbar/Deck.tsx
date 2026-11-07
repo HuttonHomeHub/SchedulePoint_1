@@ -51,8 +51,7 @@ import { cn } from '@/lib/utils';
  * (toolbar-redesign M3), and `deckScrolls` reads `scrollWidth > clientWidth` to decide only whether
  * keyboard focus should `scrollIntoView` / `preventScroll`. It never drives layout: the scrolling
  * line, the edge fade and the `squat` vertical scroll-away (a container query on the shell frame,
- * ADR-0213) are CSS alone, and a structural test
- * pins the read to that one function. The way back from a band `squat` has scrolled away is the
+ * ADR-0213) are CSS alone, and a structural test pins the read to that one function. The way back from a band `squat` has scrolled away is the
  * foot strip or keyboard focus (which scrolls the shell to the focused control); the wheel over the
  * canvas does not scroll the shell, a discoverability gap `docs/TECH_DEBT.md` records.
  *

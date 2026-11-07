@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -15,22 +15,34 @@ import { describe, expect, it } from 'vitest';
  * matches its own explanation is the failure ADR-0131 records. The "found nothing" guard is the
  * positive case, so a scan that stopped reading the tree cannot pass for "no stray consumer".
  */
-const ALLOWED = ['src/components/layout/navigator/app-shell.tsx'];
+const ALLOWED = ['components/layout/navigator/app-shell.tsx'];
+
+/** `apps/web/src`, from this file's own location so the scan does not depend on the working directory. */
+const SRC = join(import.meta.dirname, '..', '..', '..');
+
+/** Every non-test `.ts`, `.tsx` and `.css` file under `src`: a `squat:` class can live in any of them. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.(?:tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
 
 describe('the `squat:` variant', () => {
-  const files = execFileSync('git', ['ls-files', 'src'], { cwd: process.cwd(), encoding: 'utf8' })
-    .split('\n')
-    .filter((path) => /\.tsx$/.test(path) && !/\.test\.tsx$/.test(path));
+  const files = sourceFiles(SRC);
 
-  const consumers = files.filter((path) =>
-    /(?:^|[\s'"`])(?:[\w-]+:)*squat:/.test(
-      readFileSync(path, 'utf8')
-        .replace(/\/\*[\s\S]*?\*\//g, '')
-        .replace(/^\s*\/\/.*$/gm, ''),
-    ),
-  );
+  const consumers = files
+    .filter((path) =>
+      /(?:^|[\s'"`])(?:[\w-]+:)*squat:/.test(
+        readFileSync(path, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, ''),
+      ),
+    )
+    .map((path) => relative(SRC, path).split('\\').join('/'));
 
-  it('reads the components and finds the one consumer that exists', () => {
+  it('reads the sources and finds the one consumer that exists', () => {
     expect(files.length).toBeGreaterThan(200);
     expect(consumers, 'the scan found no `squat:` anywhere — it has stopped reading').not.toEqual(
       [],

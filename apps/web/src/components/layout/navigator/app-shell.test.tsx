@@ -357,7 +357,8 @@ describe('AppShell', () => {
    * grid moved out of the frame would never match `squat` and the band would hold a window it cannot
    * fit again, with every unit suite green (#569). R1's scrolling-shell form was not built, so the
    * grid keeps `overflow-hidden` at every other size, which is what leaves the landing's own
-   * overflow as hidden as it always was.
+   * overflow as hidden as it always was. That `squat:` has no consumer outside the frame is pinned by
+   * `app-shell.structural.test.ts`.
    */
   it('sits the squat grid inside the shell frame and leaves its 100 % overflow rule alone', () => {
     renderShell();

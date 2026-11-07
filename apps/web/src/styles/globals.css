@@ -47,7 +47,7 @@
    (#569, ADR-0213). 26rem and not larger so a 640 x 480 window (30rem), where the band is 28-32 % and
    the journeys sit, keeps the held band. Never applies at `lg` and wider, whatever the height: a
    short wide window (1280 x 600) keeps its two rows (CQ-3). Matches only INSIDE `.shell-frame`; a
-   `squat:` class outside it never matches, which `app-shell.test.tsx` pins. The query is pinned by
+   `squat:` class outside it never matches, which `app-shell.structural.test.ts` pins. The query is pinned by
    `breakpoints.test.ts` beside `SQUAT_MAX_HEIGHT_REM`. */
 @custom-variant squat {
   @container app-shell (width < 64rem) and (height <= 26rem) {
