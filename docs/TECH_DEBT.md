@@ -9400,7 +9400,6 @@ What is left is four cases in three shapes, and the first two are one limit that
 
 The first two need the remote plan to persist the instant a zero-span activity keeps (ADR-0161's "instant columns on `activities`", deferred), a schema change that goes through `database-architect` and, being a new column on the schedule write path, a spec (ADR-0105). **Trigger:** a planner reports a cross-plan link into or out of a milestone that lands a week off, or instant columns are added to `activities` for any other reason.
 
-
 ### 568. A crew calendar an activity also uses stays in the shared library after the crew is matched
 
 **Status:** open · **Verified:** 2026-11-01, by the e2e `creates the calendar when an activity also uses it (E6)` in `apps/api/test/interchange.e2e-spec.ts` (the calendar is created at `ORG`, bound to the activity, and the matched crew keeps its own) · **Raised:** 2026-11-01 (product owner's answer to Q2 on the #554 spec) · **Size:** M · **Owner:** api
