@@ -174,7 +174,7 @@ describe('manifest and README', () => {
     ]);
     expect(manifest).toMatchObject({
       format: 'schedulepoint.organisation-export',
-      formatVersion: '2.3',
+      formatVersion: '2.4',
       generatedAt: '2026-10-14T09:30:00.000Z',
       snapshot: 'consistent',
       includesDeleted: true,

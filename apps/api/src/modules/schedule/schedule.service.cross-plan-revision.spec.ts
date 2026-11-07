@@ -66,6 +66,7 @@ const planRow = (id: string, over: Partial<Plan> = {}): PlanWithProject =>
     scheduleTotalFloatMode: 'FINISH',
     scheduleMakeOpenEndsCritical: false,
     scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
+    scheduleInstantsComputedAt: null,
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,

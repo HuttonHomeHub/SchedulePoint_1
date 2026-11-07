@@ -232,3 +232,63 @@ describe('writeResults — derived duration is the 25th argument', () => {
     expect(args[24], 'derived_duration_minutes is the 25th').toEqual([6720, null]);
   });
 });
+
+/**
+ * ADR-0212, `docs/specs/cross-plan-instants/m2-schema-design.md` §4. The four instants are the 26th to
+ * 29th arguments, appended after `derived_duration_minutes` so the indices pinned above do not move.
+ * That the `SET` list actually names them is `schedule-instants.e2e-spec.ts`'s job: a mocked
+ * `$executeRaw` records arguments and never parses the statement.
+ */
+describe('writeResults — the schedule instants are arguments 26 to 29', () => {
+  function capturing() {
+    const captured: unknown[][] = [];
+    const tx = {
+      $executeRaw: vi.fn((_s: unknown, ...args: unknown[]) => {
+        captured.push(args);
+        return Promise.resolve(2);
+      }),
+      $queryRaw: vi.fn(() => Promise.resolve([])),
+    };
+    return { captured, tx };
+  }
+  const repo = new ScheduleRepository({} as unknown as PrismaService);
+
+  it('passes each instant as whole minutes by position, a pre-1970 value included', async () => {
+    const { captured, tx } = capturing();
+    await repo.writeResults(
+      'org-1',
+      'plan-1',
+      [
+        {
+          ...result('a', 0),
+          placedStartInstant: 1_000,
+          placedFinishInstant: 2_000,
+          lateStartInstant: 3_000,
+          lateFinishInstant: 4_000,
+        },
+        { ...result('b', 0), placedStartInstant: -5_000 },
+      ],
+      new Map(),
+      tx as never,
+    );
+    const args = captured[0]!;
+    expect(args[25], 'visual_effective_start_instant').toEqual([1_000, -5_000]);
+    expect(args[26], 'visual_effective_finish_instant').toEqual([2_000, 0]);
+    expect(args[27], 'late_start_instant').toEqual([3_000, 0]);
+    expect(args[28], 'late_finish_instant').toEqual([4_000, 0]);
+  });
+
+  it('refuses a fractional instant before it reaches the database', async () => {
+    const { captured, tx } = capturing();
+    await expect(
+      repo.writeResults(
+        'org-1',
+        'plan-1',
+        [{ ...result('a', 0), lateFinishInstant: 10.5 }],
+        new Map(),
+        tx as never,
+      ),
+    ).rejects.toThrow(/lateFinishInstant is not a whole minute/);
+    expect(captured).toHaveLength(0);
+  });
+});

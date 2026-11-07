@@ -266,9 +266,18 @@ describe.skipIf(!hasDatabase)('Placed load basis — reference results and red c
   it('H3: a null placed pair falls back to the network span as a whole', async () => {
     const { actor, planId, activityId, crew } = await seedDraggedActivity();
     expect(loadedDays(await histogram(actor, planId), crew)).toEqual(PLACED_SPAN);
+    // A row with no placed pair is one no instant-aware recalculation has written, so its four instants
+    // are NULL too: ck_activities_schedule_instants_all_or_none_with_dates refuses a stored instant
+    // beside a NULL date (cross-plan-instants m2-schema-design.md A5).
     await prisma.activity.update({
       where: { id: activityId },
-      data: { visualEffectiveStart: null },
+      data: {
+        visualEffectiveStart: null,
+        visualEffectiveStartInstant: null,
+        visualEffectiveFinishInstant: null,
+        lateStartInstant: null,
+        lateFinishInstant: null,
+      },
     });
     expect(loadedDays(await histogram(actor, planId), crew)).toEqual(EARLY_SPAN);
     await prisma.activity.update({

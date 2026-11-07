@@ -927,6 +927,39 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(refused.status).toBe(429);
   });
 
+  it('exports the schedule instants as UTC instants, and the marker that says they are current (2.4)', async () => {
+    const { admin } = await seedFixture();
+
+    const { files } = await exportOf(admin);
+
+    // The fixture recalculates its plan once, so its activities carry instants and the plan its marker.
+    const calculated = jsonRows(files, 'json/plans.json').filter(
+      (p) => p.scheduleInstantsComputedAt !== null,
+    );
+    expect(
+      calculated.length,
+      'at least one plan was calculated by a current image',
+    ).toBeGreaterThan(0);
+    for (const plan of calculated) {
+      expect(plan.scheduleInstantsComputedAt).toBe(plan.scheduleComputedAt);
+      expect(plan.scheduleInstantsComputedAt).toMatch(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/);
+    }
+    const withInstants = jsonRows(files, 'json/activities.json').filter(
+      (a) => a.visualEffectiveStartInstant !== null,
+    );
+    expect(withInstants.length).toBeGreaterThan(0);
+    for (const a of withInstants) {
+      for (const k of [
+        'visualEffectiveStartInstant',
+        'visualEffectiveFinishInstant',
+        'lateStartInstant',
+        'lateFinishInstant',
+      ]) {
+        expect(a[k], k).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/);
+      }
+    }
+  });
+
   it('writes each value type exactly: a maximal Decimal(18,4), a BigInt past 2^53, a calendar day, and a guarded formula', async () => {
     const { admin } = await seedFixture();
 
@@ -984,7 +1017,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(row.changes).toEqual({
       before: {},
       after: {
-        formatVersion: '2.3',
+        formatVersion: '2.4',
         files: EXPORT_FILES.length * 2,
         rows: manifest.files.filter((f) => f.kind === 'json').reduce((n, f) => n + f.rows, 0),
         bytes: raw.length,
@@ -1040,7 +1073,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(rows[0]).toMatchObject({ outcome: 'FAILURE', actorUserId: admin.userId });
     expect((rows[0]!.changes as { after: Json }).after).toMatchObject({
       reason: 'client_aborted',
-      formatVersion: '2.3',
+      formatVersion: '2.4',
     });
 
     // The snapshot and its lock ended with the connection: the next export goes through.

@@ -253,6 +253,10 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'swimlaneWbsLevel:int',
       // 2.3 — appended (swimlanes made from activity codes): the code type the swimlanes come from.
       'swimlaneCodeTypeId:text',
+      // 2.4 — appended (cross-plan instants, ADR-0212): when the activities' instants were written.
+      // EXPORTED rather than withheld: it is the predicate a reader needs to know whether a row's
+      // instants are current (equal to `scheduleComputedAt`).
+      'scheduleInstantsComputedAt:instant',
     ),
     withheld: {
       version: VERSION,
@@ -333,6 +337,13 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'derivedDurationMinutes:int',
       // 2.1 — appended (swimlanes): the hand-made swimlane the activity belongs to, if any.
       'swimlaneId:text',
+      // 2.4 — appended (cross-plan instants, ADR-0212): the exact engine instant each of four dates
+      // is calculated from. Current only when the plan's `scheduleInstantsComputedAt` equals its
+      // `scheduleComputedAt`.
+      'visualEffectiveStartInstant:instant',
+      'visualEffectiveFinishInstant:instant',
+      'lateStartInstant:instant',
+      'lateFinishInstant:instant',
     ),
     withheld: {
       version: VERSION,
@@ -1077,7 +1088,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '2.3';
+export const EXPORT_FORMAT_VERSION = '2.4';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';

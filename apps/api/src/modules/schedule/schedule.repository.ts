@@ -293,7 +293,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the twenty-four engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the twenty-nine engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -802,7 +802,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the twenty-four engine
+   * id can never write across a plan or tenant). Sets only the twenty-nine engine
    * columns; a no-op for an empty result set.
    *
    * The caller holds the plan advisory lock, which the lock-free placement writers do not, so the
@@ -930,6 +930,37 @@ export class ScheduleRepository {
      * neither type this is an ALL-NULL array and Prisma sends it with no element-type hint.
      */
     const derivedDurationMinutes = results.map((r) => r.derivedDurationMinutes ?? null);
+    /**
+     * The four SCHEDULE INSTANTS (ADR-0212; cross-plan-instants m2-schema-design.md A3), the
+     * TWENTY-SIXTH to TWENTY-NINTH `unnest` arguments — appended after `derived_duration_minutes` so
+     * no pinned index moves. They travel as the engine's whole absolute MINUTES (`int[]`) and are
+     * converted in SQL with `timestamptz 'epoch' + make_interval(mins => …)`: integer arithmetic with
+     * no float rounding, and a time-only interval, so the session `TimeZone` cannot shift the value
+     * (an ISO string without a `Z` would be read in that zone). The engine always produces all four
+     * for every activity type, so the array is never all-NULL and the `::int[]` hint is for clarity.
+     * `ck_activities_schedule_instants_all_or_none_with_dates` fails a plan's FIRST recalculation
+     * after the columns landed if a `SET` entry is dropped (a mocked `$executeRaw` cannot see that).
+     */
+    const instantMinutes = (name: string, pick: (r: EngineResult) => number): number[] =>
+      results.map((r) => {
+        const v = pick(r);
+        if (!Number.isSafeInteger(v)) {
+          throw new Error(
+            `Schedule instant ${name} is not a whole minute (${v}) for plan ${planId}.`,
+          );
+        }
+        return v;
+      });
+    const visualEffectiveStartInstant = instantMinutes(
+      'placedStartInstant',
+      (r) => r.placedStartInstant,
+    );
+    const visualEffectiveFinishInstant = instantMinutes(
+      'placedFinishInstant',
+      (r) => r.placedFinishInstant,
+    );
+    const lateStartInstant = instantMinutes('lateStartInstant', (r) => r.lateStartInstant);
+    const lateFinishInstant = instantMinutes('lateFinishInstant', (r) => r.lateFinishInstant);
 
     const updated = await db.$executeRaw`
       UPDATE activities AS a
@@ -957,7 +988,11 @@ export class ScheduleRepository {
         leveling_delay_minutes = v.leveling_delay_minutes,
         leveling_window_exceeded = v.leveling_window_exceeded,
         self_over_allocated = v.self_over_allocated,
-        derived_duration_minutes = v.derived_duration_minutes
+        derived_duration_minutes = v.derived_duration_minutes,
+        visual_effective_start_instant = timestamptz 'epoch' + make_interval(mins => v.visual_effective_start_instant),
+        visual_effective_finish_instant = timestamptz 'epoch' + make_interval(mins => v.visual_effective_finish_instant),
+        late_start_instant = timestamptz 'epoch' + make_interval(mins => v.late_start_instant),
+        late_finish_instant = timestamptz 'epoch' + make_interval(mins => v.late_finish_instant)
       FROM unnest(
         ${ids}::uuid[],
         ${earlyStart}::date[],
@@ -983,14 +1018,19 @@ export class ScheduleRepository {
         ${levelingDelayMinutes}::int[],
         ${levelingWindowExceeded}::boolean[],
         ${selfOverAllocated}::boolean[],
-        ${derivedDurationMinutes}::int[]
+        ${derivedDurationMinutes}::int[],
+        ${visualEffectiveStartInstant}::int[],
+        ${visualEffectiveFinishInstant}::int[],
+        ${lateStartInstant}::int[],
+        ${lateFinishInstant}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
         external_driven, loe_no_span, resource_driver_missing, visual_effective_start, visual_effective_finish,
         visual_conflict, visual_drift_days, remaining_float, visual_conflict_reason, leveled_start,
         leveled_finish, leveling_delay_minutes, leveling_window_exceeded, self_over_allocated,
-        derived_duration_minutes
+        derived_duration_minutes, visual_effective_start_instant, visual_effective_finish_instant,
+        late_start_instant, late_finish_instant
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid
@@ -1026,6 +1066,11 @@ export class ScheduleRepository {
    * plan's CONFIGURATION, a settings PATCH writes them without recalculating, and the plan row is
    * loaded before this transaction opens.
    *
+   * **`schedule_instants_computed_at` is written in THIS statement, never a second one** (ADR-0212 D4;
+   * m2-schema-design.md B1): `now()` is one value per statement, so a current recalculation always
+   * leaves it EQUAL to `schedule_computed_at`, and an older image's stamp (which names its columns)
+   * moves the cursor alone — the inequality is what tells the derivation the instants are not current.
+   *
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.
    *
@@ -1041,6 +1086,7 @@ export class ScheduleRepository {
     await db.$executeRaw`
       UPDATE plans
       SET schedule_computed_at = now(),
+          schedule_instants_computed_at = now(),
           schedule_critical_path_definition =
             ${criticality.criticalPathDefinition}::"CriticalPathDefinition",
           schedule_critical_float_threshold_minutes = ${criticality.criticalFloatThresholdMinutes},
