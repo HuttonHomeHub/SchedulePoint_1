@@ -1,6 +1,6 @@
 # Feature Spec: SchedulePoint 1.1.0 — the fresh start
 
-- **Status:** Draft — awaiting approval before implementation. Two critical questions in §1 "Open questions".
+- **Status:** Approved — by the product owner, 2026-11-08. Q1: option **E** (remove the unreachable fields, values, the placement-migration route and export file, recorded as a one-time exception in the new ADR). Q2: release freeze accepted. Version **1.1.0**, not 2.0.0, recorded as the same one-time exception. Every other question in this folder takes its recommended default, including `schema-design.md` §12 (answers recorded there).
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-11-08
 - **Tracking issue / epic:** no register row; the scope is the product owner's six decisions of 2026-11-08 (recorded
@@ -161,6 +161,18 @@ alternates are the refusal (use case 2) and the rollback (use case 3).
   new volume → 1.1.0 boots empty → rollback to 1.0.0 on the old volume shows the data.
 
 ### Open questions
+
+**Answered by the product owner, 2026-11-08** (clickable choices in the session):
+
+- **Q1 → E.** Remove the fields, values, route and export file listed in §4.6 in 1.1.0. The new ADR records it as
+  a one-time exception to ADR-0190 D1/D2 (no outside consumer, single user, fresh database), not a precedent.
+  Where this document says "subject to Q1" or "K keeps…", read E.
+- **Q2 → freeze accepted.**
+- **Version → 1.1.0**, kept after the owner was told tag-pinning rollback does not cross the release
+  (`schema-design.md` §12 Q5); recorded in the same ADR exception.
+- **Everything else → the stated defaults.**
+
+The questions as they were put:
 
 **CRITICAL — the answers change scope.**
 

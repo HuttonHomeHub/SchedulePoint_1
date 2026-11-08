@@ -1,7 +1,7 @@
 # Fresh start 1.1 — database design
 
 - **Author:** database-architect, 2026-11-08
-- **Status:** Proposed. Design only: no migration, `schema.prisma` or code has been changed.
+- **Status:** Approved — by the product owner, 2026-11-08 (§12 records the answers). Design only: no migration, `schema.prisma` or code has been changed.
 - **Scope:** the database half of the 1.1.0 release: the squashed baseline migration, the tidy folded
   into it, refusing a pre-1.1 database, the backup interaction, and how to prove the baseline is right.
   The feature spec and plan for the whole release are the feature-analyst's, in this folder.
@@ -555,6 +555,14 @@ so it needs the full spec and plan. That is the feature-analyst's document in th
 ---
 
 ## 12. Open questions for the owner
+
+**Answered 2026-11-08 by the product owner:** Q1 → **P-c** (remove the endpoint; the ADR-0190 break is taken
+as a recorded one-time exception, see Q5). Q2 → **narrow** the level enums to what is produced. Q3 → the
+recommended default: take the NOT NULL only once the #492 race is traced. Q4 → the recommended default:
+load-and-count with a "restorable only by 1.0" note. Q5 → **1.1.0**, with ADR-0215 recording why it is not a
+major. Q6 → a permanent catalogue gate is a separate follow-up, not this epic.
+
+The questions as they were put:
 
 - **Q1, the placement-migration endpoint (T2).** P-a: keep everything; zero risk; a table that is empty
   for ever. P-b (recommended): drop the table, keep `GET …/placement-migration` returning an empty
