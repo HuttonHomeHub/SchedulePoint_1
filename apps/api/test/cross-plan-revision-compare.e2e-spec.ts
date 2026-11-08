@@ -387,10 +387,11 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
       expect(rows.map((r) => r.code).sort()).toEqual(['A100', 'B200']);
       for (const row of rows) {
         expect(row.fromStart).not.toBeNull();
-        expect(row.fromStart).toBe(row.fromEarlyStart);
-        expect(row.toStart).toBe(row.toEarlyStart);
-        expect(row.fromFinish).toBe(row.fromEarlyFinish);
-        expect(row.toFinish).toBe(row.toEarlyFinish);
+        // The four `*Early*` names were removed; their absence is pinned here.
+        expect(row).not.toHaveProperty('fromEarlyStart');
+        expect(row).not.toHaveProperty('toEarlyStart');
+        expect(row).not.toHaveProperty('fromEarlyFinish');
+        expect(row).not.toHaveProperty('toEarlyFinish');
       }
     });
 
