@@ -1,6 +1,6 @@
 # Implementation Plan: A baseline's float is compared in minutes — the float-frame fix
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) 
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Status:** Approved — by the product owner, 2026-11-08 (the simplified plan, one milestone).
 - **Owner:** api (with web for the display)
 
@@ -147,6 +147,7 @@ T4 switches the API on, and the web ignores the new fields until T5. T5 changes 
 out. Every step keeps `main` releasable, and there is no flag (ADR-0088 D1).
 
 **Agents to involve:**
+
 - database-architect: T1, mandatory.
 - builder: implementation.
 - api-reviewer and backend-performance-reviewer: T2 and T4.
@@ -163,13 +164,13 @@ Each task's PR must satisfy the Feature Completion Criteria in [`docs/PROCESS.md
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                                     | Likelihood | Impact | Mitigation                                                                                              |
-| ------------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------- |
-| Pre-release baselines show the not-comparable note until the 1.0 wipe                 | certain    | low    | Intended (CQ-2); the owner wipes every plan at 1.0                                                     |
-| A plan not recalculated since the release shows the note on its live side             | med        | low    | The note says recalculating fixes it                                                                     |
-| NULL inferred as 0 or "unchanged" in a later edit                                     | low        | high   | Column comments state the NULL rule; a unit case per surface                                              |
-| Schema hand-written under time pressure                                               | low        | high   | §19.3: database-architect, re-run on failure                                                              |
-| Merge conflict with the `*Early*` removal PR                                          | med        | low    | Rebase T4 onto it; do not touch those fields                                                              |
-| The extra `writeResults` array costs measurable time                                  | low        | low    | Not measured here; backend-performance-reviewer reviews T2 (no owner measurement)                        |
-| A day figure on the comparison differs from an activity's own-calendar float elsewhere | med        | low    | Frame stated on the panel; minutes and hours are exact                                                    |
-| `isNearCritical` also depends on the day factor (`compute.ts:740-743`)                | —          | —      | Out of scope (neither frozen nor compared); reported in spec §0                                           |
+| Risk / assumption                                                                      | Likelihood | Impact | Mitigation                                                                        |
+| -------------------------------------------------------------------------------------- | ---------- | ------ | --------------------------------------------------------------------------------- |
+| Pre-release baselines show the not-comparable note until the 1.0 wipe                  | certain    | low    | Intended (CQ-2); the owner wipes every plan at 1.0                                |
+| A plan not recalculated since the release shows the note on its live side              | med        | low    | The note says recalculating fixes it                                              |
+| NULL inferred as 0 or "unchanged" in a later edit                                      | low        | high   | Column comments state the NULL rule; a unit case per surface                      |
+| Schema hand-written under time pressure                                                | low        | high   | §19.3: database-architect, re-run on failure                                      |
+| Merge conflict with the `*Early*` removal PR                                           | med        | low    | Rebase T4 onto it; do not touch those fields                                      |
+| The extra `writeResults` array costs measurable time                                   | low        | low    | Not measured here; backend-performance-reviewer reviews T2 (no owner measurement) |
+| A day figure on the comparison differs from an activity's own-calendar float elsewhere | med        | low    | Frame stated on the panel; minutes and hours are exact                            |
+| `isNearCritical` also depends on the day factor (`compute.ts:740-743`)                 | —          | —      | Out of scope (neither frozen nor compared); reported in spec §0                   |
