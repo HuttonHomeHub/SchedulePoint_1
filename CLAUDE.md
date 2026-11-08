@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 29 API modules
-> (`apps/api/src/modules/`), 43 Prisma models across 83 migrations, 1923 web
+> (`apps/api/src/modules/`), 43 Prisma models across 84 migrations, 1923 web
 > source files with 49 Playwright suites beside the base journey, and
-> 213 ADRs.
+> 214 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -114,7 +114,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   29 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (43 models) + 83 migrations
+│   │   ├── prisma/           #   Schema (43 models) + 84 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -616,6 +616,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0211** _(Accepted)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
 - **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
 - **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
+- **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

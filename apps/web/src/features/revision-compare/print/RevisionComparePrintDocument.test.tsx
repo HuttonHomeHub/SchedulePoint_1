@@ -13,6 +13,9 @@ function moved(over: Partial<RevisionMovedActivity> = {}): RevisionMovedActivity
     fromTotalFloatDays: 12,
     toTotalFloatDays: 0,
     floatMovementDays: -12,
+    fromTotalFloatMinutes: 17280,
+    toTotalFloatMinutes: 0,
+    floatMovementMinutes: -17280,
     fromStart: '2026-02-01',
     toStart: '2026-02-10',
     fromFinish: '2026-02-20',
@@ -42,6 +45,7 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
       dataDate: '2026-01-01',
     },
     dayFactorMinutes: 1440,
+    floatNotComparableCount: 0,
     settingsVerdict: 'MATCH',
     completion: {
       assessable: true,
@@ -232,6 +236,42 @@ describe('the printed revision comparison', () => {
     const cells = [...container.querySelectorAll('tbody td')].map((c) => c.textContent);
     expect(cells).toContain('unknown');
     expect(cells).toContain('0 d');
+  });
+
+  it('prints the float movement as the screen words it, and the not-comparable note once', () => {
+    const { container } = render(
+      <RevisionComparePrintDocument
+        compare={comparison({
+          floatNotComparableCount: 2,
+          criticalPath: {
+            ...comparison().criticalPath,
+            entered: [
+              moved({ floatMovementDays: -2, floatMovementMinutes: -960 }),
+              moved({
+                activityId: 'a2',
+                floatMovementDays: null,
+                floatMovementMinutes: null,
+                fromTotalFloatDays: null,
+              }),
+            ],
+            enteredTotal: 2,
+          },
+        })}
+        printedAt={PRINTED_AT}
+      />,
+    );
+    const cells = [...container.querySelectorAll('tbody td')].map((c) => c.textContent);
+    expect(cells).toContain('Float down 2 days (16 h)');
+    expect(cells).toContain('Float change unknown');
+    const text = container.textContent ?? '';
+    expect(text.match(/Float could not be compared for 2 activities/g)).toHaveLength(1);
+  });
+
+  it('prints no float note when every float could be compared', () => {
+    const { container } = render(
+      <RevisionComparePrintDocument compare={comparison()} printedAt={PRINTED_AT} />,
+    );
+    expect(container.textContent).not.toMatch(/could not be compared/);
   });
 
   it('marks a row that is not in the live plan', () => {

@@ -2255,7 +2255,14 @@ export class ScheduleService {
     const fromSide = frozenRevisionSide(fromRows, datesBasis);
     const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows, datesBasis);
 
-    const delta = computeRevisionDelta(fromSide, toSide, REVISION_ROW_CAP, movementDaysBetween);
+    const delta = computeRevisionDelta(
+      fromSide,
+      toSide,
+      REVISION_ROW_CAP,
+      movementDaysBetween,
+      // Float is shown on the SAME frame as the completion movement beside it (ADR-0214).
+      dayFactorMinutes,
+    );
 
     /**
      * **Whether the criticality delta means anything at all**, and the answer is no when either
@@ -2343,6 +2350,7 @@ export class ScheduleService {
             codeIsTheCorrelationKey: false,
             includeProgress: includes.includes('progress'),
             calendarName: (id) => calendarNameById.get(id) ?? null,
+            dayFactorMinutes,
             cap: REVISION_ROW_CAP,
           },
         )
@@ -2452,6 +2460,9 @@ export class ScheduleService {
             dataDate: revisionDate(plan.plannedStart),
           } satisfies RevisionSide),
       dayFactorMinutes,
+      // Zero over a side that was never calculated: the criticality delta is then not assessable
+      // and a count of "float that could not be compared" would describe rows nobody is shown.
+      floatNotComparableCount: bothScheduled ? delta.floatNotComparableCount : 0,
       settingsVerdict: compareCriticalityRules(
         readCriticalityRule(fromBaseline),
         toBaseline
@@ -2545,6 +2556,7 @@ export class ScheduleService {
         toRowCount: toRows === null ? liveSide.length : toRows.length,
         enteredTotal: delta.enteredTotal,
         leftTotal: delta.leftTotal,
+        floatNotComparableCount: result.floatNotComparableCount,
         settingsVerdict: result.settingsVerdict,
         durationMs: Date.now() - startedAt,
       },
@@ -2865,6 +2877,7 @@ export class ScheduleService {
           newSideCarrierActivityId: null,
           newSideCarrierName: null,
         },
+        floatNotComparableCount: 0,
         criticalPath: { ...EMPTY_CRITICAL_PATH_DELTA, notAssessableReason: 'NO_COMMON_CODES' },
       };
     }
@@ -2874,6 +2887,7 @@ export class ScheduleService {
       correlated.to,
       REVISION_ROW_CAP,
       movementDaysBetween,
+      dayFactorMinutes,
     );
 
     // Whether the criticality delta means anything at all. `is_critical` DEFAULTS to false, so an
@@ -2942,6 +2956,7 @@ export class ScheduleService {
             codeIsTheCorrelationKey: true,
             includeProgress: includes.includes('progress'),
             calendarName: (id) => calendarNameById.get(id) ?? null,
+            dayFactorMinutes,
             cap: REVISION_ROW_CAP,
           },
         )
@@ -2987,6 +3002,7 @@ export class ScheduleService {
 
     const result: CrossPlanRevisionCompare = {
       ...identity,
+      floatNotComparableCount: bothScheduled ? delta.floatNotComparableCount : 0,
       correlation,
       notAssessableReason: null,
       completion: {
@@ -3088,6 +3104,7 @@ export class ScheduleService {
         toUnmatched: correlation.toUnmatched,
         enteredTotal: result.criticalPath.enteredTotal,
         leftTotal: result.criticalPath.leftTotal,
+        floatNotComparableCount: result.floatNotComparableCount,
         settingsVerdict: result.settingsVerdict,
         durationMs: Date.now() - startedAt,
       },

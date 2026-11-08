@@ -21,6 +21,7 @@ const row = (o: Partial<RevisionRow> & { activityId: string }): RevisionRow => (
   durationMinutes: 480,
   isCritical: false,
   totalFloatDays: 0,
+  totalFloatMinutes: 0,
   earlyStart: '2026-01-01',
   earlyFinish: '2026-01-05',
   laneIndex: 0,
@@ -121,14 +122,111 @@ describe('computeRevisionDelta', () => {
 
   it('keeps a null float null rather than coercing it to zero', () => {
     const d = computeRevisionDelta(
-      [row({ activityId: 'a', totalFloatDays: null })],
-      [row({ activityId: 'a', isCritical: true, totalFloatDays: 0 })],
+      [row({ activityId: 'a', totalFloatDays: null, totalFloatMinutes: null })],
+      [row({ activityId: 'a', isCritical: true, totalFloatDays: 0, totalFloatMinutes: 0 })],
       CAP,
     );
     // Absence and zero are different facts. `variance.ts:90-93` already takes this line; matched,
     // not re-decided.
     expect(d.entered[0]?.fromTotalFloatDays).toBeNull();
     expect(d.entered[0]?.floatMovementDays).toBeNull();
+    expect(d.entered[0]?.floatMovementMinutes).toBeNull();
+    // Never calculated is not "could not be compared": the existing unknown handling says why.
+    expect(d.floatNotComparableCount).toBe(0);
+  });
+
+  describe('float is compared in minutes and shown in days on one frame (#318, ADR-0214)', () => {
+    const entering = (from: Partial<RevisionRow>, to: Partial<RevisionRow> = {}) =>
+      computeRevisionDelta(
+        [row({ activityId: 'a', ...from })],
+        [row({ activityId: 'a', isCritical: true, ...to })],
+        CAP,
+        undefined,
+        480,
+      );
+
+    it('reads a day-length change that moved no float as zero movement', () => {
+      // 2,400 minutes was five days on an eight-hour calendar and two on a 24-hour one: the day
+      // columns differ (5 against 2) while nothing moved, which is what the old subtraction showed
+      // as "down 3 days".
+      const d = entering(
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+        { totalFloatDays: 2, totalFloatMinutes: 2400 },
+      );
+      expect(d.entered[0]).toMatchObject({
+        floatMovementMinutes: 0,
+        floatMovementDays: 0,
+        fromTotalFloatDays: 5,
+        toTotalFloatDays: 5,
+      });
+      expect(d.floatNotComparableCount).toBe(0);
+    });
+
+    it('derives days once from the movement in minutes, on the frame passed in', () => {
+      const d = entering(
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+        { totalFloatDays: 3, totalFloatMinutes: 1440 },
+      );
+      expect(d.entered[0]).toMatchObject({
+        fromTotalFloatMinutes: 2400,
+        toTotalFloatMinutes: 1440,
+        floatMovementMinutes: -960,
+        floatMovementDays: -2,
+      });
+    });
+
+    it('reports a float with days but no minutes as not comparable, never zero or unchanged', () => {
+      const d = entering(
+        { totalFloatDays: 5, totalFloatMinutes: null },
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+      );
+      expect(d.entered[0]).toMatchObject({
+        fromTotalFloatDays: null,
+        toTotalFloatDays: 5,
+        floatMovementMinutes: null,
+        floatMovementDays: null,
+      });
+      expect(d.floatNotComparableCount).toBe(1);
+    });
+
+    it('counts a not-comparable pair among the rows that remained, not only entered and left', () => {
+      const d = computeRevisionDelta(
+        [row({ activityId: 'a', totalFloatDays: 4, totalFloatMinutes: null })],
+        [row({ activityId: 'a', totalFloatDays: 4, totalFloatMinutes: 1920 })],
+        CAP,
+        undefined,
+        480,
+      );
+      expect(d.entered).toHaveLength(0);
+      expect(d.floatNotComparableCount).toBe(1);
+    });
+
+    it('orders by the movement in minutes, not by the rounded day figure beside it', () => {
+      // Both movements read "−1 day" on a 480-minute frame; the order is the exact one.
+      const from = [
+        row({ activityId: 'a', code: 'A', totalFloatDays: 3, totalFloatMinutes: 1440 }),
+        row({ activityId: 'b', code: 'B', totalFloatDays: 3, totalFloatMinutes: 1440 }),
+      ];
+      const to = [
+        row({
+          activityId: 'a',
+          code: 'A',
+          isCritical: true,
+          totalFloatDays: 2,
+          totalFloatMinutes: 1000,
+        }),
+        row({
+          activityId: 'b',
+          code: 'B',
+          isCritical: true,
+          totalFloatDays: 2,
+          totalFloatMinutes: 1100,
+        }),
+      ];
+      const d = computeRevisionDelta(from, to, CAP, undefined, 480);
+      expect(d.entered.map((r) => r.floatMovementDays)).toEqual([-1, -1]);
+      expect(d.entered.map((r) => r.activityId)).toEqual(['b', 'a']);
+    });
   });
 
   it('excludes a WBS_SUMMARY from entered and left without dropping it from the union', () => {
@@ -154,11 +252,16 @@ describe('computeRevisionDelta', () => {
 
   it('orders entered by float movement descending, nulls last, then code then id', () => {
     const from = [
-      row({ activityId: 'small', code: 'B', totalFloatDays: 1 }),
-      row({ activityId: 'big', code: 'A', totalFloatDays: 10 }),
-      row({ activityId: 'unknown', code: 'C', totalFloatDays: null }),
+      row({ activityId: 'small', code: 'B', totalFloatDays: 1, totalFloatMinutes: 1440 }),
+      row({ activityId: 'big', code: 'A', totalFloatDays: 10, totalFloatMinutes: 14400 }),
+      row({ activityId: 'unknown', code: 'C', totalFloatDays: null, totalFloatMinutes: null }),
     ];
-    const to = from.map((r) => ({ ...r, isCritical: true, totalFloatDays: 0 }));
+    const to = from.map((r) => ({
+      ...r,
+      isCritical: true,
+      totalFloatDays: 0,
+      totalFloatMinutes: 0,
+    }));
     const d = computeRevisionDelta(from, to, CAP);
     // An unknown movement is not a large one, so it sorts last rather than first.
     expect(d.entered.map((r) => r.activityId)).toEqual(['small', 'big', 'unknown']);

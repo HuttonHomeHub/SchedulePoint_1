@@ -68,6 +68,7 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
     lateStart: DAY,
     lateFinish: DAY,
     totalFloat: 5,
+    totalFloatMinutes: 2400,
     freeFloat: 2,
     isCritical: true,
     // `true` so a mapper that hard-codes `false` fails the value case (#403).
@@ -162,6 +163,9 @@ const FORBIDDEN_ACTIVITY_KEYS = [
   'actualExpense',
   'accrualType',
   'freeFloat',
+  // #318: the unrounded minutes beside the whitelisted `totalFloat` day figure. A guest is shown
+  // the day count and no comparison surface, so the precision is a column nobody asked to expose.
+  'totalFloatMinutes',
   'scheduleAsLateAsPossible',
   'constraintViolated',
   'externalDriven',

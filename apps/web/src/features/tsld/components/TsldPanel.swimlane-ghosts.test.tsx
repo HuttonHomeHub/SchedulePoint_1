@@ -85,6 +85,7 @@ const VARIANCE = ['a', 'b'].map((activityId) => ({
   startVarianceDays: 5,
   finishVarianceDays: 5,
   floatVarianceDays: 0,
+  floatVarianceMinutes: 0,
 }));
 
 const COMPARE_GHOSTS = [

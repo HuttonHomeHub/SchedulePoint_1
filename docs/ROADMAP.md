@@ -422,6 +422,16 @@ keep `main` releasable.
   lags were converted to working time on their lag calendar, each conversion recorded, and every
   linked plan is recalculated once, upstream first, when the API starts.
 
+- **A frozen float carries its minutes** (shipped 2026-11-08,
+  [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
+  [`docs/specs/baseline-float-frame/`](specs/baseline-float-frame/); closed `docs/TECH_DEBT.md` #318).
+  Changing how long a working day is made every baseline comparison show float as having moved, with no
+  date moved, because a baseline froze float as a rounded day count that could not be re-framed. A
+  recalculation now keeps the float in working minutes and capture copies it, so comparisons subtract
+  minutes and show days on the earlier revision's plan working day with the hours beside them ("Float down
+  2 days (16 h)"). A baseline captured before then reads "Float movement unknown" and a quiet note counts
+  what could not be compared.
+
 - **A plan keeps the instant beside the date, and a cross-plan link reads it** (shipped 2026-11-07,
   [ADR-0212](adr/0212-a-plan-keeps-the-instant-beside-the-date.md); spec and plan at
   [`docs/specs/cross-plan-instants/`](specs/cross-plan-instants/); closed `docs/TECH_DEBT.md` #565).

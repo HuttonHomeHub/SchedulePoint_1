@@ -21,6 +21,7 @@ const frozen: FrozenRevisionRowInput = {
   durationMinutes: 480,
   isCritical: false,
   totalFloat: 0,
+  totalFloatMinutes: 0,
   baselineStart: day('2026-01-05'),
   baselineFinish: day('2026-01-09'),
   placedStart: day('2026-01-12'),
@@ -46,6 +47,7 @@ const live: LiveRevisionRowInput = {
   durationMinutes: 480,
   isCritical: false,
   totalFloat: 0,
+  totalFloatMinutes: 0,
   earlyStart: day('2026-01-05'),
   earlyFinish: day('2026-01-09'),
   visualEffectiveStart: day('2026-01-19'),
@@ -88,6 +90,18 @@ describe('the revision projections read the dates of the basis they are given', 
     const [l] = liveRevisionSide([live], 'NETWORK');
     expect([f!.earlyStart, f!.earlyFinish]).toEqual(['2026-01-05', '2026-01-09']);
     expect([l!.earlyStart, l!.earlyFinish]).toEqual(['2026-01-05', '2026-01-09']);
+  });
+});
+
+describe('both projections carry the float minutes verbatim (#318)', () => {
+  it('copies minutes, and a NULL stays NULL beside a day figure', () => {
+    const [f] = frozenRevisionSide(
+      [{ ...frozen, totalFloat: 5, totalFloatMinutes: 2400 }],
+      'NETWORK',
+    );
+    const [l] = liveRevisionSide([{ ...live, totalFloat: 5, totalFloatMinutes: null }], 'NETWORK');
+    expect([f!.totalFloatDays, f!.totalFloatMinutes]).toEqual([5, 2400]);
+    expect([l!.totalFloatDays, l!.totalFloatMinutes]).toEqual([5, null]);
   });
 });
 

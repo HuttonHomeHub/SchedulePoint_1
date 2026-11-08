@@ -389,6 +389,7 @@ describe('GanttPanel — baseline variance (ADR-0025)', () => {
     startVarianceDays: 2,
     finishVarianceDays: 2,
     floatVarianceDays: null,
+    floatVarianceMinutes: null,
     ...over,
   });
 
@@ -470,6 +471,7 @@ describe('GanttPanel — variance honesty', () => {
       startVarianceDays: null,
       finishVarianceDays: null,
       floatVarianceDays: null,
+      floatVarianceMinutes: null,
     };
     render(<GanttPanel activities={TWO} varianceByActivityId={new Map([['a', row]])} />);
     // Activity 'a' is genuinely new; 'b' has no row and must not borrow that label.

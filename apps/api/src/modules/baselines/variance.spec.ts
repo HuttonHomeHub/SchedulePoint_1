@@ -12,6 +12,7 @@ function base(overrides: Partial<VarianceBaselineRow> = {}): VarianceBaselineRow
     baselineStart: '2026-01-05',
     baselineFinish: '2026-01-09',
     totalFloat: 0,
+    totalFloatMinutes: 0,
     ...overrides,
   };
 }
@@ -24,6 +25,7 @@ function live(overrides: Partial<VarianceLiveRow> = {}): VarianceLiveRow {
     start: '2026-01-05',
     finish: '2026-01-09',
     totalFloat: 0,
+    totalFloatMinutes: 0,
     ...overrides,
   };
 }
@@ -39,12 +41,14 @@ describe('computeVariance', () => {
       startVarianceDays: 0,
       finishVarianceDays: 0,
       floatVarianceDays: 0,
+      floatVarianceMinutes: 0,
     });
     expect(rollup).toEqual({
       worstFinishSlipDays: null,
       behindCount: 0,
       addedCount: 0,
       removedCount: 0,
+      floatNotComparableCount: 0,
     });
   });
 
@@ -80,11 +84,63 @@ describe('computeVariance', () => {
 
   it('subtracts float as current − baseline (positive = more float now)', () => {
     const { rows } = computeVariance(
-      [base({ totalFloat: 2 })],
-      [live({ totalFloat: 5 })],
+      [base({ totalFloat: 2, totalFloatMinutes: 2880 })],
+      [live({ totalFloat: 5, totalFloatMinutes: 7200 })],
       allMinutesWorkCalendar,
     );
-    expect(rows[0]?.floatVarianceDays).toBe(3);
+    expect(rows[0]).toMatchObject({ floatVarianceMinutes: 4320, floatVarianceDays: 3 });
+  });
+
+  describe('float is compared in minutes on the baseline’s frozen day (#318, ADR-0214)', () => {
+    it('reads an unmoved float after a day-length change as zero, not as the day columns differ', () => {
+      // Captured on a 24-hour day (2,400 minutes → 2 d); the calendar is then edited to eight hours
+      // and the live float reads 5 d for the very same 2,400 minutes. Nothing moved.
+      const { rows, rollup } = computeVariance(
+        [base({ totalFloat: 2, totalFloatMinutes: 2400 })],
+        [live({ totalFloat: 5, totalFloatMinutes: 2400 })],
+        allMinutesWorkCalendar,
+        1440,
+      );
+      expect(rows[0]).toMatchObject({ floatVarianceDays: 0, floatVarianceMinutes: 0 });
+      expect(rollup.floatNotComparableCount).toBe(0);
+    });
+
+    it('converts the minutes once, on the baseline’s frame', () => {
+      const { rows } = computeVariance(
+        [base({ totalFloat: 5, totalFloatMinutes: 2400 })],
+        [live({ totalFloat: 3, totalFloatMinutes: 1440 })],
+        allMinutesWorkCalendar,
+        480,
+      );
+      expect(rows[0]).toMatchObject({ floatVarianceMinutes: -960, floatVarianceDays: -2 });
+    });
+
+    it('reports a float with days but no minutes as not comparable, and counts it', () => {
+      const { rows, rollup } = computeVariance(
+        [base({ totalFloat: 2, totalFloatMinutes: null }), base({ sourceActivityId: 'a2' })],
+        [live({ totalFloat: 2, totalFloatMinutes: 2880 }), live({ id: 'a2' })],
+        allMinutesWorkCalendar,
+      );
+      expect(rows[0]).toMatchObject({ floatVarianceDays: null, floatVarianceMinutes: null });
+      expect(rows[1]).toMatchObject({ floatVarianceDays: 0, floatVarianceMinutes: 0 });
+      expect(rollup.floatNotComparableCount).toBe(1);
+    });
+
+    it('does not count a float that was never calculated, nor an added or removed row', () => {
+      const { rows, rollup } = computeVariance(
+        [
+          base({ totalFloat: null, totalFloatMinutes: null }),
+          base({ sourceActivityId: 'gone', totalFloat: 3, totalFloatMinutes: null }),
+        ],
+        [
+          live({ totalFloat: 3, totalFloatMinutes: 4320 }),
+          live({ id: 'new', totalFloat: 1, totalFloatMinutes: null }),
+        ],
+        allMinutesWorkCalendar,
+      );
+      expect(rows.map((r) => r.floatVarianceDays)).toEqual([null, null, null]);
+      expect(rollup.floatNotComparableCount).toBe(0);
+    });
   });
 
   it('reports an activity added after capture as inBaseline:false with null variance', () => {

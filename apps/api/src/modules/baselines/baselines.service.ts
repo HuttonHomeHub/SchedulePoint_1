@@ -452,6 +452,7 @@ export class BaselinesService {
           addedCount: 0,
           removedCount: 0,
           basis: null,
+          floatNotComparableCount: 0,
         },
       };
     }
@@ -476,6 +477,7 @@ export class BaselinesService {
         baselineStart: basis === 'PLACED' ? day(s.placedStart) : day(s.baselineStart),
         baselineFinish: basis === 'PLACED' ? day(s.placedFinish) : day(s.baselineFinish),
         totalFloat: s.totalFloat,
+        totalFloatMinutes: s.totalFloatMinutes,
       })),
       liveRows.map((l) => ({
         id: l.id,
@@ -484,6 +486,7 @@ export class BaselinesService {
         start: basis === 'PLACED' ? day(l.visualEffectiveStart) : day(l.earlyStart),
         finish: basis === 'PLACED' ? day(l.visualEffectiveFinish) : day(l.earlyFinish),
         totalFloat: l.totalFloat,
+        totalFloatMinutes: l.totalFloatMinutes,
       })),
       calendar,
       active.hoursPerDayMinutes,

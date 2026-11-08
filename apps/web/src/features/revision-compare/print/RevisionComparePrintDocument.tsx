@@ -18,6 +18,9 @@ import {
 } from '../model/change-sentences';
 import {
   carrierChangedSentence,
+  floatPairTexts,
+  floatMovementPhrase,
+  floatNotComparableNote,
   completionSentence,
   criticalPathUnavailable,
   HONESTY_FOOTER,
@@ -70,6 +73,7 @@ export function RevisionComparePrintDocument({
   printedAt?: Date;
 }): React.ReactElement {
   const caveat = settingsCaveat(compare.settingsVerdict);
+  const floatNote = floatNotComparableNote(compare.floatNotComparableCount);
   /**
    * **A cross-plan comparison names BOTH plans, or the page is a false statement to exactly the
    * reader it exists for.** `planName` is a same-plan field, so the compiler forces the question
@@ -168,6 +172,9 @@ export function RevisionComparePrintDocument({
           )}
 
           {caveat === null ? null : <p className="revision-print-caveat">{caveat}</p>}
+          {/* Printed once, ahead of both the delta and the change list: paper shows both views, so
+              the note that qualifies the float in each belongs before either (ADR-0214). */}
+          {floatNote === null ? null : <p className="revision-print-caveat">{floatNote}</p>}
           {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
             <p className="revision-print-statement">
               {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
@@ -282,6 +289,7 @@ function PrintedMovedTable({
                 <th>Activity</th>
                 <th>Float before</th>
                 <th>Float after</th>
+                <th>Float movement</th>
                 <th>Start after</th>
                 <th>Finish after</th>
               </tr>
@@ -297,8 +305,10 @@ function PrintedMovedTable({
                   {/* An unknown float prints as "unknown", never as a dash that could be read as
                       zero and never as 0 — absence and zero are different facts, kept apart from
                       the engine all the way to the page. */}
-                  <td>{floatCell(row.fromTotalFloatDays)}</td>
-                  <td>{floatCell(row.toTotalFloatDays)}</td>
+                  <td>{floatPairTexts(row).from}</td>
+                  <td>{floatPairTexts(row).to}</td>
+                  {/* The same phrase as the screen (days on the plan working day, hours beside). */}
+                  <td>{floatMovementPhrase(row)}</td>
                   <td>{row.toStart ?? '—'}</td>
                   <td>{row.toFinish ?? '—'}</td>
                 </tr>
@@ -309,10 +319,6 @@ function PrintedMovedTable({
       )}
     </>
   );
-}
-
-function floatCell(days: number | null): string {
-  return days === null ? 'unknown' : `${days} d`;
 }
 
 /** Print the comparison — the panel's header button calls this. */

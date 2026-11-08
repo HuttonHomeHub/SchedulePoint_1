@@ -24,6 +24,7 @@ const row = (o: Partial<RevisionRow> & { activityId: string }): RevisionRow => (
   durationMinutes: 480,
   isCritical: false,
   totalFloatDays: 0,
+  totalFloatMinutes: 0,
   earlyStart: '2026-01-05',
   earlyFinish: '2026-01-09',
   // Every one of these is a REAL value on a fully-recorded side: lane 0 is a lane, 0 % is a
@@ -70,6 +71,7 @@ const opts = (o: Partial<ClassifyOptions> = {}): ClassifyOptions => ({
   codeIsTheCorrelationKey: false,
   includeProgress: false,
   calendarName: () => null,
+  dayFactorMinutes: 1440,
   cap: 200,
   ...o,
 });
@@ -109,6 +111,69 @@ describe('the revision change classifier', () => {
     expect(found?.rows).toHaveLength(1);
     expect(found?.rows[0]?.activityId).toBe('a');
     expect(found?.notAssessableReason).toBeNull();
+  });
+
+  describe('CRITICALITY compares float in minutes as whole days on the frame (#318, ADR-0214)', () => {
+    const criticality = (from: Partial<RevisionRow>, to: Partial<RevisionRow>, frame = 480) =>
+      classOf(
+        classifyRevisionChanges(
+          side([row({ activityId: 'a', ...from })]),
+          side([row({ activityId: 'a', ...to })]),
+          opts({ dayFactorMinutes: frame }),
+        ),
+        'CRITICALITY',
+      );
+
+    it('lists nothing for a day-length change that moved no float', () => {
+      // Equal minutes, different day columns (5 d on an eight-hour calendar, 2 d on a 24-hour one).
+      const found = criticality(
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+        { totalFloatDays: 2, totalFloatMinutes: 2400 },
+      );
+      expect(found?.rows).toHaveLength(0);
+    });
+
+    it('lists a float that moved a whole day, with labels that state days and hours and differ', () => {
+      const found = criticality(
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+        { totalFloatDays: 3, totalFloatMinutes: 1440 },
+      );
+      expect(found?.rows).toHaveLength(1);
+      expect(found?.rows[0]).toMatchObject({ from: 'float 5 d (40 h)', to: 'float 3 d (24 h)' });
+    });
+
+    it('does not list a movement that rounds to the same whole day', () => {
+      // 40 h and 36 h are both "5 d" on an eight-hour frame (4.5 rounds up): the two labels would
+      // read alike, which is the `edgeChanged` defect.
+      const found = criticality(
+        { totalFloatDays: 5, totalFloatMinutes: 2400 },
+        { totalFloatDays: 5, totalFloatMinutes: 2160 },
+      );
+      expect(found?.rows).toHaveLength(0);
+    });
+
+    it('lists two critical rows that differ only by float, with two different labels', () => {
+      const found = criticality(
+        { isCritical: true, totalFloatDays: 0, totalFloatMinutes: 0 },
+        { isCritical: true, totalFloatDays: -2, totalFloatMinutes: -960 },
+      );
+      expect(found?.rows).toHaveLength(1);
+      expect(found?.rows[0]?.from).not.toBe(found?.rows[0]?.to);
+    });
+
+    it('does not judge a float with days but no minutes, and still lists a flip', () => {
+      const unjudged = criticality(
+        { totalFloatDays: 5, totalFloatMinutes: null },
+        { totalFloatDays: 2, totalFloatMinutes: 2400 },
+      );
+      expect(unjudged?.rows).toHaveLength(0);
+      const flipped = criticality(
+        { isCritical: false, totalFloatDays: 5, totalFloatMinutes: null },
+        { isCritical: true, totalFloatDays: 0, totalFloatMinutes: 0 },
+      );
+      expect(flipped?.rows[0]).toMatchObject({ from: 'float unknown' });
+      expect(flipped?.rows[0]?.from).not.toBe(flipped?.rows[0]?.to);
+    });
   });
 
   it('detects ADDED and REMOVED, and neither is a change to an existing row', () => {
@@ -513,6 +578,7 @@ describe('the RECODED class across two SEPARATELY IMPORTED plans', () => {
     durationMinutes: 480,
     isCritical: false,
     totalFloatDays: 0,
+    totalFloatMinutes: 0,
     earlyStart: '2026-01-05',
     earlyFinish: '2026-01-06',
     laneIndex: 0,

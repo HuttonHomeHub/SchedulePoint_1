@@ -120,6 +120,7 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
     lateStart: null,
     lateFinish: null,
     totalFloat: null,
+    totalFloatMinutes: null,
     isCritical: false,
     budgetedCost: 0,
     budgetedExpense: 0,
@@ -242,6 +243,36 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
       activityId: { in: ids.slice(0, 8_000) },
     });
     expect(rows[0]).toEqual(lane);
+  });
+
+  it('copies the unrounded float minutes verbatim, and NULL as NULL (#318)', async () => {
+    const db = tx();
+    const repository = new BaselineRepository({} as PrismaService);
+    await repository.createWithSnapshot(
+      input({
+        activities: [
+          { ...activity, totalFloat: 5, totalFloatMinutes: 2400 },
+          { ...activity, id: 'act-2', totalFloat: 3, totalFloatMinutes: null },
+        ],
+        lanes: [],
+      }),
+      db as never,
+    );
+    expect(db.baselineActivity.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          sourceActivityId: 'act-1',
+          totalFloat: 5,
+          totalFloatMinutes: 2400,
+        }),
+        // Never defaulted to 0 or derived from the day figure: NULL means "not comparable".
+        expect.objectContaining({
+          sourceActivityId: 'act-2',
+          totalFloat: 3,
+          totalFloatMinutes: null,
+        }),
+      ],
+    });
   });
 
   it('writes SWIMLANE_TYPE on every capture, with no type and NULL activity columns off a code source', async () => {

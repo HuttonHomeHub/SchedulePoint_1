@@ -206,6 +206,7 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         lateStart: true,
         lateFinish: true,
         totalFloat: true,
+        totalFloatMinutes: true,
         freeFloat: true,
         isCritical: true,
         isNearCritical: true,
@@ -431,6 +432,117 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     await admin.agent.get(compareUrl(planId, from)).expect(200);
     const after = await engineOwnedSnapshot(planId);
     expect(after).toEqual(before);
+  });
+
+  describe('float is compared in minutes, so a working-day change is not float movement (#318)', () => {
+    const variance = (planId: string) =>
+      `/api/v1/organizations/acme/plans/${planId}/baselines/variance`;
+
+    /**
+     * An eight-hour week, a 5-day-float branch, a baseline, then the calendar's day length edited to
+     * seven hours and the plan recalculated: the working MINUTES are unchanged, so no float moved —
+     * but `round(2400 / 420)` reads 6 where the baseline froze 5.
+     */
+    async function dayLengthChanged(admin: Actor) {
+      const planId = await makePlan(admin);
+      const cal = await admin.agent
+        .post('/api/v1/organizations/acme/calendars')
+        .send({
+          name: 'Eight hour week',
+          shifts: [0, 1, 2, 3, 4].map((weekday) => ({
+            weekday,
+            startMinute: 8 * 60,
+            endMinute: 16 * 60,
+          })),
+        })
+        .expect(201);
+      const calendarId = cal.body.data.id as string;
+      const planVersion = (
+        await admin.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200)
+      ).body.data.version as number;
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ calendarId, version: planVersion })
+        .expect(200);
+      const spine = await makeActivity(admin, planId, 'Spine', 12);
+      const slack = await makeActivity(admin, planId, 'Slack', 7);
+      const end = await makeActivity(admin, planId, 'End', 1);
+      await link(admin, planId, spine, end);
+      await link(admin, planId, slack, end);
+      await recalculate(admin, planId);
+      const before = await capture(admin, planId, 'Before');
+
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/calendars/${calendarId}`)
+        .send({ hoursPerDay: 7, version: cal.body.data.version as number })
+        .expect(200);
+      await recalculate(admin, planId);
+      return { planId, before, slack };
+    }
+
+    it('reads zero float movement everywhere after a day-length edit', async () => {
+      const admin = await adminWithOrg();
+      const { planId, before, slack } = await dayLengthChanged(admin);
+
+      // Non-vacuity: the day columns DO disagree (5 frozen, 6 live) while the minutes agree — the
+      // old subtraction of the two read "+1 day" here.
+      const frozen = await prisma.baselineActivity.findFirstOrThrow({
+        where: { baselineId: before, sourceActivityId: slack },
+        select: { totalFloat: true, totalFloatMinutes: true },
+      });
+      const live = await prisma.activity.findUniqueOrThrow({
+        where: { id: slack },
+        select: { totalFloat: true, totalFloatMinutes: true },
+      });
+      expect(frozen).toEqual({ totalFloat: 5, totalFloatMinutes: 2400 });
+      expect(live).toEqual({ totalFloat: 6, totalFloatMinutes: 2400 });
+
+      const v = await admin.agent.get(variance(planId)).expect(200);
+      for (const r of v.body.data as {
+        floatVarianceDays: number | null;
+        floatVarianceMinutes: number | null;
+      }[]) {
+        expect(r.floatVarianceDays).toBe(0);
+        expect(r.floatVarianceMinutes).toBe(0);
+      }
+      expect(v.body.meta.floatNotComparableCount).toBe(0);
+
+      const res = await admin.agent
+        .get(`${compareUrl(planId, before)}&include=changes`)
+        .expect(200);
+      const criticality = (
+        res.body.data.changes.classes as { changeClass: string; rows: unknown[] }[]
+      ).find((c) => c.changeClass === 'CRITICALITY');
+      // The old predicate listed Slack here, as a change of "criticality", on the day columns alone.
+      expect(criticality?.rows).toEqual([]);
+      expect(res.body.data.floatNotComparableCount).toBe(0);
+    });
+
+    it('reports a float with days but no minutes as not comparable, and counts it', async () => {
+      const admin = await adminWithOrg();
+      const { planId, before } = await dayLengthChanged(admin);
+      // A baseline captured before the minutes were stored: days present, minutes NULL.
+      await prisma.baselineActivity.updateMany({
+        where: { baselineId: before },
+        data: { totalFloatMinutes: null },
+      });
+
+      const v = await admin.agent.get(variance(planId)).expect(200);
+      const rows = v.body.data as {
+        inBaseline: boolean;
+        floatVarianceDays: number | null;
+        floatVarianceMinutes: number | null;
+      }[];
+      expect(rows).toHaveLength(3);
+      for (const r of rows) {
+        expect(r.floatVarianceDays).toBeNull();
+        expect(r.floatVarianceMinutes).toBeNull();
+      }
+      expect(v.body.meta.floatNotComparableCount).toBe(3);
+
+      const res = await admin.agent.get(compareUrl(planId, before)).expect(200);
+      expect(res.body.data.floatNotComparableCount).toBe(3);
+    });
   });
 
   it('says UNKNOWN when a side never recorded its criticality rule, and never MATCH', async () => {

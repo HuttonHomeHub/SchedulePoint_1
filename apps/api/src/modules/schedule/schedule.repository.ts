@@ -299,7 +299,7 @@ export interface ScheduleAggregate {
  * the caller's transaction: take the plan-scoped write lock (shared with the
  * dependency cycle check, ADR-0021), load the plan's active nodes and edges for
  * the engine, and write the engine's results back with a single **batched raw
- * UPDATE** that touches ONLY the twenty-nine engine-owned columns — never `version`,
+ * UPDATE** that touches ONLY the thirty engine-owned columns — never `version`,
  * `updated_at`, or `updated_by`, so a recalculation cannot collide with, or be
  * mistaken for, a definition/progress edit.
  */
@@ -808,7 +808,7 @@ export class ScheduleRepository {
   /**
    * Persist the engine's per-activity results in one statement via `unnest`,
    * matching each row by id and re-asserting the plan/org/active scope (so a stale
-   * id can never write across a plan or tenant). Sets only the twenty-nine engine
+   * id can never write across a plan or tenant). Sets only the thirty engine
    * columns; a no-op for an empty result set.
    *
    * The caller holds the plan advisory lock, which the lock-free placement writers do not, so the
@@ -842,6 +842,11 @@ export class ScheduleRepository {
     const factorFor = (activityId: string): number =>
       dayFactorByActivity.get(activityId) ?? MINUTES_PER_DAY;
     const totalFloat = results.map((r) => Math.round(r.totalFloat / factorFor(r.activityId)));
+    // The same float, UNROUNDED and in the engine's own unit, so a comparison can subtract minutes
+    // and convert once: the day figure above cannot be re-framed after a calendar's day length
+    // changes (docs/TECH_DEBT.md #318, ADR-0214). Always written beside `total_float` — the
+    // table's CHECK refuses minutes without days.
+    const totalFloatMinutes = results.map((r) => r.totalFloat);
     // Free float (M6-F1, ADR-0035 §17–§20) — engine-owned like total_float, day-denominated.
     const freeFloat = results.map((r) => Math.round(r.freeFloat / factorFor(r.activityId)));
     const isCritical = results.map((r) => r.isCritical);
@@ -1009,7 +1014,8 @@ export class ScheduleRepository {
         visual_effective_start_instant = timestamptz 'epoch' + make_interval(mins => v.visual_effective_start_instant),
         visual_effective_finish_instant = timestamptz 'epoch' + make_interval(mins => v.visual_effective_finish_instant),
         late_start_instant = timestamptz 'epoch' + make_interval(mins => v.late_start_instant),
-        late_finish_instant = timestamptz 'epoch' + make_interval(mins => v.late_finish_instant)
+        late_finish_instant = timestamptz 'epoch' + make_interval(mins => v.late_finish_instant),
+        total_float_minutes = v.total_float_minutes
       FROM unnest(
         ${ids}::uuid[],
         ${earlyStart}::date[],
@@ -1039,7 +1045,8 @@ export class ScheduleRepository {
         ${visualEffectiveStartInstant}::int[],
         ${visualEffectiveFinishInstant}::int[],
         ${lateStartInstant}::int[],
-        ${lateFinishInstant}::int[]
+        ${lateFinishInstant}::int[],
+        ${totalFloatMinutes}::int[]
       ) AS v(
         id, early_start, early_finish, late_start, late_finish,
         total_float, free_float, is_critical, is_near_critical, constraint_violated,
@@ -1047,7 +1054,7 @@ export class ScheduleRepository {
         visual_conflict, visual_drift_days, remaining_float, visual_conflict_reason, leveled_start,
         leveled_finish, leveling_delay_minutes, leveling_window_exceeded, self_over_allocated,
         derived_duration_minutes, visual_effective_start_instant, visual_effective_finish_instant,
-        late_start_instant, late_finish_instant
+        late_start_instant, late_finish_instant, total_float_minutes
       )
       WHERE a.id = v.id
         AND a.plan_id = ${planId}::uuid

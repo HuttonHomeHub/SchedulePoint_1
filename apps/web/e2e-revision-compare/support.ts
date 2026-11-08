@@ -157,6 +157,96 @@ export async function seedRevision(
   return { enteringName: 'Cladding', leavingName: 'Frame', removedName: 'Site hoarding' };
 }
 
+export interface SeededFloatFrame {
+  /** Off the critical path at capture and on it afterwards, with exactly the float it had. */
+  unmovedName: string;
+}
+
+/**
+ * Seed a plan whose **working day changes and nothing else moves**, then make one activity enter
+ * the critical path without its float changing — the case a day-column comparison reads as float
+ * movement (`docs/TECH_DEBT.md` #318, ADR-0214).
+ *
+ * ```
+ *   at capture:   an eight-hour calendar, a 12 d spine and a 7 d branch that floats 5 d (2,400 min)
+ *   after:        the calendar's hours-per-day edited to 7 and the plan recalculated: the branch
+ *                 still floats 2,400 minutes, which now rounds to 6 d on its own calendar
+ *                 (the baseline froze 5 d)
+ *                 the critical-float threshold raised to 2,400 min, so the branch ENTERS the
+ *                 critical path with its float exactly as it was
+ * ```
+ *
+ * So the comparison must read the branch as **entered, float unchanged**: the day columns disagree
+ * (5 against 6) and the minutes agree. The threshold is what puts the row in a list at all — an
+ * unmoved float that never changed criticality is not in any row the panel shows.
+ *
+ * Seeds through the API and does NOT reload; its caller does (`docs/TECH_DEBT.md` #208).
+ */
+export async function seedFloatFrame(
+  page: Page,
+  orgSlug: string,
+  planId: string,
+): Promise<SeededFloatFrame> {
+  await page.evaluate(
+    async ({ slug, planId }) => {
+      const call = async (path: string, method: string, body?: unknown) => {
+        const res = await fetch(`/api/v1/organizations/${slug}${path}`, {
+          method,
+          headers: { 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        if (!res.ok) throw new Error(`${method} ${path} ${String(res.status)}`);
+        return res.status === 204 ? null : ((await res.json()) as { data: unknown }).data;
+      };
+      const versionOf = async (path: string): Promise<number> =>
+        ((await call(path, 'GET')) as { version: number }).version;
+
+      const calendar = (await call('/calendars', 'POST', {
+        name: 'Eight hour week',
+        shifts: [0, 1, 2, 3, 4].map((weekday) => ({
+          weekday,
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+        })),
+      })) as { id: string; version: number };
+      await call(`/plans/${planId}`, 'PATCH', {
+        calendarId: calendar.id,
+        version: await versionOf(`/plans/${planId}`),
+      });
+
+      const act = (name: string, durationDays: number) =>
+        call(`/plans/${planId}/activities`, 'POST', { name, durationDays }) as Promise<{
+          id: string;
+        }>;
+      const spine = await act('Spine', 12);
+      const branch = await act('Unmoved branch', 7);
+      const end = await act('Handover', 1);
+      for (const predecessorId of [spine.id, branch.id]) {
+        await call(`/plans/${planId}/dependencies`, 'POST', {
+          predecessorId,
+          successorId: end.id,
+        });
+      }
+      await call(`/plans/${planId}/schedule/recalculate`, 'POST');
+      await call(`/plans/${planId}/baselines`, 'POST', { name: 'Before the day changed' });
+
+      // The day gets shorter; no shift moves, so no working minute is added or lost.
+      await call(`/calendars/${calendar.id}`, 'PATCH', {
+        hoursPerDay: 7,
+        version: await versionOf(`/calendars/${calendar.id}`),
+      });
+      await call(`/plans/${planId}`, 'PATCH', {
+        criticalPathDefinition: 'TOTAL_FLOAT',
+        criticalFloatThresholdMinutes: 5 * 480,
+        version: await versionOf(`/plans/${planId}`),
+      });
+      await call(`/plans/${planId}/schedule/recalculate`, 'POST');
+    },
+    { slug: orgSlug, planId },
+  );
+  return { unmovedName: 'Unmoved branch' };
+}
+
 export interface SeededCrossPlanPair {
   /** The OTHER plan's name — what a planner picks under **Compare with**. */
   otherPlanName: string;

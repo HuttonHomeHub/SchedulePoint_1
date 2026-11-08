@@ -127,6 +127,11 @@ baseline reports as its captured durations and float. So `baselines.hours_per_da
 at freeze, by the same argument that decision already made. This was not in the brief; it is not
 optional if the snapshot property is to survive.
 
+> **Amended by [ADR-0214](./0214-a-frozen-float-carries-its-minutes.md) (2026-11-08).** The factor froze
+> the baseline's _durations_ and float, but a float frozen as a rounded day cannot be re-framed, so a
+> comparison across a later hours-per-day edit still read as movement. The baseline now also freezes the
+> float in working minutes, and every comparison subtracts minutes and converts once on this frozen factor.
+
 ### 6. Changing hours-per-day does **not** rewrite stored durations
 
 The minutes are the truth. Rewriting them on a calendar edit would move dates for every activity on

@@ -52,8 +52,24 @@ export class BaselineVarianceRowResponseDto implements BaselineVarianceRow {
   @ApiProperty({ nullable: true, type: Number, description: 'Working days (positive = behind).' })
   finishVarianceDays!: number | null;
 
-  @ApiProperty({ nullable: true, type: Number, description: 'current − baseline float (days).' })
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'current − baseline total float in whole days, derived from `floatVarianceMinutes` on the ' +
+      'baseline’s frozen working day (ADR-0214). Null when not comparable, never 0.',
+  })
   floatVarianceDays!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'current − baseline total float in working minutes, exact. Null when the activity is not in ' +
+      'the baseline, was removed, or either side’s float has no minutes (a baseline captured, or a ' +
+      'plan last recalculated, before minutes were stored) — counted in `floatNotComparableCount`.',
+  })
+  floatVarianceMinutes!: number | null;
 }
 
 /** The plan-level variance roll-up returned in `meta` (ADR-0025). */
@@ -95,4 +111,11 @@ export class PlanVarianceSummaryResponseDto implements PlanVarianceSummary {
       'were recorded. Every row’s dated fields and start/finish variances are on this basis.',
   })
   basis!: VarianceBasis | null;
+
+  @ApiProperty({
+    description:
+      'Activities in the baseline and live whose float was calculated on both sides but has no ' +
+      'minutes on one, so `floatVarianceDays` is null for them (ADR-0214). 0 with no active baseline.',
+  })
+  floatNotComparableCount!: number;
 }

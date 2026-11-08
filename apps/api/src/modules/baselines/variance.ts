@@ -3,6 +3,8 @@ import type { BaselineVarianceRow } from '@repo/types';
 import { MINUTES_PER_DAY } from '../schedule/day-compat-calendar';
 import type { WorkingTimeCalendar } from '../schedule/engine';
 
+import { compareFloat, floatDaysOnFrame } from './float-movement';
+
 /** A baseline snapshot row projected to the fields variance needs (dates as `YYYY-MM-DD`). */
 export interface VarianceBaselineRow {
   sourceActivityId: string;
@@ -11,6 +13,8 @@ export interface VarianceBaselineRow {
   baselineStart: string | null;
   baselineFinish: string | null;
   totalFloat: number | null;
+  /** Unrounded working minutes (#318); NULL beside a set `totalFloat` is not comparable. */
+  totalFloatMinutes: number | null;
 }
 
 /**
@@ -28,6 +32,8 @@ export interface VarianceLiveRow {
   start: string | null;
   finish: string | null;
   totalFloat: number | null;
+  /** Unrounded working minutes (#318); NULL beside a set `totalFloat` is not comparable. */
+  totalFloatMinutes: number | null;
 }
 
 /** The plan-level roll-up computed alongside the rows (the summary lacks the baseline identity). */
@@ -36,6 +42,11 @@ export interface VarianceRollup {
   behindCount: number;
   addedCount: number;
   removedCount: number;
+  /**
+   * Activities in the baseline and live whose float was calculated on both sides but has no minutes
+   * on one (ADR-0214): their `floatVarianceDays` is null and they are counted here, never read as 0.
+   */
+  floatNotComparableCount: number;
 }
 
 export interface VarianceResult {
@@ -66,7 +77,8 @@ function workingDiff(
  * baseline's snapshot on `sourceActivityId` and computes start/finish/float variance in
  * **working days** on the plan's calendar. The sign convention is **positive = current
  * later than baseline (behind schedule)**; `floatVarianceDays = current − baseline`
- * total float (positive = more float now). A live activity added after capture is
+ * total float, compared in minutes and converted once on the baseline's frozen day length
+ * (positive = more float now). A live activity added after capture is
  * `inBaseline: false` (variance null); a baselined activity no longer live is a
  * `removed: true` row (current fields null). Live rows keep their input order; removed
  * rows follow.
@@ -92,6 +104,7 @@ export function computeVariance(
   let worstFinishSlipDays: number | null = null;
   let behindCount = 0;
   let addedCount = 0;
+  let floatNotComparableCount = 0;
 
   for (const live of liveRows) {
     const base = baselineById.get(live.id) ?? null;
@@ -101,10 +114,19 @@ export function computeVariance(
     const finishVarianceDays = base
       ? workingDiff(calendar, base.baselineFinish, live.finish, dayFactorMinutes)
       : null;
-    const floatVarianceDays =
-      base && live.totalFloat !== null && base.totalFloat !== null
-        ? live.totalFloat - base.totalFloat
-        : null;
+    // Float is compared in MINUTES and converted once, on the frame the start/finish variance above
+    // already uses (ADR-0214): subtracting two day figures, each rounded on its own day length,
+    // reported a calendar edit as float movement.
+    const floatComparison = base
+      ? compareFloat(
+          { days: base.totalFloat, minutes: base.totalFloatMinutes },
+          { days: live.totalFloat, minutes: live.totalFloatMinutes },
+        )
+      : null;
+    const floatVarianceMinutes =
+      floatComparison?.kind === 'COMPARABLE' ? floatComparison.movementMinutes : null;
+    const floatVarianceDays = floatDaysOnFrame(floatVarianceMinutes, dayFactorMinutes);
+    if (floatComparison?.kind === 'NOT_COMPARABLE') floatNotComparableCount += 1;
 
     if (base === null) addedCount += 1;
     if (finishVarianceDays !== null && finishVarianceDays > 0) {
@@ -129,6 +151,7 @@ export function computeVariance(
       startVarianceDays,
       finishVarianceDays,
       floatVarianceDays,
+      floatVarianceMinutes,
     });
   }
 
@@ -151,8 +174,12 @@ export function computeVariance(
       startVarianceDays: null,
       finishVarianceDays: null,
       floatVarianceDays: null,
+      floatVarianceMinutes: null,
     });
   }
 
-  return { rows, rollup: { worstFinishSlipDays, behindCount, addedCount, removedCount } };
+  return {
+    rows,
+    rollup: { worstFinishSlipDays, behindCount, addedCount, removedCount, floatNotComparableCount },
+  };
 }

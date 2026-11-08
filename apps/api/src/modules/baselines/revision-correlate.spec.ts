@@ -18,6 +18,7 @@ const row = (over: Partial<RevisionRow> & Pick<RevisionRow, 'activityId'>): Revi
   durationMinutes: 480,
   isCritical: false,
   totalFloatDays: 0,
+  totalFloatMinutes: 0,
   earlyStart: '2026-01-05',
   earlyFinish: '2026-01-06',
   laneIndex: 0,

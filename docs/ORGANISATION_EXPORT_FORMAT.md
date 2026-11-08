@@ -1,7 +1,7 @@
 # The organisation export format
 
 - **Format name:** `schedulepoint.organisation-export`
-- **Version:** `2.4`
+- **Version:** `2.5`
 - **Decision:** [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **Produced by:** the Org Admin's **Export data** (built in the milestones after this document; spec in
   [`specs/organisation-export/`](specs/organisation-export/feature-spec.md)).
@@ -47,7 +47,8 @@ file is present even when it has no rows: its JSON is `[]` and its CSV is a head
   rate such as a resource's `costPerUnit` is a decimal in the same unit. A plan with no currency states none.
 - **Units are in the name.** Every duration, lag, float and delay column ends in `Minutes` or `Days`, and the
   Notes column of each table says which. A float is stored in working days on the
-  activity's own calendar, so it is `totalFloatDays`, not `totalFloat` and not minutes.
+  activity's own calendar, so it is `totalFloatDays`, not `totalFloat` and not minutes. Since `2.5`
+  total float is also given unrounded in working minutes, as `totalFloatMinutes`.
 - **Finish dates** (`earlyFinish`, `lateFinish`, `actualFinish`, `endDate` and the like) are the **inclusive
   last day**: the day the work finishes on, not the day after.
 - **Computed and layout columns** (early and late dates, float, criticality, lane and placement columns) are
@@ -94,7 +95,7 @@ version.
 ```json
 {
   "format": "schedulepoint.organisation-export",
-  "formatVersion": "2.4",
+  "formatVersion": "2.5",
   "generatedAt": "2026-10-14T09:30:00.000Z",
   "generator": { "product": "SchedulePoint", "apiVersion": "0.93.0" },
   "organization": { "id": "…", "slug": "acme", "name": "Acme" },
@@ -145,6 +146,15 @@ version.
 
 Changes since `1.0`:
 
+- **`2.5`** — two appended columns, both named `totalFloatMinutes`: on `activities`, total float in
+  working minutes on the activity's own calendar, unrounded; on `baseline-activities`, the same figure
+  copied when the baseline was captured. `totalFloatDays` is that value divided by a working day and
+  rounded, so after a calendar's hours per day change, compare minutes, not days. Empty where
+  `totalFloatDays` was calculated (or captured) before this column existed, or on a plan not
+  calculated since: that float cannot be compared in minutes, and empty never means 0. A `1.x` file
+  used the name `totalFloatMinutes` for what `2.0` renamed `totalFloatDays`; no `1.x` file was ever
+  downloaded, and this column holds real minutes. Nothing is renamed or retyped, so a reader written
+  for `2.4` reads `2.5`.
 - **`2.4`** — five appended columns. `activities.visualEffectiveStartInstant`, `.visualEffectiveFinishInstant`,
   `.lateStartInstant` and `.lateFinishInstant` hold the exact working instant each of those four dates is
   calculated from. Each is written in the plan's own clock time in UTC form, and no time-zone conversion
@@ -490,6 +500,7 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `visualEffectiveFinishInstant` | instant | the moment work stops, not the inclusive last day `visualEffectiveFinish` shows; since 2.4 |
 | `lateStartInstant`             | instant | exact working instant `lateStart` is calculated from; since 2.4                            |
 | `lateFinishInstant`            | instant | the moment work stops, not the inclusive last day `lateFinish` shows; since 2.4            |
+| `totalFloatMinutes`            | int     | minutes of working time, unrounded; empty (not 0) when calculated before 2.5; since 2.5    |
 
 Not exported: `version`, `deleteBatchId`.
 
@@ -687,6 +698,7 @@ Rows: every row of the organisation. Files `json/baseline-activities.json` and `
 | `codeValueId`             | text    | the activity's value of the baseline's code type at capture, empty for none or unrecorded (since 2.3) |
 | `codeLaneIndex`           | int     | its lane within that value's swimlane at capture, from 0; empty when unrecorded (since 2.3)           |
 | `codeLaneUpdatedAt`       | instant | when that lane was last written; empty when unrecorded (since 2.3)                                    |
+| `totalFloatMinutes`       | int     | minutes of working time, unrounded, as captured; empty (not 0) when captured before 2.5               |
 
 Not exported: `version`, `deleteBatchId`.
 

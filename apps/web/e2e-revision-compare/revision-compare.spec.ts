@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck, pressPromotable } from '../e2e-support/toolbar';
 
-import { createAndOpenPlan, onboard, openProject, seedRevision } from './support';
+import { createAndOpenPlan, onboard, openProject, seedFloatFrame, seedRevision } from './support';
 
 /**
  * **The Compare revisions journey** (revision M2-T4) — against a real API and a real database,
@@ -288,6 +288,66 @@ test('a planner compares a revision against live and reads what entered the crit
 
   // ── 9 · No axe violations on a POPULATED comparison ────────────────────────────────────────
   // Populated deliberately: an all-empty scan certifies nothing (the ADR-0116 M5 finding).
+  const scan = await new AxeBuilder({ page })
+    .include('[data-revision-compare-panel]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(scan.violations).toEqual([]);
+});
+
+/**
+ * **A working-day change is not float movement** (`docs/TECH_DEBT.md` #318, ADR-0214) — against the
+ * real route and a real database, because the claim is about numbers the API computes from stored
+ * minutes and the panel words, and neither half can be proved by a fixture handed to the other.
+ *
+ * The seeded activity entered the critical path with its float **exactly as it was** while the
+ * calendar's day length changed, so its two day figures differ (5 frozen, 6 live) and its minutes
+ * agree. A comparison that subtracted the day figures read "Float up 1 day" here.
+ */
+test('a planner changes the working day and the comparison reads float as unchanged', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openProject(page);
+  const planId = await createAndOpenPlan(page, 'Riverside programme');
+  const { unmovedName } = await seedFloatFrame(page, orgSlug, planId);
+  await page.reload();
+
+  await pressPromotable(page, {
+    id: 'compare-revisions',
+    via: 'analysis',
+    menuItem: 'Compare revisions…',
+  });
+  const panel = page.getByRole('region', { name: 'Compare revisions' });
+  await expect(panel).toBeVisible();
+  await panel.getByLabel('Earlier revision').selectOption({ label: 'Before the day changed' });
+
+  const entered = panel.getByRole('region', { name: /entered the critical path/i });
+  const row = entered.getByRole('button', { name: new RegExp(unmovedName) });
+  await expect(row).toBeVisible();
+  // Non-vacuity, stated in the same breath: the day columns DO differ, so this is the row an old
+  // subtraction would have worded as movement.
+  await expect(row).toContainText('5 d → 5 d');
+  await expect(row).toContainText('Float unchanged');
+  await expect(row).not.toContainText(/Float (up|down)/);
+
+  // Every float could be compared, so the quiet note is absent rather than present and empty.
+  await expect(panel.locator('[data-float-not-comparable]')).toHaveCount(0);
+
+  // The printed comparison says the same thing in the same words.
+  await page.evaluate(() => {
+    window.print = () => {};
+  });
+  await panel.getByRole('button', { name: 'Print comparison' }).click();
+  const printed = await page.evaluate(
+    () => document.querySelector('.tsld-print-container .revision-print')?.textContent ?? '',
+  );
+  expect(printed).toContain(unmovedName);
+  expect(printed).toContain('Float unchanged');
+  expect(printed).not.toMatch(/could not be compared/i);
+  expect(printed).not.toMatch(/Float (up|down)/);
+
   const scan = await new AxeBuilder({ page })
     .include('[data-revision-compare-panel]')
     .withTags(['wcag2a', 'wcag2aa'])

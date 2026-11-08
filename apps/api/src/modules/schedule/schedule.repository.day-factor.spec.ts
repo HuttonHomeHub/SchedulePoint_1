@@ -116,6 +116,36 @@ describe('writeResults — float is persisted in the activity’s own calendar d
     expect(twoNumberArrays).not.toContainEqual([1, 1]);
     void params;
   });
+
+  it('also persists the unrounded minutes, which no factor may touch (#318)', async () => {
+    const captured: unknown[][] = [];
+    const tx = {
+      $executeRaw: vi.fn((_s: unknown, ...args: unknown[]) => {
+        captured.push(args);
+        return Promise.resolve(2);
+      }),
+      $queryRaw: vi.fn(() => Promise.resolve([])),
+    };
+    const repo = new ScheduleRepository({} as unknown as PrismaService);
+
+    // 2,400 minutes: 5 days at 480, but round(2400/1440) = 2 at 1,440 — the day figure is lossy.
+    await repo.writeResults(
+      'org-1',
+      'plan-1',
+      [result('a-short', 2400), result('a-full', 2400)],
+      new Map([
+        ['a-short', 480],
+        ['a-full', 1440],
+      ]),
+      tx as never,
+    );
+
+    const args = captured[0]!;
+    expect(args[5], 'total_float is the 6th unnest argument').toEqual([5, 2]);
+    expect(args[29], 'total_float_minutes is the 30th, unrounded and factor-free').toEqual([
+      2400, 2400,
+    ]);
+  });
 });
 
 /**
