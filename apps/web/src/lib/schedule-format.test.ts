@@ -156,6 +156,6 @@ describe('float that cannot be compared (#318, ADR-0214)', () => {
 
   it('words the column note only when there is something to say', () => {
     expect(floatVarianceColumnNote(0)).toBeNull();
-    expect(floatVarianceColumnNote(3)).toBe('3 could not be compared');
+    expect(floatVarianceColumnNote(3)).toBe('3 not comparable');
   });
 });

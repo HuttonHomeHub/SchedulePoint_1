@@ -2,6 +2,7 @@ import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 
 import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
@@ -400,8 +401,8 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByText('−2 d float')).toBeInTheDocument();
   });
 
-  it('explains a float variance it could not compute, in the header and from the cell (#318)', () => {
-    renderWithVariance(
+  it('explains a float variance it could not compute, in the header and from the cell (#318)', async () => {
+    const { container } = renderWithVariance(
       varianceRow({
         currentTotalFloat: 5,
         baselineTotalFloat: 2,
@@ -409,19 +410,23 @@ describe('ActivitiesTable — baseline variance', () => {
         floatVarianceMinutes: null,
       }),
     );
+    expect((await axe(container)).violations).toEqual([]);
     // The description is VISIBLE text in the header, never a tooltip.
     const header = screen.getByRole('columnheader', { name: /Total float variance/ });
-    const note = within(header).getByText('1 could not be compared');
-    // The "—" cell points at it, so the dash is explained rather than read as "no change".
-    const cell = screen
-      .getAllByText('—')
-      .find((el) => el.getAttribute('aria-describedby') === note.id);
-    expect(cell).toBeDefined();
+    const note = within(header).getByText('1 not comparable');
+    // Visual only: the header's accessible name stays "Total float variance".
+    expect(note).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
+    // The "—" cell carries its own reason in text a screen reader reads, so the dash is explained
+    // rather than read as "no change".
+    const reason = screen.getByText('could not be compared');
+    expect(reason).toHaveClass('sr-only');
+    expect(reason.parentElement?.textContent).toBe('— could not be compared');
   });
 
   it('adds no header note when every float variance could be computed', () => {
     renderWithVariance(varianceRow());
-    expect(screen.queryByText(/could not be compared/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not comparable|could not be compared/)).not.toBeInTheDocument();
   });
 
   it('labels an activity added since capture (across the variance columns)', () => {

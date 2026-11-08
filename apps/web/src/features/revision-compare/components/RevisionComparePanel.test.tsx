@@ -256,6 +256,22 @@ describe('RevisionComparePanel', () => {
     expect(note).not.toHaveAttribute('aria-live');
   });
 
+  it('places the note directly under the view toggle and has no axe violations with it showing', async () => {
+    const { container } = renderPanel({
+      from: 'b1',
+      compare: comparison({
+        floatNotComparableCount: 4,
+        criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
+      }),
+    });
+    const note = container.querySelector('[data-float-not-comparable]');
+    expect(note).not.toBeNull();
+    // Ahead of every section it qualifies, not after them.
+    const entered = screen.getByRole('region', { name: /Entered the critical path/i });
+    expect(note?.compareDocumentPosition(entered)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect((await axe(container)).violations).toEqual([]);
+  });
+
   it('reads the basis-neutral date fields', () => {
     renderPanel({
       from: 'b1',
@@ -285,7 +301,7 @@ describe('RevisionComparePanel', () => {
         },
       }),
     });
-    expect(screen.getByText(/float movement unknown/i)).toBeInTheDocument();
+    expect(screen.getByText(/float change unknown/i)).toBeInTheDocument();
     expect(screen.queryByText(/float unchanged/i)).not.toBeInTheDocument();
   });
 
@@ -682,6 +698,18 @@ describe('the Changes view', () => {
     expect(container.querySelector('[data-float-not-comparable]')?.textContent).toMatch(
       /for 2 activities/,
     );
+  });
+
+  it('has no axe violations in the change list with the not-comparable note showing', async () => {
+    const { container } = renderPanel({
+      compare: { ...withChanges(), floatNotComparableCount: 2 },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const note = container.querySelector('[data-float-not-comparable]');
+    expect(note).not.toBeNull();
+    // Directly under the summary line, as the print puts it before both views.
+    expect(note?.previousElementSibling?.className).toMatch(/border-b/);
+    expect((await axe(container)).violations).toEqual([]);
   });
 
   it('renders a class it could not assess as a REASON, never as "no changes"', () => {

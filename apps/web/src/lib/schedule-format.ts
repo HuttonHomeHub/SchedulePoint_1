@@ -126,7 +126,7 @@ export function isFloatNotComparable(row: BaselineVarianceRow): boolean {
  * could take for "no change". The full explanation is the Compare revisions panel's note.
  */
 export function floatVarianceColumnNote(count: number): string | null {
-  return count <= 0 ? null : `${count} could not be compared`;
+  return count <= 0 ? null : `${count} not comparable`;
 }
 
 /** Finish variance — the headline comparison. Convenience wrapper over {@link formatDayVariance}. */

@@ -461,9 +461,11 @@ on both routes. Each moved row (`criticalPath.entered` and `.left`) carries `fro
 `toTotalFloatMinutes` and `floatMovementMinutes` (`to − from`, exact), and its `fromTotalFloatDays`,
 `toTotalFloatDays` and `floatMovementDays` are those minutes as whole days on **`dayFactorMinutes`** (the
 earlier revision's plan working day, the factor the completion movement is measured on). Each is `null`
-where its minutes are: a calculated float with no minutes on a side is **not comparable**, never `0` and
-never rescaled, and the top-level `floatNotComparableCount` counts the matched non-summary activities in
-that state (`0` when a side was never calculated). The rows are ordered by `floatMovementMinutes`. The
+where its minutes are, **even when that side's float was calculated in days**: a side with no minutes
+reads `null` days, and a calculated float with no minutes on a side is **not comparable**, never `0` and
+never rescaled. The top-level `floatNotComparableCount` is how a client tells that state from an
+unknown float; it counts the matched non-summary activities in
+that state (`0` when a side was never calculated or the plans share no activity codes). The rows are ordered by `floatMovementMinutes`. The
 `CRITICALITY` change-list class lists an activity when its `isCritical` flipped or its float in whole days
 on `dayFactorMinutes` differs, both sides holding minutes; its labels read `float 2 d (16 h)`,
 `critical · float 0 d (0 h)` or `float unknown`. A day-length edit that moves no date therefore moves no

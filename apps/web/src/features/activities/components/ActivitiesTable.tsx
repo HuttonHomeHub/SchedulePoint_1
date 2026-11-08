@@ -1,14 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, CalendarSummary } from '@repo/types';
 import { MoreHorizontal } from 'lucide-react';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 
 import {
@@ -484,9 +476,9 @@ export function ActivitiesTable({
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   // How many "Total float variance" cells read "—" for want of float minutes (ADR-0214), counted
-  // from the rows the table already holds. The visible line it drives names them, and each such
-  // cell points at it, so the dash is explained rather than left to read as "no change".
-  const floatNoteId = useId();
+  // from the rows the table already holds. The visible line it drives counts them and each such
+  // cell says so in text a screen reader reads, so the dash is explained rather than left to read
+  // as "no change".
   const floatNotComparableCount = useMemo(() => {
     if (!varianceByActivityId) return 0;
     let count = 0;
@@ -1087,7 +1079,10 @@ export function ActivitiesTable({
                 headerCell: () => (
                   <>
                     {header}
-                    <span id={floatNoteId} className="text-muted-foreground block text-xs">
+                    {/* Visual only: the header's accessible name stays "Total float variance", and
+                        each dash carries its own reason, so a screen reader meets the cause where
+                        the value is and not as a suffix on a column name. */}
+                    <span aria-hidden="true" className="text-muted-foreground block text-xs">
                       {floatNote}
                     </span>
                   </>
@@ -1098,13 +1093,11 @@ export function ActivitiesTable({
             if (!row) return <span className="text-muted-foreground">—</span>;
             const variance = formatDayVariance(row, field);
             return (
-              <span
-                className={VARIANCE_TONE_CLASS[variance.tone]}
-                {...(field === 'float' && floatNote !== null && isFloatNotComparable(row)
-                  ? { 'aria-describedby': floatNoteId }
-                  : {})}
-              >
+              <span className={VARIANCE_TONE_CLASS[variance.tone]}>
                 {variance.text}
+                {field === 'float' && isFloatNotComparable(row) ? (
+                  <span className="sr-only"> could not be compared</span>
+                ) : null}
               </span>
             );
           },
@@ -1168,7 +1161,6 @@ export function ActivitiesTable({
     noteCountByActivityId,
     varianceByActivityId,
     floatNotComparableCount,
-    floatNoteId,
     canEditSchedule,
     canReportProgress,
     onOpenLogic,

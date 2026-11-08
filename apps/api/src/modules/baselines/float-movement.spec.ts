@@ -40,6 +40,17 @@ describe('floatDaysOnFrame', () => {
     expect(floatDaysOnFrame(-960, 480)).toBe(-2);
   });
 
+  it('rounds half away from zero, so a lost half day mirrors a gained one', () => {
+    expect(floatDaysOnFrame(1200, 480)).toBe(3);
+    expect(floatDaysOnFrame(-1200, 480)).toBe(-3);
+  });
+
+  it('never returns negative zero', () => {
+    const days = floatDaysOnFrame(-192, 480);
+    expect(days).toBe(0);
+    expect(Object.is(days, -0)).toBe(false);
+  });
+
   it('keeps no minutes as null, never zero', () => {
     expect(floatDaysOnFrame(null, 480)).toBeNull();
   });

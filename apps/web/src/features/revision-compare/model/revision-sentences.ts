@@ -25,10 +25,14 @@ import type {
  * collapsing the distinction in the one channel a screen-reader user has.
  */
 
+// Built once: constructing an `Intl.NumberFormat` is not free and this runs per row. The runtime
+// locale, not a hard-coded one, so a decimal separator reads the way the planner's others do
+// (the same choice `formatBytes` makes); at most one decimal, so a whole number of hours has none.
+const HOURS_FORMAT = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
+
 /** Whole hours, or one decimal when the minutes are not a whole number of hours. */
 function hoursText(minutes: number): string {
-  const hours = Math.abs(minutes) / 60;
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return HOURS_FORMAT.format(Math.abs(minutes) / 60);
 }
 
 /**
@@ -47,7 +51,7 @@ export function floatMovementPhrase(row: {
   floatMovementMinutes: number | null;
 }): string {
   const { floatMovementDays: days, floatMovementMinutes: minutes } = row;
-  if (days === null || minutes === null) return 'Float movement unknown';
+  if (days === null || minutes === null) return 'Float change unknown';
   if (minutes === 0) return 'Float unchanged';
   const direction = minutes > 0 ? 'up' : 'down';
   if (days === 0) return `Float ${direction} ${hoursText(minutes)} h`;
@@ -61,24 +65,68 @@ export function floatDaysText(days: number | null): string {
   return days === null ? 'unknown' : `${days} d`;
 }
 
+function signedHoursText(minutes: number): string {
+  return `${minutes < 0 ? '−' : ''}${hoursText(minutes)}`;
+}
+
+/**
+ * Both sides' float for a row, as the "from → to" pair.
+ *
+ * When the two day figures read the same but the minutes moved, the days alone would print
+ * "5 d → 5 d" beside "Float down 4 h" — a movement the pair contradicts. In that case each side
+ * carries its hours ("5 d (40 h) → 5 d (36 h)"), so the pair and the phrase agree. Panel and print
+ * both read this, so the two artefacts cannot word it differently.
+ */
+export function floatPairTexts(row: {
+  fromTotalFloatDays: number | null;
+  toTotalFloatDays: number | null;
+  fromTotalFloatMinutes: number | null;
+  toTotalFloatMinutes: number | null;
+}): { from: string; to: string } {
+  const { fromTotalFloatMinutes: fromMin, toTotalFloatMinutes: toMin } = row;
+  const from = floatDaysText(row.fromTotalFloatDays);
+  const to = floatDaysText(row.toTotalFloatDays);
+  if (
+    row.fromTotalFloatDays !== null &&
+    row.fromTotalFloatDays === row.toTotalFloatDays &&
+    fromMin !== null &&
+    toMin !== null &&
+    fromMin !== toMin
+  ) {
+    return {
+      from: `${from} (${signedHoursText(fromMin)} h)`,
+      to: `${to} (${signedHoursText(toMin)} h)`,
+    };
+  }
+  return { from, to };
+}
+
 /**
  * The quiet note for float that could not be compared, or `null` at zero — silence is right when
  * every float could be compared, and a line saying so on every comparison trains a reader to skip
  * the place the note will appear (ADR-0214, ADR-0127's count-what-you-cannot-draw shape).
  *
- * A standing condition, not an event (ADR-0132): it is text on the page and is never announced.
+ * A standing condition, not an event (ADR-0132): it is text on the page, and the announcement
+ * carries only the short {@link floatNotComparableClause}.
  */
 export function floatNotComparableNote(count: number): string | null {
   if (count <= 0) return null;
   const subject =
     count === 1
-      ? 'Float could not be compared for 1 activity. Its float was calculated before float minutes were stored'
-      : `Float could not be compared for ${count} activities. Their float was calculated before float minutes were stored`;
+      ? 'Float could not be compared for 1 activity.'
+      : `Float could not be compared for ${count} activities.`;
   return (
-    `${subject}, so a change of working day cannot be told from a change of float, and it is ` +
-    'left out of the float figures here. Recalculating the plan updates the live side; an ' +
-    'earlier baseline cannot be updated.'
+    `${subject} They were calculated or captured before this version recorded float exactly, so ` +
+    'a change of working day cannot be told apart from a change of float. They are left out of ' +
+    'the float movement here. Recalculating the plan refreshes the current side; an earlier ' +
+    'baseline stays as it was captured.'
   );
+}
+
+/** The short spoken form of the same fact, appended to the settled-comparison announcement. */
+export function floatNotComparableClause(count: number): string | null {
+  if (count <= 0) return null;
+  return `Float could not be compared for ${count} ${count === 1 ? 'activity' : 'activities'}.`;
 }
 
 /** How a side is named in running prose. The live side is LABELLED as live, never left blank. */
@@ -268,7 +316,10 @@ export function comparisonAnnouncement(
    */
   const coverage = 'correlation' in compare ? `${correlationSentence(compare.correlation)} ` : '';
   const unavailable = criticalPathUnavailable(compare.criticalPath.notAssessableReason);
-  if (unavailable !== null) return `${coverage}${unavailable}`;
+  const floatClause = floatNotComparableClause(compare.floatNotComparableCount);
+  const withFloat = (text: string): string =>
+    floatClause === null ? text : `${text} ${floatClause}`;
+  if (unavailable !== null) return withFloat(`${coverage}${unavailable}`);
   const { enteredTotal, leftTotal, addedTotal, removedTotal } = compare.criticalPath;
   const parts: string[] = [];
   // **Every count is the server's TRUE total, never a returned array's length.** All four row sets
@@ -296,7 +347,7 @@ export function comparisonAnnouncement(
   ]
     .filter((c): c is string => c !== null)
     .join(' ');
-  return caveats === '' ? headline : `${headline} ${caveats}`;
+  return withFloat(caveats === '' ? headline : `${headline} ${caveats}`);
 }
 
 /** "Showing 200 of 412" — the cap and the true total both from the payload, never a local constant. */

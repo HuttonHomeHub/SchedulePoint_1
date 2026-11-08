@@ -15,7 +15,7 @@ import {
   completionSentence,
   comparisonAnnouncement,
   criticalPathUnavailable,
-  floatDaysText,
+  floatPairTexts,
   floatMovementPhrase,
   floatNotComparableNote,
   frameSentence,
@@ -146,6 +146,7 @@ export function RevisionComparePanel({
   onComparePlanChange,
 }: RevisionComparePanelProps): React.ReactElement {
   const announce = useAnnounce();
+  const floatNote = compare ? floatNotComparableNote(compare.floatNotComparableCount) : null;
   /**
    * Which reading of the comparison is showing. Resets to the delta whenever a new comparison
    * settles is DELIBERATELY not done: a planner who switched to Changes and then changed one side
@@ -607,6 +608,11 @@ export function RevisionComparePanel({
                   />
                 ) : (
                   <>
+                    {floatNote === null ? null : (
+                      <p data-float-not-comparable className="text-muted-foreground text-xs">
+                        {floatNote}
+                      </p>
+                    )}
                     {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
                       <p className="text-muted-foreground text-sm">
                         {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
@@ -646,12 +652,6 @@ export function RevisionComparePanel({
                           )}
                         </p>
                       </>
-                    )}
-
-                    {floatNotComparableNote(compare.floatNotComparableCount) === null ? null : (
-                      <p data-float-not-comparable className="text-muted-foreground text-xs">
-                        {floatNotComparableNote(compare.floatNotComparableCount)}
-                      </p>
                     )}
 
                     {compare.criticalPath.addedTotal > 0 ||
@@ -757,6 +757,7 @@ function MovedRow({
   row: RevisionMovedActivity | CrossPlanMovedActivity;
   onActivate: (activityId: string) => void;
 }): React.ReactElement {
+  const pair = floatPairTexts(row);
   const detail = (
     <>
       <span>{row.name}</span>
@@ -767,7 +768,7 @@ function MovedRow({
       <span className="text-muted-foreground block text-xs">
         {floatMovementPhrase(row)}
         {' · '}
-        {floatDaysText(row.fromTotalFloatDays)} → {floatDaysText(row.toTotalFloatDays)}
+        {pair.from} → {pair.to}
         {row.toStart === null && row.toFinish === null
           ? null
           : ` · now ${row.toStart ?? '—'} to ${row.toFinish ?? '—'}`}

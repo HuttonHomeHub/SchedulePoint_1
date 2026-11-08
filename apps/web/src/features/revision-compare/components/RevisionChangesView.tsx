@@ -216,6 +216,7 @@ export function RevisionChangesView({
 }: RevisionChangesViewProps): React.ReactElement {
   const announce = useAnnounce();
   const footerId = useId();
+  const floatNote = floatNotComparableNote(floatNotComparableCount);
 
   // Once per settled report, never per render — the ADR-0079 stale-debounce lesson: a re-render
   // must not re-arm the message, or a later one overwrites it four jumps in.
@@ -249,6 +250,11 @@ export function RevisionChangesView({
       <p className="text-muted-foreground border-b pb-2 text-xs">
         {changesAnnouncement(report.classes)}
       </p>
+      {floatNote === null ? null : (
+        <p data-float-not-comparable className="text-muted-foreground text-xs">
+          {floatNote}
+        </p>
+      )}
       {report.classes.map((assessment) => (
         <ClassSection
           key={assessment.changeClass}
@@ -257,11 +263,6 @@ export function RevisionChangesView({
           otherPlanName={otherPlanName}
         />
       ))}
-      {floatNotComparableNote(floatNotComparableCount) === null ? null : (
-        <p data-float-not-comparable className="text-muted-foreground text-xs">
-          {floatNotComparableNote(floatNotComparableCount)}
-        </p>
-      )}
       <p id={footerId} className="text-muted-foreground border-t pt-2 text-xs">
         {CHANGES_FOOTER}
       </p>

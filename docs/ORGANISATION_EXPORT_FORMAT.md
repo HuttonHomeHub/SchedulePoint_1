@@ -469,7 +469,7 @@ Rows: every row of the organisation. Files `json/activities.json` and `csv/activ
 | `earlyFinish`                  | date    | inclusive last day                                                                         |
 | `lateStart`                    | date    |                                                                                            |
 | `lateFinish`                   | date    | inclusive last day                                                                         |
-| `totalFloatDays`               | int     | working days                                                                               |
+| `totalFloatDays`               | int     | working days; the unrounded value is `totalFloatMinutes` (since 2.5, below)                |
 | `freeFloatDays`                | int     | working days                                                                               |
 | `isCritical`                   | boolean |                                                                                            |
 | `isNearCritical`               | boolean |                                                                                            |
@@ -672,7 +672,7 @@ Rows: every row of the organisation. Files `json/baseline-activities.json` and `
 | `baselineFinish`          | date    | inclusive last day                                                                                    |
 | `lateStart`               | date    |                                                                                                       |
 | `lateFinish`              | date    | inclusive last day                                                                                    |
-| `totalFloatDays`          | int     | working days                                                                                          |
+| `totalFloatDays`          | int     | working days; the unrounded value is `totalFloatMinutes` (since 2.5, below)                           |
 | `isCritical`              | boolean |                                                                                                       |
 | `budgetedCost`            | bigint  |                                                                                                       |
 | `budgetedExpense`         | bigint  |                                                                                                       |

@@ -262,7 +262,7 @@ describe('the printed revision comparison', () => {
     );
     const cells = [...container.querySelectorAll('tbody td')].map((c) => c.textContent);
     expect(cells).toContain('Float down 2 days (16 h)');
-    expect(cells).toContain('Float movement unknown');
+    expect(cells).toContain('Float change unknown');
     const text = container.textContent ?? '';
     expect(text.match(/Float could not be compared for 2 activities/g)).toHaveLength(1);
   });

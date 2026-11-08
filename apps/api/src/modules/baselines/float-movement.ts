@@ -35,9 +35,12 @@ export function compareFloat(from: FloatSide, to: FloatSide): FloatComparison {
 
 /**
  * Minutes as whole days on `frameMinutes` (the earlier revision's plan working day), or null when
- * there are no minutes. The one conversion every surface shares; `Math.round` is the rounding
- * `computeVariance` already applies to its working-day spans.
+ * there are no minutes. The one conversion every surface shares. Half rounds **away from zero**,
+ * so +2.5 and −2.5 days are 3 and −3: `Math.round` rounds half toward +∞ and would read a lost
+ * half day as −2 where a gained one reads +3. A small negative is `0`, never `-0`.
  */
 export function floatDaysOnFrame(minutes: number | null, frameMinutes: number): number | null {
-  return minutes === null ? null : Math.round(minutes / frameMinutes);
+  if (minutes === null) return null;
+  const days = Math.sign(minutes) * Math.round(Math.abs(minutes) / frameMinutes);
+  return days === 0 ? 0 : days;
 }

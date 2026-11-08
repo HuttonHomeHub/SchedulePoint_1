@@ -8,7 +8,9 @@ import {
   comparisonAnnouncement,
   floatDaysText,
   floatMovementPhrase,
+  floatNotComparableClause,
   floatNotComparableNote,
+  floatPairTexts,
   settingsCaveat,
   sideLabel,
   sideTitle,
@@ -182,10 +184,46 @@ describe('float movement in words (#318, ADR-0214)', () => {
   });
 
   it('states an unknown movement as unknown and never as unchanged', () => {
-    expect(phrase(null, null)).toBe('Float movement unknown');
+    expect(phrase(null, null)).toBe('Float change unknown');
     expect(phrase(null, null)).not.toMatch(/unchanged/i);
     expect(floatDaysText(null)).toBe('unknown');
     expect(floatDaysText(0)).toBe('0 d');
+  });
+});
+
+describe('floatPairTexts', () => {
+  const pair = (fd: number | null, td: number | null, fm: number | null, tm: number | null) =>
+    floatPairTexts({
+      fromTotalFloatDays: fd,
+      toTotalFloatDays: td,
+      fromTotalFloatMinutes: fm,
+      toTotalFloatMinutes: tm,
+    });
+
+  it('shows days alone when the days differ or the minutes agree', () => {
+    expect(pair(5, 3, 2400, 1440)).toEqual({ from: '5 d', to: '3 d' });
+    expect(pair(5, 5, 2400, 2400)).toEqual({ from: '5 d', to: '5 d' });
+    expect(pair(null, 3, null, 1440)).toEqual({ from: 'unknown', to: '3 d' });
+  });
+
+  it('adds the hours to both sides when the days read the same but the minutes moved', () => {
+    expect(pair(5, 5, 2400, 2160)).toEqual({ from: '5 d (40 h)', to: '5 d (36 h)' });
+    expect(pair(0, 0, -30, -90)).toEqual({ from: '0 d (−0.5 h)', to: '0 d (−1.5 h)' });
+  });
+});
+
+describe('floatNotComparableClause and the announcement', () => {
+  it('is null at zero and speaks a short clause otherwise', () => {
+    expect(floatNotComparableClause(0)).toBeNull();
+    expect(floatNotComparableClause(1)).toBe('Float could not be compared for 1 activity.');
+    expect(floatNotComparableClause(3)).toBe('Float could not be compared for 3 activities.');
+  });
+
+  it('appends the clause to the settled-comparison announcement only when there is a count', () => {
+    expect(comparisonAnnouncement(compare())).not.toMatch(/Float could not be compared/);
+    expect(comparisonAnnouncement({ ...compare(), floatNotComparableCount: 2 })).toMatch(
+      /Float could not be compared for 2 activities\.$/,
+    );
   });
 });
 
@@ -198,5 +236,6 @@ describe('floatNotComparableNote', () => {
     expect(floatNotComparableNote(1)).toMatch(/^Float could not be compared for 1 activity\./);
     expect(floatNotComparableNote(3)).toMatch(/for 3 activities\./);
     expect(floatNotComparableNote(3)).toMatch(/Recalculating the plan/);
+    expect(floatNotComparableNote(3)).not.toMatch(/minutes were stored/);
   });
 });

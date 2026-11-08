@@ -398,7 +398,8 @@ export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
   @ApiProperty({
     description:
       'Matched activities whose float was calculated on both sides but has no minutes on at ' +
-      'least one, so their float movement is null (ADR-0214). 0 when a side was never calculated.',
+      'least one, so their float movement is null (ADR-0214). 0 when a side was never calculated ' +
+      'or when notAssessableReason is NO_COMMON_CODES.',
   })
   floatNotComparableCount!: number;
 
