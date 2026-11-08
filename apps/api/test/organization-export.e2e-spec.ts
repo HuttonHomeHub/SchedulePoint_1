@@ -991,9 +991,10 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       // A row with no day figure was never calculated: its minutes are empty, never 0. A calculated
       // row carries whole minutes (the recalculation writes them since #318 T2) or empty.
       for (const r of rows.filter((row) => row.id !== id)) {
-        if (r.totalFloatDays === null) expect(r.totalFloatMinutes, `${file} ${r.id}`).toBeNull();
+        if (r.totalFloatDays === null)
+          expect(r.totalFloatMinutes, `${file} ${String(r.id)}`).toBeNull();
         else if (r.totalFloatMinutes !== null)
-          expect(Number.isInteger(r.totalFloatMinutes), `${file} ${r.id}`).toBe(true);
+          expect(Number.isInteger(r.totalFloatMinutes), `${file} ${String(r.id)}`).toBe(true);
       }
     }
   });
