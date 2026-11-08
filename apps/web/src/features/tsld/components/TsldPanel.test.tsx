@@ -6,15 +6,13 @@ import { TsldPanel } from './TsldPanel';
 
 import { anActivity } from '@/test/activity-fixture';
 
-// This file exercises the M1 read-only surface, so it pins the editing flag OFF
-// (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
-// surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
-// Canvas-first authoring also defaults ON now (it mounts a drawable canvas in place of
+// This file exercises the M1 read-only surface; the editing surface is covered by
+// TsldPanel.editing.test.tsx. Canvas-first authoring defaults ON (it mounts a drawable canvas in place of
 // the empty/recalc-prompt states), so pin it OFF too; its behaviour is covered by
 // TsldPanel.authoring.test.tsx.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: false, CANVAS_AUTHORING_ENABLED: false };
+  return { ...actual, CANVAS_AUTHORING_ENABLED: false };
 });
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -102,21 +100,6 @@ describe('TsldPanel', () => {
     expect(legend).toHaveTextContent('Driving link');
     expect(legend).toHaveTextContent('Non-driving link');
     expect(legend).toHaveTextContent('Constraint');
-  });
-
-  it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
-    render(
-      <TsldPanel
-        activities={[activity()]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={() => Promise.resolve({ recalcConflict: null })}
-      />,
-    );
-    // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).
-    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
   });
 
   it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {

@@ -30,7 +30,6 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  */
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

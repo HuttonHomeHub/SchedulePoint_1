@@ -236,7 +236,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
 
 /**
  * A light-forced painter palette for the **export & print** deliverables (spec
- * `docs/specs/export-print/`, behind `VITE_EXPORT_PRINT`). Extends {@link TsldPalette} (so it drops
+ * `docs/specs/export-print/`). Extends {@link TsldPalette} (so it drops
  * straight into `paintScene`) with the three surface colours the off-screen export composites around
  * the diagram — the paper `ground`, the title `ink`, and the muted subtitle `mutedInk`.
  */

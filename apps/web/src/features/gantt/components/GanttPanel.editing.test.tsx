@@ -189,7 +189,6 @@ describe('on a plan that has not been calculated', () => {
             key,
             activity: { type: 'TASK' },
             gating: deriveActivityEditorGating({
-              penManaged: true,
               holdsPen: true,
               canWrite: true,
               canProgress: true,

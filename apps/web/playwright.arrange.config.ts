@@ -76,8 +76,6 @@ export default defineConfig({
             timeout: 120_000,
             env: {
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               VITE_SCHEDULE_INTERCHANGE: 'true',
             },
           },

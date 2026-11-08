@@ -43,7 +43,6 @@ const CALLBACKS = {
  */
 function pen(over: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: {
       state: 'FREE',
       holder: null,

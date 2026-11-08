@@ -50,7 +50,6 @@ function renderTable(rows: Partial<ActivitySummary>[], canEditSchedule = true) {
         // carries no sentence to shade *with*. Passing it means this suite exercises the path that
         // ships instead of a fallback production never takes.
         editorGating={deriveActivityEditorGating({
-          penManaged: true,
           holdsPen: canEditSchedule,
           canWrite: true,
           canProgress: false,

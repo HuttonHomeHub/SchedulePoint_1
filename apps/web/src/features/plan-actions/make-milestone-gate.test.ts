@@ -16,7 +16,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
  * sentence would be one nobody ships.
  */
 const OPEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -25,7 +24,6 @@ const OPEN = deriveActivityEditorGating({
 
 /** A Planner who does not hold the pen. */
 const NO_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,
@@ -34,7 +32,6 @@ const NO_PEN = deriveActivityEditorGating({
 
 /** A Viewer: the role cannot write. */
 const NO_ROLE = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: false,
   canProgress: false,

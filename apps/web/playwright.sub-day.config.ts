@@ -65,10 +65,6 @@ export default defineConfig({
               // The legacy stacked plan page, not the canvas workspace: this suite is about two
               // FIELDS and two table columns, and driving them through a canvas would add a dozen
               // reasons to fail for something the epic is not about.
-              // The pen must be real, because every write here is pen-gated (ADR-0028) and a
-              // duration that saves without the lock is not the thing being tested.
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_TSLD_EDITING: 'true',
               // The tabbed editor, which is what every shipped bundle contains. This suite pinned
               // it OFF until the dialog-unification epic, so it proved the duration field on a
               // surface no operator can produce (ADR-0088 D1: a `VITE_` flag is inlined at build

@@ -20,14 +20,13 @@ vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    TSLD_EDITING_ENABLED: true,
     CANVAS_DIRECT_MANIPULATION_ENABLED: false,
     CANVAS_MULTI_SELECT_ENABLED: true,
   };
 });
 vi.mock('@/config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true, TSLD_EDITING_ENABLED: true };
+  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true };
 });
 vi.mock(
   '../render/run-optimise-layout',

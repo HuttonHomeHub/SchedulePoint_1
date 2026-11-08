@@ -50,7 +50,6 @@ import {
   FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
-  TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
@@ -694,8 +693,8 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  * additions (`VITE_ENTRY_ROUTES`): each is spread into the array conditionally so flag-off is
  * byte-for-byte the prior three-item bar. Progress is role-gated (Contributor+, `canReportProgress`);
  * Resources additionally rides `VITE_RESOURCES` (matching the table's row action) and is otherwise
- * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE` +
- * `VITE_ACTIVITY_STEPS` and hides for a duration-derived selection — matching the table's Steps row
+ * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE`
+ * and hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
  * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
@@ -725,7 +724,7 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  *   and cannot flip under anybody.
  * - `next-conflict-status`, which is `presentational` — it never holds a roving stop, so it cannot
  *   be the thing focus was on.
- * - `pen` (`penManaged === true`). It survives a peer TAKING the pen; what would remove it is the
+ * - `pen`. It survives a peer TAKING the pen; what would remove it is the
  *   lock feature itself going away mid-session, and any sentence about that would be a guess.
  */
 export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
@@ -1088,103 +1087,99 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // rarest action on the bar. The second half of that sentence said "and the only one that is
     // inert outside Visual mode", which stopped being true with the mode (M-F-T6): there is one
     // planning surface, so every plan can carry a placement and every plan can clear one.
-    ...(TOOLBAR_QUICK_WINS_ENABLED
-      ? [
-          {
-            id: 'clear-visual-placement',
-            group: 'object' as const,
-            labelVisibility: 'always' as const,
-            order: 6.5,
-            label: 'Clear visual start',
-            // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
-            // is what moved it.
-            //
-            // foot-row-and-deck M1 omitted this control outside Visual mode on ADR-0082's
-            // discriminator — the action did not APPLY to a plan scheduled Early, because such a
-            // plan had no hand-placed start anywhere in it. The collapse removes that condition:
-            // every plan can hold a placement. The first version of this change therefore made the
-            // item unconditional, and **`e2e-workspace-chrome/dock.spec.ts` went red on its
-            // equality**, which is precisely what that gate's docblock says the equality is for
-            // ("if a future milestone genuinely needs to spend canvas on a selection, this number
-            // is the conversation").
-            //
-            // Measured (`measure-toolbar/m-f-foot-row.spec.ts`, 2026-09-20): this control is
-            // **146 px** of a bar summing **989 px**, against 1038 px of room at 1920, **958 at
-            // 1646** and **752 at 1440** — so unconditionally it costs the diagram **0 / 36 / 76
-            // px**. The 1646 figure is the product owner's own screen.
-            //
-            // So the honest successor to the plan-level predicate is the activity-level one: an
-            // activity nobody has PLACED has no placement to clear, which is ADR-0082's omit clause
-            // stated about the object rather than about the plan. The row grows only when a placed
-            // activity is selected — exactly when this control is wanted.
-            //
-            // **`conflict-remedy.ts` rejected this refinement at T6 and its stated reason was
-            // wrong**, which is recorded there rather than quietly reversed: it cited ADR-0094
-            // refusing a per-context ORDER (because re-ordering moves controls under a planner's
-            // cursor) and applied it to per-context VISIBILITY, which this bar already does three
-            // times over — `isSummary` gates Dissolve, Duplicate and Duplicate band, with the
-            // `lostReason` machinery built for exactly that.
-            isVisible: (ctx: SelectionActionContext) => ctx.hasPlacement,
-            // The ADR-0135 handoff sentence. A peer holding the pen can clear this activity's
-            // placement, so the control really can leave under a reader's focus ring — the same
-            // hazard `docs/TECH_DEBT.md` #204(c) measured, now produced by an activity write rather
-            // than a plan one. Present tense, true before and after, which is what makes a static
-            // string honest here.
-            lostReason: 'This activity no longer has a hand-placed start to clear.',
-            /**
-             * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
-             *
-             * The ux gate's blocking finding, and it is the epic's own purpose failing on its
-             * commonest conflict type. The two route remedies render first, ahead of Logic, with a
-             * conflict icon; this one sits last, after Delete, with a neutral icon — so a planner
-             * who pressed Next conflict, read "visual placement conflict" and landed on the bar had
-             * to hunt nine controls for the one that answers it. The `barAction` decision (do not
-             * render a twin) is right and stays; what it left out was any signal at all.
-             *
-             * The icon rather than the position, because `order` is static and a per-context order
-             * would re-run the width ladder as the selection changes — moving controls under the
-             * planner's cursor, which is exactly what kept the count off the `next-conflict` label.
-             * `icon` already takes a ctx form for precisely this kind of state.
-             */
-            icon: (ctx: SelectionActionContext) => {
-              // **Asked of the remedy map, not of a key literal** (one-planning-surface M-D). This
-              // read `conflictKey === 'visualConflict'` until the placement conflict split in two,
-              // and a second hard-coded key beside a total `Record` is the drift that record exists
-              // to prevent: the alert belongs on whichever control the map NAMES as the remedy, so
-              // asking the map makes that true by construction rather than by two places agreeing.
-              //
-              // The consequence is the one worth having. `visualLaterThanBound`'s remedy is a ROUTE,
-              // rendered as its own button, so this item stays an ordinary `Eraser` — clearing the
-              // placement is still available to that planner, but two alert-flavoured controls would
-              // make neither of them the answer.
-              const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
-              return remedy?.kind === 'barAction' && remedy.itemId === 'clear-visual-placement' ? (
-                <TriangleAlert className="size-4" />
-              ) : (
-                <Eraser className="size-4" />
-              );
-            },
-            // When this IS the conflict's remedy it carries the reason as its description, so a
-            // Viewer reaching the shaded button hears why it is there. Asked of the remedy map, not
-            // a key literal, like the icon above; `visualLaterThanBound`'s route carries its own.
-            srDescription: (ctx: SelectionActionContext) => {
-              const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
-              return remedy?.kind === 'barAction' &&
-                remedy.itemId === 'clear-visual-placement' &&
-                ctx.conflictKey !== null
-                ? conflictReasonLabel(ctx.conflictKey)
-                : undefined;
-            },
-            penGated: true,
-            // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
-            // in — never re-derived here. Two independent copies of a four-condition ladder is how
-            // the count and the filter came to disagree about the word "conflict" in the first place.
-            isEnabled: (ctx: SelectionActionContext) => ctx.clearPlacement.enabled,
-            disabledReason: (ctx: SelectionActionContext) => ctx.clearPlacement.reason ?? undefined,
-            onActivate: (ctx: SelectionActionContext) => ctx.onClearVisualPlacement(),
-          },
-        ]
-      : []),
+    {
+      id: 'clear-visual-placement',
+      group: 'object' as const,
+      labelVisibility: 'always' as const,
+      order: 6.5,
+      label: 'Clear visual start',
+      // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
+      // is what moved it.
+      //
+      // foot-row-and-deck M1 omitted this control outside Visual mode on ADR-0082's
+      // discriminator — the action did not APPLY to a plan scheduled Early, because such a
+      // plan had no hand-placed start anywhere in it. The collapse removes that condition:
+      // every plan can hold a placement. The first version of this change therefore made the
+      // item unconditional, and **`e2e-workspace-chrome/dock.spec.ts` went red on its
+      // equality**, which is precisely what that gate's docblock says the equality is for
+      // ("if a future milestone genuinely needs to spend canvas on a selection, this number
+      // is the conversation").
+      //
+      // Measured (`measure-toolbar/m-f-foot-row.spec.ts`, 2026-09-20): this control is
+      // **146 px** of a bar summing **989 px**, against 1038 px of room at 1920, **958 at
+      // 1646** and **752 at 1440** — so unconditionally it costs the diagram **0 / 36 / 76
+      // px**. The 1646 figure is the product owner's own screen.
+      //
+      // So the honest successor to the plan-level predicate is the activity-level one: an
+      // activity nobody has PLACED has no placement to clear, which is ADR-0082's omit clause
+      // stated about the object rather than about the plan. The row grows only when a placed
+      // activity is selected — exactly when this control is wanted.
+      //
+      // **`conflict-remedy.ts` rejected this refinement at T6 and its stated reason was
+      // wrong**, which is recorded there rather than quietly reversed: it cited ADR-0094
+      // refusing a per-context ORDER (because re-ordering moves controls under a planner's
+      // cursor) and applied it to per-context VISIBILITY, which this bar already does three
+      // times over — `isSummary` gates Dissolve, Duplicate and Duplicate band, with the
+      // `lostReason` machinery built for exactly that.
+      isVisible: (ctx: SelectionActionContext) => ctx.hasPlacement,
+      // The ADR-0135 handoff sentence. A peer holding the pen can clear this activity's
+      // placement, so the control really can leave under a reader's focus ring — the same
+      // hazard `docs/TECH_DEBT.md` #204(c) measured, now produced by an activity write rather
+      // than a plan one. Present tense, true before and after, which is what makes a static
+      // string honest here.
+      lostReason: 'This activity no longer has a hand-placed start to clear.',
+      /**
+       * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
+       *
+       * The ux gate's blocking finding, and it is the epic's own purpose failing on its
+       * commonest conflict type. The two route remedies render first, ahead of Logic, with a
+       * conflict icon; this one sits last, after Delete, with a neutral icon — so a planner
+       * who pressed Next conflict, read "visual placement conflict" and landed on the bar had
+       * to hunt nine controls for the one that answers it. The `barAction` decision (do not
+       * render a twin) is right and stays; what it left out was any signal at all.
+       *
+       * The icon rather than the position, because `order` is static and a per-context order
+       * would re-run the width ladder as the selection changes — moving controls under the
+       * planner's cursor, which is exactly what kept the count off the `next-conflict` label.
+       * `icon` already takes a ctx form for precisely this kind of state.
+       */
+      icon: (ctx: SelectionActionContext) => {
+        // **Asked of the remedy map, not of a key literal** (one-planning-surface M-D). This
+        // read `conflictKey === 'visualConflict'` until the placement conflict split in two,
+        // and a second hard-coded key beside a total `Record` is the drift that record exists
+        // to prevent: the alert belongs on whichever control the map NAMES as the remedy, so
+        // asking the map makes that true by construction rather than by two places agreeing.
+        //
+        // The consequence is the one worth having. `visualLaterThanBound`'s remedy is a ROUTE,
+        // rendered as its own button, so this item stays an ordinary `Eraser` — clearing the
+        // placement is still available to that planner, but two alert-flavoured controls would
+        // make neither of them the answer.
+        const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+        return remedy?.kind === 'barAction' && remedy.itemId === 'clear-visual-placement' ? (
+          <TriangleAlert className="size-4" />
+        ) : (
+          <Eraser className="size-4" />
+        );
+      },
+      // When this IS the conflict's remedy it carries the reason as its description, so a
+      // Viewer reaching the shaded button hears why it is there. Asked of the remedy map, not
+      // a key literal, like the icon above; `visualLaterThanBound`'s route carries its own.
+      srDescription: (ctx: SelectionActionContext) => {
+        const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+        return remedy?.kind === 'barAction' &&
+          remedy.itemId === 'clear-visual-placement' &&
+          ctx.conflictKey !== null
+          ? conflictReasonLabel(ctx.conflictKey)
+          : undefined;
+      },
+      penGated: true,
+      // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
+      // in — never re-derived here. Two independent copies of a four-condition ladder is how
+      // the count and the filter came to disagree about the word "conflict" in the first place.
+      isEnabled: (ctx: SelectionActionContext) => ctx.clearPlacement.enabled,
+      disabledReason: (ctx: SelectionActionContext) => ctx.clearPlacement.reason ?? undefined,
+      onActivate: (ctx: SelectionActionContext) => ctx.onClearVisualPlacement(),
+    },
     // ---------------------------------------------------------------- canvas commands (M2-T1)
     //
     // A separate `find` group, so the primitive draws its rule between "what to do with this

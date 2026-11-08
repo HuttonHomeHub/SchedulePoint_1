@@ -28,7 +28,6 @@ function status(overrides: Partial<PlanEditLockStatus>): PlanEditLockStatus {
 
 function makePen(s: PlanEditLockStatus | undefined, extra: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: s,
     holdsPen: s?.state === 'HELD_BY_ME',
     isPending: false,

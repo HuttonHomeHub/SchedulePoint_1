@@ -254,8 +254,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const role = useOrgRole(orgSlug);
   const session = useSession();
   const currentUserId = session.data?.user.id;
-  // The edit-lock "pen" (ADR-0028). When the pen layer is off (`VITE_PLAN_EDIT_LOCK`
-  // unset) `penManaged` is false and gating falls back to role only — today's behaviour.
+  // The edit-lock "pen" (ADR-0028): schedule editing needs the role AND holding the pen.
   const pen = usePlanPen(orgSlug, planId);
   const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
   // Notes (ADR-0046) are collaborative annotations: Contributor upward may write, and unlike schedule
@@ -264,7 +263,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The on-canvas schedule model (activities/dependencies/positions/recalculate) is
   // additionally pen-gated: a Planner must hold the pen to edit it (spec §3.1 / ADR-0028).
   const { canEditSchedule, canRecalc, canProgress, penReadOnly } = derivePlanGating({
-    penManaged: pen.penManaged,
     holdsPen: pen.holdsPen,
     canWrite,
     canProgress: canReportProgress(role),
@@ -575,7 +573,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const activityEditorGating = useMemo(
     () =>
       deriveActivityEditorGating({
-        penManaged: pen.penManaged,
         holdsPen: pen.holdsPen,
         canWrite,
         canProgress,
@@ -590,14 +587,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // (`lock-view.ts` reads the same `status.holder`), so this is threading, not new data.
         holder: pen.status?.holder ?? null,
       }),
-    [
-      pen.penManaged,
-      pen.holdsPen,
-      canWrite,
-      canProgress,
-      plan.data?.canReadCost,
-      pen.status?.holder,
-    ],
+    [pen.holdsPen, canWrite, canProgress, plan.data?.canReadCost, pen.status?.holder],
   );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
@@ -2581,7 +2571,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
 
   // Compose a **Level of Effort span** from two driver activities (Stage D, spec
-  // `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the canvas endpoint-pick
+  // `docs/specs/canvas-activity-types/`) — the canvas endpoint-pick
   // tool's commit. It reuses the *shipped* LOE type + API (M5-epic, ADR-0035 §21): create a
   // `LEVEL_OF_EFFORT` activity (duration is engine-derived, so `durationDays: 0`) → SS (start → LOE) →
   // FF (LOE → finish), recorded as ONE undoable `createLoeSpanCommand` (undo deletes the LOE, cascading
@@ -3294,7 +3284,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onTsldLink,
     onTsldAutoArrange,
     onTsldRefresh,
-    // Compose a Level of Effort span from two driver activities (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`)
+    // Compose a Level of Effort span from two driver activities (Stage D)
     // — reuses the shipped LOE type/API; one undoable action with rollback-on-partial-failure.
     createLoeSpan,
   };

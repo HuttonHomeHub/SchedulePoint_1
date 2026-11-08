@@ -1130,7 +1130,7 @@ export function ActivitiesTable({
           // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
           // four contributes an action that is never shaded (Logic, Resources and Report progress are
           // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
-          // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
+          // predicate — `canWrite && holdsPen` — so they cannot disagree).
           //
           // A unit test can only reach it by turning all four off, at which point the column is absent and
           // the test passes for the wrong reason. The first version of that test did exactly that and still

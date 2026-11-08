@@ -59,7 +59,6 @@ const T2 = { ...task('t2', 'G2', 0, 3), swimlaneLanes: [stored('G2', 0)] };
 const PLAN = [G1, G2, T1, T2];
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

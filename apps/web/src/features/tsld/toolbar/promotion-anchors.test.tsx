@@ -12,11 +12,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   CANVAS_LENSES_ENABLED: true,
-  EXPORT_PRINT_ENABLED: true,
   EARNED_VALUE_ENABLED: false,
   RESOURCE_CURVES_ENABLED: false,
   GUEST_SHARE_LINKS_ENABLED: false,
-  CANVAS_ACTIVITY_TYPES_ENABLED: false,
   SCHEDULE_INTERCHANGE_ENABLED: false,
   CANVAS_LIVE_FEEDBACK_ENABLED: false,
 }));

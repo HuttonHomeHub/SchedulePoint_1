@@ -256,7 +256,6 @@ function renderScreen() {
 /** A pen object shaped like `usePlanPen`'s return, tuned per test. */
 function pen(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    penManaged: false,
     holdsPen: false,
     status: undefined,
     isPending: false,
@@ -300,26 +299,9 @@ beforeEach(() => {
 
 afterEach(() => vi.clearAllMocks());
 
-describe('PlanDetailScreen — pen gating (flag off: role only)', () => {
-  it('a Planner edits the schedule; no read-only hint', () => {
-    h.pen = pen({ penManaged: false });
-    renderScreen();
-    expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('true');
-    expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('true');
-    // The Recalculate control moved into the toolbar registry with the ADR-0031 layout, so it is
-    // no longer a component this route renders. Its pen-gating is asserted where the control now
-    // lives — `tsld-toolbar-recalculate.test.tsx`, "keeps the pen-gated reason when the pen is not
-    // held" — rather than dropped. (ADR-0088 D3: a retirement may delete a parity suite, never
-    // coverage.)
-    expect(screen.getByTestId('activity-editor').dataset.canManage).toBe('true');
-    expect(screen.getByTestId('create-activity')).toBeInTheDocument();
-    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
-  });
-});
-
-describe('PlanDetailScreen — pen gating (flag on)', () => {
+describe('PlanDetailScreen — pen gating', () => {
   it('a Planner WITHOUT the pen loses every schedule affordance but keeps progress', () => {
-    h.pen = pen({ penManaged: true, holdsPen: false });
+    h.pen = pen({ holdsPen: false });
     renderScreen();
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('false');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
@@ -337,7 +319,7 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
   });
 
   it('a Planner WITH the pen regains every affordance; no read-only hint', () => {
-    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.pen = pen({ holdsPen: true });
     renderScreen();
     expect(screen.getByTestId('tsld-panel').dataset.canEdit).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('true');
@@ -347,7 +329,7 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
 
   it('a Contributor keeps progress but never edits, with no read-only hint', () => {
     h.role = 'CONTRIBUTOR';
-    h.pen = pen({ penManaged: true, holdsPen: false });
+    h.pen = pen({ holdsPen: false });
     renderScreen();
     expect(screen.getByTestId('activities-table').dataset.canProgress).toBe('true');
     expect(screen.getByTestId('activities-table').dataset.canWrite).toBe('false');
@@ -364,7 +346,7 @@ describe('PlanDetailScreen — pen gating (flag on)', () => {
 
 describe('PlanDetailScreen — reposition seam (#24d)', () => {
   it('a lane-only move uses useRepositionLane (no useUpdateActivity, no recalc)', async () => {
-    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.pen = pen({ holdsPen: true });
     renderScreen();
     const onReposition = h.tsld.props?.onReposition as (i: unknown) => Promise<unknown>;
     const outcome = await onReposition({ activityId: 'a1', laneIndex: 2 });
@@ -375,7 +357,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
   });
 
   it('a day change hand-places through the placement seam, then recalculates', async () => {
-    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.pen = pen({ holdsPen: true });
     renderScreen();
     const onReposition = h.tsld.props?.onReposition as (i: unknown) => Promise<unknown>;
     const outcome = await onReposition({ activityId: 'a1', startDay: 5 });
@@ -394,7 +376,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
 
   it('a 423 on the move routes through pen.onWriteRejected and drops to a no-op', async () => {
     const onWriteRejected = vi.fn(() => ({ kind: 'lock' as const }));
-    h.pen = pen({ penManaged: true, holdsPen: true, onWriteRejected });
+    h.pen = pen({ holdsPen: true, onWriteRejected });
     h.repositionLane.mockRejectedValue(
       new ApiFetchError(423, {
         code: 'LOCKED',
@@ -410,7 +392,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
   });
 
   it('a 409 on a lane move surfaces the stale-plan conflict (not applied)', async () => {
-    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.pen = pen({ holdsPen: true });
     h.repositionLane.mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
     );
@@ -424,7 +406,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
   });
 
   it('a day change that lands but fails to recalc is applied with a non-fatal conflict', async () => {
-    h.pen = pen({ penManaged: true, holdsPen: true });
+    h.pen = pen({ holdsPen: true });
     h.recalculate.mockRejectedValue(new Error('recalc down'));
     renderScreen();
     const onReposition = h.tsld.props?.onReposition as (

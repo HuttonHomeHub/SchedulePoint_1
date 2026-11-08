@@ -9,14 +9,10 @@ import { penReason } from './pen-reason';
  * the screen (the route wires the inputs from `useOrgRole` + `usePlanPen`).
  *
  * The rule: on-canvas schedule editing (activities / dependencies / positions /
- * recalculate) requires **both** the role capability **and** holding the pen —
- * but only when the pen layer is active. With the pen off (`VITE_PLAN_EDIT_LOCK`
- * unset) gating falls back to role alone — today's behaviour, byte-for-byte. The
+ * recalculate) requires **both** the role capability **and** holding the pen. The
  * Contributor **progress** path is never pen-gated (Q-C).
  */
 export interface PlanGatingInput {
-  /** Is the pen layer active at all (`pen.penManaged`). */
-  penManaged: boolean;
   /** Does the caller currently hold the pen (`pen.holdsPen`). */
   holdsPen: boolean;
   /** Role: may manage the hierarchy (plan metadata + baselines). */
@@ -39,12 +35,12 @@ export interface PlanGating {
 }
 
 export function derivePlanGating(input: PlanGatingInput): PlanGating {
-  const { penManaged, holdsPen, canWrite, canProgress, canCalculate } = input;
+  const { holdsPen, canWrite, canProgress, canCalculate } = input;
   return {
-    canEditSchedule: penManaged ? canWrite && holdsPen : canWrite,
-    canRecalc: penManaged ? canCalculate && holdsPen : canCalculate,
+    canEditSchedule: canWrite && holdsPen,
+    canRecalc: canCalculate && holdsPen,
     canProgress,
-    penReadOnly: penManaged && canWrite && !holdsPen,
+    penReadOnly: canWrite && !holdsPen,
   };
 }
 

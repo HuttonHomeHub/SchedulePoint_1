@@ -14,13 +14,7 @@ import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
 import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  ACCOUNT_SETTINGS_ENABLED,
-  AUDIT_LOG_ENABLED,
-  GUEST_SHARE_LINKS_ENABLED,
-  PASSWORD_RESET_ENABLED,
-  RESOURCES_ENABLED,
-} from '@/config/env';
+import { AUDIT_LOG_ENABLED, GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -572,9 +566,7 @@ const shareGuestRoute = createRoute({
 /**
  * The two public password-reset routes (ADR-0074 M4).
  *
- * Both are registered — and the sign-in link rendered — behind the SAME `PASSWORD_RESET_ENABLED`
- * constant. Splitting them is the stranding failure the flag's docblock describes: a link to a
- * conditionally-registered route compiles in both branches, so typecheck cannot catch it.
+ * Both are registered unconditionally, and the sign-in link is always rendered.
  *
  * Only `/reset-password` parses search, and `validateSearch` is permissive there. Better Auth
  * composes the `?token=` / `?error=` redirect itself, a mail client may mangle the query, and a
@@ -657,9 +649,8 @@ const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   // Unconditional by design — see the route's own docblock. Three unflagged surfaces link here.
   verifyEmailRoute,
-  // Dark surface (ADR-0074 M4): both reset routes join the tree only when the flag is on — and the
-  // sign-in link is gated on the same constant, which is what stops it becoming a link to nothing.
-  ...(PASSWORD_RESET_ENABLED ? [forgotPasswordRoute, resetPasswordRoute] : []),
+  forgotPasswordRoute,
+  resetPasswordRoute,
   // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
   // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
   ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
@@ -684,9 +675,7 @@ const routeTree = rootRoute.addChildren([
     // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
     // app is byte-identical when off — no route, no nav entry, no query.
     ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
-    // Dark surface (ADR-0074 M3): the account route joins the tree only when the flag is on, so
-    // the app is byte-identical when off — no route and no menu entry.
-    ...(ACCOUNT_SETTINGS_ENABLED ? [accountRoute] : []),
+    accountRoute,
   ]),
 ]);
 

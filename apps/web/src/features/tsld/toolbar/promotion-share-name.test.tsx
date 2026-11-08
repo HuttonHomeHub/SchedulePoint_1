@@ -7,7 +7,6 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  EXPORT_PRINT_ENABLED: true,
   GUEST_SHARE_LINKS_ENABLED: true,
 }));
 

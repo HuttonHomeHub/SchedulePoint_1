@@ -72,7 +72,6 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

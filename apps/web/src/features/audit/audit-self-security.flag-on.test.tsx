@@ -6,16 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Env from '@/config/env';
 
 /**
- * The flag-**ON** half of ADR-0073 C2.4 — an actor-less row rendering beside the reader's own.
- *
- * This file exists because the milestone shipped with only its rollback contract covered. The
- * parity suite proves what the screen does **not** do; nothing proved that an attempt row reaches
- * the reader with the column and the sentence that make it legible — which is the entire feature,
- * on the one screen whose copy tells somebody they may be under attack.
+ * ADR-0073 C2.4 — an actor-less row rendering beside the reader's own: an attempt row reaches the
+ * reader with the column and the sentence that make it legible — which is the entire feature, on the
+ * one screen whose copy tells somebody they may be under attack.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<typeof Env>()),
-  AUDIT_SELF_SECURITY_ENABLED: true,
   AUDIT_LOG_ENABLED: true,
 }));
 
@@ -64,7 +60,7 @@ const ROWS = [
   },
 ];
 
-describe('self-security surface, flag ON (ADR-0073 C2.4)', () => {
+describe('self-security surface (ADR-0073 C2.4)', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     fetchMock.mockResolvedValue({

@@ -46,7 +46,7 @@ export interface BuildDiagramImageOptions {
 }
 
 /**
- * The shared off-screen Diagram-image build (ADR-0078 S11, `VITE_EXPORT_PRINT`).
+ * The shared off-screen Diagram-image build (ADR-0078 S11).
  *
  * Extracted from `use-tsld-toolbar-context.tsx` verbatim — the body below is the code that used to
  * sit at the top of that file's ~500-line memo, comments and all. This was the **second and last**

@@ -9,7 +9,7 @@ import { statedDuration } from '@/lib/stated-duration';
 
 /**
  * The pure, DOM-free **Schedule CSV** serialiser for the TSLD export deliverables (spec
- * `docs/specs/export-print/`, behind `VITE_EXPORT_PRINT`). Like `render/lenses.ts` it has no canvas,
+ * `docs/specs/export-print/`). Like `render/lenses.ts` it has no canvas,
  * React or data-fetching dependency — it only projects the already-shipped `ActivitySummary` columns
  * the activities table consumes into an Excel-friendly, injection-safe CSV, so it is exhaustively
  * unit-tested. `use-tsld-toolbar-context` wires it into `downloadBlob` + the announcer.

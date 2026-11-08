@@ -59,8 +59,6 @@ export default defineConfig({
             // what every shipped bundle carries (ADR-0088 D1).
             env: {
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
             },
           },
         ],

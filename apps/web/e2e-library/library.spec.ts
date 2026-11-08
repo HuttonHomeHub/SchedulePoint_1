@@ -149,7 +149,11 @@ test('a project calendar is scoped to its project, and archiving retires a resou
     .click();
   await assignDialog.getByLabel('Budgeted units').fill('16');
   await assignDialog.getByRole('button', { name: 'Assign resource' }).click();
-  await expect(assignDialog.getByText('Crew A')).toBeVisible();
+  // Exact, and the first: a substring match also resolves the picker's own "Crew A (Labour)" option
+  // while it is closing (hidden), and once the assignment lands the name renders twice in the dialog
+  // (the assignment row's label and a labelled control) — so the bare match was a strict-mode race
+  // that failed about one run in three. Both remaining matches are the new assignment.
+  await expect(assignDialog.getByText('Crew A', { exact: true }).first()).toBeVisible();
   // Exact: the dialog chrome's own ✕ is labelled "Close dialog", which a substring match would
   // ambiguously also select (the `e2e-resource-view/support.ts` precedent).
   await assignDialog.getByRole('button', { name: 'Close', exact: true }).click();

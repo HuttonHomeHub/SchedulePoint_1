@@ -69,9 +69,7 @@ import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
-  COST_ACCRUAL_ENABLED,
   EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
@@ -242,9 +240,9 @@ export function ActivityEditorSession({
   // query lives with the form it seeds, and a Contributor who never looks at Progress never pays for
   // it. Adjusted during render for the same reason as the intent above: it is derived from `active`.
   //
-  // Only where the panel that renders them exists (the same flag pair as the panel below): a host with
-  // either flag off would otherwise fetch a list nobody is shown.
-  const stepsEnabled = ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED;
+  // Only where the panel that renders them exists (the same flag as the panel below): a host with
+  // it off would otherwise fetch a list nobody is shown.
+  const stepsEnabled = EARNED_VALUE_ENABLED;
   const [stepsRequested, setStepsRequested] = useState(stepsEnabled && active === 'progress');
   if (stepsEnabled && active === 'progress' && !stepsRequested) setStepsRequested(true);
 
@@ -1067,15 +1065,15 @@ export function ActivityEditorSession({
                     error={panelErrors.measure ?? null}
                     {...othersSaving('measure')}
                   />
-                  {/* The flag pair that decides whether weighted steps exist at all.
+                  {/* The flag that decides whether weighted steps exist at all.
                       **It used to be described as matching "the Steps entry points" in
                       `ActivitiesTable` and `selection-actions`, and those are gone**
                       (`docs/specs/object-bar-defects/` M1) — both opened this tab, so the panel is
-                      now reached only through `Progress`. The pair still belongs here for the
+                      now reached only through `Progress`. The flag still belongs here for the
                       reason the security review gave: without it the tab would show a checklist the
                       product has no business offering. What changed is that this is now the ONLY
-                      place the flags are read for steps, so there is no parity left to keep. */}
-                  {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
+                      place the flag is read for steps, so there is no parity left to keep. */}
+                  {EARNED_VALUE_ENABLED ? (
                     <WeightedStepsPanel
                       form={stepsForm}
                       array={stepsArray}
@@ -1115,7 +1113,7 @@ export function ActivityEditorSession({
 
                   <FieldGateProvider gate={gating.cost}>
                     {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
-                    {COST_ACCRUAL_ENABLED ? <ActivityAccrualField form={cost.form} /> : null}
+                    <ActivityAccrualField form={cost.form} />
                     <ScopeSaveBar
                       gate={gating.cost}
                       dirty={cost.isDirty}

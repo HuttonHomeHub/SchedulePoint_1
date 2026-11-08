@@ -143,11 +143,9 @@ export function PenStatusCluster({
    */
   portalSentence?: boolean;
 }): React.ReactElement | null {
-  const { penManaged, view, containerRef, controlsProps } = penLock;
+  const { view, containerRef, controlsProps } = penLock;
   const sentenceId = useId();
   const Slot = portalSentence === false ? Fragment : PenStatusHost;
-
-  if (!penManaged) return null;
 
   const base = 'flex min-w-0 items-center gap-2 text-sm';
 

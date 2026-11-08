@@ -18,10 +18,6 @@ import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  // Pin on-canvas activity types OFF here: this authoring suite asserts the Add menu's disabled
-  // "Span between" (Hammock / Level of effort) placeholders. The flag-on single "Level of Effort
-  // (hammock)" live item is covered by tsld-toolbar-activity-types.test.tsx.
-  CANVAS_ACTIVITY_TYPES_ENABLED: false,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -114,15 +110,6 @@ describe('TSLD toolbar — canvas-first authoring items (flag on)', () => {
       // The three draw kinds are offered as single-choice (radio) menu items…
       fireEvent.click(screen.getByRole('menuitemradio', { name: 'Start milestone' }));
       expect(setCreateType).toHaveBeenCalledWith('START_MILESTONE');
-    });
-
-    it('previews Hammock / Level of effort as disabled "Span between" menu items', () => {
-      renderToolbar(ctx());
-      fireEvent.click(addCaret());
-      for (const name of ['Hammock', 'Level of effort']) {
-        const item = screen.getByRole('menuitem', { name: new RegExp(name) });
-        expect(item).toHaveAttribute('aria-disabled', 'true');
-      }
     });
 
     it('labels the button with the armed kind while adding', () => {

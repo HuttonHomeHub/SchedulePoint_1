@@ -37,7 +37,6 @@ const ROW: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
  * #111 is about.
  */
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,

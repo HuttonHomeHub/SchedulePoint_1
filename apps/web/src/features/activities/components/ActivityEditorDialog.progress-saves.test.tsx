@@ -23,7 +23,6 @@ vi.mock('@/components/ui/announcer', () => ({
 }));
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

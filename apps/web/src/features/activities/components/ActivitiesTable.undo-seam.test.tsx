@@ -74,7 +74,6 @@ function renderTable(handlers: {
         planId="pl1"
         canEditSchedule
         editorGating={deriveActivityEditorGating({
-          penManaged: true,
           holdsPen: true,
           canWrite: true,
           canProgress: false,

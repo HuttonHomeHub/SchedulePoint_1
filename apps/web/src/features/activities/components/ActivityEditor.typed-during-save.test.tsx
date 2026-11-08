@@ -29,7 +29,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
 }));
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

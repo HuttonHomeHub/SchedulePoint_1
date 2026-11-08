@@ -17,7 +17,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_ACTIVITY_TYPES_ENABLED: true,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {

@@ -82,7 +82,6 @@ const ACTIVITY = {
 } as unknown as ActivitySummary;
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

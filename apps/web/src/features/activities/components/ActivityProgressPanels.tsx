@@ -27,7 +27,7 @@ import { FieldGrid } from '@/components/ui/form-layout';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
-import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 /**
@@ -127,20 +127,18 @@ export function ReportedProgressPanel({
             error={form.formState.errors.percentComplete?.message}
             {...form.register('percentComplete', { valueAsNumber: true })}
           />
-          {PROGRESS_INGESTION_ENABLED ? (
-            <TextField
-              label={remainingLabel(hoursPerDay)}
-              {...durationInputProps(hoursPerDay)}
-              hint={remainingHelp(hoursPerDay)}
-              error={
-                form.formState.errors.remaining?.message ??
-                (remainingWriteFields(values.remaining ?? '', hoursPerDay) === null
-                  ? REMAINING_NEEDS_WHOLE_DAYS
-                  : undefined)
-              }
-              {...form.register('remaining')}
-            />
-          ) : null}
+          <TextField
+            label={remainingLabel(hoursPerDay)}
+            {...durationInputProps(hoursPerDay)}
+            hint={remainingHelp(hoursPerDay)}
+            error={
+              form.formState.errors.remaining?.message ??
+              (remainingWriteFields(values.remaining ?? '', hoursPerDay) === null
+                ? REMAINING_NEEDS_WHOLE_DAYS
+                : undefined)
+            }
+            {...form.register('remaining')}
+          />
           <TextField label="Actual start" type="date" {...form.register('actualStart')} />
           <TextField
             label="Actual finish"
@@ -148,30 +146,26 @@ export function ReportedProgressPanel({
             error={form.formState.errors.actualFinish?.message}
             {...form.register('actualFinish')}
           />
-          {PROGRESS_INGESTION_ENABLED ? (
-            <>
-              {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
+          {/* Suspend is a RECORD, resume is the schedule input, and the two look identical
                 sitting side by side — so each says which it is (surface audit F1, ADR-0035 §4).
                 Only the resume date reaches the engine: it floors the remaining work at
                 `max(data date, resume date)`. The suspend date is stored, shown and exported, and
                 the recalculation does not read it. Saying so here is the whole fix: a planner who
                 sets a suspend date and sees no dates move should be able to find out why from the
                 field rather than from the source. */}
-              <TextField
-                label="Suspend date"
-                type="date"
-                hint="Recorded only — it does not move any dates."
-                {...form.register('suspendDate')}
-              />
-              <TextField
-                label="Resume date"
-                type="date"
-                hint="Remaining work is scheduled from this date, or the data date if later."
-                error={form.formState.errors.resumeDate?.message}
-                {...form.register('resumeDate')}
-              />
-            </>
-          ) : null}
+          <TextField
+            label="Suspend date"
+            type="date"
+            hint="Recorded only — it does not move any dates."
+            {...form.register('suspendDate')}
+          />
+          <TextField
+            label="Resume date"
+            type="date"
+            hint="Remaining work is scheduled from this date, or the data date if later."
+            error={form.formState.errors.resumeDate?.message}
+            {...form.register('resumeDate')}
+          />
         </FieldGrid>
         {/* The consequence of the six fields above, given the same weight as a field rather than
           trailing off as a sentence — it is the answer to "what did I just say happened?". */}

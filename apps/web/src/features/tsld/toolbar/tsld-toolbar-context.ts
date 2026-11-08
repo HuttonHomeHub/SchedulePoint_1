@@ -54,7 +54,7 @@ export interface TsldToolbarContext {
    * available to every role including read-only viewers because navigating never mutates the plan. */
   goToDate: (iso: string) => void;
   /** Today as a local calendar day (`YYYY-MM-DD`) — the target of the **Recenter on today** command
-   * (`VITE_TOOLBAR_QUICK_WINS`), which reuses {@link goToDate}. View-only; offered to every role. */
+   * which reuses {@link goToDate}. View-only; offered to every role. */
   todayIso: string;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
@@ -156,11 +156,10 @@ export interface TsldToolbarContext {
   /** Pick the dependency kind the Link tool creates. */
   setLinkType: (type: DependencyType) => void;
   /** True when the current edit mode is the two-click **Level of Effort (hammock)** endpoint-pick tool
-   * (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`) — drives the Add-menu item's checked state. Mutually
+   * (Stage D) — drives the Add-menu item's checked state. Mutually
    * exclusive with add/link (a single {@link import('../interaction/gesture-machine').EditMode}). */
   isLoeSpanning: boolean;
-  /** Arm / disarm the LOE endpoint-pick tool (pen-gated). Only reachable when
-   * `VITE_CANVAS_ACTIVITY_TYPES` is on (the Add-menu item is flag-gated); a toggle like the Add/Link
+  /** Arm / disarm the LOE endpoint-pick tool (pen-gated). A toggle like the Add/Link
    * tools, and leaving it (Escape / re-select) returns to Select. */
   toggleLoeSpanMode: () => void;
   /** Whether the LOE tool has already picked its **start driver** (Stage D) — drives the Add trigger's
@@ -331,10 +330,9 @@ export interface TsldToolbarContext {
   /** True once the plan has activities to plot — the view/summary/legend controls appear then. */
   hasDiagram: boolean;
 
-  // --- Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) ------------------------------------------
+  // --- Toolbar quick-wins ---------------------------------------------------------------------
   // These wire four previously-"Coming soon" placeholders to shipped features (spec
-  // `docs/specs/toolbar-quick-wins/`). Populated on every build; nothing reads them while the flag is
-  // off (the four ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  // `docs/specs/toolbar-quick-wins/`).
   /** The canvas selection lifted to the main toolbar (F0), or null when nothing is selected. Drives
    * the selection-aware items' enabled state. */
   selectedActivityId: string | null;
@@ -367,7 +365,7 @@ export interface TsldToolbarContext {
    * disagree about the same lock, each looking correct alone.
    *
    * Optional because the Gantt's selection context and every existing test build a toolbar context
-   * without one; the pen item's `isVisible` reads `penManaged`, so absent ⇒ no pen item.
+   * without one; the pen item's `isVisible` reads its presence, so absent ⇒ no pen item.
    */
   penLock?: PenLockView;
   /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`
@@ -532,10 +530,9 @@ export interface TsldToolbarContext {
    */
   zoomToSelection: () => void;
 
-  // --- Export & print (VITE_EXPORT_PRINT, spec `docs/specs/export-print/`) -------------------
+  // --- Export & print (spec `docs/specs/export-print/`) ---------------------------------------
   // Client-side deliverables over already-shipped data + the shipped canvas renderer — no API/schema/
-  // engine change. Populated on every build but derived cheaply when the flag is off (nothing reads
-  // them then: the `export`/`print` ids resolve to their `placeholderItem()` stubs), so they are inert.
+  // engine change.
   /** Serialise the activity table to an Excel-safe, injection-safe CSV and download it (scope `'all'`
    * = every activity; `'matching'` = the lens-narrowed subset, CQ-3), announcing the download (M1). */
   exportScheduleCsv: (scope: ExportScope) => void;
@@ -555,18 +552,18 @@ export interface TsldToolbarContext {
   /** Print the whole diagram via the browser print dialog (M4, CQ-4 — the image path): reuse the M2
    * off-screen PNG, mount it into the print-only `PrintSurface` (a print stylesheet hides the app-shell),
    * `window.print()`, then tear the surface down on `afterprint`/timeout. Off-screen paint only — the
-   * live canvas is never touched. A no-op when the flag is off. */
+   * live canvas is never touched. */
   printDiagram: () => void;
   /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the
    * conditional **Matching activities only (N)** CSV item (CQ-3). False (item hidden) with no lens
-   * active or when `VITE_EXPORT_PRINT` is off. */
+   * active. */
   filterActive: boolean;
   /** How many activities match the active lens — the **N** in "Matching activities only (N)". */
   matchingCount: number;
   /** A user-safe VISIBLE error from a failed export/print (a PDF-library load failure, a `toBlob`
    * failure, …), or `null` when there is none. The `announce()` live-region message is sr-only, so this
    * is the sighted-user surface — the workspace renders it as a dismissable `role="alert"` banner beside
-   * the toolbar (UX review B2). Always `null` when `VITE_EXPORT_PRINT` is off. */
+   * the toolbar (UX review B2). */
   exportError: string | null;
   /** Dismiss the {@link exportError} banner (clears it back to `null`). */
   dismissExportError: () => void;

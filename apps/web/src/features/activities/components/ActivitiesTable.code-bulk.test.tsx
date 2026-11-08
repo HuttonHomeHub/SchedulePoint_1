@@ -34,7 +34,6 @@ const ROWS: ActivitySummary[] = [
 ];
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,

@@ -28,7 +28,6 @@ function status(overrides: Partial<PlanEditLockStatus>): PlanEditLockStatus {
 
 function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: undefined,
     holdsPen: false,
     isPending: false,
@@ -45,11 +44,6 @@ function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
 }
 
 describe('EditLockBanner', () => {
-  it('renders nothing when the pen layer is off', () => {
-    const { container } = render(<EditLockBanner pen={makePen({ penManaged: false })} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
   it('shows a loading placeholder (not silence) while status is resolving', () => {
     render(<EditLockBanner pen={makePen({ status: undefined })} />);
     expect(screen.getByText(/checking who’s editing/i)).toBeInTheDocument();

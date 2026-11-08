@@ -22,9 +22,8 @@ const ROLES = {
 } as const;
 
 const PEN = {
-  held: { penManaged: true, holdsPen: true },
-  notHeld: { penManaged: true, holdsPen: false },
-  layerOff: { penManaged: false, holdsPen: false },
+  held: { holdsPen: true },
+  notHeld: { holdsPen: false },
 } as const;
 
 function gate(
@@ -49,7 +48,7 @@ describe('deriveActivityEditorGating — the converged collections', () => {
     'reuses the definition gate object for %s',
     (path) => {
       for (const role of ['viewer', 'contributor', 'planner'] as const) {
-        for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+        for (const pen of ['held', 'notHeld'] as const) {
           const gates = gate(role, pen);
           expect(gates[path]).toBe(gates.general);
         }
@@ -84,15 +83,10 @@ describe('deriveActivityEditorGating — definition scopes', () => {
     },
   );
 
-  it('falls back to role alone when the pen layer is off (byte-for-byte today’s behaviour)', () => {
-    const g = gate('planner', 'layerOff');
-    for (const path of DEFINITION_PATHS) expect(g[path].writable).toBe(true);
-  });
-
   it.each(['viewer', 'contributor'] as const)(
     'blocks %s on definition scopes for role, whatever the pen says',
     (role) => {
-      for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+      for (const pen of ['held', 'notHeld'] as const) {
         const g = gate(role, pen);
         expect(g.general.writable).toBe(false);
         expect(g.general.reason).toMatch(/role/i);
@@ -119,7 +113,7 @@ describe('deriveActivityEditorGating — definition scopes', () => {
    * capability a merged Save would have destroyed for progress.
    */
   it('never pen-gates notes', () => {
-    for (const pen of ['held', 'notHeld', 'layerOff'] as const) {
+    for (const pen of ['held', 'notHeld'] as const) {
       expect(gate('contributor', pen).notes.writable).toBe(true);
       expect(gate('planner', pen).notes.writable).toBe(true);
     }
@@ -143,7 +137,7 @@ describe('deriveActivityEditorGating — progress is never pen-gated', () => {
     expect(g.measure.writable).toBe(false);
   });
 
-  it.each(['held', 'notHeld', 'layerOff'] as const)(
+  it.each(['held', 'notHeld'] as const)(
     'keeps progress writable for a Planner with pen state %s',
     (pen) => {
       expect(gate('planner', pen).progress.writable).toBe(true);
@@ -219,7 +213,6 @@ describe('the pen refusal names a control the reader actually has (#115)', () =>
    * this plan…", which was false whenever nobody held the pen.
    */
   const base = {
-    penManaged: true,
     holdsPen: false,
     canWrite: true,
     canProgress: true,

@@ -1,14 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
-  EXPORT_PRINT_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
-  TOOLBAR_QUICK_WINS_ENABLED,
   flagDefaultOff,
   flagDefaultOn,
 } from './env';
@@ -29,16 +26,6 @@ describe('flagDefaultOff', () => {
   });
 });
 
-describe('TOOLBAR_QUICK_WINS_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-19; no VITE_TOOLBAR_QUICK_WINS set)', () => {
-    // The five quick-wins are wired to shipped features and on by default now that their specialist
-    // reviews (a11y / ux / component / perf / security / test) are green (M3). Setting
-    // VITE_TOOLBAR_QUICK_WINS=false ships the four ids as their "Coming soon" placeholders — the
-    // byte-for-byte rollback path.
-    expect(TOOLBAR_QUICK_WINS_ENABLED).toBe(true);
-  });
-});
-
 describe('CANVAS_LENSES_ENABLED', () => {
   it('is on by default (delivered & enabled, 2026-07-19; no VITE_CANVAS_LENSES set)', () => {
     // The three canvas insight lenses are wired to shipped data and on by default now that their
@@ -56,17 +43,6 @@ describe('CANVAS_NAV_ENABLED', () => {
     // resolves the three ids to their "Coming soon" placeholders, adds no new dimmedIds, and leaves the
     // Visual drag path byte-for-byte today's — the rollback path / parity gate.
     expect(CANVAS_NAV_ENABLED).toBe(true);
-  });
-});
-
-describe('EXPORT_PRINT_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-20; no VITE_EXPORT_PRINT set)', () => {
-    // Export & print (CSV + PNG/PDF + browser Print) is on by default now that its six specialist
-    // reviews (security / devops / performance / a11y / ux / component) are green (M5). Setting
-    // VITE_EXPORT_PRINT=false resolves `export`/`print` to their "Coming soon" placeholders, loads no
-    // export module or jsPDF chunk, and leaves the toolbar/canvas/a11y tree byte-for-byte — the
-    // rollback path / parity gate.
-    expect(EXPORT_PRINT_ENABLED).toBe(true);
   });
 });
 
@@ -109,16 +85,6 @@ describe('SCHEDULE_INTERCHANGE_ENABLED', () => {
     // Stage C2 M1). Setting VITE_SCHEDULE_INTERCHANGE=false renders the plan-create surface byte-for-byte
     // today's — no "Import from file…" entry, no dialog, the review code unreached — the rollback path.
     expect(SCHEDULE_INTERCHANGE_ENABLED).toBe(true);
-  });
-});
-
-describe('CANVAS_ACTIVITY_TYPES_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-20; no VITE_CANVAS_ACTIVITY_TYPES set)', () => {
-    // On-canvas advanced activity types (Stage D) is on by default now that its five specialist reviews
-    // (a11y / ux / component / perf / test) are green (Task 4). Setting VITE_CANVAS_ACTIVITY_TYPES=false
-    // keeps the Add menu's disabled "Soon" placeholders byte-for-byte and leaves the LOE endpoint-pick
-    // tool unreachable — the rollback path / parity gate.
-    expect(CANVAS_ACTIVITY_TYPES_ENABLED).toBe(true);
   });
 });
 

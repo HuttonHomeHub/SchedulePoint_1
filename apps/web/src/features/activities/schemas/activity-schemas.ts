@@ -254,8 +254,8 @@ export const activityFormSchema = z
     percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
     // Cost accrual (M7 rung 5, ADR-0044 §32): how the activity's cost is time-phased in the EV read's
     // Planned Value (START/UNIFORM/END). A plain enum attribute like `percentCompleteType` (default
-    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); only editable
-    // behind `VITE_COST_ACCRUAL`, but always seeded from the row so a stored value round-trips when hidden.
+    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); editable
+    // in the cost scope, and always seeded from the row so a stored value round-trips.
     accrualType: z.enum(ACCRUAL_TYPES),
     physicalPercentComplete: z
       .number({ message: 'Enter a percentage from 0 to 100.' })
@@ -301,8 +301,8 @@ export type ActivityFormValues = z.infer<typeof activityFormSchema>;
  * dates are raw `<input type="date">` values (`''` = unset). The M2 progress-ingestion
  * fields (ADR-0035) — an explicit `remaining` (blank derives it from
  * percent) plus `suspendDate` / `resumeDate` for a paused activity — are optional and
- * only editable behind the `VITE_PROGRESS_INGESTION` flag; the dialog seeds them from
- * the row either way so a stored value round-trips unchanged. Cross-field rules mirror
+ * editable in the progress panel; the dialog seeds them from
+ * the row so a stored value round-trips unchanged. Cross-field rules mirror
  * the API: you cannot finish before you start, finish without starting, or resume
  * before you suspend.
  */

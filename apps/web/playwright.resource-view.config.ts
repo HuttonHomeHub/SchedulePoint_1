@@ -77,8 +77,6 @@ export default defineConfig({
             env: {
               VITE_CANVAS_RESOURCE_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               VITE_RESOURCES: 'true',
               VITE_RESOURCE_CURVES: 'true',
             },

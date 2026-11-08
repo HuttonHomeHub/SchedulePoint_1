@@ -58,7 +58,6 @@ import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
-  CANVAS_ACTIVITY_TYPES_ENABLED,
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
@@ -1640,10 +1639,8 @@ export function ToolbarPlanWorkspace({
       // does not make the panel trigger a recalculation, only describe one.
       recalcPending={model.autoRecalc.isPending}
       projectFinish={scheduleSummary.data?.projectFinish ?? null}
-      // LOE endpoint-pick span (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`). Gated on the flag so flag-off is
-      // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also
-      // flag-gated), so the prop is simply absent.
-      {...(CANVAS_ACTIVITY_TYPES_ENABLED ? { onLoeSpan: model.createLoeSpan } : {})}
+      // LOE endpoint-pick span (Stage D): the tool-mode the Add menu's Level-of-Effort item arms.
+      onLoeSpan={model.createLoeSpan}
       // Quiescence during an open two-click pick + the ADR-0048 inverse the link confirmation
       // offers (ADR-0064 T5/T7) — the same three the legacy layout passes.
       //

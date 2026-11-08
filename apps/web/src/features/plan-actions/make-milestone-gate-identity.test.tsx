@@ -36,7 +36,6 @@ vi.mock('./make-milestone-gate', async (importOriginal) => {
 
 /** A Planner who does not hold the pen — built by the REAL derivation, never a literal. */
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,

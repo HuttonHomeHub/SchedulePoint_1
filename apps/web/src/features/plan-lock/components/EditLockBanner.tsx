@@ -50,9 +50,7 @@ export function EditLockBanner({
   // All the delicate hand-off orchestration (view resolution, tick, focus return, lost-control
   // scroll, the Keep-editing dismissal) lives in one shared hook so the compact toolbar pen-status
   // renders identically (ADR-0031). This card is just the presentation.
-  const { penManaged, view, containerRef, controlsProps } = usePenLockView(pen, currentUserId, now);
-
-  if (!penManaged) return null;
+  const { view, containerRef, controlsProps } = usePenLockView(pen, currentUserId, now);
 
   if (!view) {
     // Status still loading — a placeholder (not silence) so gated affordances that

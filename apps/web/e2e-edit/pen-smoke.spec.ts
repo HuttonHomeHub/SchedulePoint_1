@@ -3,8 +3,8 @@ import { expect, test } from '../e2e-support/test';
 import { addActivity, showActivities, onboard, openNewPlan, startEditing } from './support';
 
 /**
- * Flag-ON smoke journey (TECH_DEBT #25b/#27b harness). Proves the editing surface
- * actually boots with `VITE_TSLD_EDITING` + `VITE_PLAN_EDIT_LOCK` on and the API
+ * Smoke journey (TECH_DEBT #25b/#27b harness). Proves the editing surface
+ * actually boots with the API
  * enforcing (`PLAN_EDIT_LOCK_ENFORCED=true`): a Planner must take the pen before the
  * schedule-editing affordances appear, and a write then succeeds because they hold it.
  * This is the harness's own health check — the substantive keyboard-edit and pen
@@ -17,7 +17,7 @@ test('the pen gates schedule editing; taking it unlocks writes (flag-on stack)',
   await onboard(page, stamp);
   await openNewPlan(page);
 
-  // The pen layer is live: the banner offers the "Start editing" CTA (VITE_PLAN_EDIT_LOCK on).
+  // The pen layer is live: the banner offers the "Start editing" CTA.
   const startEditingBtn = page.getByRole('button', { name: 'Start editing' });
   await expect(startEditingBtn).toBeVisible();
 

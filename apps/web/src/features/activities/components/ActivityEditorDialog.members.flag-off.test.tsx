@@ -40,7 +40,6 @@ function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 const SUMMARY = row({ id: 'sum-1', name: 'Substructure', code: 'W1', type: 'WBS_SUMMARY' });
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

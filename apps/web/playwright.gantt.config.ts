@@ -76,8 +76,6 @@ export default defineConfig({
             env: {
               VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
             },
           },
         ],

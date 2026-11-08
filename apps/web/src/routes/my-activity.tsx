@@ -1,5 +1,4 @@
 import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
-import { AUDIT_FILTERS_ENABLED, AUDIT_SELF_SECURITY_ENABLED } from '@/config/env';
 import { useSelfAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
 import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
@@ -31,11 +30,8 @@ export function MyActivityScreen(): React.ReactElement {
   // cannot drift about what a category means. The surface differs, and that is a prop: only this
   // one may offer Sign-ins, because only this one can return them.
   const [filter, setFilter] = useUrlFilterState(EMPTY_AUDIT_FILTER, parseAuditFilter);
-  const narrowed = AUDIT_FILTERS_ENABLED && !isAuditFilterEmpty(filter);
-  const query = useSelfAuditEvents(
-    AUDIT_FILTERS_ENABLED ? toAuditQuery(filter, 'self') : undefined,
-    AUDIT_SELF_SECURITY_ENABLED,
-  );
+  const narrowed = !isAuditFilterEmpty(filter);
+  const query = useSelfAuditEvents(toAuditQuery(filter, 'self'), true);
 
   return (
     <PageContainer>
@@ -65,17 +61,15 @@ export function MyActivityScreen(): React.ReactElement {
         reassurance padding; an audit row that overstates what it proves is the same defect class as
         one that understates it.
       */}
-      {AUDIT_SELF_SECURITY_ENABLED ? (
-        <p className="text-muted-foreground mt-1 text-sm" id={ATTEMPTS_NOTE_ID}>
-          Failed sign-ins against your email address appear here with{' '}
-          <strong className="text-foreground font-medium">Not signed in</strong> in the{' '}
-          <strong className="text-foreground font-medium">By</strong> column. Most often that is a
-          mistyped or out-of-date password — very likely your own. A row does not mean anyone got
-          in, and it does not identify who tried.{' '}
-          <strong className="text-foreground font-medium">Several in a row</strong> is the pattern
-          worth looking at.
-        </p>
-      ) : null}
+      <p className="text-muted-foreground mt-1 text-sm" id={ATTEMPTS_NOTE_ID}>
+        Failed sign-ins against your email address appear here with{' '}
+        <strong className="text-foreground font-medium">Not signed in</strong> in the{' '}
+        <strong className="text-foreground font-medium">By</strong> column. Most often that is a
+        mistyped or out-of-date password — very likely your own. A row does not mean anyone got in,
+        and it does not identify who tried.{' '}
+        <strong className="text-foreground font-medium">Several in a row</strong> is the pattern
+        worth looking at.
+      </p>
       {/*
         The rows sit in a named section (ADR-0146 D2). **My activity was not named in the report and
         has the same defect as the five screens that were** — its table sat straight on the page
@@ -87,11 +81,9 @@ export function MyActivityScreen(): React.ReactElement {
       */}
       <SectionCard title="Your events" flush className="mt-6">
         <div className="flex flex-col gap-4">
-          {AUDIT_FILTERS_ENABLED ? (
-            <div>
-              <AuditFilterBar surface="self" value={filter} onChange={setFilter} />
-            </div>
-          ) : null}
+          <div>
+            <AuditFilterBar surface="self" value={filter} onChange={setFilter} />
+          </div>
           <AuditEventList
             query={query}
             caption="My audit events"
@@ -99,16 +91,14 @@ export function MyActivityScreen(): React.ReactElement {
             // own email fifty times. Once attempts are included that stops being true: a row with no
             // actor sits beside rows that are theirs, and without the column it reads as something
             // THEY did. The column earns its place exactly when the feed stops being homogeneous.
-            showActor={AUDIT_SELF_SECURITY_ENABLED}
+            showActor
             // Associated with the table rather than merely sitting above it: the table is a focusable
             // `role="region"`, so a reader navigating by landmark lands inside it having skipped
             // whatever precedes it — and what precedes it here is the sentence saying a row does not
             // mean anyone got in.
             /* Both, space-separated: `aria-describedby` takes a list, and the two notes answer
              different questions — what this log covers, and what a "Not signed in" row proves. */
-            describedById={
-              AUDIT_SELF_SECURITY_ENABLED ? `${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}` : COVERAGE_ID
-            }
+            describedById={`${COVERAGE_ID} ${ATTEMPTS_NOTE_ID}`}
             emptyMessage="Nothing here yet. Signing in and out is recorded, along with joining or leaving an organisation and anything you deleted or restructured in a plan."
             emptyFilteredMessage={
               narrowed

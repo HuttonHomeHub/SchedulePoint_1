@@ -59,7 +59,6 @@ vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'u1
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanPen: () => ({
-    penManaged: false,
     holdsPen: true,
     onWriteRejected: h.onWriteRejected,
   }),

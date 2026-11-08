@@ -3,7 +3,7 @@ import { LoadingShape, PageHeader, Skeleton } from '@/components/ui/page';
 import { ChangePasswordForm, ResendVerificationButton, useSession } from '@/features/auth';
 
 /**
- * The account screen (`/account`, ADR-0074 M3) — behind `VITE_ACCOUNT_SETTINGS`.
+ * The account screen (`/account`, ADR-0074 M3).
  *
  * **Deliberately not a settings information architecture.** It is the smallest surface that hosts
  * the two things a person needs and had nowhere to do: change their password, and see whether

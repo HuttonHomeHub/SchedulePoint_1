@@ -619,10 +619,9 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e
 
-      # Flag-ON editing journeys: a second Playwright run (playwright.edit.config.ts)
-      # serving the app with VITE_TSLD_EDITING + VITE_PLAN_EDIT_LOCK on and the API
+      # Editing journeys: a second Playwright run (playwright.edit.config.ts) with the API
       # enforcing the lock (PLAN_EDIT_LOCK_ENFORCED=true), so on-canvas editing and the
-      # pen are really exercised (TECH_DEBT #25b/#27b). It runs after the flag-off run
+      # pen are really exercised (TECH_DEBT #25b/#27b). It runs after the base run
       # tears down its servers, reusing the same ports.
       - name: Web end-to-end tests (editing flags on)
         if: ${{ matrix.shard == 2 }}
@@ -686,9 +685,8 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:undo
 
-      # Flag-ON on-canvas activity types journey (playwright.loe.config.ts) serving the app with
-      # VITE_CANVAS_ACTIVITY_TYPES on (layered on the canvas authoring + editing/pen
-      # flags, with the pen enforced), so the Level-of-Effort endpoint-pick tool — the Add-menu item,
+      # On-canvas activity types journey (playwright.loe.config.ts) layered on the canvas
+      # authoring flag, with the pen enforced, so the Level-of-Effort endpoint-pick tool — the Add-menu item,
       # the two-click keyboard pick, and the announcements — is exercised end to end (Stage D). Runs
       # last, after the prior runs tear down their servers, reusing the ports.
       - name: Web end-to-end tests (on-canvas activity types flag on)

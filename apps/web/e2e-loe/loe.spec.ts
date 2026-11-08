@@ -5,7 +5,7 @@ import { expect, test } from '../e2e-support/test';
 import { armLoeTool, drawTask, onboard, openNewPlan, pickLoeSpan, startEditing } from './support';
 
 /**
- * Flag-ON **on-canvas advanced activity types** journey (`VITE_CANVAS_ACTIVITY_TYPES`, Stage D,
+ * **On-canvas advanced activity types** journey (Stage D,
  * `docs/specs/canvas-activity-types/`, M-D1 Task 4) — the canvas Add split-button's Level of Effort
  * (hammock) endpoint-pick tool, layered on canvas-first authoring (ADR-0032). Proves the whole
  * two-click LOE loop runs in a real browser:

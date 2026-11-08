@@ -41,7 +41,6 @@ const ACTIVITY: ActivitySummary = anActivity({
  */
 const gatingFor = (canWrite: boolean, canProgress = false) =>
   deriveActivityEditorGating({
-    penManaged: true,
     holdsPen: canWrite,
     canWrite: true,
     canProgress,

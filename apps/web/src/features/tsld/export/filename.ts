@@ -1,6 +1,6 @@
 /**
- * Pure filename helpers for the TSLD **export & print** deliverables (spec `docs/specs/export-print/`,
- * behind `VITE_EXPORT_PRINT`). No DOM, canvas, React or `Date.now()` at module scope — the caller
+ * Pure filename helpers for the TSLD **export & print** deliverables (spec `docs/specs/export-print/`).
+ * No DOM, canvas, React or `Date.now()` at module scope — the caller
  * supplies the date (the toolbar passes its local `todayIso`), so the whole module is deterministic and
  * exhaustively unit-testable. `download.ts` names the download from {@link buildExportFilename}.
  */

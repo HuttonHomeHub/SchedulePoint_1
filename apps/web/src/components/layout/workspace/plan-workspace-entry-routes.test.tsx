@@ -17,7 +17,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
   NOTES_ENABLED: true,
-  TOOLBAR_QUICK_WINS_ENABLED: true,
   ENTRY_ROUTES_ENABLED: true,
   PROGRAMME_SCHEDULING_ENABLED: false,
 }));
@@ -39,7 +38,7 @@ vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
 vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'user-me' } } }) }));
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ penManaged: false }),
+  usePlanPen: () => ({ holdsPen: true }),
   CompactPenStatus: () => null,
 }));
 

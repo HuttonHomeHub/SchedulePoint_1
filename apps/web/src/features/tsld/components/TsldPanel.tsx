@@ -18,7 +18,6 @@ import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  TSLD_EDITING_ENABLED,
 } from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
@@ -318,7 +317,7 @@ export interface TsldPanelProps {
    * hosts the lens there. Absent offers none.
    */
   swimlanesToggle?: { checked: boolean; onChange: () => void };
-  /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
+  /** Whether the viewer may edit (Planner/Org Admin). Gates editing. */
   canEdit?: boolean;
   /**
    * Why a pen-gated selection action is shut, given a phrase naming what it does — `null` when it
@@ -327,8 +326,8 @@ export interface TsldPanelProps {
    * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
    */
   scheduleRefusal?: (action: string) => string | null;
-  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence + the
-   * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
+  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence +
+   * `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
   /** Route-composed reposition handler (the minimal `visualStart` PATCH + recalc). Resolves with a
@@ -431,7 +430,7 @@ export interface TsldPanelProps {
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
-   * LOE tool-mode (armed from the flag-gated Add-menu item) enables the on-canvas endpoint-pick. */
+   * LOE tool-mode (armed from the Add-menu item) enables the on-canvas endpoint-pick. */
   onLoeSpan?: (input: TsldLoeSpanInput) => Promise<TsldLoeSpanOutcome>;
   /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
    * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
@@ -680,7 +679,7 @@ interface PendingCreate {
  * `aria-hidden`; keyboard/AT users navigate the listbox, and selecting rings the bar). The
  * activities table remains the fuller conforming alternative.
  *
- * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
+ * **M2:** when editing is enabled (`canEdit` + `onCreate`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
  * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
  * in time (a hand-placement) or drags from a bar's **edge handle** to another bar to draw a
@@ -993,7 +992,7 @@ export function TsldPanel({
   // Arm/disarm side effects: announce the first prompt when the LOE tool is armed (its canvas is
   // aria-hidden, so the prompt must be spoken), and — on disarm — drop any half-finished pick and
   // announce the disarm (WCAG 4.1.3), UNLESS a successful commit already announced its success. Runs
-  // only on a `mode` transition. Inert while the flag is off — `mode` is never `'loe'` then.
+  // only on a `mode` transition.
   useEffect(() => {
     if (mode === 'loe') {
       loeArmedRef.current = true;
@@ -1840,7 +1839,7 @@ export function TsldPanel({
   // bars simply don't paint (`paint.ts` skips `drawnStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
 
-  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+  const editingEnabled = showDiagram && canEdit && onCreate !== undefined;
   // The plural-move capability exists only where the keymap will honour it: the hint is a claim
   // about what Alt+arrow does, so it needs the same conditions the keydown branch needs.
   const canMovePlural =

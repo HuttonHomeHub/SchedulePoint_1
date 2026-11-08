@@ -70,8 +70,6 @@ export default defineConfig({
               VITE_ADVANCED_ACTIVITY_TYPES: 'true',
               VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
               // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
               // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
               // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve

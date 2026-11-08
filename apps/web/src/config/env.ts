@@ -41,9 +41,8 @@ export function flagDefaultOn(value: string | undefined): boolean {
  *
  * **It has no consumer right now**, and that is the normal resting state of this helper rather than
  * a sign it is dead: every flag passes through it for the length of one epic and then leaves.
- * {@link AUDIT_LOG_ENABLED} moved to {@link flagDefaultOn} on 2026-08-03,
- * {@link AUDIT_FILTERS_ENABLED} took its place and moved on 2026-08-04,
- * {@link AUDIT_SELF_SECURITY_ENABLED} the same day, and the next flag will need it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
+ * {@link AUDIT_LOG_ENABLED} moved to {@link flagDefaultOn} on 2026-08-03, and the next flag will
+ * need it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
  * that makes `"TRUE"` read as off — so it cannot rot unnoticed between epics.
  *
  * Do not delete it as dead code, and do not describe a specific consumer here: a named consumer is
@@ -53,65 +52,6 @@ export function flagDefaultOn(value: string | undefined): boolean {
 export function flagDefaultOff(value: string | undefined): boolean {
   return value === 'true' || value === '1';
 }
-
-/**
- * The plan edit-lock "pen" front-end layer (ADR-0028, edit-lock M2). **ON by
- * default** (2026-07-12). Set `VITE_PLAN_EDIT_LOCK=false` to ship the pen inert:
- * `usePlanPen` then reports `penManaged: false` — the lock-status query never polls,
- * no heartbeat runs, the `EditLockBanner` renders nothing, and schedule-editing
- * affordances fall back to role-only gating (rollback / opt-out).
- *
- * ROLLOUT ORDERING (ADR-0028 §9): the web pen is on by default; the API's
- * `PLAN_EDIT_LOCK_ENFORCED` is NOT (it stays a deliberate config switch). Keep that
- * order — enable enforcement only once a bundle with the pen on is live, so users
- * are already acquiring the pen on every editing entry point (harmless while the
- * backend still accepts non-holder writes). Flipping enforcement first would 423 the
- * activities-table / dependency / recalculate flows.
- *
- * @enabled 2026-07-12
- *
- * **Not retired in ADR-0084 batch 1, and the reason is a finding rather than a deferral.**
- * It WAS retired, and CI caught it: `playwright.config.ts` pins this flag OFF for the whole
- * BASE journey — "the read-only TSLD surface and the role-only (no-pen) editing journeys stay
- * covered", in its own words — so retiring it left six editing specs clicking controls the pen
- * now shades. D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
- * whole Playwright config can BE one. `pnpm check:flags` now refuses to retire a flag any
- * config still pins, so this cannot recur silently.
- */
-export const PLAN_EDIT_LOCK_ENABLED = flagDefaultOn(import.meta.env.VITE_PLAN_EDIT_LOCK);
-
-/**
- * On-canvas TSLD structural editing (M2). **ON by default** (2026-07-12) now that
- * every pre-enablement gate is green — see below. Set `VITE_TSLD_EDITING=false` to
- * fall back to the M1 read-only surface, byte-for-byte (rollback / opt-out).
- *
- * CONCURRENCY PRECONDITION — MET. The plan edit-lock (ADR-0028) has landed: the
- * `features/plan-lock` "pen" (behind {@link PLAN_EDIT_LOCK_ENABLED}, also on by
- * default) makes a Planner take an exclusive lock before the canvas editing
- * affordances go live. NB the server-side write-gate `PLAN_EDIT_LOCK_ENFORCED`
- * remains **default-off** and is enabled by config as a separate, deliberate step
- * AFTER the web pen is confirmed deployed (ADR-0028 §9 rollout ordering) — never
- * flip enforcement ahead of the web bundle or non-holder writes would 423.
- *
- * PRE-ENABLEMENT GATES — ALL GREEN. The `Alt+←/→` time-nudge must NOT trigger
- * native Back/Forward history navigation (preventDefault is the mitigation, but
- * browser-chrome accelerators aren't guaranteed suppressible everywhere): asserted
- * automatically on **Chromium** by the flag-on Playwright suite (`keyboard-edit.spec.ts`
- * via `pnpm --filter @repo/web test:e2e:edit`) and MANUALLY CONFIRMED PASSING on
- * **Firefox / Safari / Edge** (2026-07-12, docs/TECH_DEBT.md #25a). Procedure:
- * docs/runbooks/tsld-editing-enablement.md.
- *
- * @enabled 2026-07-12
- *
- * **Not retired in ADR-0084 batch 1, and the reason is a finding rather than a deferral.**
- * It WAS retired, and CI caught it: `playwright.config.ts` pins this flag OFF for the whole
- * BASE journey — "the read-only TSLD surface and the role-only (no-pen) editing journeys stay
- * covered", in its own words — so retiring it left six editing specs clicking controls the pen
- * now shades. D5 said a retirement deletes the flag-off PARITY SUITE; it did not say that a
- * whole Playwright config can BE one. `pnpm check:flags` now refuses to retire a flag any
- * config still pins, so this cannot recur silently.
- */
-export const TSLD_EDITING_ENABLED = flagDefaultOn(import.meta.env.VITE_TSLD_EDITING);
 
 /**
  * Canvas-first plan authoring (ADR-0032, spec `docs/specs/canvas-first-authoring.md`). **ON by
@@ -160,20 +100,6 @@ export const CANVAS_AUTHORING_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVA
 export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_CALENDAR);
 
 /**
- * Progress ingestion — retained-logic recalc (ADR-0035, M2). **ON by default** (quality gates cleared
- * — component/a11y/ux reviews and the repair-warnings follow-up). When on, the progress editor gains a
- * **remaining duration** input plus **suspend / resume** dates, and the plan settings gain a **recalc
- * mode** picker (Retained Logic / Progress Override / Actual Dates). Everything behind it — the
- * settable API fields, the engine's progress classification, and the conformance proof (S02/S03/S04) —
- * is already live; the flag only governs whether a planner can *edit* the new fields in the web UI
- * (percent + actual dates were always editable). Set `VITE_PROGRESS_INGESTION=false` to roll back to
- * the percent-plus-actual-dates editor.
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PROGRESS_INGESTION);
-
-/**
  * Advanced schedule constraints (ADR-0035 §7–§11, M4). **ON by default** now that its quality gates are
  * cleared — the accessibility (pass), component (pass), and UX (blockers folded in: shared
  * `CheckboxField`, plain section chrome, expected-finish copy/guard) reviews are green. When on, the
@@ -190,22 +116,6 @@ export const PROGRESS_INGESTION_ENABLED = flagDefaultOn(import.meta.env.VITE_PRO
  */
 export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
   import.meta.env.VITE_ADVANCED_CONSTRAINTS,
-);
-
-/**
- * Float & critical plan settings (ADR-0035 §17/§18/§20, M6). **ON by default** now that its quality
- * gates have cleared (component/ux/a11y reviews folded in during M6-F7) — the picker is a plan-settings
- * card built on the same reviewed primitives as the other plan settings. When on, the plan settings gain
- * three controls: a **critical-path definition** (Total float / Longest path), a **total-float measure**
- * (Finish / Start / Smallest), and a **make-open-ends-critical** toggle. Everything behind it — the
- * settable API fields, the engine's float & critical computation, and the conformance proof
- * (S07/S08/S11/S13) — is already live; the flag only governs whether a planner can *edit and see* the
- * three options in the web UI. Set `VITE_FLOAT_CRITICAL_SETTINGS=false` to hide them (rollback / opt-out).
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const FLOAT_CRITICAL_SETTINGS_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_FLOAT_CRITICAL_SETTINGS,
 );
 
 /**
@@ -303,45 +213,6 @@ export const RESOURCE_LEVELLING_ENABLED = flagDefaultOn(import.meta.env.VITE_RES
  * @enabled 2026-07-18
  */
 export const EARNED_VALUE_ENABLED = flagDefaultOn(import.meta.env.VITE_EARNED_VALUE);
-
-/**
- * Cost-accrual web surface (M7 rung 5, ADR-0044 F1 / ADR-0035 §32). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — its quality gates
- * (a11y / ux / component / e2e) and documented pre-flip blockers (TECH_DEBT #38/#39/#40/#41/#44) are
- * now cleared. When on, the activity form's
- * "Cost & earned value" fieldset gains a **Cost accrual** select (Start / Uniform / End):
- *
- * - **Cost accrual** — governs WHEN the activity's cost is recognised in the Earned-Value read's
- *   Planned-Value time-phasing (Start = whole cost at the start, End = at the finish, Uniform = spread
- *   linearly). It changes no date — only the cost / cash-flow S-curve.
- *
- * Everything behind it — the settable `accrualType` create/update activity field and the accrual-aware
- * PV time-phasing in the `earned-value` read — is already live; the flag only governs whether the web
- * UI exposes the picker. The cost **S-curve chart** (the period-trend series) is a later, separate
- * slice. Set `VITE_COST_ACCRUAL=false` to disable it (rollback / opt-out).
- *
- * @enabled 2026-07-18
- */
-export const COST_ACCRUAL_ENABLED = flagDefaultOn(import.meta.env.VITE_COST_ACCRUAL);
-
-/**
- * Weighted activity-steps web surface (M7 rung 5, ADR-0044 §2 / ADR-0035 §33). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a
- * brand-new dark surface whose quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the activities table
- * gains a per-activity **Steps** row action that opens an editor for the activity's weighted progress
- * checklist:
- *
- * - **Activity steps** — an editable ordered list of steps (name, relative weight, % complete) with
- *   add / remove / reorder, saved in one bulk `PUT …/activities/:activityId/steps`. When an activity
- *   has steps, its PHYSICAL %-complete rolls up as the weighted mean `Σ(wᵢ·pᵢ)/Σ(wᵢ)` and wins over the
- *   manual `physicalPercentComplete` (all-zero weights fall back to the manual field). A live preview of
- *   the rolled-up % is shown in the editor.
- *
- * Everything behind it — the settable `ActivityStep` rows, the bulk-replace endpoint, and the read-time
- * `rollupPhysicalPercent` resolver — is already live; the flag only governs whether the web UI exposes
- * the editor. Set `VITE_ACTIVITY_STEPS=false` to disable it (rollback / opt-out).
- *
- * @enabled 2026-07-18
- */
-export const ACTIVITY_STEPS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_STEPS);
 
 /**
  * Resource loading-curves web surface (M7 rung 5, ADR-0044 §3 / ADR-0035 §31). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — its quality gates
@@ -443,29 +314,6 @@ export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOn(
 export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
 
 /**
- * TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). **OFF by default during build** —
- * it will flip on after the specialist reviews (a11y / ux / component / perf) are green (M3). When on,
- * it wires four previously-"Coming soon" TSLD toolbar buttons to already-shipped features — no new
- * domain capability, no API/schema/engine change. **It wired FIVE until ADR-0093** removed
- * `update-progress` from the command surface altogether (not flag-off — the shape is deleted), so
- * this flag no longer gates it in either direction:
- *
- * - **Go to today** — pans the canvas to today's date line (reuses the `goToDate` left-inset view jump).
- * - **Comments** — reveals + focuses the plan-level notes thread (`PlanNotesSection`, `VITE_NOTES`).
- * - **Add note** — opens the selected activity's Logic panel at its Notes section (`VITE_NOTES`).
- * - **Clear visual start** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
- *
- * **ON by default** (2026-07-19, product sign-off) now that the commands are wired to already-
- * shipped features and the accessibility / ux / component / performance / security / test reviews are
- * green. Each of the four ids resolves to its real {@link ToolbarItem} when on, and to its existing
- * `placeholderItem()` "Coming soon" stub when off — so `VITE_TOOLBAR_QUICK_WINS=false` restores the
- * placeholders byte-for-byte (emergency rollback / opt-out).
- *
- * @enabled 2026-07-19
- */
-export const TOOLBAR_QUICK_WINS_ENABLED = flagDefaultOn(import.meta.env.VITE_TOOLBAR_QUICK_WINS);
-
-/**
  * TSLD canvas insight lenses (spec `docs/specs/canvas-lenses/`). **OFF by default during build** —
  * it will flip on after the specialist reviews (a11y / ux / component / perf) are green (M4). When
  * on, it turns three shaded Look-row toolbar placeholders into real client-side read lenses over
@@ -531,61 +379,6 @@ export const CANVAS_LENSES_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_L
  * @enabled 2026-07-20
  */
 export const CANVAS_NAV_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_NAV);
-
-/**
- * TSLD export & print (spec `docs/specs/export-print/`, Stage C1). When on, it turns the two shaded
- * Do-row toolbar placeholders (`export`, `print`) into real client-side deliverables over
- * already-shipped data + the shipped canvas renderer — no new API/schema/`@repo/types`/CPM-engine
- * change (the recalc parity gate is untouched):
- *
- * - **Export ▾** — an APG menu-button, grouped Schedule / Diagram: **Schedule (CSV)** (the activity
- *   table as an Excel-safe, injection-safe, UTF-8-BOM CSV; relabelled **All activities (CSV)** with a
- *   conditional **Matching activities only (N)** item when a Stage-A filter / Stage-B isolate lens is
- *   narrowing the set), plus **Diagram — whole plan / current view** as both **PNG** (off-screen
- *   `paintScene` in a light print palette) and **PDF** (lazy `import('jspdf')`, absent from the initial
- *   bundle). Each output carries a distinct filename and announces "Preparing…" then the outcome; a
- *   failure raises a visible dismissable banner.
- * - **Print…** — a browser-print of the whole diagram via the image path (print-only container +
- *   `@media print` stylesheet).
- *
- * **ON by default** (2026-07-20, product sign-off) now that the four outputs are wired and the six
- * specialist reviews (security / devops / performance / accessibility / ux / component) are green (every
- * blocking finding folded: per-extent filenames, visible error surface, in-flight announcement, honest
- * column-superset doc, whitespace-aware CSV injection guard, Schedule/Diagram menu sections). Each of the
- * two ids resolves to its real behaviour when on, and to its existing `placeholderItem()` "Coming soon"
- * stub when off — the `export`/`print` shapes are spread into both branches so they can't drift — so
- * `VITE_EXPORT_PRINT=false` restores the toolbar, canvas paint and a11y tree byte-for-byte (emergency
- * rollback / opt-out); no export module or jsPDF chunk loads. `share` (ADR-0012 guest link) + XER/MSP
- * interchange are C2, out of scope; app-handled `Ctrl/Cmd+P` is a documented deferred fast-follow.
- *
- * @enabled 2026-07-20
- */
-export const EXPORT_PRINT_ENABLED = flagDefaultOn(import.meta.env.VITE_EXPORT_PRINT);
-
-/**
- * On-canvas advanced activity types — the **Level of Effort (hammock)** endpoint-pick tool (Stage D,
- * spec `docs/specs/canvas-activity-types/`). When on, the canvas Add split-button's two disabled "Soon"
- * placeholders (Level of effort + Hammock) collapse into ONE live **Level of Effort (hammock)** menu
- * item that arms a canvas endpoint-pick tool-mode: pick a start driver, then a finish driver, and
- * SchedulePoint composes a `LEVEL_OF_EFFORT` activity plus its SS (start → LOE) and FF (LOE → finish)
- * edges as one undoable action, then recalcs and redraws. The armed trigger shows "Pick start driver" →
- * "Pick finish driver", the item shades below two activities, the tool disarms and announces on
- * commit/cancel, and a keyboard-picked start survives a pointer-picked finish (single-sourced pick).
- * Frontend-only over the already-shipped LOE engine/API (M5-epic, ADR-0035 §21) — no new
- * API/schema/`@repo/types`/CPM-engine change (the recalc parity gate is untouched); a raw `HAMMOCK`
- * create is never wired (the engine has no distinct Hammock — the LOE **is** the span-derived hammock).
- *
- * **ON by default** (2026-07-20, product sign-off) now that the five specialist reviews (accessibility /
- * ux / component / performance / test) are green (Task 4; every blocking finding folded: disarm-on-
- * commit, Escape announcement, cross-modality pick, armed-trigger state, <2-activities gate). Flag-off ⇒
- * the Add menu keeps today's disabled "Soon" placeholders byte-for-byte and the LOE tool-mode is
- * unreachable (`VITE_CANVAS_ACTIVITY_TYPES=false` = emergency rollback / opt-out).
- *
- * @enabled 2026-07-20
- */
-export const CANVAS_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_CANVAS_ACTIVITY_TYPES,
-);
 
 /**
  * TSLD canvas-axis-aligned resource strip + over-allocation highlight (spec
@@ -1001,41 +794,6 @@ export const CANVAS_LINK_ROUTING_ENABLED =
 export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);
 
 /**
- * **Per-assignment join lag** (`VITE_ASSIGNMENT_LAG`, default **ON** since 2026-08-02) — ADR-0071
- * M4/M6, the planner's
- * half of the engine-surface audit's F6.
- *
- * The CPM engine, the resource histogram, the levelling pass and the Earned-Value read have all
- * carried a per-assignment join lag since ADR-0071 M0–M3 — so a crane arriving four days into a
- * fortnight schedules, loads, levels and earns correctly, and **nothing in the product could set
- * one**. It could be imported, and that was the whole of it. This flag is the field.
- *
- * Flag ON adds a "Joins after" control to the assign form and to each assignment row, reading the
- * ADR-0070 `d`/`h`/`m` grammar against the activity's **saved** calendar — not the calendar a
- * pending edit has selected, because an assignment write does not carry the calendar with it and
- * converting against an unsaved choice would store minutes measured on a calendar the activity does
- * not have. Where the factor is unresolved the field keeps hours and minutes and refuses days,
- * naming the reason; that is the same code path a rollback leaves behind, so the degraded state and
- * the flag-off state cannot rot separately.
- *
- * Flipped default-ON by M6, once the deferred specialist gates ran over the whole M0–M5 diff and
- * every blocking finding was folded — a silently-wrong `2d4h` on the degraded path, a Save button on
- * the native `disabled` attribute, an assign-form refusal that registered with nothing and announced
- * nothing, an entry route that never received the day factor and so was permanently degraded, and a
- * placeholder offering an example in the unit its own label was refusing. The flag-on journey
- * (`apps/web/e2e-assignment-lag/`, its own CI step) proves the factor, the pen and the optimistic
- * `version` against a real API.
- *
- * Rollback: set `VITE_ASSIGNMENT_LAG=false` and rebuild the web image. Nothing persisted depends on
- * it — `lagMinutes` has been on the assignment DTOs since ADR-0071 M0, an existing lag keeps
- * scheduling, loading and earning exactly as it does now, and the flag-off surface simply stops
- * showing it. The flag-off parity suite is kept, not weakened: it is the rollback contract.
- *
- * @enabled 2026-08-02
- */
-export const ASSIGNMENT_LAG_ENABLED = flagDefaultOn(import.meta.env.VITE_ASSIGNMENT_LAG);
-
-/**
  * **The Float paths panel** (`VITE_FLOAT_PATHS`, default **ON** since 2026-08-02) — the
  * engine↔planner surface audit's F4, and its last open finding.
  *
@@ -1134,108 +892,6 @@ export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATH
  * @enabled 2026-08-03
  */
 export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
-
-/**
- * The audit log's **filter bar** (ADR-0073 C1) — category chips, an outcome control and a date
- * range on both audit screens, with the chosen filter in the URL so a narrowed view survives a
- * reload and can be pasted to a colleague.
- *
- * **ON by default since 2026-08-04 (C1.5)**, and the flip is a hard precondition for the coverage
- * milestone rather than a preference. The producers that milestone adds are server-side, and a
- * `VITE_` constant is a client build-time value that cannot gate a server-side record (the ADR-0060
- * M0 rule). So the day the first coverage producer merges, every reader's feed gains two to three
- * orders of magnitude more rows — flag or no flag. Had the filter still been off at that moment the
- * log would have been unusable for everyone, with no rollback that helps.
- *
- * Rollback: set `VITE_AUDIT_FILTERS=false` and rebuild the web image. Flag-off is byte-for-byte the
- * prior screens — no bar renders and the client sends no filter parameter at all, so the request is
- * the one it sent before. Pinned by `audit-filter.parity.test.tsx`, which is **kept** after the flip
- * rather than weakened: that suite is the rollback contract (ADR-0053 M6), not scaffolding.
- *
- * @enabled 2026-08-04
- */
-export const AUDIT_FILTERS_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_FILTERS);
-
-/**
- * Failed sign-ins against the reader's own address, on **My activity** (ADR-0073 C2).
- *
- * The single most useful row an audit log has to offer — somebody trying to get into your account —
- * has until now been readable by nobody: it carries no organisation and no actor, and both reads
- * filter on exactly those columns, so it was reachable only from `psql` (TECH_DEBT #91). C2.2
- * attributes it to the account it named; this flag turns on the surface that shows it.
- *
- * **ON by default since 2026-08-04 (C2.5).** Only the client half is flagged, and it cannot be
- * otherwise: the write-time attribution is a server-side record and a `VITE_` constant is a client
- * build-time value (the ADR-0060 M0 rule). The server's own parity is structural instead — absent
- * `include=attempts` the widened read's `where` is exactly what it always was, measured at 0.20 ms
- * and unchanged.
- *
- * Rollback: set `VITE_AUDIT_SELF_SECURITY=false` and rebuild the web image. Flag-off, this screen
- * sends no `include` parameter at all and shows no actor column, so it is byte-for-byte what it
- * was. Pinned by `audit-self-security.parity.test.tsx`, which is **kept** rather than weakened —
- * that suite is the rollback contract (ADR-0053 M6). Its sibling
- * `audit-self-security.flag-on.test.tsx` pins the other half, and exists because this milestone
- * first shipped with only the rollback covered: nothing proved an attempt row reached the reader
- * with the column and the sentence that make it legible.
- *
- * @enabled 2026-08-04
- */
-export const AUDIT_SELF_SECURITY_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_SELF_SECURITY);
-
-/**
- * The `/account` screen: change your password, see and resend your address verification
- * (ADR-0074 M3). **ON by default** since 2026-08-05, once the M5 gate pass and both flag-on
- * journeys were green.
- *
- * **This flag is legitimate, and its sibling `VITE_PASSWORD_RESET` is a different kind of gate.**
- * Everything behind this one already works against today's server: `sendVerificationEmail` is
- * configured, and `/change-password` has always been reachable — there was simply no screen. So
- * the flag gates a **product decision** (is this surface ready?), not a server capability.
- *
- * Contrast the M2 work, which ships **unflagged**: those surfaces branch on whether the server has
- * `AUTH_REQUIRE_EMAIL_VERIFICATION` on, and a `VITE_` constant is baked into the bundle long before
- * an operator sets that (the ADR-0060 M0 rule). A flag there would strand a flag-off bundle against
- * a flag-on server — worse than none. **A client surface whose gate is a server-side condition is
- * branched on runtime evidence; a client surface whose gate is a product decision takes a flag.**
- *
- * Rollback: set `VITE_ACCOUNT_SETTINGS=false` and rebuild the web image. Flag-off, no `/account`
- * route is registered and the account menu has no entry for it, so the app is byte-for-byte what it
- * was. Pinned by `account-settings.parity.test.tsx`, kept rather than weakened — that suite is the
- * rollback contract (ADR-0053 M6).
- *
- * @enabled 2026-08-05
- */
-export const ACCOUNT_SETTINGS_ENABLED = flagDefaultOn(import.meta.env.VITE_ACCOUNT_SETTINGS);
-
-/**
- * The signed-out password-reset flow: `/forgot-password`, `/reset-password`, and the
- * **"Forgot your password?" link on sign-in** (ADR-0074 M4). **ON by default** since 2026-08-05.
- *
- * **Its prerequisite was a deployment fact, not a code state, and that is why it flipped second.**
- * `sendResetPassword` is configured in `createAuth()`, so the endpoint no longer throws
- * `RESET_PASSWORD_DISABLED` — but a reset link that is composed and then not delivered is *worse*
- * than a missing screen: the enumeration-safe copy says "if that address has an account we've sent
- * a link" whatever happened, so a silent transport failure is indistinguishable from success to the
- * one person who needs it to work. The flip was therefore held until the product owner confirmed
- * `MAIL_SMTP_URL`/`MAIL_FROM` are set and sending on the deployed host (2026-08-05). Where that is
- * not true, `SmtpMailService` is not selected at all and mail is only logged — see
- * `common/mail/mail.service.ts` and `docs/TECH_DEBT.md` #94, which is the half of this still open:
- * a send that fails *after* the handoff is invisible to the person waiting for it.
- *
- * **The link and both routes share this one constant, and splitting them is the failure this
- * comment exists to prevent.** A "Forgot your password?" link pointing at a conditionally-registered
- * route is a link to nothing, and **`pnpm typecheck` cannot catch it**: `...(FLAG ? [route] : [])`
- * widens to `(typeof route)[]`, so the registered-route union contains the route in *both* branches
- * and `<Link to="/forgot-password">` compiles either way. The flag structure is the gate; the
- * parity suite pins the link's absence specifically.
- *
- * Rollback: set `VITE_PASSWORD_RESET=false` and rebuild the web image. Flag-off, neither route is
- * registered and sign-in carries no link, so the app is byte-for-byte what it was. Pinned by
- * `password-reset.parity.test.tsx`, kept rather than weakened (ADR-0053 M6).
- *
- * @enabled 2026-08-05
- */
-export const PASSWORD_RESET_ENABLED = flagDefaultOn(import.meta.env.VITE_PASSWORD_RESET);
 
 /**
  * The TSLD **data-date line** (`VITE_CANVAS_DATA_DATE`, default **OFF** during build) — canvas

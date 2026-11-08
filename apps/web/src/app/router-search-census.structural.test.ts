@@ -10,10 +10,8 @@ import { router } from './router';
 // census rather than fail it.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  PASSWORD_RESET_ENABLED: true,
   RESOURCES_ENABLED: true,
   AUDIT_LOG_ENABLED: true,
-  ACCOUNT_SETTINGS_ENABLED: true,
   GUEST_SHARE_LINKS_ENABLED: true,
 }));
 

@@ -4,10 +4,8 @@ import { Dialog } from '@/components/ui/dialog';
 import {
   ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
-  FLOAT_CRITICAL_SETTINGS_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
-  PROGRESS_INGESTION_ENABLED,
   RESOURCE_CURVES_ENABLED,
   RESOURCE_LEVELLING_ENABLED,
 } from '@/config/env';
@@ -139,21 +137,17 @@ export function PlanChromeDialogs({
               canEdit={model.canWrite}
             />
           </SettingsSection>
-          {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
-            <SettingsSection title="Critical path & float">
-              <PlanScheduleSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                calendars={model.calendars.data ?? []}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
-          {PROGRESS_INGESTION_ENABLED ? (
-            <SettingsSection title="Progress & recalculation">
-              <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
-            </SettingsSection>
-          ) : null}
+          <SettingsSection title="Critical path & float">
+            <PlanScheduleSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              calendars={model.calendars.data ?? []}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
+          <SettingsSection title="Progress & recalculation">
+            <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
           {ADVANCED_CONSTRAINTS_ENABLED ? (
             <SettingsSection title="Expected finish">
               <PlanExpectedFinishToggle

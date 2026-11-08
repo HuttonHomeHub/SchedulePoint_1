@@ -1,8 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **per-assignment join lag**
- * (`VITE_ASSIGNMENT_LAG`, ADR-0071 M4) — the "Joins after" control on the assign form and on each
+ * End-to-end configuration for the **per-assignment join lag** (ADR-0071 M4) — the "Joins after" control on the assign form and on each
  * assignment row.
  *
  * Everything this suite proves needs a **real API and a real database**. That `1d` on an eight-hour
@@ -63,7 +62,6 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
-              VITE_ASSIGNMENT_LAG: 'true',
               // The resources surface the control lives on.
               VITE_RESOURCES: 'true',
               // The legacy stacked plan page and the flag-off Resources DIALOG, not the tabbed
@@ -76,10 +74,6 @@ export default defineConfig({
               // the note above gives: `ActivityResourcesPanel` is the same component whether it is
               // reached as a dialog or as the editor's Resources tab (ADR-0062), so only the route
               // to it changes.
-              // The pen must be real: an assignment write is pen-gated (ADR-0028), and a lag that
-              // saves without the lock is not the thing being tested.
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_TSLD_EDITING: 'true',
               // `VITE_LIBRARY_SCOPING` is deliberately NOT pinned. It is default-on, so the
               // resource picker is the shared APG `Combobox` — leaving it at its default is what
               // makes this journey drive the control a planner actually meets, and the shared

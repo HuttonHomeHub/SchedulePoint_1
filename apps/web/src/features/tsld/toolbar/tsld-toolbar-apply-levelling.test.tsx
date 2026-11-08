@@ -159,7 +159,6 @@ describe('the Apply levelled dates… command', () => {
 describe('the Apply levelled dates… command — the role gate, with the real gating logic', () => {
   function gated(role: 'VIEWER' | 'CONTRIBUTOR', requestApplyLevelling: () => void) {
     const gating = derivePlanGating({
-      penManaged: true,
       holdsPen: true,
       canWrite: canManageHierarchy(role),
       canProgress: canReportProgress(role),

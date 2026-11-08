@@ -68,8 +68,6 @@ export default defineConfig({
             // not about.
             env: {
               VITE_AUDIT_LOG: 'true',
-              VITE_AUDIT_FILTERS: 'true',
-              VITE_AUDIT_SELF_SECURITY: 'true',
             },
           },
         ],

@@ -49,7 +49,7 @@ export interface TsldCanvasUiState {
   setLinkType: React.Dispatch<React.SetStateAction<DependencyType>>;
   /**
    * The **Level of Effort (hammock)** endpoint-pick tool's picked **start driver** id (Stage D,
-   * `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the SINGLE source of
+   * `docs/specs/canvas-activity-types/`) — the SINGLE source of
    * truth for "the picked start", shared by the pointer pick (canvas → `onLoeSpanStep`), the keyboard
    * pick (`TsldPanel`'s listbox Enter), and the toolbar's Add-trigger label. Null when no start is
    * picked; cleared when the tool disarms (`mode` leaves `'loe'`). Inert while the flag/tool is off

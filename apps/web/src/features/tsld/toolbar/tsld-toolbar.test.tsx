@@ -21,16 +21,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
   // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
   CANVAS_NAV_ENABLED: false,
-  // Pin export & print OFF here too (this is the flag-off registry suite): `export`/`print` stay their
-  // "Coming soon" placeholders. The real flag-on Export menu is covered in tsld-toolbar-export.test.tsx.
-  EXPORT_PRINT_ENABLED: false,
   // Pin External-Guest share links OFF here too (now ON by default, ADR-0051 F-M4): `share` stays its
   // "Coming soon" placeholder. The real flag-on Share… item is covered in tsld-toolbar-share.test.tsx.
   GUEST_SHARE_LINKS_ENABLED: false,
-  // Pin the on-canvas advanced activity types (Stage D) OFF here too: the Add menu's "Span between"
-  // section stays today's disabled Level-of-effort + Hammock "Soon" placeholders (the flag-on single
-  // "Level of Effort (hammock)" item is covered in tsld-toolbar-activity-types.test.tsx).
-  CANVAS_ACTIVITY_TYPES_ENABLED: false,
   // Pin the canvas resource-view lens (Stage E, ADR-0049) OFF here too: `resource-view` AND the M2
   // `over-allocation` highlight stay their "Coming soon" placeholders (the flag-on toggles are covered
   // in tsld-toolbar-resource-view.test.tsx).
@@ -405,36 +398,10 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(requestAutoArrange).toHaveBeenCalledOnce();
   });
 
-  it('renders the search field and inline roadmap placeholders, disabled with a reason', () => {
+  it('renders the search field as a disabled stub', () => {
     renderRows(ctx());
     // Search leads the Find cluster as a disabled field (not a menu item).
     expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
-    // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    // `Colour by…` left this list in ADR-0090 M2-T2 along with the live control. Its flag-off
-    // placeholder was NOT left behind on Row 1: a placeholder occupying the width the live control
-    // just vacated defeats the move exactly. Flag-off, `View ▾`'s Insight section has no colour
-    // group at all.
-    // Print and Share folded into the Share & export menu in ADR-0090 M2-T4, and Export became that
-    // menu's trigger — so only one top-level placeholder remains where three stood.
-    for (const name of ['Share & export']) {
-      const item = screen.getByRole('button', { name });
-      expect(item).toHaveAttribute('aria-disabled', 'true');
-      // The title repeats the label ONLY when the button is icon-only, because then it is the
-      // single thing identifying which control is refusing. A labelled button already shows its
-      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
-      // than hard-coded, so this case keeps working whichever side of that line an item is on.
-      // NOT `hasAttribute('aria-label')` — see the sibling case: a labelled button with a linked
-      // reason carries one too. The visible label is the button's first text node.
-      const iconOnly = !item.textContent?.startsWith(name);
-      if (iconOnly) {
-        expect(item).toHaveAttribute('title', `${name} — Coming soon`);
-      } else {
-        // ADR-0204: a labelled shaded control shows its reason as a tip, not a hover-only `title`.
-        expect(item).not.toHaveAttribute('title');
-        fireEvent.focus(item);
-        expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Coming soon');
-      }
-    }
   });
 
   it('offers no resource-view lens at all inside View when VITE_CANVAS_RESOURCE_VIEW is off', () => {

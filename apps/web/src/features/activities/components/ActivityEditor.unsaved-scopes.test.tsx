@@ -23,7 +23,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
  * no-op for the scopes that already worked.
  */
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

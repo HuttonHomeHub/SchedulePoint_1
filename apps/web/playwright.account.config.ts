@@ -1,8 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **account recovery** (`VITE_ACCOUNT_SETTINGS` +
- * `VITE_PASSWORD_RESET`, ADR-0074 M5-T3).
+ * End-to-end configuration for **account recovery** (ADR-0074 M5-T3).
  *
  * Two things make this suite different from its 24 siblings.
  *
@@ -76,12 +75,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Only the two flags this journey is about. The fewer flags a journey needs, the
-            // fewer reasons it has to fail for something it is not testing.
-            env: {
-              VITE_ACCOUNT_SETTINGS: 'true',
-              VITE_PASSWORD_RESET: 'true',
-            },
           },
         ],
       }),

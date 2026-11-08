@@ -32,7 +32,7 @@ import { CANVAS_DATA_DATE_ENABLED, CANVAS_RESOURCE_VIEW_ENABLED } from '@/config
 
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
- * `docs/specs/export-print/` §Milestone 2, behind `VITE_EXPORT_PRINT`). It creates its **own** canvas
+ * `docs/specs/export-print/` §Milestone 2). It creates its **own** canvas
  * (`document.createElement('canvas')`, matching how the live `TsldCanvas` allocates its surface), runs
  * the shipped `paintScene` against it with the light print palette + the pure {@link buildExportViewport}
  * geometry, composites a white paper ground behind the diagram, draws the title band + legend into the

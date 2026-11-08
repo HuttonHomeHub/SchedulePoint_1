@@ -36,7 +36,6 @@ import {
   Plus,
   Printer,
   Redo2,
-  Rows3,
   Scale,
   Search,
   Settings,
@@ -120,7 +119,6 @@ import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 import { useTooltip } from '@/components/ui/tooltip';
 import {
-  CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_LENSES_ENABLED,
@@ -133,13 +131,11 @@ import {
   CANVAS_VISUAL_LANGUAGE_ENABLED,
   EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
-  EXPORT_PRINT_ENABLED,
   GANTT_VIEW_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
   SCHEDULE_INTERCHANGE_ENABLED,
-  TOOLBAR_QUICK_WINS_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
@@ -977,15 +973,6 @@ const MILESTONE_ADD_TYPES = new Set<string>(['START_MILESTONE', 'FINISH_MILESTON
  * Level-of-Effort item shades with this reason (Stage D spec §Edge cases). */
 const LOE_TOO_FEW_REASON = 'Add activities to span between them';
 
-/** A small "coming soon" tag for menu rows that preview a not-yet-built activity kind. */
-function SoonTag(): React.ReactElement {
-  return (
-    <span className="border-border text-muted-foreground text-micro ml-auto rounded-full border border-dashed px-2 py-0.5 font-medium tracking-wide uppercase">
-      Soon
-    </span>
-  );
-}
-
 /**
  * The **Add split-button** (ADR-0032 M4) — the canvas-first replacement for the plain "Add activity"
  * toggle. A **true** split button (ADR-0064 T3, matching {@link LinkControl}): the primary region
@@ -1034,8 +1021,6 @@ function AddActivityControl({
         ? 'Pick finish driver'
         : 'Pick start driver'
       : 'Add';
-  // Flag-off (`CANVAS_ACTIVITY_TYPES` dark) the LOE tool is unreachable, so `isLoeSpanning` is never true
-  // and the label/active reflection collapses to today's plain "Add", byte-for-byte.
   const loeTooFew = ctx.loeSpanActivityCount < 2;
   const armed = ctx.isAddingActivity || ctx.isLoeSpanning;
   // The primary region's action, which follows whichever tool this control currently reflects: it
@@ -1124,43 +1109,27 @@ function AddActivityControl({
           </MenuItem>
         ) : null}
         {/* Span-between kinds (ADR-0032) are derived from two endpoints, not point-and-draw — so they
-            live here as a distinct section. Flag-on (`VITE_CANVAS_ACTIVITY_TYPES`, Stage D) this is ONE
-            live **Level of Effort (hammock)** item that arms the endpoint-pick tool — the LOE is the
-            span-derived hammock, so there is no separate Hammock item and no raw `HAMMOCK` create (Q1).
-            Flag-off it stays today's two disabled "Soon" placeholders, byte-for-byte. */}
+            live here as a distinct section. This is ONE live **Level of Effort (hammock)** item that
+            arms the endpoint-pick tool — the LOE is the span-derived hammock, so there is no
+            separate Hammock item and no raw `HAMMOCK` create (Q1). */}
         <MenuSection divider label="Span between activities" />
-        {CANVAS_ACTIVITY_TYPES_ENABLED ? (
-          // Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
-          // hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
-          // `menuitemradio` (the `selected` prop) so the armed state still announces via `aria-checked`.
-          <MenuItem
-            selected={ctx.isLoeSpanning}
-            disabled={loeTooFew}
-            onSelect={() => ctx.toggleLoeSpanMode()}
-          >
-            <Check
-              aria-hidden="true"
-              className={cn('size-4', ctx.isLoeSpanning ? 'opacity-100' : 'opacity-0')}
-            />
-            Level of Effort (hammock)
-            {loeTooFew ? (
-              <span className="text-muted-foreground ml-auto text-xs">{LOE_TOO_FEW_REASON}</span>
-            ) : null}
-          </MenuItem>
-        ) : (
-          <>
-            <MenuItem disabled onSelect={() => {}}>
-              <Waypoints aria-hidden="true" className="size-4" />
-              Hammock
-              <SoonTag />
-            </MenuItem>
-            <MenuItem disabled onSelect={() => {}}>
-              <Rows3 aria-hidden="true" className="size-4" />
-              Level of effort
-              <SoonTag />
-            </MenuItem>
-          </>
-        )}
+        {/* Disabled-with-reason (shade-don't-hide) below two activities — the span needs two drivers to
+            hang off (B5) — mirroring the Export menu's "No matching activities" pattern. Stays a
+            `menuitemradio` (the `selected` prop) so the armed state still announces via `aria-checked`. */}
+        <MenuItem
+          selected={ctx.isLoeSpanning}
+          disabled={loeTooFew}
+          onSelect={() => ctx.toggleLoeSpanMode()}
+        >
+          <Check
+            aria-hidden="true"
+            className={cn('size-4', ctx.isLoeSpanning ? 'opacity-100' : 'opacity-0')}
+          />
+          Level of Effort (hammock)
+          {loeTooFew ? (
+            <span className="text-muted-foreground ml-auto text-xs">{LOE_TOO_FEW_REASON}</span>
+          ) : null}
+        </MenuItem>
       </Menu>
     </>
   );
@@ -2942,12 +2911,9 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * unchanged within each row (a row wraps; nothing overflows — ADR-0109 D1). Real controls sit alongside **future-feature placeholders** — disabled
  * "Coming soon" stubs (resource-view, share) that make the toolbar read as fully designed and are
  * switched on later by swapping the stub for a real command (`docs/TOOLBAR_ROADMAP.md`).
- * (go-to-today, comments and add-note under
- * `VITE_TOOLBAR_QUICK_WINS`; search/filter, colour-by and baseline-overlay
- * under `VITE_CANVAS_LENSES`; isolate-logic, next-conflict and snap-to-grid under `VITE_CANVAS_NAV`;
- * export and print under `VITE_EXPORT_PRINT`; the Add menu's Level-of-effort/Hammock placeholders
- * collapse to one live Level-of-Effort item under `VITE_CANVAS_ACTIVITY_TYPES` — each a placeholder
- * only when its owning flag is off.)
+ * (search/filter, colour-by and baseline-overlay under `VITE_CANVAS_LENSES`; isolate-logic,
+ * next-conflict and snap-to-grid under `VITE_CANVAS_NAV` — each a placeholder only when its owning
+ * flag is off.)
  *
  * Two design rules the registry enforces (ADR-0031):
  * 1. **Stable shape, shade-don't-hide** — a capability that is temporarily unavailable (e.g. zoom
@@ -3005,29 +2971,6 @@ function penVerbs(ctx: TsldToolbarContext): { canStart: boolean; canStop: boolea
 }
 
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
-  // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/order/
-  // label/icon each remaining id carries in BOTH its real (flag-on) item and its
-  // `placeholderItem()` (flag-off) stub, declared once and spread into both so the two branches can't
-  // drift (component review C1; mirrors the `add-activity` shared-shape pattern below).
-  const todayShape = {
-    id: 'today',
-    group: 'frame' as const,
-    row: 'strip' as const,
-    order: 13,
-    label: 'Go to today',
-    icon: <LocateFixed className="size-4" />,
-  };
-  const commentsShape = {
-    id: 'comments',
-    // **Panels, not Plan** (toolbar-redesign M2-T2): Comments opens a panel beside the diagram, which
-    // is what the Legend and Resource view do, and it left the DO row so the row that carries the
-    // pen can hold a labelled Apply levelled dates. Taxonomy group 7 (`help`) is the Panels group.
-    group: 'help' as const,
-    row: 'strip' as const,
-    order: 2,
-    label: 'Comments',
-    icon: <MessageSquare className="size-4" />,
-  };
   // Insight-lens (VITE_CANVAS_LENSES) shared item shapes — the id/group/row/order/label(/icon)
   // each lens id carries in BOTH its real (flag-on) item and its stub (flag-off `SearchFieldControl` /
   // `placeholderItem()`), declared once and spread into both branches so they can't drift (mirrors the
@@ -3068,22 +3011,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     order: 2,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
-  };
-  // Export & print (VITE_EXPORT_PRINT) shared item shapes — the id/group/row/order/label/icon each
-  // of the two ids carries in BOTH its real (flag-on) item and its `placeholderItem()` (flag-off) stub,
-  // declared once and spread into both branches so they can't drift (mirrors the quick-wins / lens /
-  // canvas-nav shared-shape pattern). Both ride the Row 2 · Do deliverables cluster (no pen — they read,
-  // never author).
-  // The deliverables trigger (ADR-0090 M2-T4): one stop where there were three. It sits in the new
-  // `output` group at Row 2's trailing edge — the group renamed from the never-used `history`, so
-  // the taxonomy gained a home for "what the plan leaves as" without growing.
-  const exportShape = {
-    id: 'export',
-    group: 'output' as const,
-    row: 'strip' as const,
-    order: 0,
-    label: SHARE_EXPORT_LABEL,
-    icon: <FileDown className="size-4" />,
   };
   const registered: ToolbarItem<TsldToolbarContext>[] = [
     // --- 1 · Frame / navigate (Row 1 · Look) --------------------------------------------------
@@ -3151,28 +3078,30 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // Go-to-today — a viewport jump that places today at the left edge (distinct from the "Today line"
     // *display* toggle in `View▾`). Named "Go to today" (not "Recenter") for honesty: `goToDate` pins the
     // day at the 12px left inset, it does not centre (label-honesty nit). It stays on the deck, leading the
-    // Look row, while Zoom and Fit are in the diagram's corner cluster. Flag-on it reuses the `goToDate` view jump (toolbar quick-wins F1) — view-only,
-    // so a Viewer can use it; flag-off it is the "Coming soon" placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...todayShape,
-          // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): ordered ahead
-          // of the zoom cluster, where the date control has always sat. It is a `render` item, and a
-          // split button is not something you stuff into a menu.
-          //
-          // A `render` item owns its own chrome, and this one resolves its label from
-          // `api.labelState` exactly as its `View ▾` neighbour does.
-          // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
-          // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
-          // same milestone as the Early/Visual selector; the control itself is display-only and reads
-          // no mode. The flag-off arm went with the flag — and it was the arm that rendered NO caret,
-          // so keeping it would have been keeping the surface without the capability.
-          order: -2,
-          render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
-            <GoToTodayControl ctx={ctx} api={api} />
-          ),
-        }
-      : placeholderItem(todayShape),
+    // Look row, while Zoom and Fit are in the diagram's corner cluster. It reuses the `goToDate` view
+    // jump (toolbar quick-wins F1) — view-only, so a Viewer can use it.
+    {
+      id: 'today',
+      group: 'frame',
+      row: 'strip',
+      label: 'Go to today',
+      icon: <LocateFixed className="size-4" />,
+      // **The merged control takes `go-to-date`'s slot** (ADR-0091 M7-S6): ordered ahead
+      // of the zoom cluster, where the date control has always sat. It is a `render` item, and a
+      // split button is not something you stuff into a menu.
+      //
+      // A `render` item owns its own chrome, and this one resolves its label from
+      // `api.labelState` exactly as its `View ▾` neighbour does.
+      // **Go-to-date outlives the mode it shipped beside** (one-planning-surface M-F-T5).
+      // `VITE_SCHEDULING_MODES` gated the caret because ADR-0033 delivered the date control in the
+      // same milestone as the Early/Visual selector; the control itself is display-only and reads
+      // no mode. The flag-off arm went with the flag — and it was the arm that rendered NO caret,
+      // so keeping it would have been keeping the surface without the capability.
+      order: -2,
+      render: (ctx: TsldToolbarContext, api: ToolbarItemRenderApi) => (
+        <GoToTodayControl ctx={ctx} api={api} />
+      ),
+    },
 
     // --- 2 · Lens / display (Row 1 · Look) ----------------------------------------------------
     {
@@ -3381,7 +3310,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       labelVisibility: 'always',
       label: 'Editing control',
       icon: <PenLine className="size-4" />,
-      isVisible: (ctx) => ctx.penLock?.penManaged === true,
+      isVisible: (ctx) => ctx.penLock !== undefined,
       // Shaded, never absent, in the eleven branches offering neither verb: an item that disappears
       // takes a roving stop with it and shifts every command on the DO row sideways.
       isEnabled: (ctx) => penVerbs(ctx).canStart || penVerbs(ctx).canStop,
@@ -3766,50 +3695,60 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // `selection-duplication.structural.test.ts` fails if a selection-gated item reappears here
     // with a dock twin, so this comment is a signpost rather than the enforcement.
     // Export ▾ (export & print, `docs/specs/export-print/`) — a menu-button of client-side deliverables
-    // (Schedule CSV now; Diagram PNG/PDF at M2/M3). Flag-on it's the real `ExportMenuControl`, gated on a
-    // computed diagram (disabled-with-reason otherwise, shade-don't-hide); flag-off it's the byte-for-byte
-    // `placeholderItem()` "Coming soon" stub. `exportShape` is spread into both so they can't drift.
-    EXPORT_PRINT_ENABLED
-      ? {
-          ...exportShape,
-          // **Enabled when ANY row inside is actionable, not when the exports are** (ADR-0082, and
-          // the rule M2-T7 exists to pin). Gating the trigger on `hasDiagram` alone — which is what
-          // the first version did, inheriting the old Export button's gate — shut the whole menu on
-          // a plan with no computed diagram and took **Share** with it. Sharing needs a permission,
-          // not a schedule, so a Planner on a freshly created plan could share before this change
-          // and could not after: a capability lost to a relocation, which is the exact failure this
-          // milestone's suite-impact pass exists to catch.
-          //
-          // Each row keeps its own gate and its own reason; the trigger only asks whether there is
-          // anything at all behind it.
-          isEnabled: (ctx) => ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare),
-          disabledReason: (ctx) =>
-            ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare)
-              ? undefined
-              : EXPORT_NO_DIAGRAM_REASON,
-          render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
-        }
-      : placeholderItem(exportShape),
+    // (Schedule CSV now; Diagram PNG/PDF at M2/M3), gated on a computed diagram (disabled-with-reason
+    // otherwise, shade-don't-hide). It rides the Row 2 · Do deliverables cluster (no pen — it reads,
+    // never authors).
+    // The deliverables trigger (ADR-0090 M2-T4): one stop where there were three. It sits in the new
+    // `output` group at Row 2's trailing edge — the group renamed from the never-used `history`, so
+    // the taxonomy gained a home for "what the plan leaves as" without growing.
+    {
+      id: 'export',
+      group: 'output',
+      row: 'strip',
+      order: 0,
+      label: SHARE_EXPORT_LABEL,
+      icon: <FileDown className="size-4" />,
+      // **Enabled when ANY row inside is actionable, not when the exports are** (ADR-0082, and
+      // the rule M2-T7 exists to pin). Gating the trigger on `hasDiagram` alone — which is what
+      // the first version did, inheriting the old Export button's gate — shut the whole menu on
+      // a plan with no computed diagram and took **Share** with it. Sharing needs a permission,
+      // not a schedule, so a Planner on a freshly created plan could share before this change
+      // and could not after: a capability lost to a relocation, which is the exact failure this
+      // milestone's suite-impact pass exists to catch.
+      //
+      // Each row keeps its own gate and its own reason; the trigger only asks whether there is
+      // anything at all behind it.
+      isEnabled: (ctx) => ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare),
+      disabledReason: (ctx) =>
+        ctx.hasDiagram || (GUEST_SHARE_LINKS_ENABLED && ctx.canShare)
+          ? undefined
+          : EXPORT_NO_DIAGRAM_REASON,
+      render: (ctx, api) => <ExportMenuControl ctx={ctx} api={api} />,
+    },
     // `share` folded INTO the Share & export menu in ADR-0090 M2-T4 — see `ExportMenuControl`.
     // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
-    // every role; absent when `VITE_NOTES` is off (there is nothing to reveal). Flag-off it is the
-    // "Coming soon" placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...commentsShape,
-          // Icon-only at every width (M6, owner decision 2026-10-10; it was icon-only below
-          // `--container-roomy`, CQ-2). On the flag-on item only, so the flag-off placeholder stays
-          // byte-for-byte what it was.
-          labelVisibility: 'never' as const,
-          description: "Show the plan's comments beside the diagram",
-          isVisible: () => NOTES_ENABLED,
-          // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
-          // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
-          // Flag-off it's a one-shot scroll action (not a toggle), so no pressed state.
-          ...(ENTRY_ROUTES_ENABLED ? { isActive: (ctx) => ctx.notesOpen } : {}),
-          onActivate: (ctx) => ctx.revealComments(),
-        }
-      : placeholderItem(commentsShape),
+    // every role; absent when `VITE_NOTES` is off (there is nothing to reveal).
+    {
+      id: 'comments',
+      // **Panels, not Plan** (toolbar-redesign M2-T2): Comments opens a panel beside the diagram, which
+      // is what the Legend and Resource view do, and it left the DO row so the row that carries the
+      // pen can hold a labelled Apply levelled dates. Taxonomy group 7 (`help`) is the Panels group.
+      group: 'help',
+      row: 'strip',
+      order: 2,
+      label: 'Comments',
+      icon: <MessageSquare className="size-4" />,
+      // Icon-only at every width (M6, owner decision 2026-10-10; it was icon-only below
+      // `--container-roomy`, CQ-2).
+      labelVisibility: 'never' as const,
+      description: "Show the plan's comments beside the diagram",
+      isVisible: () => NOTES_ENABLED,
+      // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
+      // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
+      // Without it it is a one-shot scroll action (not a toggle), so no pressed state.
+      ...(ENTRY_ROUTES_ENABLED ? { isActive: (ctx) => ctx.notesOpen } : {}),
+      onActivate: (ctx) => ctx.revealComments(),
+    },
 
     // `legend` moved INTO `View ▾` in ADR-0090 M2-T2, under a new **Panels** section — the direct
     // answer to the product owner's Q2. A panel is a surface you read beside the diagram, not a

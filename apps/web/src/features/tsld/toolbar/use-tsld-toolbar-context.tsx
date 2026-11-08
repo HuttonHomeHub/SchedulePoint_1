@@ -40,7 +40,6 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  EXPORT_PRINT_ENABLED,
 } from '@/config/env';
 import { printGanttSchedule } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
@@ -431,19 +430,15 @@ export function useTsldToolbarContext({
   const varianceLoading = model.variance.isPending;
   const varianceError = model.variance.isError;
 
-  // Export & print (VITE_EXPORT_PRINT): the lens-narrowed "matching" set the conditional CSV item
-  // exports (CQ-3). Gated on the flag so flag-off adds nothing — mirroring how canvas-nav gated
-  // `orderedConflicts`: off ⇒ no lens predicate runs and `filterActive`/`matchingCount` degrade to
-  // false/0 (the flag's "flag-off ⇒ zero cost" + byte-for-byte contract). On ⇒ a bar matches when it
-  // passes BOTH the Stage-A filter (search + attributes) AND, if isolate is active with a selection, the
-  // Stage-B logic chain — the same predicates the canvas dims by (`render/lenses` + `render/logic-path`).
+  // Export & print: the lens-narrowed "matching" set the conditional CSV item exports (CQ-3). A bar
+  // matches when it passes BOTH the Stage-A filter (search + attributes) AND, if isolate is active
+  // with a selection, the Stage-B logic chain — the same predicates the canvas dims by
+  // (`render/lenses` + `render/logic-path`).
   const exportMatch = useMemo<{
     filterActive: boolean;
     matchingCount: number;
     isMatching: ((activity: ActivitySummary) => boolean) | undefined;
   }>(() => {
-    if (!EXPORT_PRINT_ENABLED)
-      return { filterActive: false, matchingCount: 0, isMatching: undefined };
     const filterOn =
       CANVAS_LENSES_ENABLED && isFilterActive(lensState.filterQuery, lensState.filterAttrs);
     const isolateChain =
@@ -587,8 +582,7 @@ export function useTsldToolbarContext({
       linkType,
       setLinkType,
       // Two-click LOE endpoint-pick tool (Stage D, ADR-0035 §21): a mode toggle mutually exclusive with
-      // add/link (a single EditMode). Reachable only when `VITE_CANVAS_ACTIVITY_TYPES` is on (the
-      // Add-menu item is flag-gated) and pen-gated as part of the authoring cluster.
+      // add/link (a single EditMode). Pen-gated as part of the authoring cluster.
       isLoeSpanning: mode === 'loe',
       toggleLoeSpanMode: withDiagram(() => setMode((m) => (m === 'loe' ? 'select' : 'loe'))),
       // The Add trigger reflects the LOE tool's mid-pick step (B4): once a start driver is picked the
@@ -686,8 +680,7 @@ export function useTsldToolbarContext({
 
       hasDiagram,
 
-      // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) — the lifted selection + shipped seams the five
-      // real items call. Inert while the flag is off (the ids resolve to their placeholder stubs).
+      // Toolbar quick-wins — the lifted selection + shipped seams the five real items call.
       todayIso,
       selectedActivityId,
       selectedActivity,
@@ -767,9 +760,8 @@ export function useTsldToolbarContext({
       matchedIds,
       currentMatchId: canvasUi.lensState.searchCursorId,
 
-      // Export & print (VITE_EXPORT_PRINT) — client deliverables over already-fetched data. Inert while
-      // the flag is off (the `export`/`print` ids resolve to their placeholder stubs, so none of these
-      // are ever called). CSV (M1) / PNG (M2) / PDF (M3) / Print (M4) are all wired.
+      // Export & print — client deliverables over already-fetched data. CSV (M1) / PNG (M2) / PDF (M3) /
+      // Print (M4) are all wired.
       exportScheduleCsv: (scope) => {
         // Resolve the WBS-parent column client-side from the full list (a parent's code/name by id).
         const byId = new Map(activities.map((a) => [a.id, a]));
@@ -866,12 +858,11 @@ export function useTsldToolbarContext({
       // Browser Print (M4, feature-spec §4 CQ-4 — the IMAGE path): reuse the shared off-screen PNG for
       // the WHOLE diagram, mount it into the print-only `PrintSurface` (the print stylesheet hides the
       // app-shell root), open the browser print dialog, then tear the surface down on `afterprint` /
-      // fallback timeout. Gated on the flag (defensive — flag-off the `print` id is its placeholder stub,
-      // so this is never called) and re-entry-guarded via `printing` (the build is async). A build failure
+      // fallback timeout. Re-entry-guarded via `printing` (the build is async). A build failure
       // surfaces a user-safe message and never throws; `printing` always resets in `finally`. The live
       // canvas is never touched — only its viewport is READ by `buildDiagramImage`.
       printDiagram: () => {
-        if (!EXPORT_PRINT_ENABLED || printing) return;
+        if (printing) return;
 
         // The Gantt is DOM, so it prints as a document — no rasterisation (ADR-0059 M4). Branching on
         // `planView` is enough to keep the flag-off path byte-identical: with `VITE_GANTT_VIEW` off it

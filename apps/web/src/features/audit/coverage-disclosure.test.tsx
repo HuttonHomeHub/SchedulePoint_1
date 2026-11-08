@@ -26,7 +26,6 @@ import type * as Env from '@/config/env';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<typeof Env>()),
-  AUDIT_SELF_SECURITY_ENABLED: true,
   AUDIT_LOG_ENABLED: true,
 }));
 

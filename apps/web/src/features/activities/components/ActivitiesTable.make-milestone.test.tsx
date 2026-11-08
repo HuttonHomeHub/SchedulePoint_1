@@ -43,7 +43,6 @@ function renderTable(row: Partial<ActivitySummary>, onMakeMilestone = vi.fn()) {
         planId="pl1"
         canEditSchedule
         editorGating={deriveActivityEditorGating({
-          penManaged: true,
           holdsPen: true,
           canWrite: true,
           canProgress: false,

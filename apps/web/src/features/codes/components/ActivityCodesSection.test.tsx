@@ -31,7 +31,6 @@ vi.mock('@/lib/api/client', async (importOriginal) => ({
  */
 const gatingFor = (role: 'planner' | 'viewer', pen: 'held' | 'notHeld' = 'held') =>
   deriveActivityEditorGating({
-    penManaged: true,
     holdsPen: pen === 'held',
     canWrite: role === 'planner',
     canProgress: true,

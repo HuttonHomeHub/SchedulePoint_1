@@ -10,17 +10,14 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
- * Flag-ON TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). Pins `VITE_TOOLBAR_QUICK_WINS`
- * on — plus the flags the four items compose with (`VITE_NOTES` for Comments/Add-note,
+ * TSLD toolbar quick-wins (spec `docs/specs/toolbar-quick-wins/`). Pins the flags the four items compose with (`VITE_NOTES` for Comments/Add-note,
  * `VITE_SCHEDULING_MODES`/canvas authoring for Clear-visual-placement) — and asserts each item's
- * visible/enabled/disabledReason/onActivate against the pen-gating matrix. The flag-OFF byte-for-byte
- * placeholders are covered in `tsld-toolbar.test.tsx`.
+ * visible/enabled/disabledReason/onActivate against the pen-gating matrix.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   NOTES_ENABLED: true,
-  TOOLBAR_QUICK_WINS_ENABLED: true,
 }));
 
 /** A stand-in selected activity — only id + version are read by the clear-placement onActivate. */

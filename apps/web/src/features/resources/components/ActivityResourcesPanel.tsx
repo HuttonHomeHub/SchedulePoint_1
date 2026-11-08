@@ -11,7 +11,6 @@ import {
 } from '../api/use-resources';
 import type { OnAssignmentEdited } from '../model/assignment-edit';
 import {
-  assignmentLagEnabled,
   assignmentLagHelp,
   assignmentLagLabel,
   canAuthorLagDays,
@@ -160,9 +159,9 @@ export function ActivityResourcesPanel({
   // zero-span milestone — hidden there (TECH_DEBT #44b), in both the assigned rows and the assign form.
   const showCurve = RESOURCE_CURVES_ENABLED && !isMilestone;
   // The join lag delays a resource *within* the activity's span, so a zero-span milestone has nothing
-  // for it to sit inside — hidden there for the same reason the loading curve is (#44b), and behind
-  // its own flag (ADR-0071 M4).
-  const showLag = assignmentLagEnabled() && !isMilestone;
+  // for it to sit inside — hidden there for the same reason the loading curve is (#44b)
+  // (ADR-0071 M4).
+  const showLag = !isMilestone;
 
   const resourceById = new Map((resources.data ?? []).map((r) => [r.id, r]));
   // At most one assignment drives an activity; whoever does is what a new driver would displace.
@@ -284,8 +283,7 @@ export function ActivityResourcesPanel({
         isDriving,
         // The rate is meaningful only for the driver — drop a stray value entered before un-driving.
         ...(isDriving ? {} : { unitsPerHour: undefined }),
-        // Flag off, no lag is sent at all — the create body is byte-identical to the one that ships
-        // today, which is what makes the rollback a switch rather than a revert.
+        // No lag is sent for a milestone, or when none was entered.
         ...(showLag && lag.ok && lag.minutes > 0 ? { lagMinutes: lag.minutes } : {}),
       })
       .then(
@@ -489,7 +487,7 @@ export function ActivityResourcesPanel({
                     </div>
                   ) : null}
                   {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives.
-                    Behind its own flag and hidden for a zero-span milestone. The grammar is
+                    Hidden for a zero-span milestone. The grammar is
                     ADR-0070's; the factor is the activity's SAVED calendar, so `2d` here means the
                     same thing the engine will measure. */}
                   {showLag ? (

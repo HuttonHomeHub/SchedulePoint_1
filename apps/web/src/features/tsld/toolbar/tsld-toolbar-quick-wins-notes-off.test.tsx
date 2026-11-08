@@ -18,7 +18,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   NOTES_ENABLED: false,
-  TOOLBAR_QUICK_WINS_ENABLED: true,
 }));
 
 const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as ActivitySummary;

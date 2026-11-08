@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **on-canvas advanced activity types** suite
- * (`VITE_CANVAS_ACTIVITY_TYPES`, Stage D, `docs/specs/canvas-activity-types/`). Mirrors the
+ * Journey helpers for the **on-canvas advanced activity types** suite
+ * (Stage D, `docs/specs/canvas-activity-types/`). Mirrors the
  * canvas-first authoring helpers (`e2e-authoring/support.ts`) verbatim for onboarding + drawing —
  * this surface layers directly on top of that one (the LOE tool arms from the same Add split-button)
  * — and adds the LOE endpoint-pick helper.

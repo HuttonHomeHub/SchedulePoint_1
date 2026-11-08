@@ -293,8 +293,6 @@ async function startServers() {
   });
   start('web', 'pnpm', ['dev'], HERE, {
     VITE_CANVAS_AUTHORING: 'true',
-    VITE_TSLD_EDITING: 'true',
-    VITE_PLAN_EDIT_LOCK: 'true',
     VITE_SCHEDULE_INTERCHANGE: 'true',
   });
   await Promise.all([waitFor(API_HEALTH, 'the API'), waitFor(WEB, 'the dev server')]);

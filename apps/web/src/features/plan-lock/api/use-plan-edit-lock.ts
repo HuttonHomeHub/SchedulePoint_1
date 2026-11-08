@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { classifyLockError } from '../lib/lock-error';
 
-import { API_BASE_URL, PLAN_EDIT_LOCK_ENABLED } from '@/config/env';
+import { API_BASE_URL } from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 import { planLockKeys } from '@/lib/query/hierarchy-keys';
 
@@ -26,14 +26,11 @@ const lockPath = (orgSlug: string, planId: string): string =>
 
 // --- status query ----------------------------------------------------------
 
-export function planEditLockQueryOptions(orgSlug: string, planId: string, enabled: boolean) {
+export function planEditLockQueryOptions(orgSlug: string, planId: string) {
   return queryOptions({
     queryKey: planLockKeys.status(orgSlug, planId),
     queryFn: () => apiFetch<PlanEditLockStatus>(lockPath(orgSlug, planId)),
-    enabled,
-    // Poll only while the pen layer is active; `false` fully stops the interval
-    // when flag-off so the disabled feature costs zero network.
-    refetchInterval: enabled ? POLL_MS : false,
+    refetchInterval: POLL_MS,
     refetchOnWindowFocus: true,
     staleTime: 0, // lock status is inherently volatile — never serve it stale on mount
   });
@@ -43,9 +40,8 @@ export function planEditLockQueryOptions(orgSlug: string, planId: string, enable
 export function usePlanEditLock(
   orgSlug: string,
   planId: string,
-  enabled: boolean,
 ): UseQueryResult<PlanEditLockStatus> {
-  return useQuery(planEditLockQueryOptions(orgSlug, planId, enabled));
+  return useQuery(planEditLockQueryOptions(orgSlug, planId));
 }
 
 // --- mutations (one per verb) ----------------------------------------------
@@ -195,10 +191,8 @@ export type WriteRejection =
   | { kind: 'passthrough' };
 
 export interface PlanPen {
-  /** Is the pen layer active at all (the `VITE_PLAN_EDIT_LOCK` flag). */
-  penManaged: boolean;
   status: PlanEditLockStatus | undefined;
-  /** The caller currently holds the pen (only ever true when `penManaged`). */
+  /** The caller currently holds the pen. */
   holdsPen: boolean;
   /** Any acquire/release/request/handoff is in flight. */
   isPending: boolean;
@@ -220,16 +214,14 @@ export interface PlanPen {
  * the mutations, and the heartbeat lifecycle into one `PlanPen`, driving the shared
  * announcer for action results. Server state (the lease) lives entirely in TanStack
  * Query keyed by plan; the only local state is the transient `lostControl` flag
- * (ADR-0004 split). When the flag is off, `penManaged` is false and the whole layer
- * is inert (no polling, no heartbeat, no banner).
+ * (ADR-0004 split).
  */
 export function usePlanPen(orgSlug: string, planId: string): PlanPen {
-  const penManaged = PLAN_EDIT_LOCK_ENABLED;
   const queryClient = useQueryClient();
 
-  const lockQuery = usePlanEditLock(orgSlug, planId, penManaged);
+  const lockQuery = usePlanEditLock(orgSlug, planId);
   const status = lockQuery.data;
-  const holdsPen = penManaged && status?.state === 'HELD_BY_ME';
+  const holdsPen = status?.state === 'HELD_BY_ME';
 
   // The `EditLockBanner`'s own `role="status"` live region announces every state
   // transition (Start/Stop/lost/…), so we deliberately do NOT also fire the shared
@@ -281,7 +273,6 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
 
   return {
-    penManaged,
     status,
     holdsPen: Boolean(holdsPen),
     isPending:

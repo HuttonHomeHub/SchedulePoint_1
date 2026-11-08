@@ -73,11 +73,8 @@ export default defineConfig({
               VITE_ACTIVITY_EDITOR_CONVERGENCE: 'true',
               VITE_RESOURCES: 'true',
               VITE_NOTES: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              // Steps + earned value ON: the Progress tab's third panel and the physical-% measure
+              // Earned value ON: the Progress tab's third panel and the physical-% measure
               // it overrides are the co-location this epic exists for.
-              VITE_ACTIVITY_STEPS: 'true',
               VITE_EARNED_VALUE: 'true',
             },
           },

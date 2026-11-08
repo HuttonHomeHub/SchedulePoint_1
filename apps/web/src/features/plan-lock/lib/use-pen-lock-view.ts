@@ -53,7 +53,6 @@ function useKeyedIdentity<T>(value: T, key: string): T {
  * placeholder, never an empty state, which reads as "nobody is editing".
  */
 export interface PenLockView {
-  penManaged: boolean;
   view: LockView | null;
   containerRef: React.RefObject<HTMLDivElement | null>;
   controlsProps: EditLockControlsProps;
@@ -93,7 +92,7 @@ export function usePenLockView(
   // its neighbour, found by the M7 architecture review. Re-syncs on becoming visible rather than
   // waiting up to a second, so the aside is never briefly stale on return.
   useEffect(() => {
-    if (now !== undefined || !pen.penManaged) return;
+    if (now !== undefined) return;
     let id: ReturnType<typeof setInterval> | undefined;
     const start = () => {
       id = setInterval(() => setTick(Date.now()), 1000);
@@ -115,12 +114,16 @@ export function usePenLockView(
       stop();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [now, pen.penManaged]);
+  }, [now]);
 
   const effectiveNow = now ?? tick;
-  const view = pen.penManaged
-    ? resolveLockView(pen.status, pen.lostControl, currentUserId, dismissedRequestId, effectiveNow)
-    : null;
+  const view = resolveLockView(
+    pen.status,
+    pen.lostControl,
+    currentUserId,
+    dismissedRequestId,
+    effectiveNow,
+  );
   const signature = view ? `${view.tone}:${view.actions.join('|')}` : 'none';
 
   // After the user's own action changes the view, pull focus back to the surface container rather
@@ -201,18 +204,16 @@ export function usePenLockView(
   // time: correct-looking, and incapable of working. Caught by asking whether the input was stable
   // rather than by anything failing, which is the only way this class is ever caught.
   //
-  // The pieces below ARE stable: every callback is a `useCallback` on that hook, `penManaged` is a
-  // build-time constant, and `holder` comes from the query cache. `stableView` covers everything
-  // the two surfaces render, so a change a reader can see always produces a new object and a tick
-  // that moves nothing does not.
+  // The pieces below ARE stable: every callback is a `useCallback` on that hook, and `holder` comes
+  // from the query cache. `stableView` covers everything the two surfaces render, so a change a
+  // reader can see always produces a new object and a tick that moves nothing does not.
   const { startEditing, stopEditing, requestControl, takeOver, handoff, dismissLost } = pen;
   const holder = pen.status?.holder ?? null;
   const requestedById = pen.status?.requestedBy?.id ?? null;
-  const { penManaged, isPending } = pen;
+  const { isPending } = pen;
 
   return useMemo(
     () => ({
-      penManaged,
       view: stableView,
       containerRef,
       controlsProps: {
@@ -239,7 +240,6 @@ export function usePenLockView(
     // rendered content says anything different; `act` is a local closure over a ref, which is
     // stable by definition and needs no dependency.
     [
-      penManaged,
       isPending,
       stableView,
       holder,
