@@ -3,17 +3,17 @@
 > Written for the product owner, in plain words. Written 2026-10-13. The decision behind it is
 > [ADR-0190](adr/0190-what-1-0-promises.md); the reasoning and the options are in
 > [`specs/pre-1-0-batch-2/feature-spec.md`](specs/pre-1-0-batch-2/feature-spec.md) §4.2.
-> **Nothing on this page has cut 1.0.** You said to write it down only. Cutting it is a separate step you
-> take after reading this (see "How the cut works").
+> **1.0 was cut on 2026-11-08, on your word** (the cut-1.0 question, answered "Yes, cut 1.0 now"), following
+> "How the cut works" below. The previous release, and the rollback target, is `api` 0.106.0 and `web` 0.202.0.
 
 ## The short answer
 
-**Ready, and the next step is yours.** Every line in the checklist is now done, decided by you, or marked
+**Yes — 1.0 is cut (2026-11-08).** Every line in the checklist is now done, decided by you, or marked
 not for 1.0 (2026-11-08). The three things you said must exist before 1.0 were done on your server on
 2026-10-20: the nightly backup and its practice check (row 5), your organisation's export (row 6) and the
 recycle bin's 90-day clear-out (row 7). On 2026-11-08 the old field names were removed in a release of their
 own (row 9), you counted the Dell speed result (row 8) and you confirmed the automatic API check can wait
-(row 12). 1.0 has not been cut, and cutting it is still your call.
+(row 12). You then said to cut 1.0, and it was cut the same day.
 
 ## What "1.0" is
 

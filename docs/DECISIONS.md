@@ -10,6 +10,24 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-08 — SchedulePoint 1.0 is cut
+
+**What was decided.** With every line of `docs/RELEASE_1_0.md` done, owner-decided or not for 1.0 (#1278), and the
+last 0.x release published (`api` 0.106.0, `web` 0.202.0, Release run 42477009347), the product owner was asked as a
+clickable question whether to cut 1.0 now and answered **"Yes, cut 1.0 now"**.
+
+**How.** Exactly as `docs/RELEASE_1_0.md` "How the cut works" and ADR-0190 D4 describe: one changeset,
+`'@repo/api': major` and `'@repo/web': major`, whose text is the 1.0 release note; the Version Packages pull request
+then takes both to 1.0.0, and its merge tags `api-v1.0.0` and `web-v1.0.0` and publishes the images. With the
+owner's automatic updater on, that merge is the production deploy. Rollback is pinning `API_IMAGE_TAG=0.106.0` and
+`WEB_IMAGE_TAG=0.202.0`.
+
+**Consequences.** From 1.0, a breaking change to the promises in `docs/RELEASE_1_0.md` ("What 1.0 promises
+afterwards") bumps the major (`CLAUDE.md` §10). The fresh-start wipe of the owner's plans (2026-11-08, above) remains
+the owner's own step, after a backup whose check has passed.
+
+---
+
 ## 2026-11-08 — The last pre-1.0 batch, a fresh start at 1.0, and the checklist closed
 
 **What was decided.** Asked which work to do before 1.0 (clickable questions, each with a size and a
