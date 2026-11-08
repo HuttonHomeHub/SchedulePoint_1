@@ -31,6 +31,13 @@ export interface CaptureActivityRow {
   lateStart: Date | null;
   lateFinish: Date | null;
   totalFloat: number | null;
+  /**
+   * The same float in unrounded working minutes (#318, ADR-0214), copied verbatim: a day figure
+   * cannot be re-framed after a calendar's day length changes, the minutes can. NULL beside a
+   * non-null {@link totalFloat} is a plan not recalculated since the column existed, and a
+   * baseline captured from it stores NULL too — which readers treat as "not comparable".
+   */
+  totalFloatMinutes: number | null;
   isCritical: boolean;
   /**
    * The activity's budgeted cost frozen at capture (EV1, ADR-0042 — the ADR-0025 amendment), in
@@ -311,6 +318,7 @@ export class BaselineRepository {
             lateStart: a.lateStart,
             lateFinish: a.lateFinish,
             totalFloat: a.totalFloat,
+            totalFloatMinutes: a.totalFloatMinutes,
             isCritical: a.isCritical,
             // The cost baseline frozen at capture (EV1, ADR-0042 / the ADR-0025 amendment) — an
             // integer minor-unit budget, computed by the service-side load below.
@@ -441,6 +449,7 @@ export class BaselineRepository {
         lateStart: true,
         lateFinish: true,
         totalFloat: true,
+        totalFloatMinutes: true,
         isCritical: true,
         // Cost baseline inputs (EV1, ADR-0042): the activity-level lump-sum plus each active
         // assignment's budget (explicit override or `budgetedUnits × costPerUnit`). Loaded inside

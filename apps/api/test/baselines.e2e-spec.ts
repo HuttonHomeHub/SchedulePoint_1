@@ -376,6 +376,41 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     });
   });
 
+  it('freezes total float in unrounded minutes beside the days, and NULL stays NULL (#318)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const long = await makeActivity(actor, planId, 'Long', 5);
+    const short = await makeActivity(actor, planId, 'Short', 2);
+    const end = await makeActivity(actor, planId, 'End', 1);
+    for (const pred of [long, short]) {
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: pred, successorId: end, type: 'FS' })
+        .expect(201);
+    }
+    await recalc(actor, planId);
+
+    // `Short` has three days of float on the 24-hour default calendar: 4,320 working minutes.
+    const first = await actor.agent.post(baselinesUrl(planId)).send({ name: 'One' }).expect(201);
+    const frozen = await prisma.baselineActivity.findMany({
+      where: { baselineId: first.body.data.id as string },
+      select: { sourceActivityId: true, totalFloat: true, totalFloatMinutes: true },
+    });
+    const byId = new Map(frozen.map((r) => [r.sourceActivityId, r]));
+    expect(byId.get(short)).toMatchObject({ totalFloat: 3, totalFloatMinutes: 3 * 1440 });
+    expect(byId.get(long)).toMatchObject({ totalFloat: 0, totalFloatMinutes: 0 });
+
+    // A plan whose rows carry days but no minutes (calculated before the column existed) freezes
+    // NULL, never a guess derived from the day figure.
+    await prisma.activity.update({ where: { id: short }, data: { totalFloatMinutes: null } });
+    const second = await actor.agent.post(baselinesUrl(planId)).send({ name: 'Two' }).expect(201);
+    const legacy = await prisma.baselineActivity.findFirstOrThrow({
+      where: { baselineId: second.body.data.id as string, sourceActivityId: short },
+      select: { totalFloat: true, totalFloatMinutes: true },
+    });
+    expect(legacy).toEqual({ totalFloat: 3, totalFloatMinutes: null });
+  });
+
   // T3 (placement-baseline-variance): a plain fixture where placed == early cannot tell
   // "the capture correctly froze the placed span" apart from "the capture froze the early
   // span twice" — both produce the same numbers. Hand-placing A first, so placed ≠ early,

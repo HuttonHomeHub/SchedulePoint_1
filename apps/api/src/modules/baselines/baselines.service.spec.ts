@@ -121,6 +121,7 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     lateStart: new Date('2026-01-05T00:00:00Z'),
     lateFinish: new Date('2026-01-09T00:00:00Z'),
     totalFloat: 0,
+    totalFloatMinutes: 0,
     isCritical: true,
     budgetedCost: 0,
     // ADR-0071 M3: the decomposition of that total. Empty is the common shape —
