@@ -11,13 +11,14 @@ import { expect, type Page } from '@playwright/test';
  *
  * Two assertions, because either alone can pass for the wrong reason: the control flips to
  * **Stop editing** (the holder's affordance), and the status line reads "You’re editing this
- * plan." (`lock-copy.ts` `holding`). Idempotent only in the sense that it fails loudly if the pen
- * is already held — a journey that takes it twice has lost track of its own state.
+ * plan." (`lock-copy.ts` `holding`), matched exactly so other copy containing it cannot satisfy it.
+ * Not idempotent: it fails loudly if the pen is already held — a journey that takes it twice has
+ * lost track of its own state.
  *
  * Shared from `e2e-support/` because a Playwright `testDir` is its own compilation root.
  */
 export async function takeThePen(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-  await expect(page.getByText('You’re editing this plan.')).toBeVisible();
+  await expect(page.getByText('You’re editing this plan.', { exact: true })).toBeVisible();
 }
