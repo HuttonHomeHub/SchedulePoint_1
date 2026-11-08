@@ -744,8 +744,8 @@ This narrows the unaudited surface; it does not close it, and saying otherwise w
 
 ## Toward 1.0
 
-What 1.0 requires and promises is written down in [`RELEASE_1_0.md`](RELEASE_1_0.md) (ADR-0190); it has **not**
-been cut. Required before it, each to be specified on its own: a tested database backup and restore, a
+What 1.0 requires and promises is written down in [`RELEASE_1_0.md`](RELEASE_1_0.md) (ADR-0190); it was
+**cut on 2026-11-08** on the owner's word (`DECISIONS.md`, 2026-11-08). Required before it, each to be specified on its own: a tested database backup and restore, a
 whole-organisation export (specified and approved 2026-10-14,
 [ADR-0194](adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md); spec and plan at
 [`docs/specs/organisation-export/`](specs/organisation-export/)), and the recycle bin's 90-day permanent clear-out

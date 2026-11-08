@@ -240,10 +240,9 @@ repo` — `deps-dev` is Dependabot's own output for a development-dependency bum
 
 - **Semantic Versioning** (`MAJOR.MINOR.PATCH`), driven by **Changesets**.
 - User-visible changes add a changeset (`pnpm changeset`) describing the bump.
-- While pre-1.0, breaking changes bump the **minor**; the public contract is not
-  yet stable. What 1.0 requires, and what it promises afterwards, is
-  [ADR-0190](docs/adr/0190-what-1-0-promises.md); the checklist the owner reads is
-  [`docs/RELEASE_1_0.md`](docs/RELEASE_1_0.md). The move to 1.0 is the owner's call.
+- **1.0 was cut on 2026-11-08** (the owner's call). From 1.0, a change that breaks a promise in
+  [ADR-0190](docs/adr/0190-what-1-0-promises.md) / [`docs/RELEASE_1_0.md`](docs/RELEASE_1_0.md)
+  ("What 1.0 promises afterwards") bumps the **major**; before it, breaking changes bumped the minor.
 
 ## 11. Release & deployment process
 
