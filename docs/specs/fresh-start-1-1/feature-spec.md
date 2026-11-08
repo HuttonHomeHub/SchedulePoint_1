@@ -10,7 +10,7 @@
   0214 today). It amends ADR-0018, ADR-0192, ADR-0190 (record only), ADR-0088/ADR-0084 (record only), ADR-0025's
   amendments 2–7 ("NONE is permanent") and ADR-0214 ("until the 1.0 wipe"). Cited: ADR-0012, ADR-0028, ADR-0034,
   ADR-0047, ADR-0057, ADR-0076, ADR-0081, ADR-0105, ADR-0107, ADR-0110, ADR-0131, ADR-0138, ADR-0156, ADR-0194.
-- **Companion file:** `docs/specs/fresh-start-1-1/schema-design.md` — written in parallel by the database-architect.
+- **Companion file:** `docs/specs/fresh-start-1-1/schema-design.md` — the database design (database-architect, Proposed 2026-11-08): the baseline, the tidy, the boot refusal and how the baseline is proved; its open questions are §12.
   It owns the baseline migration and every schema change. **It did not exist when this spec was written** (the
   directory held nothing, 2026-11-08), so this spec states the contract that file must meet (§4.5) rather than its
   contents.
