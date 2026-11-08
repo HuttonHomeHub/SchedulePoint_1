@@ -131,7 +131,7 @@ describe('AllExceptionsFilter — body-parser payload errors', () => {
   });
 
   // What body-parser does to a raw-body/zlib failure: `createError(400, error)` with NO `type`
-  // (`lib/read.js:125`, `:136`) — a gzip body of junk bytes is `Z_DATA_ERROR`. Only the fact that
+  // (`lib/read.js:146`, `:157`) — a gzip body of junk bytes is `Z_DATA_ERROR`. Only the fact that
   // OUR error handler received it from the parsers can tell it from any other error with a status.
   /** Pass an error through `tagBodyParserErrors` the way Express does after a parser fails. */
   function fromParser(error: Error): Error {
