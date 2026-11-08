@@ -1,5 +1,19 @@
 # @repo/api
 
+## 0.106.0
+
+### Minor Changes
+
+- [#1277](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1277) [`d831d3b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d831d3b18f7604f8bc553d8d3f54c71be52676d7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Float is now compared in working minutes, so changing how long a working day is no longer shows as float movement against a baseline or between two plans. Compare revisions reads "Float down 2 days (16 h)" (days on the earlier revision's plan working day, with the exact hours beside), "Float unchanged" only when nothing moved, and "Float movement unknown" where it cannot tell; a quiet note says how many activities' float could not be compared. The activities table's Total float variance column and the "Criticality changed" change list follow the same rule. A baseline captured before this release, and a plan not recalculated since, show the unknown reading until recalculated or replaced.
+  
+  API: each moved row of `revision-compare` and `cross-plan-revision-compare` gains `fromTotalFloatMinutes`, `toTotalFloatMinutes` and `floatMovementMinutes`, and its `fromTotalFloatDays`, `toTotalFloatDays` and `floatMovementDays` are now derived from them on `dayFactorMinutes` (null where a side has no minutes). Both responses gain `floatNotComparableCount`. The baseline variance read gains `floatVarianceMinutes` per row and `floatNotComparableCount` in `meta`, and `floatVarianceDays` is re-derived from minutes. The organisation export is format 2.5 (two appended `totalFloatMinutes` columns).
+
+- [#1275](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1275) [`f159db6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f159db64834fdca0ccac87f91a3a8633e714630d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Breaking: the four deprecated date fields on each moved row of the revision comparison (`criticalPath.entered[]` and `.left[]` of `revision-compare` and `cross-plan-revision-compare`) are removed. `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` carried the same values as `fromStart`, `toStart`, `fromFinish` and `toFinish`, which stay. A program that still reads the old names must read the new ones.
+
+### Patch Changes
+
+- [#1274](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1274) [`19f7ff0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/19f7ff032ebe9ab310ec408c3b404620baa2e8a2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update body-parser to 2.4.0, which fixes a denial-of-service advisory on API request parsing.
+
 ## 0.105.0
 
 ### Minor Changes
