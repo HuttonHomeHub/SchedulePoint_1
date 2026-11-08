@@ -44,10 +44,9 @@ removed, or when saved links (plan URLs, share links) stop resolving.
 The owner decides when, and `docs/RELEASE_1_0.md` is the gate: every line is evidence-backed, owner-decided or "not
 for 1.0". The owner's answers of 2026-10-13 fix three required lines (tested backup and restore, whole-organisation
 export, the 90-day clear-out turned on and proven), each specified on its own after the batch that wrote this down,
-and collaborative editing is not in 1.0 (`docs/DECISIONS.md`, 2026-10-12). Removing the deprecated revision-comparison fields (`docs/API.md`, "Deprecated fields") is the owner's call, with
-the default of removing them at the cut as a separate release (`revision-delta.ts:235-244`, `revision-compare.dto.ts:139`,
-`cross-plan-revision-compare.dto.ts:215-236`, `packages/types/src/index.ts:3186-3192`, web test fixtures, the
-`docs/API.md` table). Internal packages are private and stay 0.x.
+and collaborative editing is not in 1.0 (`docs/DECISIONS.md`, 2026-10-12). Removing the deprecated revision-comparison fields (`docs/API.md`, "Deprecated fields") was the owner's call, with
+the default of removing them as a separate release before the cut; the owner chose that, and they were removed on
+2026-11-08 in #1275, released as `api` 0.106.0 (updated 2026-11-08). Internal packages are private and stay 0.x.
 
 **Mechanics, checked rather than assumed.** A dry run on a throwaway branch on 2026-10-13 (`@changesets/cli`
 3.0.3, command `pnpm changeset version` with a `major` changeset for both apps, then discarded) moved `@repo/api`
