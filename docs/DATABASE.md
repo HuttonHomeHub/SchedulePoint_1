@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 43
-> models across 83 committed migrations — is the single source of truth for the data model.
+> models across 84 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -541,6 +541,27 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   `externalDrivenCount` (a read-time `COUNT` over the same plan scope), letting the
   web show a per-row "External" badge beside the `constraint_violated` "Conflict"
   badge. Storing these avoids a wide migration when features that read them land.
+- **`total_float_minutes` — total float in working minutes, unrounded** (`docs/TECH_DEBT.md`
+  #318, spec `docs/specs/baseline-float-frame/`). The engine's own figure
+  (`cal.workingTimeBetween` on the activity's calendar) stored beside the rounded `total_float`,
+  and copied verbatim to `baseline_activities.total_float_minutes` at capture, so a comparison
+  subtracts minutes and converts to days once instead of comparing two days rounded with different
+  hours-per-day. Engine-owned like `total_float` (recalc `unnest` write only, never from a DTO,
+  never touching `version`). `INTEGER`: the engine's value is a signed whole count of minutes
+  bounded by its ~200-year horizon (< 2^31). Nullable, no default, no backfill, no index.
+  - **The NULL rule replaces a discriminator, deliberately** — a departure from the
+    `*_snapshot_level` rule recorded in both column comments: minutes NULL with days set means
+    "calculated or captured before this column, not comparable" (never 0); both NULL means "not
+    calculated". The product owner decided on 2026-11-08 that every plan is wiped at the 1.0
+    roll-out and no backwards compatibility is owed, so a discriminator would only describe a
+    population about to disappear.
+  - **One-way CHECKs** (`ck_activities_total_float_minutes_requires_days`,
+    `ck_baseline_activities_total_float_minutes_requires_days`): minutes never exist without days.
+    Not both-or-none: a `NOT VALID` check still applies to `UPDATE`, so it would refuse every edit
+    of a pre-existing row. No sign check — negative float is valid.
+  - **Rollback caveat.** An image older than the writer recalculates `total_float` and leaves the
+    minutes alone, so after a rollback they can be stale, not NULL, until the next recalculation on
+    a current image.
 - **`remaining_float` — the room a PLACED bar has left** (one-planning-surface §4.3 /
   US-3; CQ-1 answered "persist"). `total_float` is measured from the pure-network
   **early** finish; once a planner hand-places a bar, the float they can still spend is
@@ -554,7 +575,8 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   - **Persisted rather than subtracted on read, and the read-time alternative does not
     exist.** `total_float` and `visual_drift_days` are each **independently rounded**
     day columns — both divided by `factorFor(activityId)` and `Math.round`ed in
-    `writeResults` — and **minutes are persisted for neither**, so a read-time
+    `writeResults` — and **drift's minutes are not persisted** (total float's are, since #318,
+    in `total_float_minutes`, NULL until recalculated), so a read-time
     derivation could only ever compute `round(T/f) − round(d/f)`, which is not
     `round((T−d)/f)` on any calendar where `f` is not 1440. ADR-0140's first press
     measured **19 of 164** deployed activities on exactly such a calendar. Persisting
@@ -906,7 +928,8 @@ optimistic-locking `version`, scoped indexes).
 - **Snapshot-copy, not reference (ADR-0025).** `BaselineActivity` **duplicates** each
   activity's identity (`code`, `name`, `type`, `duration_minutes`) and its captured CPM
   dates (`baseline_start`/`baseline_finish` = the captured early start/finish,
-  `late_start`/`late_finish`, `total_float`, `is_critical`). `source_activity_id` is a
+  `late_start`/`late_finish`, `total_float`, `is_critical`, and since #318 the unrounded
+  `total_float_minutes`, NULL on rows captured before it). `source_activity_id` is a
   **plain correlation UUID with NO foreign key** — so the snapshot survives the source
   activity's 90-day hard purge (§13) and stays faithful even if the live activity is
   edited or deleted. Variance joins live activities to the snapshot on this id.

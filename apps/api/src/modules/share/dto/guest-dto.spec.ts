@@ -68,6 +68,7 @@ function activityRow(): WithAssignmentCount<WithDayFactor<Activity>> {
     lateStart: DAY,
     lateFinish: DAY,
     totalFloat: 5,
+    totalFloatMinutes: 2400,
     freeFloat: 2,
     isCritical: true,
     // `true` so a mapper that hard-codes `false` fails the value case (#403).

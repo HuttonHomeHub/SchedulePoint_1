@@ -960,6 +960,42 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     }
   });
 
+  it('exports total float in working minutes on activities and baseline rows, empty where never written (2.5)', async () => {
+    const { admin, organizationId } = await seedFixture();
+    // Nothing writes the minutes yet (#318 T2/T3), so the test sets them, signed, beside a day figure.
+    const live = await prisma.activity.findFirstOrThrow({
+      where: { organizationId, totalFloat: { not: null } },
+      orderBy: { id: 'asc' },
+    });
+    await prisma.activity.update({ where: { id: live.id }, data: { totalFloatMinutes: -2_400 } });
+    const frozen = await prisma.baselineActivity.findFirstOrThrow({
+      where: { organizationId, totalFloat: { not: null } },
+      orderBy: { id: 'asc' },
+    });
+    await prisma.baselineActivity.update({
+      where: { id: frozen.id },
+      data: { totalFloatMinutes: 2_401 },
+    });
+
+    const { files } = await exportOf(admin);
+
+    for (const [file, id, minutes] of [
+      ['activities', live.id, -2_400],
+      ['baseline-activities', frozen.id, 2_401],
+    ] as const) {
+      const rows = jsonRows(files, `json/${file}.json`);
+      expect(rows.find((r) => r.id === id)!.totalFloatMinutes, file).toBe(minutes);
+      expect(csvRows(files, `csv/${file}.csv`).find((r) => r.id === id)!.totalFloatMinutes).toBe(
+        String(minutes),
+      );
+      // Every other row predates the writer: empty, never 0.
+      expect(
+        rows.filter((r) => r.id !== id).every((r) => r.totalFloatMinutes === null),
+        file,
+      ).toBe(true);
+    }
+  });
+
   it('writes each value type exactly: a maximal Decimal(18,4), a BigInt past 2^53, a calendar day, and a guarded formula', async () => {
     const { admin } = await seedFixture();
 
@@ -1017,7 +1053,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(row.changes).toEqual({
       before: {},
       after: {
-        formatVersion: '2.4',
+        formatVersion: '2.5',
         files: EXPORT_FILES.length * 2,
         rows: manifest.files.filter((f) => f.kind === 'json').reduce((n, f) => n + f.rows, 0),
         bytes: raw.length,
@@ -1073,7 +1109,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(rows[0]).toMatchObject({ outcome: 'FAILURE', actorUserId: admin.userId });
     expect((rows[0]!.changes as { after: Json }).after).toMatchObject({
       reason: 'client_aborted',
-      formatVersion: '2.4',
+      formatVersion: '2.5',
     });
 
     // The snapshot and its lock ended with the connection: the next export goes through.

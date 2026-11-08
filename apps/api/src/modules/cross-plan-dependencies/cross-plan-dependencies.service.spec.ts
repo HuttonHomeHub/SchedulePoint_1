@@ -105,6 +105,7 @@ function activity(id: string, planId: string, overrides: Partial<Activity> = {})
     lateStart: null,
     lateFinish: null,
     totalFloat: null,
+    totalFloatMinutes: null,
     freeFloat: null,
     isCritical: false,
     isNearCritical: false,

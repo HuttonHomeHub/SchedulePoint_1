@@ -344,6 +344,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'visualEffectiveFinishInstant:instant',
       'lateStartInstant:instant',
       'lateFinishInstant:instant',
+      // 2.5 — appended (baseline float frame, #318): total float in working minutes, unrounded. Empty
+      // where `totalFloatDays` was calculated before this column existed: not comparable, never 0.
+      'totalFloatMinutes:int',
     ),
     withheld: {
       version: VERSION,
@@ -576,6 +579,9 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'codeValueId:text',
       'codeLaneIndex:int',
       'codeLaneUpdatedAt:instant',
+      // 2.5 — appended (baseline float frame, #318): the activity's float minutes copied at capture.
+      // Empty where captured before this column existed, or from a plan not recalculated since.
+      'totalFloatMinutes:int',
     ),
     withheld: {
       version: VERSION,
@@ -1088,7 +1094,7 @@ export const EXCLUDED_MODELS: readonly ExcludedModel[] = [
 ];
 
 /** The format's version. Adding a file or column is a minor change; removing or retyping is a major one. */
-export const EXPORT_FORMAT_VERSION = '2.4';
+export const EXPORT_FORMAT_VERSION = '2.5';
 
 /** The format's name, written to the manifest so a reader can tell what it holds. */
 export const EXPORT_FORMAT_NAME = 'schedulepoint.organisation-export';

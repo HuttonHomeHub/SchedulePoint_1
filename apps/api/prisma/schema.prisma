@@ -1086,8 +1086,8 @@ model Plan {
   /// NOT ONLY THIS PLAN'S OWN ROWS. A calendar's working time and a resource's calendar or capacity
   /// ceiling are inputs of every plan that uses them, so editing one stamps each of those plans
   /// (`CalendarsService`, `ResourcesService`; `docs/TECH_DEBT.md` #449). An `hours_per_day`-only edit
-  /// stamps too: the engine never reads it, but the recalculation write converts float and drift to
-  /// days with it, so the stored figures go stale.
+  /// stamps too: the engine reads it for the near-critical band (`compute.ts` #522), and the
+  /// recalculation write converts float and drift to days with it, so the stored figures go stale.
   ///
   /// CLIENT-NEVER, USER-INVISIBLE TO LOCKING. Stamped by a raw `UPDATE plans` that touches no
   /// `version`/`updated_at`/`updated_by` (the `stampScheduleComputedAt` shape), so an activity edit
@@ -1432,6 +1432,38 @@ model Activity {
   lateStart             DateTime? @map("late_start") @db.Date
   lateFinish            DateTime? @map("late_finish") @db.Date
   totalFloat            Int?      @map("total_float")
+  // TOTAL FLOAT IN WORKING MINUTES, UNROUNDED — the engine's own figure (`EngineResult.totalFloat`,
+  // `cal.workingTimeBetween` on the activity's own calendar, compute.ts), stored beside the rounded
+  // day column above so a frozen copy can be compared exactly after a calendar's hours-per-day
+  // changes (docs/TECH_DEBT.md #318, spec docs/specs/baseline-float-frame/). Engine-owned like
+  // `total_float`: written ONLY by the recalc's batched `unnest` UPDATE (writeResults), NEVER from a
+  // DTO, NEVER touching version/updated_at/updated_by (ADR-0022).
+  //
+  // INT, not Decimal/Float: `workingTimeBetween` returns a signed whole count of minutes (instants
+  // and shift windows are whole minutes), bounded by the engine's ~200-year horizon (≈1.05e8 <
+  // 2^31) — the `duration_minutes`/`leveling_delay_minutes` precedent.
+  //
+  // NULL RULE — READ IT BEFORE "FIXING" IT. This column carries NO `*_snapshot_level`-style
+  // discriminator, deliberately departing from that rule (`baselines.cost_snapshot_level` et al.):
+  //   * `total_float_minutes` NULL with `total_float` set ⇒ calculated before this column existed
+  //     (or not recalculated since) — the float is NOT comparable in minutes. Never read it as 0.
+  //   * both NULL ⇒ not calculated.
+  //   * both set ⇒ minutes are exact.
+  // The product owner decided on 2026-11-08 that every plan is wiped at the 1.0 roll-out and no
+  // backwards compatibility is owed, so after that wipe the first state arises only from a plan not
+  // yet recalculated, which a recalculation repairs; a discriminator would describe a population
+  // that is about to stop existing.
+  //
+  // ck_activities_total_float_minutes_requires_days (raw SQL, migration
+  // 20261108120000_total_float_minutes): minutes never exist without the day figure. ONE-WAY only —
+  // a both-or-none check would refuse every edit of a pre-existing row (days set, minutes NULL),
+  // because a NOT VALID check still applies to updates. No sign CHECK: negative float is valid. No
+  // index: read only in the plan-scoped activity load; nothing filters or sorts by it.
+  //
+  // ROLLBACK CAVEAT. An image older than the writer (T2) recalculates `total_float` and leaves this
+  // column as it was, so after a rollback the minutes can be STALE rather than NULL until the next
+  // recalculation on a current image rewrites them. No marker guards this (owner's decision, above).
+  totalFloatMinutes     Int?      @map("total_float_minutes")
   // Free float in whole working days (ADR-0035 §17–§20, M6-F1; day-denominated public
   // column per ADR-0036 §7). Engine-owned CPM output exactly like total_float:
   // written ONLY by the recalc's batched `unnest` UPDATE (schedule.repository
@@ -1593,9 +1625,10 @@ model Activity {
   //
   // WHY IT IS PERSISTED RATHER THAN SUBTRACTED ON READ, AND THE ALTERNATIVE DOES NOT EXIST.
   // `total_float` and `visual_drift_days` are each INDEPENDENTLY ROUNDED day columns (both divided
-  // by `factorFor(activityId)` and `Math.round`ed in `writeResults`), and MINUTES ARE PERSISTED FOR
-  // NEITHER — so a read-time derivation could only ever compute `round(T/f) - round(d/f)`, which is
-  // not `round((T-d)/f)` on any calendar where `f` is not 1440. ADR-0140's first press measured 19
+  // by `factorFor(activityId)` and `Math.round`ed in `writeResults`), and drift's MINUTES ARE NOT
+  // PERSISTED (total float's are, since #318, in `total_float_minutes`, NULL until recalculated) —
+  // so a read-time derivation could only ever compute `round(T/f) - round(d/f)`, which is not
+  // `round((T-d)/f)` on any calendar where `f` is not 1440. ADR-0140's first press measured 19
   // of 164 deployed activities on exactly such a calendar, so the disagreement is a real population
   // rather than a theoretical one. Persisting makes the engine round ONCE, at the only point where
   // both minute quantities still exist.
@@ -2563,12 +2596,30 @@ model BaselineActivity {
   // Frozen schedule (the captured CPM output, all date-only like the Activity
   // columns, ADR-0023). `baseline_start`/`baseline_finish` are the captured
   // early start/finish; `total_float` is unconstrained (negative float is valid).
-  baselineStart  DateTime? @map("baseline_start") @db.Date
-  baselineFinish DateTime? @map("baseline_finish") @db.Date
-  lateStart      DateTime? @map("late_start") @db.Date
-  lateFinish     DateTime? @map("late_finish") @db.Date
-  totalFloat     Int?      @map("total_float")
-  isCritical     Boolean   @default(false) @map("is_critical")
+  baselineStart     DateTime? @map("baseline_start") @db.Date
+  baselineFinish    DateTime? @map("baseline_finish") @db.Date
+  lateStart         DateTime? @map("late_start") @db.Date
+  lateFinish        DateTime? @map("late_finish") @db.Date
+  totalFloat        Int?      @map("total_float")
+  // The activity's `total_float_minutes` copied verbatim at capture (#318): unrounded working
+  // minutes on the activity's own calendar, immutable after capture like every snapshot column.
+  // Lets a comparison measure float movement exactly when a calendar's hours-per-day changed
+  // between capture and now (the day column above was rounded with the factor of its day).
+  //
+  // NULL RULE, AND NO `*_snapshot_level` DISCRIMINATOR — a deliberate departure from the rule this
+  // model's other late-added snapshot columns follow (`baselines.cost_snapshot_level`,
+  // `revision_snapshot_level`, …): NULL here with `total_float` set ⇒ captured before this column
+  // existed, or from a plan not recalculated since — the float is NOT comparable; never read it as 0.
+  // Both NULL ⇒ not calculated at capture. The product owner decided on 2026-11-08 that every plan
+  // (and so every baseline) is wiped at the 1.0 roll-out and no backwards compatibility is owed;
+  // after that the only source of the first state is a capture from a not-yet-recalculated plan,
+  // and the source row itself says so. See `Activity.totalFloatMinutes`.
+  //
+  // INT for the reason given there. ck_baseline_activities_total_float_minutes_requires_days (raw
+  // SQL): minutes never exist without days — one-way, so every pre-existing row is admitted. No
+  // sign CHECK (negative float is valid); no index (the snapshot is loaded whole per baseline).
+  totalFloatMinutes Int?      @map("total_float_minutes")
+  isCritical        Boolean   @default(false) @map("is_critical")
 
   // The captured COST BASELINE — the activity's budgeted cost frozen at capture (EV1,
   // ADR-0042; the ADR-0025 snapshot amendment), giving the active baseline a committed PV /
