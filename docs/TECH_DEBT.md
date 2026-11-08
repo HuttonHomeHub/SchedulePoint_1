@@ -9411,3 +9411,27 @@ A planner who has scrolled up to the toolbar at large text and then causes a tra
 The derivation falls back to the date, today's behaviour, for a remote plan with no current instants (ADR-0212 D3, D4). After the boot recalculation every linked plan has them; the residual is a plan linked **later** to an upstream last computed before the release, recalculated alone. A programme recalculation fills it, because it solves the upstream first; creating a link recalculates nothing. No worse than before the change.
 
 **Next:** none until the trigger. **Trigger:** `remoteInstantMissingCount` (the `schedule.xplan_remote_instant_missing` log) above zero on the deployed host more than a release after the change, or a planner report of a linked milestone a week off.
+
+### 572. The organisation landing is taller than the window at 100 % text, hidden by the shell's overflow
+
+**Status:** open · **Verified:** 2026-11-07, by `docs/specs/large-text-dock/m0-measurement.md` (M0 of #569): `shell.scrollHeight` reads 793 px (fine) and 797 px (coarse) against a `clientHeight` of 500 to 720 at widths 1024 to 1408 in windows up to 720 px high, and 833 to 1098 px in every window under 1024 wide · **Raised:** 2026-11-07 (#569, the reason R1 was rejected) · **Size:** S · **Owner:** web
+
+At 100 % text the landing's content runs past the bottom of the shell in a short window. Nobody sees a scrollbar because the shell is `overflow-hidden` outside its `squat` form (ADR-0213); what sits below the fold is reached through `<main>`'s own scroller, so nothing is lost today. It matters the day the shell's overflow rule changes: any remedy that makes the shell scroll at 100 % (R1 in the #569 spec) turns this into a visible classic scrollbar on Windows.
+
+**Next:** none until the trigger; then find which landing section sets the height and whether `<main>` should own it. **Trigger:** the next change to the shell's overflow rule, or a report of a second scrollbar on the landing.
+
+### 573. Under a coarse pointer, a corner of the selection bar is covered at 100 % text
+
+**Status:** open · **Verified:** 2026-11-07, by the M0 harness (`apps/web/measure-toolbar/large-text-dock-m0.spec.ts`, readings in `docs/specs/large-text-dock/m0-readings.coarse.json`): 51 of 55 probed points on the coarse selection bar's controls hit their own control at 100 % text; the other 4, at a corner, hit a neighbouring element · **Raised:** 2026-11-07 (#569 M0) · **Size:** S · **Owner:** web
+
+Pre-existing and unchanged by #569: the controls are reachable (their centres hit), but a finger landing on the covered corner presses the neighbour. The #569 journey therefore probes each control's own centre and corners after scrolling it into view and records this exception rather than asserting all 55.
+
+**Next:** identify the covering element from the readings and decide whether the bar's gap or the neighbour's box should change. **Trigger:** a report of a mis-pressed selection-bar control on a touch screen, or the next change to the selection bar's layout.
+
+### 574. The production dependency audit has never been recorded, and one advisory is on the API request path
+
+**Status:** open · **Verified:** 2026-11-07, by `pnpm audit --prod` in the reconciliation pass (`docs/DECISIONS.md`, 2026-11-07): 38 advisories (1 critical, 21 high, 11 moderate, 5 low); no CI step, register row or `docs/SECURITY_STANDARDS.md` line records an earlier run · **Raised:** 2026-11-07 (reconciliation pass) · **Size:** S · **Owner:** repo
+
+Read by reachability, most are not exposed: the critical is `dompurify` under `jspdf`, whose `html()` the product never calls (`export/pdf.ts` embeds a PNG); `seroval`, `mysql2`, `brace-expansion`, `browserslist`, `minimatch` and `baseline-browser-mapping` sit in build or unused paths. The one on the API request path is `body-parser@2.3.0` (`GHSA-27r3-jxmh-p828`, a denial of service on trailing bytes, fixed in 2.4.0); its version is pinned in `scripts/dependency-claims.json`, so a bump also re-registers those claims. `qs` is on the same path with no `qs` or `arrayFormat` use in either app.
+
+**Next:** take `body-parser` 2.4.0 (Dependabot or an override) with its claims re-read. Making `pnpm audit --prod --audit-level=high` an advisory gate is a new CI step, so it needs a spec (ADR-0105). **Trigger:** the next dependency batch, or any advisory on the request path rated high.
