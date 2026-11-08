@@ -364,9 +364,10 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   const focusLanded = await page.evaluate(() => {
     const active = document.activeElement;
     if (active === null || active === document.body) return false;
-    // The toggle is only the destination when no plan surface is mounted (panel takes the body).
+    // The toggle is the destination when no plan surface can take focus. The diagram stays mounted
+    // under a `hidden` wrapper while the panel takes the body, so mounted is not the test.
     const surface = document.querySelector('[role="listbox"], [role="treegrid"]');
-    return surface !== null
+    return surface !== null && surface.closest('[hidden], [inert]') === null
       ? surface.contains(active)
       : active.closest('[data-activities-toggle]') !== null;
   });

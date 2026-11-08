@@ -30,11 +30,13 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await openNewPlan(page);
 
   // The plan opens as the toolbar workspace: two command rows over the canvas — not the ADR-0030
-  // chrome bands, and not the legacy long-scrolling page. On a fresh plan the canvas shows its
-  // empty-state prompt (the labelled diagram region only appears once activities exist), and the
-  // activities panel is collapsed to give the canvas the room (canvas-maximal).
+  // chrome bands, and not the legacy long-scrolling page. On a fresh plan, opened by a planner
+  // who has not taken the pen, the canvas shows its empty-state prompt naming the first gesture and
+  // why it is shaded (ADR-0064 T9), and the activities panel is collapsed to give the canvas the room (canvas-maximal).
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
-  await expect(page.getByText(/No activities to diagram yet/i)).toBeVisible();
+  await expect(page.getByTestId('canvas-empty-state')).toContainText(
+    'This plan has no activities yet. Start editing this plan to draw activities.',
+  );
   await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeHidden();
 
@@ -298,8 +300,8 @@ test('icon-only deck glyphs name themselves to pointer, keyboard and touch', asy
  * control that said `aria-expanded="true"` could not dismiss what it had opened.
  *
  * **Export** is a plain trigger whose restore target is itself. The split-button caret is probed in
- * `e2e-authoring/authoring.spec.ts`, because this suite pins `VITE_CANVAS_AUTHORING` off and so
- * renders no split button. The outcome is asserted after a settle, not the order of events, since the
+ * `e2e-authoring/authoring.spec.ts`, because this suite's subject is the toolbar's own
+ * triggers. The outcome is asserted after a settle, not the order of events, since the
  * original flicker is timing-shaped.
  *
  * **Verified red** against the pre-fix `Menu`: the second press left the menu open.

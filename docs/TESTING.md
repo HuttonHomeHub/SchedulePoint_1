@@ -207,8 +207,7 @@ room" — was the previous gate's title and error string and was never what its 
 would have been a gate incapable of failing: measured, **zero of the nine wraps in the estate sat in
 a table with positive slack**.
 
-`apps/web/e2e-authoring-flow/` is **both** — a flag-on journey for
-`VITE_CANVAS_AUTHORING_FLOW`, and a diagnostic whose `link-direction.spec.ts`
+`apps/web/e2e-authoring-flow/` is **both** — a journey for the authoring flow, and a diagnostic whose `link-direction.spec.ts`
 half deliberately does not depend on that flag, because the defects it measures
 were fixed outside it.
 
@@ -219,13 +218,6 @@ browser, a real recalculation cadence and a real server can say which of those
 clicks actually became a pick. When a defect report and the code disagree, that
 gap is where the answer is — write the suite that measures it rather than the
 test that re-states the code.
-
-`apps/web/e2e-authoring-flow-off/` is the same journey's **flag-off** twin
-(`playwright.authoring-flow-off.config.ts`, `test:e2e:authoring-flow-off`; `docs/TECH_DEBT.md` #76). The
-Link tool's pointer pick runs through echo plumbing wired outside the flag, and no other config pins the
-flag off, so this suite drives that pick in a browser with `VITE_CANVAS_AUTHORING_FLOW=false`: the link
-comes out the right way round, no mode band shows, Enter does not link, and Escape drops an open pick. It
-reuses `e2e-authoring-flow/support.ts` rather than copying it.
 
 Journeys include automated accessibility assertions.
 
