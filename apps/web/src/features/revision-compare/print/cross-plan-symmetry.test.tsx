@@ -62,6 +62,7 @@ const CROSS_PLAN: CrossPlanRevisionCompare = {
     dataDate: '2026-01-01',
   },
   dayFactorMinutes: 1440,
+  floatNotComparableCount: 0,
   frame: {
     planId: 'p-old',
     planName: 'Riverside Rev A',

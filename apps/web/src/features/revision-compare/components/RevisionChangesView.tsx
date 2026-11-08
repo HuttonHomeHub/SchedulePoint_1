@@ -14,7 +14,7 @@ import {
   classTitle,
   notAssessableSentence,
 } from '../model/change-sentences';
-import { otherPlanRowNote } from '../model/revision-sentences';
+import { floatNotComparableNote, otherPlanRowNote } from '../model/revision-sentences';
 
 import { useAnnounce } from '@/components/ui/announcer';
 
@@ -44,6 +44,12 @@ export interface RevisionChangesViewProps {
    * what forces the "nothing to reveal" case to be answered rather than remembered.
    */
   readonly report: RevisionChangeReport | CrossPlanChangeReport;
+  /**
+   * Matched activities whose float could not be compared (ADR-0214), from the comparison the report
+   * belongs to. The float half of "Criticality changed" does not judge them, so the view says how
+   * many were left out rather than letting an empty class read as "no float moved".
+   */
+  readonly floatNotComparableCount: number;
   /** Select and reveal an activity in whichever view is showing. */
   readonly onActivateActivity: (activityId: string, name?: string) => void;
   /**
@@ -204,6 +210,7 @@ function ClassSection({
 
 export function RevisionChangesView({
   report,
+  floatNotComparableCount,
   onActivateActivity,
   otherPlanName,
 }: RevisionChangesViewProps): React.ReactElement {
@@ -250,6 +257,11 @@ export function RevisionChangesView({
           otherPlanName={otherPlanName}
         />
       ))}
+      {floatNotComparableNote(floatNotComparableCount) === null ? null : (
+        <p data-float-not-comparable className="text-muted-foreground text-xs">
+          {floatNotComparableNote(floatNotComparableCount)}
+        </p>
+      )}
       <p id={footerId} className="text-muted-foreground border-t pt-2 text-xs">
         {CHANGES_FOOTER}
       </p>

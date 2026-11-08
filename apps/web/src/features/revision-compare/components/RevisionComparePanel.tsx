@@ -15,6 +15,9 @@ import {
   completionSentence,
   comparisonAnnouncement,
   criticalPathUnavailable,
+  floatDaysText,
+  floatMovementPhrase,
+  floatNotComparableNote,
   frameSentence,
   membershipSentence,
   noCommonCodesSentence,
@@ -594,6 +597,7 @@ export function RevisionComparePanel({
                 {view === 'changes' && compare.changes ? (
                   <RevisionChangesView
                     report={compare.changes}
+                    floatNotComparableCount={compare.floatNotComparableCount}
                     onActivateActivity={announceActivation}
                     // The OTHER plan's name, so a row that lives only there explains its own
                     // missing control rather than going silent. THIS is where the null-id rows
@@ -642,6 +646,12 @@ export function RevisionComparePanel({
                           )}
                         </p>
                       </>
+                    )}
+
+                    {floatNotComparableNote(compare.floatNotComparableCount) === null ? null : (
+                      <p data-float-not-comparable className="text-muted-foreground text-xs">
+                        {floatNotComparableNote(compare.floatNotComparableCount)}
+                      </p>
                     )}
 
                     {compare.criticalPath.addedTotal > 0 ||
@@ -755,9 +765,9 @@ function MovedRow({
           while the screen showed only the derived phrase, so the person who was not in the room
           got more than the planner looking at the diagram (the M4 ux review's D9 recurrence). */}
       <span className="text-muted-foreground block text-xs">
-        {floatPhrase(row)}
+        {floatMovementPhrase(row)}
         {' · '}
-        {floatCell(row.fromTotalFloatDays)} → {floatCell(row.toTotalFloatDays)}
+        {floatDaysText(row.fromTotalFloatDays)} → {floatDaysText(row.toTotalFloatDays)}
         {row.toStart === null && row.toFinish === null
           ? null
           : ` · now ${row.toStart ?? '—'} to ${row.toFinish ?? '—'}`}
@@ -834,24 +844,4 @@ function MovedRow({
       ) : null}
     </>
   );
-}
-
-/**
- * The row's float movement in words. **A null movement is stated as unknown, never as zero** —
- * absence and zero are different facts, and this is the last place they could be collapsed after
- * the API and the pure delta both kept them apart.
- */
-/** An unknown float reads as "unknown", never as a dash that could be mistaken for zero. */
-function floatCell(days: number | null): string {
-  return days === null ? 'unknown' : `${days} d`;
-}
-
-function floatPhrase(row: RevisionMovedActivity | CrossPlanMovedActivity): string {
-  if (row.floatMovementDays === null) return 'Float movement unknown';
-  const magnitude = Math.abs(row.floatMovementDays);
-  const unit = magnitude === 1 ? 'day' : 'days';
-  if (row.floatMovementDays === 0) return 'Float unchanged';
-  return row.floatMovementDays > 0
-    ? `Float up ${magnitude} ${unit}`
-    : `Float down ${magnitude} ${unit}`;
 }

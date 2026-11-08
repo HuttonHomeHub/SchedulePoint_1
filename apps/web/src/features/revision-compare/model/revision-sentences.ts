@@ -25,6 +25,62 @@ import type {
  * collapsing the distinction in the one channel a screen-reader user has.
  */
 
+/** Whole hours, or one decimal when the minutes are not a whole number of hours. */
+function hoursText(minutes: number): string {
+  const hours = Math.abs(minutes) / 60;
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+}
+
+/**
+ * **The float movement in words, counted in days on the plan's working day with the exact hours
+ * beside it** — "Float down 2 days (16 h)" (ADR-0214). The days are the earlier revision's plan
+ * working day, the same one the completion sentence is measured on, and the hours carry what the
+ * rounded day drops. **A null movement is stated as unknown, never as zero or unchanged**: absence
+ * and zero are different facts, and this is the last place they could be collapsed after the API
+ * and the pure delta both kept them apart.
+ *
+ * A movement under half a working day rounds to zero days and is NOT "unchanged" — it moved — so it
+ * reads in hours alone ("Float down 4 h").
+ */
+export function floatMovementPhrase(row: {
+  floatMovementDays: number | null;
+  floatMovementMinutes: number | null;
+}): string {
+  const { floatMovementDays: days, floatMovementMinutes: minutes } = row;
+  if (days === null || minutes === null) return 'Float movement unknown';
+  if (minutes === 0) return 'Float unchanged';
+  const direction = minutes > 0 ? 'up' : 'down';
+  if (days === 0) return `Float ${direction} ${hoursText(minutes)} h`;
+  const magnitude = Math.abs(days);
+  const unit = magnitude === 1 ? 'day' : 'days';
+  return `Float ${direction} ${magnitude} ${unit} (${hoursText(minutes)} h)`;
+}
+
+/** One side's float. An unknown float reads "unknown", never a dash that could be taken for zero. */
+export function floatDaysText(days: number | null): string {
+  return days === null ? 'unknown' : `${days} d`;
+}
+
+/**
+ * The quiet note for float that could not be compared, or `null` at zero — silence is right when
+ * every float could be compared, and a line saying so on every comparison trains a reader to skip
+ * the place the note will appear (ADR-0214, ADR-0127's count-what-you-cannot-draw shape).
+ *
+ * A standing condition, not an event (ADR-0132): it is text on the page and is never announced.
+ */
+export function floatNotComparableNote(count: number): string | null {
+  if (count <= 0) return null;
+  const subject =
+    count === 1
+      ? 'Float could not be compared for 1 activity. Its float was calculated before float minutes were stored'
+      : `Float could not be compared for ${count} activities. Their float was calculated before float minutes were stored`;
+  return (
+    `${subject}, so a change of working day cannot be told from a change of float, and it is ` +
+    'left out of the float figures here. Recalculating the plan updates the live side; an ' +
+    'earlier baseline cannot be updated.'
+  );
+}
+
 /** How a side is named in running prose. The live side is LABELLED as live, never left blank. */
 export function sideLabel(side: RevisionSide): string {
   return side.kind === 'LIVE' ? 'the plan as it stands now' : (side.name ?? 'an unnamed revision');

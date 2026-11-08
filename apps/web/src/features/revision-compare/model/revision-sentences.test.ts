@@ -6,6 +6,9 @@ import {
   carrierChangedSentence,
   completionSentence,
   comparisonAnnouncement,
+  floatDaysText,
+  floatMovementPhrase,
+  floatNotComparableNote,
   settingsCaveat,
   sideLabel,
   sideTitle,
@@ -45,6 +48,7 @@ const compare = (over: Partial<RevisionCompare> = {}): RevisionCompare => ({
     dataDate: '2026-01-01',
   },
   dayFactorMinutes: 1440,
+  floatNotComparableCount: 0,
   settingsVerdict: 'MATCH',
   completion: completion(),
   criticalPath: {
@@ -155,5 +159,44 @@ describe('the comparison prose', () => {
   it('states a truncation with the true total, and says nothing when there is none', () => {
     expect(truncationNote(200, 412, 200)).toBe('Showing the first 200 of 412.');
     expect(truncationNote(12, 12, 200)).toBeNull();
+  });
+});
+
+describe('float movement in words (#318, ADR-0214)', () => {
+  const phrase = (floatMovementDays: number | null, floatMovementMinutes: number | null) =>
+    floatMovementPhrase({ floatMovementDays, floatMovementMinutes });
+
+  it('counts days on the plan day with the exact hours beside them', () => {
+    expect(phrase(-2, -960)).toBe('Float down 2 days (16 h)');
+    expect(phrase(1, 480)).toBe('Float up 1 day (8 h)');
+    expect(phrase(-2, -990)).toBe('Float down 2 days (16.5 h)');
+  });
+
+  it('says unchanged only for exactly zero minutes', () => {
+    expect(phrase(0, 0)).toBe('Float unchanged');
+  });
+
+  it('does not call a sub-day movement unchanged: it moved, so it reads in hours', () => {
+    expect(phrase(0, -240)).toBe('Float down 4 h');
+    expect(phrase(0, 120)).toBe('Float up 2 h');
+  });
+
+  it('states an unknown movement as unknown and never as unchanged', () => {
+    expect(phrase(null, null)).toBe('Float movement unknown');
+    expect(phrase(null, null)).not.toMatch(/unchanged/i);
+    expect(floatDaysText(null)).toBe('unknown');
+    expect(floatDaysText(0)).toBe('0 d');
+  });
+});
+
+describe('floatNotComparableNote', () => {
+  it('is null at zero — silence is right when every float could be compared', () => {
+    expect(floatNotComparableNote(0)).toBeNull();
+  });
+
+  it('says how many and why, singular and plural', () => {
+    expect(floatNotComparableNote(1)).toMatch(/^Float could not be compared for 1 activity\./);
+    expect(floatNotComparableNote(3)).toMatch(/for 3 activities\./);
+    expect(floatNotComparableNote(3)).toMatch(/Recalculating the plan/);
   });
 });

@@ -35,6 +35,9 @@ function moved(over: Partial<RevisionMovedActivity> = {}): RevisionMovedActivity
     fromTotalFloatDays: 12,
     toTotalFloatDays: 0,
     floatMovementDays: -12,
+    fromTotalFloatMinutes: 17280,
+    toTotalFloatMinutes: 0,
+    floatMovementMinutes: -17280,
     fromStart: '2026-02-01',
     toStart: '2026-02-10',
     fromFinish: '2026-02-20',
@@ -64,6 +67,7 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
       dataDate: '2026-01-01',
     },
     dayFactorMinutes: 1440,
+    floatNotComparableCount: 0,
     settingsVerdict: 'MATCH',
     completion: {
       assessable: true,
@@ -96,8 +100,8 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
   };
 }
 
-function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
-  const props: RevisionComparePanelProps = {
+function panelProps(over: Partial<RevisionComparePanelProps> = {}): RevisionComparePanelProps {
+  return {
     baselines: [baseline()],
     baselinesPending: false,
     compare: null,
@@ -120,6 +124,10 @@ function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
     onComparePlanChange: vi.fn(),
     ...over,
   };
+}
+
+function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
+  const props = panelProps(over);
   return { ...render(<RevisionComparePanel {...props} />), props };
 }
 
@@ -206,7 +214,46 @@ describe('RevisionComparePanel', () => {
     });
     const section = screen.getByRole('region', { name: /entered the critical path/i });
     expect(within(section).getByText('Roof covering')).toBeInTheDocument();
-    expect(within(section).getByText(/float down 12 days/i)).toBeInTheDocument();
+    // 12 days on a 24-hour frame is 288 hours: the exact figure sits beside the day count.
+    expect(within(section).getByText(/float down 12 days \(288 h\)/i)).toBeInTheDocument();
+  });
+
+  it('reads an unmoved float as unchanged', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: {
+          ...comparison().criticalPath,
+          entered: [
+            moved({
+              floatMovementDays: 0,
+              floatMovementMinutes: 0,
+              fromTotalFloatMinutes: 2400,
+              toTotalFloatMinutes: 2400,
+            }),
+          ],
+          enteredTotal: 1,
+        },
+      }),
+    });
+    expect(screen.getByText(/float unchanged/i)).toBeInTheDocument();
+  });
+
+  it('says nothing about float it could not compare when there is none', () => {
+    renderPanel({ from: 'b1', compare: comparison() });
+    expect(document.querySelector('[data-float-not-comparable]')).toBeNull();
+  });
+
+  it('states how many activities’ float could not be compared, as a quiet note', () => {
+    const { container } = renderPanel({
+      from: 'b1',
+      compare: comparison({ floatNotComparableCount: 4 }),
+    });
+    const note = container.querySelector('[data-float-not-comparable]');
+    expect(note?.textContent).toMatch(/Float could not be compared for 4 activities/);
+    // A standing condition (ADR-0132): text on the page, never a live-region announcement.
+    expect(note).not.toHaveAttribute('role');
+    expect(note).not.toHaveAttribute('aria-live');
   });
 
   it('reads the basis-neutral date fields', () => {
@@ -226,12 +273,20 @@ describe('RevisionComparePanel', () => {
       compare: comparison({
         criticalPath: {
           ...comparison().criticalPath,
-          entered: [moved({ floatMovementDays: null, toTotalFloatDays: null })],
+          entered: [
+            moved({
+              floatMovementDays: null,
+              floatMovementMinutes: null,
+              toTotalFloatDays: null,
+              toTotalFloatMinutes: null,
+            }),
+          ],
           enteredTotal: 1,
         },
       }),
     });
     expect(screen.getByText(/float movement unknown/i)).toBeInTheDocument();
+    expect(screen.queryByText(/float unchanged/i)).not.toBeInTheDocument();
   });
 
   /** A row from a frozen side naming a since-deleted activity SAYS SO rather than looking normal. */
@@ -613,6 +668,20 @@ describe('the Changes view', () => {
     // bare text query is ambiguous — and an ambiguous locator is how a suite comes to assert on
     // whichever node happens to be first.
     expect(screen.getByRole('region', { name: /Entered the critical path/i })).toBeVisible();
+  });
+
+  it('states the not-comparable float in the change list too, and only when there is some', () => {
+    const { container, rerender } = renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    expect(container.querySelector('[data-float-not-comparable]')).toBeNull();
+    rerender(
+      <RevisionComparePanel
+        {...panelProps({ compare: { ...withChanges(), floatNotComparableCount: 2 } })}
+      />,
+    );
+    expect(container.querySelector('[data-float-not-comparable]')?.textContent).toMatch(
+      /for 2 activities/,
+    );
   });
 
   it('renders a class it could not assess as a REASON, never as "no changes"', () => {

@@ -48,6 +48,7 @@ describe('varianceText', () => {
     startVarianceDays: 0,
     finishVarianceDays: 0,
     floatVarianceDays: 0,
+    floatVarianceMinutes: 0,
     ...over,
   });
 

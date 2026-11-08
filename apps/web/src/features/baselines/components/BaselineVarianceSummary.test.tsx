@@ -14,6 +14,7 @@ function summary(overrides: Partial<PlanVarianceSummary> = {}): PlanVarianceSumm
     addedCount: 1,
     removedCount: 0,
     basis: 'PLACED',
+    floatNotComparableCount: 0,
     ...overrides,
   };
 }

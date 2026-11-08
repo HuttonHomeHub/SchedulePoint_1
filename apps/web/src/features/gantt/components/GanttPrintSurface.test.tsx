@@ -33,6 +33,7 @@ const varianceRow = (over: Partial<BaselineVarianceRow> = {}): BaselineVarianceR
   startVarianceDays: 5,
   finishVarianceDays: 5,
   floatVarianceDays: 0,
+  floatVarianceMinutes: 0,
   ...over,
 });
 

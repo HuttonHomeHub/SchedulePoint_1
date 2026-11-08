@@ -332,6 +332,7 @@ describe('ActivitiesTable — baseline variance', () => {
       startVarianceDays: 0,
       finishVarianceDays: 3,
       floatVarianceDays: 0,
+      floatVarianceMinutes: 0,
       ...overrides,
     };
   }
@@ -397,6 +398,30 @@ describe('ActivitiesTable — baseline variance', () => {
   it('shows a float loss as behind (less float than baseline)', () => {
     renderWithVariance(varianceRow({ finishVarianceDays: 0, floatVarianceDays: -2 }));
     expect(screen.getByText('−2 d float')).toBeInTheDocument();
+  });
+
+  it('explains a float variance it could not compute, in the header and from the cell (#318)', () => {
+    renderWithVariance(
+      varianceRow({
+        currentTotalFloat: 5,
+        baselineTotalFloat: 2,
+        floatVarianceDays: null,
+        floatVarianceMinutes: null,
+      }),
+    );
+    // The description is VISIBLE text in the header, never a tooltip.
+    const header = screen.getByRole('columnheader', { name: /Total float variance/ });
+    const note = within(header).getByText('1 could not be compared');
+    // The "—" cell points at it, so the dash is explained rather than read as "no change".
+    const cell = screen
+      .getAllByText('—')
+      .find((el) => el.getAttribute('aria-describedby') === note.id);
+    expect(cell).toBeDefined();
+  });
+
+  it('adds no header note when every float variance could be computed', () => {
+    renderWithVariance(varianceRow());
+    expect(screen.queryByText(/could not be compared/)).not.toBeInTheDocument();
   });
 
   it('labels an activity added since capture (across the variance columns)', () => {
