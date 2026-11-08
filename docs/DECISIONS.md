@@ -10,6 +10,52 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-08 — The fresh start ships as 1.1.0, and the "wipe at 1.0" plan is superseded
+
+**What was decided.** The product owner approved the spec, schema design and plan in
+`docs/specs/fresh-start-1-1/` (clickable questions, 2026-11-08). Six decisions came with the brief:
+
+- **OD-1.** 1.0.0 stays a private dress rehearsal; the fresh start ships as **1.1.0** for `api` and `web`, its
+  notes calling it "the first public release; needs a fresh, empty database". "Public" is a label only: there is
+  one user.
+- **OD-2.** Wipe everything stored (accounts, organisations, clients, projects, plans, calendars, resources, audit
+  log). The operator's `.env` is kept. A final backup whose `check` has passed is taken first.
+- **OD-3.** The method is a **new empty database**, not a wipe command and not an automatic wipe. The migrations
+  are squashed into one baseline, and the 1.1.0 image **refuses to start against a pre-1.1 database**, pointing
+  at a plain-English guide.
+- **OD-4.** Remove code that exists only for rows older versions wrote, and tidy schema leftovers inside the
+  baseline. Kept: the CSP legacy report-body parser, soft delete, the recycle bin, retention, backups, the edit
+  lock, XER/MSPDI import.
+- **OD-5.** Retire all 48 remaining web feature flags and the Playwright configs that pin flags off. Keep
+  `flagDefaultOff`, `check:flags` and the ADR-0084/0088 process. API runtime switches stay.
+- **OD-6.** One release: everything ships together; nothing goes out half done.
+
+Four answers followed the questions the spec and design raised:
+
+- **Q1 (spec) → option E.** The fields, enum values, route and organisation-export file that can no longer be
+  produced are **removed** in 1.1.0 (spec §4.6; `schema-design.md` §12 P-c, the placement-migration endpoint, and
+  narrowed level enums). It is recorded in ADR-0215 as a **one-time exception** to ADR-0190 D1/D2: no outside
+  consumer, one user, test data, a fresh database. It is not a precedent.
+- **Q2 (spec) → release freeze.** No Version Packages pull request is merged while the epic is open.
+- **Version → 1.1.0, not 2.0.0**, kept after the owner was told that rollback by tag-pinning does not cross this
+  release and that every existing database is refused (`schema-design.md` §12 Q5). Same exception.
+- **Everything else took the stated defaults**, including `schema-design.md` §12: Q3 (the baseline-criticality
+  NOT NULL only once the #492 race is traced), Q4 (`check` loads and counts a 1.0 copy with a "restorable only by
+  1.0" note) and Q6 (a permanent catalogue gate is a separate follow-up, not this epic).
+
+**Supersedes.** The 2026-11-08 entry "The last pre-1.0 batch, a fresh start at 1.0, and the checklist closed"
+recorded "All plans will be wiped when I roll out 1.0". The wipe now happens at **1.1.0**, as a new database. That
+entry is not edited (this file's own rule); the same sentence in `docs/RELEASE_1_0.md` is corrected in M4.
+
+**Why.** The 1.0 wipe was described as the owner's own step and nothing was built for it. Doing it as a squashed
+baseline behind a refusing image lets 84 migrations, 48 compiled-on flags and the old-data code paths go in one
+reviewed release, with the old database left untouched and the way back one volume line.
+
+**Consequences.** ADR-0215 (Proposed until M4) carries the reasoning. The guide `docs/guides/start-fresh-on-1-1.md`
+is a draft that M4's rehearsal verifies. No changeset until M4 T3.
+
+---
+
 ## 2026-11-08 — SchedulePoint 1.0 is cut
 
 **What was decided.** With every line of `docs/RELEASE_1_0.md` done, owner-decided or not for 1.0 (#1278), and the

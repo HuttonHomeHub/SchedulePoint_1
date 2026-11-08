@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 29 API modules
 > (`apps/api/src/modules/`), 43 Prisma models across 84 migrations, 1923 web
 > source files with 49 Playwright suites beside the base journey, and
-> 214 ADRs.
+> 215 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -616,6 +616,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
 - **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
 - **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
+- **ADR-0215** _(Proposed; amends ADR-0018, ADR-0192, ADR-0194, ADR-0107 D2, ADR-0025, ADR-0212 D4 and ADR-0214; records a one-time exception to ADR-0190)_ — A fresh start is a new database, and the image refuses the old one → [`0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md`](docs/adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

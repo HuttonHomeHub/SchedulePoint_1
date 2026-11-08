@@ -422,6 +422,13 @@ keep `main` releasable.
   lags were converted to working time on their lag calendar, each conversion recorded, and every
   linked plan is recalculated once, upstream first, when the API starts.
 
+- **1.1.0, the fresh start** (decided 2026-11-08, Proposed in
+  [ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md); spec and plan at
+  [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md); not yet built). One release that
+  retires the 48 web feature flags, folds the migrations into one baseline behind an image that refuses a
+  pre-1.1 database, and removes code that existed only for rows older versions wrote. The owner moves to a new
+  empty database by the draft guide [`start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md).
+
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
   [`docs/specs/baseline-float-frame/`](specs/baseline-float-frame/); closed `docs/TECH_DEBT.md` #318).
