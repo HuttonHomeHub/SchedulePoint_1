@@ -3,59 +3,53 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-07 (late). The session began the same day (hand-off check: everything matched GitHub — `web`
-0.201.0 and `api` 0.104.0, Release run 42373611861, #1238–#1245 and #1256–#1259 merged, Dependabot #1246–#1255 open).
-The owner chose **all six** offered items; everything is merged and released as **`web` 0.201.1** and
-**`api` 0.105.0** (with `@repo/interchange` 0.16.2) — see "Where things stand" for the release PR and tags. The owner's
-**hard rule** still stands: nothing that needs them to test, measure or check anything on their server or devices (a
-decision question is fine; a test is not). **1.0 is not cut**; that stays the owner's call (ADR-0190). **P6 M5 and M6
-still wait for a real P6 export**; do not offer them.
+**Written:** 2026-11-08. The session began the same day (hand-off check: everything matched GitHub — `web` 0.201.1
+and `api` 0.105.0, Release run 42426152434 with both image jobs successful, #1260–#1273 merged, no open PRs and no
+Dependabot PRs). Goal: get SchedulePoint ready for the 1.0 cut, then ask the owner. Everything chosen is merged and
+released as **`api` 0.106.0** and **`web` 0.202.0**, and every line of `docs/RELEASE_1_0.md` is now done, decided or
+not for 1.0. **1.0 is cut: `api` 1.0.0 and `web` 1.0.0**, on the owner's yes (see "Where things stand"). The owner's **hard rule** still stands: nothing that needs them to test, measure
+or check anything on their server or devices (a decision question is fine; a test is not). **P6 M5 and M6 still wait
+for a real P6 export**; do not offer them.
 
-## The owner's answers this session (2026-11-07)
+## The owner's answers this session (2026-11-08)
 
-- **Build:** all six: the Dependabot updates, #566, #567, the reconciliation pass, #569, #565.
-- **#569 spec:** Q1 **B** — keep the foot bar reachable for _any_ way of enlarging text (user stylesheet or extension,
-  not just the browser setting); Q2 **A** — a strip that arrives while the page is scrolled up stays where it is.
-- **#565 spec:** Q1 **B** — the stored instants also fix links from work that finishes part-way through a day; Q2 **A**
-  — linked plans are recalculated once, upstream first, the first time the new version starts.
-- **Engineering decisions taken by the session (not asked):** the ten Dependabot bumps landed as one PR (#1262) at their
-  proposed versions, as the 2026-10-05 batch did, and the ten were closed as superseded; #567's finding shipped although
-  neither import adapter reads a rate today (a guard for the day one does; said plainly in #1261); #569's remedy is R2
-  (a container query on a `.shell-frame` wrapper, ADR-0213) after M0 showed R1 would expose the landing's hidden
-  overflow as a scrollbar at 100 % — ui-architect settled where the container goes; the register numbering was kept
-  contiguous by giving #569's row 570 and #565's 571; a corrupt remote instant falls back to the date with a log line
-  rather than failing the downstream recalculation (security review); the reconciliation pass's dependency-audit finding
-  is filed as #574 rather than fixed in this batch.
-- **Deliberately not done (owner rule):** #565 plan task M5-T1 asks someone to read the boot recalculation's log counts
-  (`schedule.xplan_instants_rederived`: `pending`, `recalculated`) on the deployed host. Not asked, not done.
+- **Build before 1.0:** #574 (`body-parser` 2.4.0), checklist row 9 (remove the four deprecated `*Early*` fields as a
+  release of their own), and #318 (float in minutes). **Declined for 1.0:** #419, #294, #477, #490, #573.
+- **Row 8:** the Dell result (45.9 fps) counts; the older Surface reading (26.0) is listed under "Known limits at 1.0".
+- **Row 12:** the automatic API breaking-change check is not needed for 1.0 (#507 tracks it).
+- **A fresh start at 1.0 (important):** "All plans will be wiped when I roll out 1.0. Only I have used it so far so
+  happy for it to start afresh. Same goes for any backwards compatibility elsewhere." Recorded in `docs/DECISIONS.md`
+  2026-11-08 and `docs/RELEASE_1_0.md` "How the cut works" step 5. Until 1.0, do not spend effort on compatibility
+  with data or clients from before it.
+- **#318 spec:** show a quiet note whenever float cannot be compared (Q2 a); show "Float down 2 days (16 h)" (Q3 a);
+  approved the simplified one-milestone plan (no legacy-baseline machinery).
+- **1.0:** asked as a clickable question once everything above was merged and released, the owner answered
+  **"Yes, cut 1.0 now"**. Cut by #1279 (one changeset, both apps major), then Version Packages → 1.0.0.
+
+## Engineering decisions taken by the session (not asked)
+
+- **#574:** a hand-edited lockfile (pnpm's update drifted unrelated packages), integrity hashes matched against the
+  registry by the security review; 2.4.0 newly accepts `Content-Encoding: zstd`, so two e2e cases pin it (oversize →
+  413 after decompression, corrupt → 400). The `pnpm audit --prod` CI-gate idea is **not** done and needs a spec.
+- **#318 (ADR-0214):** `INTEGER` minutes (never fractional, can be negative) with a one-way CHECK (minutes require
+  days); no discriminator column — NULL minutes mean "before this release"; export format **2.5**. Accepted risk: a
+  rollback to an image older than 0.106.0 leaves minutes stale until the next recalculation (no backwards
+  compatibility is needed). Float days round half away from zero. The activities table derives its not-comparable
+  count from its own rows rather than threading a prop (the rule lives in two places; ADR-0214 says so).
+- **Three PRs and one release**, merged one at a time: #1274, #1275, #1277, then Version Packages #1276.
 
 ## Where things stand
 
-- **Latest releases:** `web` **0.201.1**, `api` **0.105.0**, `@repo/interchange` 0.16.2 (Version Packages #1264, `da244199`, tags `web-v0.201.1` and `api-v0.105.0`, Release run 42426152434 with both image publish jobs successful).
-- **This batch's PRs, in merge order:** #1260 (#566 MSPDI tier wording), #1261 (#567 code-match rate finding), #1262
-  (Dependabot #1246–#1255 combined), #1263 (#565 M0 spec + predictions), #1265 (#569 M0 measurement), #1266 (#565 M1
-  engine instants), #1267 (#565 M2 schema: four `TIMESTAMPTZ(3)` instants on `activities` +
-  `plans.schedule_instants_computed_at`, export 2.4), #1268 (#565 M3 boot recalculation, dormant), #1269 (#565 M4 the
-  read switched on + marker migration), #1270 (#565 M5 ADR-0212 Accepted, #565 closed, #571 filed), #1271 (#569 M1,
-  ADR-0213 Accepted), #1272 (reconciliation pass), #1264 (release), then this hand-off.
-- **New ADRs:** **ADR-0212** (a plan keeps the instant beside the date; cross-plan links read it) and **ADR-0213** (the
-  shell asks its own frame whether it is short) — both Accepted.
-- **New migrations:** `20261107120000_schedule_instants`, `20261107120100_cross_plan_instants_marker` (statement-free;
-  keys the once-only boot recalculation). Rollback steps are in `docs/DEPLOYMENT.md` ("Rolling back past the cross-plan
-  instants release").
-- **Closed:** #565, #566, #567, #569. **New rows:** **#570** (a strip that arrives while the frame is scrolled up lands
-  below the window; Q2 A), **#571** (a downstream plan reads an upstream's date until that upstream is recalculated after
-  the release), **#572** (the landing is taller than the window at 100 % text, hidden by the shell's overflow), **#573**
-  (a corner of the coarse selection bar is covered at 100 %), **#574** (the production dependency audit was never
-  recorded; `body-parser` 2.3.0 is on the API request path, fixed in 2.4.0).
-- **Dependabot #1246–#1255:** merged as #1262 and closed.
-
-## The reconciliation pass (2026-11-07)
-
-Recorded in `docs/DECISIONS.md` and `docs/RECONCILE.md` (PR #1272). Fixed: `security-reviewer.md` now knows ADR-0211's
-crash reports; `ui-architect.md`'s stale #548 sentence; `ARCHITECTURE.md` §10's three swept tables (four); `CLAUDE.md`
-§17's staff panel count (nine); seven register pointers (#105, #117, #118b, #257, #264, #342, #517). Recorded, not fixed:
-`pnpm audit --prod` (now #574). **Not run:** step 5a (the clone is shallow).
+- **Latest releases:** **`api` 1.0.0 and `web` 1.0.0** (cut PR #1279, Version Packages #1280, tags `api-v1.0.0` and
+  `web-v1.0.0`, Release run 42483100758 with both image publish jobs successful). The last 0.x release, and the rollback
+  target, is `api` 0.106.0 / `web` 0.202.0 (Version Packages #1276, Release run 42477009347).
+- **This batch's PRs, in merge order:** #1274 (#574 body-parser 2.4.0), #1275 (row 9: four deprecated fields
+  removed), #1277 (#318: float stored and compared in minutes, ADR-0214, migration
+  `20261108120000_total_float_minutes`), #1276 (release), #1278 (the 1.0 checklist closed + DECISIONS entry), #1279 (cut 1.0),
+  #1280 (Version Packages 1.0.0), then this hand-off.
+- **New ADR:** **ADR-0214** (float is stored and compared in minutes). **New migration:** one (two nullable columns
+  and two CHECKs; no rewrite, measured on 5,000 rows).
+- **Closed:** #318, #574. **No new register rows.**
 
 ## The three host steps: DONE on 2026-10-20
 
@@ -133,6 +127,9 @@ in `docs/DECISIONS.md`, 2026-10-20). `docs/RELEASE_1_0.md` rows 5, 6 and 7 are *
 - 2026-11-07 (batch 2): build all six (Dependabot, #566, #567, reconciliation, #569, #565); #569 Q1 B (any way of
   enlarging text) and Q2 A (an arriving strip stays put); #565 Q1 B (part-day finishes too) and Q2 A (recalculate linked
   plans once at first start).
+- 2026-11-08: build #574, row 9 and #318 (declined #419, #294, #477, #490, #573); row 8 Dell counts; row 12 not for
+  1.0; #318 Q2 a, Q3 a and the simplified plan; **plans are wiped at 1.0 and no backwards compatibility is needed
+  before it**; **cut 1.0: yes**.
 
 ## Parked by the owner — keep, do not raise
 
@@ -213,17 +210,30 @@ owner returns to one, the steps are ready:
 
 ## Suggested next
 
-- Ask the owner what to build next; offer only from the open register and backlog, not the parked items.
-- **Worth offering:** **#574** (take `body-parser` 2.4.0 with its dependency claims re-read — small; making the audit a
-  gate needs a spec); any Dependabot PRs that have opened since; **#572** and **#573** are small UI follow-ups with
-  triggers, offer only if the owner wants polish.
-- **#562**, **#563**, **#568**, **#570** and **#571** stay on their own triggers.
+- **The owner's own next step (do not do it for them, do not ask them to test anything):** the fresh-start wipe of
+  their plans, after a backup whose check has passed. Offer the steps only if they raise it.
+- **From now on a change that breaks a promise in `docs/RELEASE_1_0.md` ("What 1.0 promises afterwards") bumps the
+  major** (`CLAUDE.md` §10). Check every API, file-format and operator-setting change against that list.
+- **Worth offering after 1.0:** the `pnpm audit --prod` advisory gate (#574's left-over idea; needs a spec), and the
+  small faults the owner declined for 1.0 (#419, #294, #477, #490, #573), each only on its trigger or if the owner asks.
+- **#562**, **#563**, **#568**, **#570**, **#571** and **#572** stay on their own triggers.
 - The next reconciliation pass is due at the next epic boundary (last full pass 2026-11-07).
-
-Still offer only if the owner raises it: row 9 at the 1.0 cut.
 
 ## Environment notes a new session would otherwise rediscover
 
+- **2026-11-08 lessons (the 1.0-prep batch):**
+  - **A worktree that predates a dependency bump runs the OLD library.** After #574 merged, `check:claims` failed
+    ("verified against 2.4.0, 2.3.0 is installed") and two zstd e2e cases answered 415 in a stacked worktree. Run
+    `pnpm install --frozen-lockfile --prefer-offline` in every worktree after rebasing past a lockfile change.
+  - **CodeQL's "Initialize CodeQL" can fail on a 504 downloading its bundle**; no code was read. One
+    `rerun_failed_jobs` fixed it; dedupe keeps the newer success.
+  - **A test written in a schema-only task can assume "nothing writes this yet".** #318's T1 export test asserted
+    every other row's minutes were null; T2 made the recalculation write them. The full API e2e caught it, the
+    targeted runs did not.
+  - **`export-format-doc.structural.spec.ts` pins every `*Days` note to exactly "working days"** and every
+    `*Minutes` note to start with "minutes"; cross-references belong in the prose above the table.
+  - **A stacked branch rebased with `git rebase --onto origin/main <old parent tip>`** after each squash was clean
+    every time (#1275 → #318 → the checklist PR).
 - **2026-11-07 (batch 2) lessons:**
   - **Stack dependent branches and prove the tree, not the SHA.** Each stacked PR was rebased with `git rebase --onto
 origin/main <old-base>` after its parent squash-merged; comparing `git rev-parse HEAD^{tree}` with the tree that
