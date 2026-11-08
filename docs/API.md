@@ -33,21 +33,21 @@
   ADR-0190 D1 and [`RELEASE_1_0.md`](RELEASE_1_0.md). After 1.0, a breaking change to `/api/v1` may be made in
   place only with a package major bump, a migration note in the CHANGELOG and an ADR; `/api/v2` is introduced only
   when a program outside this repository depends on v1 (none does today). Removing the four deprecated fields
-  below at the 1.0 cut is covered by ADR-0190, which is the ADR this section asks for.
+  below, as a release before the 1.0 cut, is covered by ADR-0190, which is the ADR this section asks for.
 
 ### Deprecated fields
 
 A field renamed within a version is added under its new name, kept under its old one, and marked
 `deprecated: true` in OpenAPI until the next breaking change, which also needs an ADR (above). Both
-carry **one value**, set from one expression, so they cannot disagree.
+carry **one value**, set from one expression, so they cannot disagree. Nothing is deprecated today.
 
-| Deprecated                                                                                      | Use instead                                      | Where                                                                                              | Removed                         |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------- |
-| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | At the next breaking API change |
+| Removed                                                                                         | Use instead                                      | Where                                                                                              | Removed in    |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------- |
+| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | `api` 0.106.0 |
 
-The names said "early" but hold the placed dates when `datesBasis` is `PLACED`. The web client reads the new
-names (the comparison panel and its printout); the old four remain only for other clients, and are removed at the
-next breaking API change.
+This is a removal record. The old names said "early" but held the placed dates when `datesBasis` is `PLACED`;
+they were removed (2026-11-08, `RELEASE_1_0.md` row 9) as a release of their own, and a client still reading
+them gets `undefined`. The response carries only the four basis-neutral names.
 
 ## Response envelope
 
@@ -439,8 +439,7 @@ chosen once per read, never per row. It sits in `data` (the revision comparison 
 is deliberately named `datesBasis` rather than `basis`, which is the variance read's `meta.basis`.
 The moved rows (`criticalPath.entered` and `.left`) name those four dates `fromStart`, `toStart`,
 `fromFinish` and `toFinish`, which hold whichever dates `datesBasis` states; the former
-`fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` are **deprecated** and carry
-the same four values (see "Deprecated fields" above). Criticality and float stay network
+`fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` were removed (see "Deprecated fields" above). Criticality and float stay network
 quantities on either basis. Two live plans (cross-plan) have no baseline
 side and are `PLACED`. **A `NETWORK` read is not comparable with an earlier `PLACED` read of the
 same pair**: the basis can flip when a baseline is re-captured, so compare `datesBasis` before

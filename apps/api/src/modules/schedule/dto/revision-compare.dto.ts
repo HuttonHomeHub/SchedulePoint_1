@@ -60,16 +60,12 @@ import {
  */
 
 /**
- * The one sentence every `Early*`/finish date field on both routes carries, because the field names
- * predate the placed basis and renaming them is a breaking change deferred to a follow-up (#405).
+ * The one sentence every moved-row date field on both routes carries: the names are basis-neutral, so
+ * the basis is stated once here rather than implied by the name (#405).
  */
 export const DATES_BASIS_NOTE =
   '`YYYY-MM-DD`. Holds the PLACED date when the read’s `datesBasis` is `PLACED`, and the ' +
   'network’s earliest date when it is `NETWORK`, whatever the field’s name says.';
-
-/** Appended to each deprecated `*Early*` description; the removal condition is stated once. */
-export const DEPRECATED_EARLY_NOTE =
-  'Removed at the next breaking API change (`docs/API.md`, "Deprecated fields").';
 
 export class RevisionSideDto implements RevisionSide {
   @ApiProperty({ enum: REVISION_SIDE_KINDS, description: 'Which kind of revision this side is.' })
@@ -134,35 +130,6 @@ export class RevisionMovedActivityDto implements RevisionMovedActivity {
   fromFinish!: string | null;
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
   toFinish!: string | null;
-
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `fromStart`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  fromEarlyStart!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `toStart`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  toEarlyStart!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `fromFinish`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  fromEarlyFinish!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `toFinish`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  toEarlyFinish!: string | null;
 
   @ApiProperty({
     description:

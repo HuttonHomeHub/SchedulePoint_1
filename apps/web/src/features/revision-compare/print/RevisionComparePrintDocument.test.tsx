@@ -17,10 +17,6 @@ function moved(over: Partial<RevisionMovedActivity> = {}): RevisionMovedActivity
     toStart: '2026-02-10',
     fromFinish: '2026-02-20',
     toFinish: '2026-03-01',
-    fromEarlyStart: '2026-02-01',
-    toEarlyStart: '2026-02-10',
-    fromEarlyFinish: '2026-02-20',
-    toEarlyFinish: '2026-03-01',
     existsLive: true,
     ...over,
   };
@@ -120,22 +116,17 @@ describe('the printed revision comparison', () => {
     expect(container.textContent).toContain('not printed');
   });
 
-  it('prints the basis-neutral dates, not the deprecated Early* ones (#405)', () => {
+  it('prints the basis-neutral dates (#405)', () => {
     const { container } = render(
       <RevisionComparePrintDocument
         compare={comparison({
-          criticalPath: {
-            ...comparison().criticalPath,
-            entered: [moved({ toEarlyStart: '1999-01-01', toEarlyFinish: '1999-01-02' })],
-            enteredTotal: 1,
-          },
+          criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
         })}
         printedAt={PRINTED_AT}
       />,
     );
     expect(container.textContent).toContain('2026-02-10');
     expect(container.textContent).toContain('2026-03-01');
-    expect(container.textContent).not.toContain('1999-01-0');
   });
 
   it('says nothing about a cap when the set is complete', () => {

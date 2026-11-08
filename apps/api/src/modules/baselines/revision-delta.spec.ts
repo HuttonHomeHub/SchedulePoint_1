@@ -82,7 +82,7 @@ describe('computeRevisionDelta', () => {
     expect(d.entered).toHaveLength(0);
   });
 
-  it('carries the basis-neutral dates and the deprecated *Early* names as one value', () => {
+  it('carries the basis-neutral dates and none of the removed *Early* names', () => {
     // #405: the four dates are named for what they hold, and the old names stay until the next
     // breaking change, so they must never disagree.
     const d = computeRevisionDelta(
@@ -112,10 +112,11 @@ describe('computeRevisionDelta', () => {
       fromFinish: '2026-02-20',
       toFinish: '2026-03-01',
     });
-    expect(moved?.fromEarlyStart).toBe(moved?.fromStart);
-    expect(moved?.toEarlyStart).toBe(moved?.toStart);
-    expect(moved?.fromEarlyFinish).toBe(moved?.fromFinish);
-    expect(moved?.toEarlyFinish).toBe(moved?.toFinish);
+    // The four `*Early*` names were removed in 1.0 prep; the row must not carry them.
+    expect(moved).not.toHaveProperty('fromEarlyStart');
+    expect(moved).not.toHaveProperty('toEarlyStart');
+    expect(moved).not.toHaveProperty('fromEarlyFinish');
+    expect(moved).not.toHaveProperty('toEarlyFinish');
   });
 
   it('keeps a null float null rather than coercing it to zero', () => {

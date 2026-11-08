@@ -27,7 +27,6 @@ import {
 
 import {
   DATES_BASIS_NOTE,
-  DEPRECATED_EARLY_NOTE,
   RevisionCompletionDto,
   RevisionGhostBarDto,
   RevisionLinkChangeDto,
@@ -208,35 +207,6 @@ export class CrossPlanMovedActivityDto implements CrossPlanMovedActivity {
   fromFinish!: string | null;
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
   toFinish!: string | null;
-
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `fromStart`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  fromEarlyStart!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `toStart`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  toEarlyStart!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `fromFinish`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  fromEarlyFinish!: string | null;
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    deprecated: true,
-    description: 'Deprecated: the same value as `toFinish`. ' + DEPRECATED_EARLY_NOTE,
-  })
-  toEarlyFinish!: string | null;
 
   @ApiProperty({
     description:
