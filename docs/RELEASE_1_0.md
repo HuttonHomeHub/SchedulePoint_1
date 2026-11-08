@@ -71,7 +71,8 @@ rows below are the ones a person could meet, one line each, as read from each ro
 - **#88** — a mail program that scans links can "click" the verification link before the person does; only
   matters once email verification is required.
 - **#318** — after a calendar's hours-per-day changes, a baseline comparison shows float as having moved
-  when no date moved.
+  when no date moved. Closed on 2026-11-08 (ADR-0214): float is stored and compared in minutes, and a baseline
+  captured before then reads "Float movement unknown" until the 1.0 wipe.
 - **#84** — levelling gets slow when thousands of activities compete for one resource (about 11.6 seconds at
   16,000). Closed on 2026-10-17: a 16,000-activity single crew now levels in about 3 seconds where it took
   146 on the same machine before.

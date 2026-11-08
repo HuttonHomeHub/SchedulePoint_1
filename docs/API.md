@@ -370,6 +370,14 @@ sometimes holding a placed date would be the silent redefinition ADR-0148 refuse
 `currentTotalFloat`, `baselineTotalFloat` and `floatVarianceDays` are total float on **both** bases,
 always — no baseline has ever frozen remaining float.
 
+**Float is compared in minutes** (`#318`, ADR-0214). `floatVarianceMinutes` is `current − baseline`
+total float in working minutes, exact; `floatVarianceDays` is that figure converted once on the baseline's
+frozen `hoursPerDayMinutes`, the same factor the start and finish variance use. **Both are `null`, never
+`0`**, when the activity is not in the baseline, was removed, or either side's float has no minutes (a
+baseline captured, or a plan last recalculated, before `total_float_minutes` was stored). `meta.floatNotComparableCount`
+counts the activities in the baseline and live whose float was calculated on both sides but has no minutes on one;
+it is `0` with no active baseline. The minutes are never rescaled: they cannot be recovered from a rounded day.
+
 `GET …/baselines` and `GET …/baselines/:baselineId` expose the same discriminator directly:
 `BaselineSummary.placementSnapshotLevel` says which basis a variance read against that baseline
 will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are meaningful only
@@ -447,6 +455,19 @@ comparing figures across reads. On `PLACED` the live side reads `visualEffective
 and falls back to the early date for a row that has none; that fallback is kept rather than proved
 unreachable, because nothing here establishes that a live row always carries an effective-Visual
 span.
+
+**Float on the revision comparison is compared in minutes and shown on one frame** (`#318`, ADR-0214),
+on both routes. Each moved row (`criticalPath.entered` and `.left`) carries `fromTotalFloatMinutes`,
+`toTotalFloatMinutes` and `floatMovementMinutes` (`to − from`, exact), and its `fromTotalFloatDays`,
+`toTotalFloatDays` and `floatMovementDays` are those minutes as whole days on **`dayFactorMinutes`** (the
+earlier revision's plan working day, the factor the completion movement is measured on). Each is `null`
+where its minutes are: a calculated float with no minutes on a side is **not comparable**, never `0` and
+never rescaled, and the top-level `floatNotComparableCount` counts the matched non-summary activities in
+that state (`0` when a side was never calculated). The rows are ordered by `floatMovementMinutes`. The
+`CRITICALITY` change-list class lists an activity when its `isCritical` flipped or its float in whole days
+on `dayFactorMinutes` differs, both sides holding minutes; its labels read `float 2 d (16 h)`,
+`critical · float 0 d (0 h)` or `float unknown`. A day-length edit that moves no date therefore moves no
+float and lists nothing.
 
 ### The placement migration report (one-planning-surface M-I)
 

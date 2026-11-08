@@ -237,3 +237,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0211](0211-a-crash-report-is-the-screens-never-the-persons.md)                                 | A crash report is the screen's, never the person's                                         | Proposed           |
 | [0212](0212-a-plan-keeps-the-instant-beside-the-date.md)                                        | A plan keeps the instant beside the date, and a cross-plan link reads it                   | Accepted           |
 | [0213](0213-the-shell-asks-its-own-frame-whether-it-is-short.md)                                | The shell asks its own frame whether it is short                                           | Accepted           |
+| [0214](0214-a-frozen-float-carries-its-minutes.md)                                              | A frozen float carries its minutes                                                         | Accepted           |
