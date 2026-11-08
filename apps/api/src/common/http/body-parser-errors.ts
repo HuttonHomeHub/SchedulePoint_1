@@ -5,7 +5,7 @@ import type { NextFunction, Request, Response } from 'express';
  * `app-setup.ts`, not a property of the error: a library tag can be missing, and a bare `status`
  * is not evidence of anything. body-parser wraps any raw-body/zlib failure — a gzip body of junk
  * bytes is `Z_DATA_ERROR` — as `createError(400, error)` with **no `type`** (`body-parser/lib/read.js`
- * :125, :136), so the tag alone cannot recognise it; the filter needs to know where the error came
+ * :146, :157), so the tag alone cannot recognise it; the filter needs to know where the error came
  * from. A WeakSet, so nothing a client sends can set it.
  */
 const fromBodyParser = new WeakSet<object>();

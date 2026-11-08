@@ -22,7 +22,7 @@
     "@nestjs/platform-express": "12.3.2",
     "eslint-plugin-react-hooks": "7.1.1",
     "@tanstack/react-query": "5.105.0",
-    "body-parser": "2.3.0",
+    "body-parser": "2.4.0",
     "eslint": "9.39.5",
     "@prisma/client": "6.19.3",
     "yazl": "3.3.1"
@@ -36,10 +36,10 @@
   },
   "claims": [
     {
-      "ref": "read.js:36-40",
+      "ref": "read.js:42-46",
       "package": "body-parser",
       "path": "lib/read.js",
-      "lines": "36-40",
+      "lines": "42-46",
       "anchor": "onFinished.isFinished(req)",
       "citedBy": ["apps/api/src/app-setup.ts"]
     },
@@ -1298,7 +1298,7 @@
       "ref": "read.js:166",
       "package": "body-parser",
       "path": "lib/read.js",
-      "lines": "166",
+      "lines": "198",
       "anchor": "type: err.type || 'entity.parse.failed'",
       "citedBy": ["docs/DECISIONS.md"]
     },
@@ -1306,21 +1306,28 @@
       "ref": "utils.js:61-63",
       "package": "body-parser",
       "path": "lib/utils.js",
-      "lines": "61-63",
+      "lines": "46-48",
       "anchor": "? 102400 // 100kb default",
       "citedBy": ["docs/DECISIONS.md", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "read.js:146",
+      "package": "body-parser",
+      "path": "lib/read.js",
+      "lines": "146",
+      "anchor": "_error = createError(400, error)",
+      "citedBy": [
+        "apps/api/src/common/http/body-parser-errors.ts",
+        "apps/api/src/common/filters/all-exceptions.filter.spec.ts"
+      ]
     },
     {
       "ref": "read.js:125",
       "package": "body-parser",
       "path": "lib/read.js",
-      "lines": "125",
+      "lines": "146",
       "anchor": "_error = createError(400, error)",
-      "citedBy": [
-        "apps/api/src/common/http/body-parser-errors.ts",
-        "apps/api/src/common/filters/all-exceptions.filter.spec.ts",
-        "docs/TECH_DEBT.md"
-      ]
+      "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
       "ref": "request.mjs:47-99",

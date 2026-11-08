@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import zlib from 'node:zlib';
 
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -276,6 +277,42 @@ describe.skipIf(!hasDatabase)('JSON body cap (e2e)', () => {
         });
       },
     );
+
+    // body-parser 2.4.0 accepts `Content-Encoding: zstd` only where this Node has it (its own guard
+    // is `'createZstdDecompress' in zlib`), so the cases skip on a Node without it.
+    const hasZstd = 'zstdCompressSync' in zlib;
+
+    it.skipIf(!hasZstd)(
+      'refuses a zstd body that inflates past the 64 KB cap with 413, however small it travelled',
+      async () => {
+        const body = zlib.zstdCompressSync(
+          Buffer.from(JSON.stringify({ padding: 'x'.repeat(300 * 1024) })),
+        );
+        expect(body.length).toBeLessThan(64 * 1024);
+        const res = await request(server())
+          .post('/api/v1/csp-report')
+          .set('Content-Type', 'application/json')
+          .set('Content-Encoding', 'zstd')
+          // superagent would JSON-stringify a Buffer under this content type and corrupt the frame; its
+          // typings say a serializer returns a string, but it sends what it is given.
+          .serialize((b: Buffer) => b as unknown as string)
+          .send(body)
+          .expect(413);
+        expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+      },
+    );
+
+    it.skipIf(!hasZstd)('answers a corrupt zstd body with 400 and the envelope', async () => {
+      const res = await request(server())
+        .post('/api/v1/csp-report')
+        .set('Content-Type', 'application/json')
+        .set('Content-Encoding', 'zstd')
+        .send(Buffer.from('this is not compressed data at all'))
+        .expect(400);
+      expect(res.body).toEqual({
+        error: { code: 'BAD_REQUEST', message: 'The request body could not be read.' },
+      });
+    });
 
     it('answers truncated JSON in the browser’s own CSP content type the same way', async () => {
       const res = await request(server())

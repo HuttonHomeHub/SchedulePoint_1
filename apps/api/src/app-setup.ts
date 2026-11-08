@@ -201,7 +201,7 @@ export function configureHttpApp(app: NestExpressApplication): void {
   // (`BODYLESS_ORG_ROUTE`).
   //
   // Mounted first: body-parser skips a request an earlier parser already read
-  // (`body-parser/lib/read.js:36-40`, `onFinished.isFinished(req)`), so the global 64 KB parser
+  // (`body-parser/lib/read.js:42-46`, `onFinished.isFinished(req)`), so the global 64 KB parser
   // below never sees a body the large one handled.
   const orgScopedJson = json({ type: jsonTypes, limit: ORG_SCOPED_JSON_LIMIT });
   const orgScoped: RequestHandler = (req, res, next) => {
