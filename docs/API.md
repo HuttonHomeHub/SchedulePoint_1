@@ -41,9 +41,9 @@ A field renamed within a version is added under its new name, kept under its old
 `deprecated: true` in OpenAPI until the next breaking change, which also needs an ADR (above). Both
 carry **one value**, set from one expression, so they cannot disagree. Nothing is deprecated today.
 
-| Removed                                                                                         | Use instead                                      | Where                                                                                              | Removed in             |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------- |
-| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | the release before 1.0 |
+| Removed                                                                                         | Use instead                                      | Where                                                                                              | Removed in    |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------- |
+| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | `api` 0.106.0 |
 
 This is a removal record. The old names said "early" but held the placed dates when `datesBasis` is `PLACED`;
 they were removed (2026-11-08, `RELEASE_1_0.md` row 9) as a release of their own, and a client still reading
