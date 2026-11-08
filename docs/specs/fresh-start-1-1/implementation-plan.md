@@ -296,7 +296,7 @@ baseline; published shapes per Q1.
 ##### Task M3-T0 — Finish spec §4.3 with its rule (no PR; recorded in this directory as `m3-inventory.md`)
 
 - **Description:** for every row of spec §4.3 and every further hit of `captured before|before this column|no
-  backfill|pre-ADR|legacy|NOT_SNAPSHOTTED|NONE` in `apps/api/src`, `apps/web/src`, `packages/types/src`, record the
+backfill|pre-ADR|legacy|NOT_SNAPSHOTTED|NONE` in `apps/api/src`, `apps/web/src`, `packages/types/src`, record the
   file and line, the producer, and keep/remove. Pair each schema tidy-up from `schema-design.md` with its reader.
 - **Complexity:** M
 - **Risks:** removing a branch that also serves a live cause (never calculated, no active baseline) → the rule in
@@ -389,7 +389,7 @@ and `docs/RELEASE_1_0.md`.
 - **Description:** with `docker-compose.release.yml` on a scratch host or CI runner: run 1.0.0, seed one organisation
   through the REST API, `backup now` + `check`; start a 1.1.0 **candidate** image (`sha-…` tag from `main`) → confirm the
   refusal and an unchanged database; follow the guide's on-the-day steps verbatim → fresh boot, sign-up journey, `backup
-  now` + `check`; follow "if you need to go back" → 1.0.0 on the old volume shows the seeded data. Fix the guide where
+now` + `check`; follow "if you need to go back" → 1.0.0 on the old volume shows the seeded data. Fix the guide where
   reality differs.
 - **Complexity:** M
 - **Dependencies:** M1–M3, M4-T1
@@ -432,18 +432,18 @@ exception that **no changeset is added before M4-T3** (version impact is assesse
 
 ## Risks & assumptions (rollup)
 
-| #   | Risk / assumption                                                                                                     | Likelihood | Impact | Mitigation                                                                                                                                                  |
-| --- | --------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | A Version Packages PR is merged mid-epic and Watchtower deploys a partial 1.1                                         | low        | high   | No changeset until M4-T3; release freeze (Q2); M2 before M3 so the partial build refuses rather than misbehaves.                                            |
-| R2  | The squash loses a raw-SQL object (audit triggers, partial index, CHECK)                                              | med        | high   | Schema-only equivalence proof including triggers (spec §4.5); `verify_loaded`'s trigger check in CI.                                                        |
-| R3  | The refusal runs after `pre-migrate` and the restart loop fills the disk with copies                                  | low        | high   | Entrypoint order fixed in M2-T2 and asserted by the CI step ("no new file in /backups").                                                                     |
-| R4  | The owner's final backup is pruned after 30 days                                                                       | med        | med    | Guide step 4: copy it out of the backups folder (`schedulepoint-backup.sh:404-419`).                                                                        |
-| R5  | The owner checks the final backup after 1.1.0 has been pulled and gets a refusal                                      | med        | low    | Guide orders backup + check before merging; US-3 makes the refusal message say exactly what to do.                                                          |
-| R6  | A 1.0.0 image is started on the new 1.1 volume during a rollback and leaves a failed migration row                     | low        | med    | Guide: volume first, then tag. Recovery: the new volume is disposable on day one (`docker volume rm`).                                                       |
-| R7  | Prisma `migrate deploy` behaviour on an edited, already-applied baseline (pre-release) is not what M2-T3 assumes        | med        | low    | Confirm in M2-T3; fall back to lineage-only reset plus a documented manual step for contributors.                                                           |
-| R8  | A removed branch also served a live cause (never calculated, no baseline)                                             | med        | med    | Spec §4.3's rule; a unit test per kept cause in M3-T0's inventory.                                                                                           |
-| R9  | Pen-converted journeys become flaky                                                                                   | med        | low    | One helper asserting visible pen state; three local runs before merge; CI retries are already 2.                                                             |
-| R10 | Deleting suites unbalances the four CI shards                                                                         | high       | low    | Re-derive the pack in the same PR (ADR-0138); `check:e2e-roster` refuses a stale roster.                                                                     |
-| R11 | `schema-design.md` drops a column feeding a published field and the API stops emitting it                             | low        | high   | Spec §4.5 item 4; api-reviewer blocking on M3-T2/T3; an e2e assertion per spec §4.6 row under Option K.                                                      |
-| R12 | Assumption: nobody but the owner has data on any 1.x host                                                             | —          | —      | OD-2. If false, the refusal still protects that host; only the guide is needed.                                                                             |
-| R13 | Assumption: the owner's compose uses a volume named `db-data`                                                         | med        | low    | Guide shows `docker volume ls` and the `db` service's `volumes:` line before editing.                                                                       |
+| #   | Risk / assumption                                                                                                | Likelihood | Impact | Mitigation                                                                                                       |
+| --- | ---------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| R1  | A Version Packages PR is merged mid-epic and Watchtower deploys a partial 1.1                                    | low        | high   | No changeset until M4-T3; release freeze (Q2); M2 before M3 so the partial build refuses rather than misbehaves. |
+| R2  | The squash loses a raw-SQL object (audit triggers, partial index, CHECK)                                         | med        | high   | Schema-only equivalence proof including triggers (spec §4.5); `verify_loaded`'s trigger check in CI.             |
+| R3  | The refusal runs after `pre-migrate` and the restart loop fills the disk with copies                             | low        | high   | Entrypoint order fixed in M2-T2 and asserted by the CI step ("no new file in /backups").                         |
+| R4  | The owner's final backup is pruned after 30 days                                                                 | med        | med    | Guide step 4: copy it out of the backups folder (`schedulepoint-backup.sh:404-419`).                             |
+| R5  | The owner checks the final backup after 1.1.0 has been pulled and gets a refusal                                 | med        | low    | Guide orders backup + check before merging; US-3 makes the refusal message say exactly what to do.               |
+| R6  | A 1.0.0 image is started on the new 1.1 volume during a rollback and leaves a failed migration row               | low        | med    | Guide: volume first, then tag. Recovery: the new volume is disposable on day one (`docker volume rm`).           |
+| R7  | Prisma `migrate deploy` behaviour on an edited, already-applied baseline (pre-release) is not what M2-T3 assumes | med        | low    | Confirm in M2-T3; fall back to lineage-only reset plus a documented manual step for contributors.                |
+| R8  | A removed branch also served a live cause (never calculated, no baseline)                                        | med        | med    | Spec §4.3's rule; a unit test per kept cause in M3-T0's inventory.                                               |
+| R9  | Pen-converted journeys become flaky                                                                              | med        | low    | One helper asserting visible pen state; three local runs before merge; CI retries are already 2.                 |
+| R10 | Deleting suites unbalances the four CI shards                                                                    | high       | low    | Re-derive the pack in the same PR (ADR-0138); `check:e2e-roster` refuses a stale roster.                         |
+| R11 | `schema-design.md` drops a column feeding a published field and the API stops emitting it                        | low        | high   | Spec §4.5 item 4; api-reviewer blocking on M3-T2/T3; an e2e assertion per spec §4.6 row under Option K.          |
+| R12 | Assumption: nobody but the owner has data on any 1.x host                                                        | —          | —      | OD-2. If false, the refusal still protects that host; only the guide is needed.                                  |
+| R13 | Assumption: the owner's compose uses a volume named `db-data`                                                    | med        | low    | Guide shows `docker volume ls` and the `db` service's `volumes:` line before editing.                            |
