@@ -75,9 +75,8 @@ export default defineConfig({
               // The Gantt is half the claim — the item must be live there, not shaded.
               VITE_GANTT_VIEW: 'true',
               // The toolbar item lives in the TSLD registry, which the canvas workspace hosts.
-              // No pen: this analysis is read-only and is NOT pen-gated. Leaving the lock off keeps
-              // the journey about what it is about — a planner reading, not authoring.
-              VITE_PLAN_EDIT_LOCK: 'false',
+              // The pen layer is not pinned: the analysis is a read and is NOT pen-gated, so the
+              // journey takes the pen only where it has to edit to reach a state.
             },
           },
         ],

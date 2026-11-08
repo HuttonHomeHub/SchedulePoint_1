@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { takeThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -27,8 +28,7 @@ import {
  * 4. **Staleness**: recalculating the upstream alone leaves the downstream stale (the banner appears);
  *    a programme recalculate clears it.
  *
- * Runs on the plan workspace with the pen off (see the config), so it is pen-free — it moved off
- * the legacy stacked page when `VITE_CANVAS_WORKSPACE` retired.
+ * Runs on the plan workspace as shipped: the planner takes the pen on each plan before editing it.
  */
 test('a planner links plans across projects and recalculates the programme', async ({ page }) => {
   const stamp = Date.now();
@@ -37,6 +37,7 @@ test('a planner links plans across projects and recalculates the programme', asy
 
   // Upstream plan: a long activity so its computed finish clearly gates the downstream.
   await createAndOpenPlan(page, 'Procurement');
+  await takeThePen(page);
   await addActivity(page, 'Deliver steel', 20);
   await recalculate(page);
   await awaitComputedSchedule(page, orgSlug);
@@ -44,6 +45,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   // Downstream plan: back to the project, then a second plan with one activity.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await createAndOpenPlan(page, 'Construction');
+  await takeThePen(page);
   await addActivity(page, 'Erect frame');
   await recalculate(page);
 
@@ -125,6 +127,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   // recalculation, and what causes one is an edit. So the journey now does what a planner would.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('link', { name: 'Procurement', exact: true }).click();
+  await takeThePen(page);
   await showActivities(page);
   await addActivity(page, 'Late delivery', 4);
   await recalculate(page);
@@ -133,6 +136,9 @@ test('a planner links plans across projects and recalculates the programme', asy
 
   const staleBanner = page.getByText('Upstream plans changed');
   await expect(staleBanner).toBeVisible();
+
+  // Leaving the plan released the pen, and the programme recalculate is a write.
+  await takeThePen(page);
 
   // A programme recalculate clears the staleness.
   await page

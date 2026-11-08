@@ -60,11 +60,8 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // No pen: the comparison is a READ and is not pen-gated, so leaving the lock off
-              // keeps this journey about a planner reading rather than authoring.
-              VITE_PLAN_EDIT_LOCK: 'false',
-            },
+            // No flag is pinned. The comparison is a READ and is not pen-gated; the journey takes
+            // the pen (`e2e-support/pen.ts`) only where it has to edit to reach a state.
           },
         ],
       }),

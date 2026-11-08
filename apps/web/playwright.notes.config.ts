@@ -56,12 +56,11 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Notes ON, on the legacy stacked plan-detail page (canvas + pen off) so the journey is
-            // pen-free (notes are not pen-gated regardless — ADR-0046).
+            // Notes ON. The editing flags are not pinned: the pen layer runs as shipped, and the
+            // journey takes the pen through the UI (`e2e-support/pen.ts`) before it edits a plan
+            // (notes themselves are not pen-gated — ADR-0046).
             env: {
               VITE_NOTES: 'true',
-              VITE_TSLD_EDITING: 'false',
-              VITE_PLAN_EDIT_LOCK: 'false',
             },
           },
         ],

@@ -57,13 +57,12 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Programme scheduling ON (+ the M1 inter-project surface it layers on), on the legacy
-            // stacked plan-detail page (canvas + pen off) so the journey is pen-free.
+            // Programme scheduling ON (+ the M1 inter-project surface it layers on). The editing
+            // flags are not pinned: the journey runs the pen layer as shipped and takes the pen
+            // through the UI (`e2e-support/pen.ts`) before it adds an activity or a link.
             env: {
               VITE_PROGRAMME_SCHEDULING: 'true',
               VITE_INTER_PROJECT_DATES: 'true',
-              VITE_TSLD_EDITING: 'false',
-              VITE_PLAN_EDIT_LOCK: 'false',
             },
           },
         ],

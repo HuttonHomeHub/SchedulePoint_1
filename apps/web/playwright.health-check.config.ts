@@ -61,10 +61,9 @@ export default defineConfig({
             timeout: 120_000,
             env: {
               // Float paths ON: claim 5 proves the one-dock-at-a-time pair against the REAL
-              // sibling, not a stub. No pen: the report is a read and is not pen-gated — leaving
-              // the lock off keeps the journey about a planner reading, not authoring.
+              // sibling, not a stub. The pen layer is not pinned: the report is a read and is not
+              // pen-gated, so the journey takes the pen only where it has to edit to reach a state.
               VITE_FLOAT_PATHS: 'true',
-              VITE_PLAN_EDIT_LOCK: 'false',
             },
           },
         ],
