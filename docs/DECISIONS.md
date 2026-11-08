@@ -10,6 +10,27 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-08 — The last pre-1.0 batch, a fresh start at 1.0, and the checklist closed
+
+**What was decided.** Asked which work to do before 1.0 (clickable questions, each with a size and a
+recommendation), the product owner chose **#574** (`body-parser` 2.4.0, #1274), **checklist row 9** (remove the four
+deprecated revision-comparison fields as a release of their own, #1275) and **#318** (float stored and compared in
+minutes, #1277, ADR-0214). Declined for 1.0: #419, #294, #477, #490 and #573. On the two open checklist decisions:
+**row 8**, the Dell's 45.9 frames a second counts, with the older Surface reading (26.0) listed under "Known limits at
+1.0"; **row 12**, the automatic API breaking-change check is **not** needed for 1.0 (#507 tracks it).
+
+**A fresh start at 1.0.** Answering #318's first question, the owner said: "All plans will be wiped when I roll out
+1.0. Only I have used it so far so happy for it to start afresh. Same goes for any backwards compatibility
+elsewhere." So #318 stores exact float from now on and does not rescale or mark older baselines (they read "Float
+change unknown" until the wipe), and nothing before 1.0 needs to keep working after it. The wipe is the owner's act
+on their server, after a backup whose check has passed; it is not part of the cut's automation
+(`docs/RELEASE_1_0.md`, "How the cut works", step 5).
+
+**Consequences.** Every line of `docs/RELEASE_1_0.md` is now done, owner-decided or not for 1.0, and its stale line
+citations, rollback versions and "Known limits at 1.0" are brought up to date. 1.0 itself is still the owner's call.
+
+---
+
 ## 2026-11-07 — The reconciliation pass (last full pass 2026-10-31)
 
 **Why now.** Product-owner approval on 2026-11-07, one week after the previous pass, over the batch that shipped
