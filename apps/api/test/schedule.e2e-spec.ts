@@ -774,6 +774,48 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(res.body.data.nearCriticalCount).toBe(1);
   });
 
+  it('persists total float in unrounded working minutes beside the day figure (#318)', async () => {
+    // The day column cannot be re-framed once a calendar's day length changes; the minutes can.
+    // 2,400 minutes is five days on an eight-hour calendar and only two on a 24-hour one
+    // (Math.round(2400/1440)), which is exactly the gap the minutes close.
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({
+        name: 'Eight hour week',
+        shifts: [0, 1, 2, 3, 4].map((weekday) => ({
+          weekday,
+          startMinute: 8 * 60,
+          endMinute: 16 * 60,
+        })),
+      })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: cal.body.data.id as string, version: 2 })
+      .expect(200);
+
+    const spine = await makeActivity(actor, planId, 'Spine', 12);
+    const five = await makeActivity(actor, planId, 'Five days spare', 7);
+    const end = await makeActivity(actor, planId, 'End', 1);
+    await link(actor, planId, spine, end);
+    await link(actor, planId, five, end);
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    const row = await prisma.activity.findUniqueOrThrow({
+      where: { id: five },
+      select: { totalFloat: true, totalFloatMinutes: true },
+    });
+    expect(row.totalFloat).toBe(5);
+    expect(row.totalFloatMinutes).toBe(5 * 480);
+    const critical = await prisma.activity.findUniqueOrThrow({
+      where: { id: spine },
+      select: { totalFloat: true, totalFloatMinutes: true },
+    });
+    expect(critical).toEqual({ totalFloat: 0, totalFloatMinutes: 0 });
+  });
+
   it('says when it truncated the list, and does not say so when it did not', async () => {
     // A hub with four non-driving branch predecessors: into E there is the driving chain plus one
     // path per branch. The off-by-one that matters is the EXACTLY-maxPaths case — a naive
