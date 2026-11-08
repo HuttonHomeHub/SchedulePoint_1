@@ -167,6 +167,45 @@ pen's accessible name — confirm against the UI before writing the locator) bef
 - **Description:** list each flag's constant, production files and derived flags; group into ~4 PRs.
 - **Complexity:** S
 
+**Result** — the reconciliation (2026-11-08)
+
+Measured, not estimated: for every register entry, the number of non-test files under `apps/web/src`
+(excluding `config/env.ts`) that name its constant, by `grep -rlw <CONSTANT> apps/web/src`. The register
+(`scripts/flag-retirement.json` `flags`) holds 48 entries; `env.ts` defines all 48 constants. The risk note's
+"38 one-line calls" undercounted because several definitions wrap onto a second line; the lists agree. Five
+of the 48 are **derived**: each is the AND of its own `VITE_` read and a parent flag:
+
+| Derived flag                    | Parent                               |
+| ------------------------------- | ------------------------------------ |
+| `CANVAS_AUTHORING_FLOW_ENABLED` | `CANVAS_AUTHORING_ENABLED`           |
+| `CANVAS_LINK_ROUTING_ENABLED`   | `CANVAS_DIRECT_MANIPULATION_ENABLED` |
+| `CANVAS_MULTI_SELECT_ENABLED`   | `CANVAS_DIRECT_MANIPULATION_ENABLED` |
+| `CANVAS_RESOURCE_VIEW_ENABLED`  | `RESOURCE_CURVES_ENABLED`            |
+| `CANVAS_SEARCH_NAV_ENABLED`     | `CANVAS_LENSES_ENABLED`              |
+
+No deeper chains. A family is deleted in one batch. 191 production files in all; the batches are sized
+smallest first so the first batch proves the method cheaply.
+
+- **T5 — batch A (14 flags, one or two production files each, ~22 files):** `FLOAT_CRITICAL_SETTINGS`,
+  `ASSIGNMENT_LAG`, `TSLD_EDITING`, `AUDIT_SELF_SECURITY`, `PLAN_EDIT_LOCK`, `ACTIVITY_STEPS`,
+  `AUDIT_FILTERS`, `PROGRESS_INGESTION`, `ACCOUNT_SETTINGS`, `COST_ACCRUAL`, `PASSWORD_RESET`,
+  `CANVAS_ACTIVITY_TYPES`, `TOOLBAR_QUICK_WINS`, `EXPORT_PRINT`. `TSLD_EDITING` has 22 test files and
+  `PLAN_EDIT_LOCK` takes the `penManaged: false` branch with it (spec §4.4).
+- **T6 — batch B (13 flags, three or four files each, ~42 files):** `CANVAS_VISUAL_LANGUAGE`,
+  `SUB_DAY_DURATIONS`, `DURATION_TYPES`, `FLOAT_PATHS`, `GANTT_VIEW`, `SCHEDULE_INTERCHANGE`,
+  `PROGRAMME_SCHEDULING`, `AUDIT_LOG`, `ACTIVITY_CALENDAR`, `ENTRY_ROUTES`, `CANVAS_LIVE_FEEDBACK`,
+  `ACTIVITY_COPY_PASTE`, `ADVANCED_CONSTRAINTS`.
+- **T7 — batch C (11 flags, two families, ~58 files):** `RESOURCE_CURVES` + `CANVAS_RESOURCE_VIEW`,
+  `CANVAS_LENSES` + `CANVAS_SEARCH_NAV`, `CANVAS_NAV`, `CANVAS_TIME_AXIS`, `INTER_PROJECT_DATES`,
+  `ACTIVITY_EDITOR_CONVERGENCE`, `GUEST_SHARE_LINKS`, `ADVANCED_ACTIVITY_TYPES`, `RESOURCE_LEVELLING`,
+  `RESOURCES`.
+- **T8 — batch D (10 flags, the two largest families, ~64 files):** `CANVAS_DIRECT_MANIPULATION` +
+  `CANVAS_LINK_ROUTING` + `CANVAS_MULTI_SELECT`, `CANVAS_AUTHORING` + `CANVAS_AUTHORING_FLOW`,
+  `CANVAS_DATA_DATE`, `NOTES`, `WBS_IMPROVEMENTS`, `EARNED_VALUE`. The ux-reviewer sweep follows this
+  batch.
+
+14 + 13 + 11 + 10 = 48. Each name above drops its `_ENABLED` suffix and is `VITE_<NAME>` in the register.
+
 ##### Task M1-T5 … T8 — Delete flags, batch by batch (≈ one PR each)
 
 - **Complexity:** M each
