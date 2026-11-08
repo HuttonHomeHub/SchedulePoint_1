@@ -962,7 +962,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
 
   it('exports total float in working minutes on activities and baseline rows, empty where never written (2.5)', async () => {
     const { admin, organizationId } = await seedFixture();
-    // Nothing writes the minutes yet (#318 T2/T3), so the test sets them, signed, beside a day figure.
+    // The test sets known signed values beside a day figure, so the export is checked exactly.
     const live = await prisma.activity.findFirstOrThrow({
       where: { organizationId, totalFloat: { not: null } },
       orderBy: { id: 'asc' },
@@ -988,11 +988,13 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       expect(csvRows(files, `csv/${file}.csv`).find((r) => r.id === id)!.totalFloatMinutes).toBe(
         String(minutes),
       );
-      // Every other row predates the writer: empty, never 0.
-      expect(
-        rows.filter((r) => r.id !== id).every((r) => r.totalFloatMinutes === null),
-        file,
-      ).toBe(true);
+      // A row with no day figure was never calculated: its minutes are empty, never 0. A calculated
+      // row carries whole minutes (the recalculation writes them since #318 T2) or empty.
+      for (const r of rows.filter((row) => row.id !== id)) {
+        if (r.totalFloatDays === null) expect(r.totalFloatMinutes, `${file} ${r.id}`).toBeNull();
+        else if (r.totalFloatMinutes !== null)
+          expect(Number.isInteger(r.totalFloatMinutes), `${file} ${r.id}`).toBe(true);
+      }
     }
   });
 
