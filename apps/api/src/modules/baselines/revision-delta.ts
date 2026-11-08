@@ -5,6 +5,8 @@ import type {
   LagCalendarSource,
 } from '@prisma/client';
 
+import { compareFloat, floatDaysOnFrame } from './float-movement';
+
 /**
  * **The revision delta** — what entered and left the critical path between two computed schedules,
  * and how far the completion moved. One pure function over two projections.
@@ -42,8 +44,17 @@ export interface RevisionRow {
    */
   readonly durationMinutes: number | null;
   readonly isCritical: boolean;
-  /** Working days, in the activity's own calendar. NULL means unknown, never zero. */
+  /**
+   * Working days, in the activity's own calendar. NULL means unknown, never zero. **Never
+   * subtracted across two sides** — it only says whether a float was calculated at all
+   * (ADR-0214); the comparison reads {@link totalFloatMinutes}.
+   */
   readonly totalFloatDays: number | null;
+  /**
+   * The same float in unrounded working minutes (#318). NULL beside non-null `totalFloatDays` is a
+   * row calculated or captured before the minutes were stored: **not comparable**, never zero.
+   */
+  readonly totalFloatMinutes: number | null;
   readonly earlyStart: string | null;
   readonly earlyFinish: string | null;
 
@@ -94,9 +105,17 @@ export interface RevisionMovedRow {
   readonly activityId: string;
   readonly code: string | null;
   readonly name: string;
+  /** Each side's float in whole days on the comparison's frame; null where it has no minutes. */
   readonly fromTotalFloatDays: number | null;
   readonly toTotalFloatDays: number | null;
-  /** `to - from`, or **null** if either side is unknown. Absence and zero are different facts. */
+  /** `to - from` in working minutes — the exact figure. Null where either side is not comparable. */
+  readonly fromTotalFloatMinutes: number | null;
+  readonly toTotalFloatMinutes: number | null;
+  readonly floatMovementMinutes: number | null;
+  /**
+   * {@link floatMovementMinutes} in whole days on the frame (the earlier revision's plan working
+   * day), or **null** if the movement is not comparable. Absence and zero are different facts.
+   */
   readonly floatMovementDays: number | null;
   /**
    * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
@@ -159,6 +178,12 @@ export interface RevisionDelta {
   readonly completion: RevisionCompletion;
   /** Reused from ADR-0116 M6 rather than reinvented: neither side has a critical activity. */
   readonly noCriticalPath: boolean;
+  /**
+   * Matched non-summary activities whose float was calculated on both sides but has no minutes on
+   * at least one (ADR-0214). Their movement is null everywhere it is shown, and the panel says how
+   * many there were rather than letting a missing figure read as agreement (ADR-0127's shape).
+   */
+  readonly floatNotComparableCount: number;
 }
 
 /**
@@ -214,19 +239,29 @@ export function selectCarrierFromRows(rows: readonly RevisionRow[]): RevisionRow
   return best;
 }
 
-/** `to - from`, or null when either side is unknown. Absence and zero are different facts. */
-function floatMovement(from: number | null, to: number | null): number | null {
-  return from === null || to === null ? null : to - from;
-}
+/**
+ * The frame {@link computeRevisionDelta} converts float minutes to days on when a caller passes none:
+ * the 24-hour day a plan with no calendar has always used. Like `daysBetweenIso` it exists for this
+ * module's own unit cases; every caller in `apps/api` passes the earlier revision's plan factor.
+ */
+const DEFAULT_FLOAT_FRAME_MINUTES = 1440;
 
-function moved(from: RevisionRow, to: RevisionRow): RevisionMovedRow {
+function moved(from: RevisionRow, to: RevisionRow, frameMinutes: number): RevisionMovedRow {
+  const comparison = compareFloat(
+    { days: from.totalFloatDays, minutes: from.totalFloatMinutes },
+    { days: to.totalFloatDays, minutes: to.totalFloatMinutes },
+  );
+  const movementMinutes = comparison.kind === 'COMPARABLE' ? comparison.movementMinutes : null;
   return {
     activityId: to.activityId,
     code: to.code,
     name: to.name,
-    fromTotalFloatDays: from.totalFloatDays,
-    toTotalFloatDays: to.totalFloatDays,
-    floatMovementDays: floatMovement(from.totalFloatDays, to.totalFloatDays),
+    fromTotalFloatDays: floatDaysOnFrame(from.totalFloatMinutes, frameMinutes),
+    toTotalFloatDays: floatDaysOnFrame(to.totalFloatMinutes, frameMinutes),
+    fromTotalFloatMinutes: from.totalFloatMinutes,
+    toTotalFloatMinutes: to.totalFloatMinutes,
+    floatMovementMinutes: movementMinutes,
+    floatMovementDays: floatDaysOnFrame(movementMinutes, frameMinutes),
     // The projection puts placed dates in `earlyStart`/`earlyFinish` under `PLACED`.
     fromStart: from.earlyStart,
     toStart: to.earlyStart,
@@ -247,8 +282,10 @@ function presence(row: RevisionRow): RevisionPresenceRow {
  * quietly relabel the column.
  */
 function byMovementThenCodeThenId(a: RevisionMovedRow, b: RevisionMovedRow): number {
-  const am = a.floatMovementDays;
-  const bm = b.floatMovementDays;
+  // Minutes, not the whole-day figure beside them: two movements that round to the same day still
+  // order by what actually moved.
+  const am = a.floatMovementMinutes;
+  const bm = b.floatMovementMinutes;
   // Nulls sort last: an unknown movement is not a large one.
   if (am !== bm) {
     if (am === null) return 1;
@@ -279,6 +316,11 @@ export function computeRevisionDelta(
   toRows: readonly RevisionRow[],
   cap: number,
   movementDaysBetween: (from: string, to: string) => number = daysBetweenIso,
+  /**
+   * The ONE frame float minutes are shown in — the earlier revision's plan working day, the same
+   * factor `movementDaysBetween` divides by (ADR-0214). One argument from the seam, never per row.
+   */
+  floatFrameMinutes: number = DEFAULT_FLOAT_FRAME_MINUTES,
 ): RevisionDelta {
   const fromById = new Map(fromRows.map((r) => [r.activityId, r]));
   const toById = new Map(toRows.map((r) => [r.activityId, r]));
@@ -289,6 +331,7 @@ export function computeRevisionDelta(
   const removed: RevisionPresenceRow[] = [];
   let remainedCriticalCount = 0;
   let remainedNonCriticalCount = 0;
+  let floatNotComparableCount = 0;
 
   for (const to of toRows) {
     const from = fromById.get(to.activityId);
@@ -307,8 +350,16 @@ export function computeRevisionDelta(
       else remainedNonCriticalCount += 1;
       continue;
     }
-    if (to.isCritical && !from.isCritical) entered.push(moved(from, to));
-    else if (!to.isCritical && from.isCritical) left.push(moved(from, to));
+    if (
+      compareFloat(
+        { days: from.totalFloatDays, minutes: from.totalFloatMinutes },
+        { days: to.totalFloatDays, minutes: to.totalFloatMinutes },
+      ).kind === 'NOT_COMPARABLE'
+    ) {
+      floatNotComparableCount += 1;
+    }
+    if (to.isCritical && !from.isCritical) entered.push(moved(from, to, floatFrameMinutes));
+    else if (!to.isCritical && from.isCritical) left.push(moved(from, to, floatFrameMinutes));
     else if (to.isCritical) remainedCriticalCount += 1;
     else remainedNonCriticalCount += 1;
   }
@@ -365,6 +416,7 @@ export function computeRevisionDelta(
     addedTotal: added.length,
     removedTotal: removed.length,
     completion,
+    floatNotComparableCount,
     noCriticalPath:
       !fromRows.some((r) => r.isCritical && !isSummary(r)) &&
       !toRows.some((r) => r.isCritical && !isSummary(r)),

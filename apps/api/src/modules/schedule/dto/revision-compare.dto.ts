@@ -107,20 +107,53 @@ export class RevisionMovedActivityDto implements RevisionMovedActivity {
   @ApiProperty({ nullable: true, type: String }) code!: string | null;
   @ApiProperty() name!: string;
 
-  @ApiProperty({ nullable: true, type: Number, description: 'Working days on the old side.' })
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'The old side’s total float in whole days on `dayFactorMinutes`, derived from the minutes ' +
+      '(ADR-0214). Null where that side has no minutes.',
+  })
   fromTotalFloatDays!: number | null;
 
-  @ApiProperty({ nullable: true, type: Number, description: 'Working days on the new side.' })
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'The new side’s total float in whole days on `dayFactorMinutes`. Null likewise.',
+  })
   toTotalFloatDays!: number | null;
 
   @ApiProperty({
     nullable: true,
     type: Number,
     description:
-      '`to − from`, or **null** when either side is unknown. Absence and zero are different ' +
-      'facts and this payload never collapses them.',
+      '`floatMovementMinutes` in whole days on `dayFactorMinutes`, or **null** when the movement ' +
+      'is not comparable. Absence and zero are different facts and this payload never collapses them.',
   })
   floatMovementDays!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'The old side’s total float in working minutes, unrounded; null if not stored.',
+  })
+  fromTotalFloatMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'The new side’s total float in working minutes, unrounded; null if not stored.',
+  })
+  toTotalFloatMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      '`to − from` in working minutes, exact. **Null** when either side’s float is unknown or has ' +
+      'no minutes; the rows are then counted in `floatNotComparableCount`.',
+  })
+  floatMovementMinutes!: number | null;
 
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
   fromStart!: string | null;
@@ -513,6 +546,15 @@ export class RevisionCompareDto implements RevisionCompare {
       'calendar as three days’ work.',
   })
   dayFactorMinutes!: number;
+
+  @ApiProperty({
+    description:
+      'Matched activities whose float was calculated on both sides but has no minutes on at ' +
+      'least one (a baseline captured, or a live plan last recalculated, before minutes were ' +
+      'stored). Their float movement is null and the change list does not judge their float ' +
+      '(ADR-0214). 0 when a side was never calculated.',
+  })
+  floatNotComparableCount!: number;
 
   @ApiProperty({
     enum: REVISION_SETTINGS_VERDICTS,

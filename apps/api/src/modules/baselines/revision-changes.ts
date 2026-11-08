@@ -13,6 +13,7 @@ import {
   type RevisionPaidChangeClass,
 } from '@repo/types';
 
+import { compareFloat, floatDaysOnFrame } from './float-movement';
 import type { RevisionEdge, RevisionRow } from './revision-delta';
 
 /**
@@ -115,6 +116,20 @@ function minutesLabel(minutes: number | null): string | null {
   return `${String(minutes)} min (${rounded} h)`;
 }
 
+/**
+ * A float for display: whole days on the comparison's frame with the exact hours beside, because
+ * the day figure rounds and the hours carry what it drops ("float 2 d (16 h)"). A row with a float
+ * but no minutes says so — the minutes cannot be recovered from a rounded day (ADR-0214).
+ */
+function floatLabel(row: RevisionRow, frameMinutes: number): string {
+  const minutes = row.totalFloatMinutes;
+  if (minutes === null) return 'float unknown';
+  const days = floatDaysOnFrame(minutes, frameMinutes);
+  const hours = minutes / 60;
+  const hoursText = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return `float ${String(days)} d (${hoursText} h)`;
+}
+
 /** What a reader is shown where a plan states no opinion. Never a blank and never a raw null. */
 const NONE = 'None';
 const TOP_LEVEL = 'Top level';
@@ -159,6 +174,7 @@ function labelOf(
   changeClass: RowChangeClass | 'ADDED' | 'REMOVED',
   side: ReadonlyMap<string, RevisionRow>,
   calendarName: (id: string) => string | null,
+  frameMinutes: number,
 ): string | null {
   switch (changeClass) {
     case 'RENAMED':
@@ -177,7 +193,13 @@ function labelOf(
         ? null
         : `${row.earlyStart} → ${row.earlyFinish}`;
     case 'CRITICALITY':
-      return row.isCritical ? 'critical' : `float ${String(row.totalFloatDays ?? '?')} d`;
+      // A critical row states its float too: two critical rows can differ only by float (0 d → −2 d),
+      // and a listed row whose labels read alike looks like a defect rather than a fact.
+      return row.isCritical
+        ? row.totalFloatMinutes === null
+          ? 'critical'
+          : `critical · ${floatLabel(row, frameMinutes)}`
+        : floatLabel(row, frameMinutes);
     case 'RECONSTRAINED':
       return constraintLabel(row);
     case 'RECALENDARED':
@@ -198,7 +220,24 @@ function labelOf(
   }
 }
 
-function changed(from: RevisionRow, to: RevisionRow, changeClass: RowChangeClass): boolean {
+function floatDiffers(from: RevisionRow, to: RevisionRow, frameMinutes: number): boolean {
+  const comparison = compareFloat(
+    { days: from.totalFloatDays, minutes: from.totalFloatMinutes },
+    { days: to.totalFloatDays, minutes: to.totalFloatMinutes },
+  );
+  return (
+    comparison.kind === 'COMPARABLE' &&
+    floatDaysOnFrame(from.totalFloatMinutes, frameMinutes) !==
+      floatDaysOnFrame(to.totalFloatMinutes, frameMinutes)
+  );
+}
+
+function changed(
+  from: RevisionRow,
+  to: RevisionRow,
+  changeClass: RowChangeClass,
+  frameMinutes: number,
+): boolean {
   switch (changeClass) {
     case 'RENAMED':
       return from.name !== to.name;
@@ -214,7 +253,12 @@ function changed(from: RevisionRow, to: RevisionRow, changeClass: RowChangeClass
     case 'REDATED':
       return from.earlyStart !== to.earlyStart || from.earlyFinish !== to.earlyFinish;
     case 'CRITICALITY':
-      return from.isCritical !== to.isCritical || from.totalFloatDays !== to.totalFloatDays;
+      // The float half compares MINUTES, as whole days on the frame (ADR-0214): raw minutes would
+      // list an activity whose float moved by an hour and print two identical labels (the
+      // `edgeChanged` lesson), and the old day columns listed a calendar edit as a change of
+      // criticality. A side with no minutes cannot show a float difference and is not listed for
+      // one; the delta counts it in `floatNotComparableCount`.
+      return from.isCritical !== to.isCritical || floatDiffers(from, to, frameMinutes);
     case 'RECONSTRAINED':
       // All four together — a secondary constraint is a constraint, and reporting a change to it
       // under a different heading would put two halves of one edit in two places.
@@ -341,6 +385,11 @@ export interface ClassifyOptions {
    * so a calendar may be deleted without rotting the baseline (ADR-0025).
    */
   readonly calendarName: (id: string) => string | null;
+  /**
+   * The ONE frame float is shown in and compared on — the earlier revision's plan working day, the
+   * same factor the delta and the completion movement use (ADR-0214).
+   */
+  readonly dayFactorMinutes: number;
   readonly cap: number;
 }
 
@@ -363,6 +412,7 @@ export function classifyRevisionChanges(
     codeIsTheCorrelationKey,
     includeProgress,
     calendarName,
+    dayFactorMinutes,
     cap,
   } = options;
   const fromById = new Map(from.rows.map((r) => [r.activityId, r]));
@@ -400,21 +450,21 @@ export function classifyRevisionChanges(
         code: toRow.code,
         name: toRow.name,
         from: null,
-        to: labelOf(toRow, 'ADDED', toById, calendarName),
+        to: labelOf(toRow, 'ADDED', toById, calendarName, dayFactorMinutes),
         orderKey: orderKeyOf(null, toRow),
       });
       continue;
     }
     for (const c of rowClasses) {
-      if (!changed(fromRow, toRow, c)) continue;
+      if (!changed(fromRow, toRow, c, dayFactorMinutes)) continue;
       bucket.get(c)?.push({
         activityId: toRow.activityId,
         subjectId: toRow.activityId,
         changeClass: c,
         code: toRow.code,
         name: toRow.name,
-        from: labelOf(fromRow, c, fromById, calendarName),
-        to: labelOf(toRow, c, toById, calendarName),
+        from: labelOf(fromRow, c, fromById, calendarName, dayFactorMinutes),
+        to: labelOf(toRow, c, toById, calendarName, dayFactorMinutes),
         orderKey: orderKeyOf(fromRow, toRow),
       });
     }
@@ -428,7 +478,7 @@ export function classifyRevisionChanges(
       changeClass: 'REMOVED',
       code: fromRow.code,
       name: fromRow.name,
-      from: labelOf(fromRow, 'REMOVED', fromById, calendarName),
+      from: labelOf(fromRow, 'REMOVED', fromById, calendarName, dayFactorMinutes),
       to: null,
       orderKey: orderKeyOf(fromRow, null),
     });

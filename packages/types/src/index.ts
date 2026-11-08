@@ -1967,8 +1967,19 @@ export interface BaselineVarianceRow {
   /** Working-day variance (positive = later/behind); null when not comparable. */
   startVarianceDays: number | null;
   finishVarianceDays: number | null;
-  /** `current − baseline` total float in days (positive = more float now); null when not comparable. */
+  /**
+   * `current − baseline` total float in days (positive = more float now); null when not comparable.
+   * Derived from {@link floatVarianceMinutes} on the baseline's frozen day length (ADR-0214), so a
+   * calendar edit that moved no date reads 0 rather than as float movement.
+   */
   floatVarianceDays: number | null;
+  /**
+   * The exact `current − baseline` total float in working minutes. **Null is not zero**: it means
+   * the activity is not in the baseline, was removed, or its float has no minutes on a side — a
+   * baseline captured before minutes were stored, or a plan not recalculated since
+   * ({@link PlanVarianceSummary.floatNotComparableCount} counts those).
+   */
+  floatVarianceMinutes: number | null;
 }
 
 /**
@@ -1995,6 +2006,12 @@ export interface PlanVarianceSummary {
    * `undefined` shows no basis wording rather than guessing one.
    */
   basis: VarianceBasis | null;
+  /**
+   * Activities in the baseline and live whose float was calculated on both sides but cannot be
+   * compared because a side has no float minutes (ADR-0214). Their `floatVarianceDays` is null; a
+   * client states the count rather than showing them as unchanged. 0 when `baselineId` is null.
+   */
+  floatNotComparableCount: number;
 }
 
 /**
@@ -3579,8 +3596,11 @@ export interface RevisionSide {
 /**
  * An activity that changed criticality, with BOTH sides' numbers so the reader need not ask again.
  *
- * `floatMovementDays` is `to - from`, or **null** when either side is unknown. Absence and zero are
- * different facts, and this payload never collapses them.
+ * `floatMovementMinutes` is `to - from` in working minutes, or **null** when either side is unknown
+ * or has no minutes. Absence and zero are different facts, and this payload never collapses them.
+ * The `*Days` fields are those minutes as whole days on the comparison's frame (`dayFactorMinutes`,
+ * the earlier revision's plan working day) — derived, never subtracted from two rounded figures
+ * (ADR-0214); each is null where its minutes are.
  */
 export interface RevisionMovedActivity {
   activityId: string;
@@ -3589,6 +3609,9 @@ export interface RevisionMovedActivity {
   fromTotalFloatDays: number | null;
   toTotalFloatDays: number | null;
   floatMovementDays: number | null;
+  fromTotalFloatMinutes: number | null;
+  toTotalFloatMinutes: number | null;
+  floatMovementMinutes: number | null;
   /**
    * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
    * Named for what they hold, not for one basis (`docs/TECH_DEBT.md` #405).
@@ -4112,6 +4135,8 @@ export interface CrossPlanRevisionCompare {
   readonly from: RevisionSide;
   readonly to: RevisionSide;
   readonly dayFactorMinutes: number;
+  /** See {@link RevisionCompare.floatNotComparableCount}. */
+  readonly floatNotComparableCount: number;
   readonly frame: CrossPlanRevisionFrame;
   readonly settingsVerdict: RevisionSettingsVerdict;
   /** Stated first, and rendered first: everything below is worth exactly what this says it is. */
@@ -4152,6 +4177,14 @@ export interface RevisionCompare {
    * planner's `1d` on an eight-hour calendar as three days' work.
    */
   dayFactorMinutes: number;
+  /**
+   * Matched activities whose float was calculated on both sides but has no minutes on at least one
+   * (a baseline captured before minutes were stored, or a live plan not recalculated since), so
+   * their float movement is null in `criticalPath` and the float half of the change list is not
+   * judged for them (ADR-0214). A client states the count; it never reads these as "unchanged".
+   * 0 when a side was never calculated — the criticality delta is then not assessable at all.
+   */
+  floatNotComparableCount: number;
   /**
    * Whether both sides' numbers came from the same criticality rule. Never coalesced; see
    * {@link RevisionSettingsVerdict}.

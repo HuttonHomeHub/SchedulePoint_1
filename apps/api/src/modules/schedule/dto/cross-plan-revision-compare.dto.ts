@@ -187,17 +187,44 @@ export class CrossPlanMovedActivityDto implements CrossPlanMovedActivity {
 
   @ApiProperty({ nullable: true, type: String }) code!: string | null;
   @ApiProperty() name!: string;
-  @ApiProperty({ nullable: true, type: Number }) fromTotalFloatDays!: number | null;
-  @ApiProperty({ nullable: true, type: Number }) toTotalFloatDays!: number | null;
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'Whole days on `dayFactorMinutes`, derived from the minutes (ADR-0214); null if none stored.',
+  })
+  fromTotalFloatDays!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number, description: 'As `fromTotalFloatDays`.' })
+  toTotalFloatDays!: number | null;
 
   @ApiProperty({
     nullable: true,
     type: Number,
     description:
-      '`to − from`, or **null** when either side is unknown. Absence and zero are different facts ' +
-      'and this payload never collapses them.',
+      '`floatMovementMinutes` in whole days on `dayFactorMinutes`, or **null** when not ' +
+      'comparable. Absence and zero are different facts and this payload never collapses them.',
   })
   floatMovementDays!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description: 'The old side’s total float in working minutes, unrounded; null if not stored.',
+  })
+  fromTotalFloatMinutes!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number, description: 'As `fromTotalFloatMinutes`.' })
+  toTotalFloatMinutes!: number | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      '`to − from` in working minutes, exact; **null** when either side is unknown or has no ' +
+      'minutes (counted in `floatNotComparableCount`).',
+  })
+  floatMovementMinutes!: number | null;
 
   @ApiProperty({ nullable: true, type: String, description: DATES_BASIS_NOTE })
   fromStart!: string | null;
@@ -367,6 +394,14 @@ export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
   @ApiProperty({ type: RevisionSideDto }) from!: RevisionSideDto;
   @ApiProperty({ type: RevisionSideDto }) to!: RevisionSideDto;
   @ApiProperty() dayFactorMinutes!: number;
+
+  @ApiProperty({
+    description:
+      'Matched activities whose float was calculated on both sides but has no minutes on at ' +
+      'least one, so their float movement is null (ADR-0214). 0 when a side was never calculated.',
+  })
+  floatNotComparableCount!: number;
+
   @ApiProperty({ type: CrossPlanRevisionFrameDto }) frame!: CrossPlanRevisionFrameDto;
 
   @ApiProperty({

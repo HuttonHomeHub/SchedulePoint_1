@@ -269,6 +269,7 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
           codeIsTheCorrelationKey: true,
           includeProgress: true,
           calendarName: () => null,
+          dayFactorMinutes: 1440,
           cap: 500,
         },
       );

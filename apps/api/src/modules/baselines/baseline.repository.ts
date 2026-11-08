@@ -662,6 +662,7 @@ export class BaselineRepository {
       placedStart: Date | null;
       placedFinish: Date | null;
       totalFloat: number | null;
+      totalFloatMinutes: number | null;
     }[]
   > {
     return db.baselineActivity.findMany({
@@ -675,6 +676,7 @@ export class BaselineRepository {
         placedStart: true,
         placedFinish: true,
         totalFloat: true,
+        totalFloatMinutes: true,
       },
     });
   }
@@ -715,6 +717,7 @@ export class BaselineRepository {
       durationMinutes: number;
       isCritical: boolean;
       totalFloat: number | null;
+      totalFloatMinutes: number | null;
       baselineStart: Date | null;
       baselineFinish: Date | null;
       placedStart: Date | null;
@@ -742,6 +745,7 @@ export class BaselineRepository {
         durationMinutes: true,
         isCritical: true,
         totalFloat: true,
+        totalFloatMinutes: true,
         baselineStart: true,
         baselineFinish: true,
         // The frozen placed span (placement-baseline-variance). Selected unconditionally for the
@@ -872,6 +876,7 @@ export class BaselineRepository {
       durationMinutes: number;
       isCritical: boolean;
       totalFloat: number | null;
+      totalFloatMinutes: number | null;
       earlyStart: Date | null;
       earlyFinish: Date | null;
       visualEffectiveStart: Date | null;
@@ -899,6 +904,7 @@ export class BaselineRepository {
         durationMinutes: true,
         isCritical: true,
         totalFloat: true,
+        totalFloatMinutes: true,
         earlyStart: true,
         earlyFinish: true,
         // Where the bar is DRAWN (ADR-0148) — the live counterpart of the frozen placed span.
@@ -1031,6 +1037,7 @@ export class BaselineRepository {
       visualEffectiveStart: Date | null;
       visualEffectiveFinish: Date | null;
       totalFloat: number | null;
+      totalFloatMinutes: number | null;
     }[]
   > {
     return db.activity.findMany({
@@ -1045,6 +1052,7 @@ export class BaselineRepository {
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         totalFloat: true,
+        totalFloatMinutes: true,
       },
     });
   }

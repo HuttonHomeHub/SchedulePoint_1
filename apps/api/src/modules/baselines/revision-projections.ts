@@ -63,6 +63,7 @@ export interface FrozenRevisionRowInput {
   readonly durationMinutes: number;
   readonly isCritical: boolean;
   readonly totalFloat: number | null;
+  readonly totalFloatMinutes: number | null;
   readonly baselineStart: Date | null;
   readonly baselineFinish: Date | null;
   readonly placedStart: Date | null;
@@ -105,6 +106,7 @@ export interface LiveRevisionRowInput {
   readonly durationMinutes: number;
   readonly isCritical: boolean;
   readonly totalFloat: number | null;
+  readonly totalFloatMinutes: number | null;
   readonly earlyStart: Date | null;
   readonly earlyFinish: Date | null;
   readonly visualEffectiveStart: Date | null;
@@ -140,6 +142,7 @@ export const frozenRevisionSide = (
     durationMinutes: r.durationMinutes,
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
+    totalFloatMinutes: r.totalFloatMinutes,
     // `earlyStart`/`earlyFinish` carry the BASIS's dates — placed on `PLACED`, earliest on
     // `NETWORK` — and the read states which in `datesBasis`. Never chosen per row. Renaming these
     // to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
@@ -248,6 +251,7 @@ export const liveRevisionSide = (
     durationMinutes: r.durationMinutes,
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
+    totalFloatMinutes: r.totalFloatMinutes,
     earlyStart: revisionDate(
       basis === 'PLACED' ? (r.visualEffectiveStart ?? r.earlyStart) : r.earlyStart,
     ),
