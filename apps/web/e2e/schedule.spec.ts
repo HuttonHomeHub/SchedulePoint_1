@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { takeThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate, revealToolbarCommand } from '../e2e-support/toolbar';
 
@@ -52,6 +53,7 @@ async function openNewPlan(page: Page): Promise<void> {
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
+  await takeThePen(page);
 }
 
 async function addActivity(page: Page, name: string): Promise<void> {
