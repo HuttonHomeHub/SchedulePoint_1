@@ -10,6 +10,51 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-09 — 1.1.0 is released, and the owner switched without the practice run, discarding the 1.0 data
+
+**What happened.** PR #1292 (`feat(release)!: ship SchedulePoint 1.1.0, the fresh start`) and the Version Packages
+PR #1293 were merged on 2026-11-09; the Release run on `bad52e5b` tagged `api-v1.1.0` and `web-v1.1.0` and
+published both images, all three jobs green. The live switch on the owner's server followed the same day.
+
+**What the owner decided, and it did not follow the guide.** The guide planned a practice run on a spare machine
+(M4-T2), a final 1.0 backup kept off the server, and the old database kept 30 days as the way back. The owner chose
+instead to **discard all 1.0 data with no practice run**: everything in it was test data. On the server (stack
+folder `/apps/schedulepoint`, database in a **folder**, not a named volume):
+
+1. With the stack stopped, the database folder was moved aside: `/apps/schedulepoint/db` →
+   `/apps/schedulepoint/db-1.0-old`. That folder has **since been deleted**.
+2. Dockge **Update** (`docker compose pull` then `up -d`). 1.1.0 started on an empty folder: the version check
+   printed `1.1.0` and the health endpoint answered 200.
+3. The owner signed up again and created the organisation.
+
+**What was met on the way, and what it means.**
+
+- **Staff console hidden at first.** `STAFF_EMAILS` admits an address only once it is **confirmed**, regardless
+  of `AUTH_REQUIRE_EMAIL_VERIFICATION` (ADR-0086), and the confirmation mail had not yet arrived. The owner set
+  `email_verified = true` for their own row by SQL through `docker exec`; the confirmation mail then arrived and
+  confirmed it anyway. The rule is now stated where an operator will look (`docs/DEPLOYMENT.md`, the staff
+  console and the owner's deployment; the start-fresh guide, Part 3).
+- **Mail at first boot.** The first boot logged that the SMTP transport (`smtp.resend.com:465`) was not reachable
+  because verification timed out; after a stack restart it logged "mail transport reachable". Treated as a
+  transient first-boot timeout; a row is opened only if it recurs.
+- **A stale `UPDATE-HELD.txt` dated 2026-10-26** was in the backups folder (psql could not resolve host `db`, a
+  start-up timing issue, not permissions or disk). Safe to delete.
+- **First 1.1 backup:** `BACKUP FINISHED`, then `CHECK PASSED` (1 organisation, 1 user). Retention hierarchy
+  expiry stays armed from `.env`.
+
+**Why it is recorded.** The rehearsal was the plan's check on the guide, and it did not run, so the guide is
+marked "used once, never rehearsed" rather than verified (`docs/specs/fresh-start-1-1/m4-rehearsal.md`). The
+owner's layout (bind-mount folders, Dockge, a root terminal with no `sudo`) is recorded as **the canonical
+deployment until the product scales** (`docs/DEPLOYMENT.md`, "The owner's deployment"), and the operator guides
+now give the folder form beside the named-volume one. `docker-compose.release.yml` is **not** changed: the owner
+chose docs only, because changing where it keeps the database would point anyone else using it at an empty one.
+
+**Consequences.** There is no way back to the 1.0 data: the old folder is gone, and the 1.0 nightly copies still
+in the backups folder can only be restored by the 1.0.0 image and age out under the 30-day tidy-up. From 1.1.0,
+ADR-0190 holds in full (ADR-0215 D7).
+
+---
+
 ## 2026-11-08 — The fresh start ships as 1.1.0, and the "wipe at 1.0" plan is superseded
 
 **What was decided.** The product owner approved the spec, schema design and plan in

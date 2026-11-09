@@ -577,6 +577,43 @@ the client back **without touching the API or the schema** — which matters, be
 are forward-only (ADR-0018). And it holds: Watchtower only updates a container whose `:latest`
 digest has moved (ADR-0047), so a pinned semver tag is never silently re-pulled.
 
+## The owner's deployment
+
+**This is the canonical deployment until the product scales** (owner, 2026-11-09). Where it differs from
+`docker-compose.release.yml`, the guides give both forms; the release compose file is deliberately left as it is,
+because changing where it keeps the database would point anyone else using it at an empty one
+(`docs/DECISIONS.md`, 2026-11-09). Values of secrets and of the alert and heartbeat URLs are never written down
+here.
+
+| What             | The owner's server                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host tooling     | **Dockge**; the stack folder is `/apps/schedulepoint`, holding `compose.yaml` and `.env`; compose project name `schedulepoint`                                                                                |
+| Terminal         | Usually a terminal that is **root inside a container**: there is no `sudo`, so leave it out of every command in the guides                                                                                    |
+| `db`             | `postgres:17-alpine`, container `schedulepoint-db`, no published port                                                                                                                                         |
+| `api`            | `ghcr.io/huttonhomehub/schedulepoint_1/api:${API_IMAGE_TAG:-latest}`, container `schedulepoint-api`                                                                                                           |
+| `web`            | `ghcr.io/huttonhomehub/schedulepoint_1/web:${WEB_IMAGE_TAG:-latest}`, container `schedulepoint-web`, port 8080 behind the owner's reverse proxy at `https://schedulepoint.huttonhomehub.co.uk`                |
+| `backup`         | The same api image, `user: '1000:1000'`, entrypoint `schedulepoint-backup.sh`, command `schedule`                                                                                                             |
+| `watchtower`     | `containrrr/watchtower:1.7.1`, container `schedulepoint-watchtower`, label-enabled, monitor-only switchable from `.env` (`WATCHTOWER_MONITOR_ONLY`), GHCR sign-in from the host's `/root/.docker/config.json` |
+| Database storage | A **folder** (bind mount), `/apps/schedulepoint/db`, **not** the `db-data` named volume                                                                                                                       |
+| Backups folder   | A folder, `/apps/schedulepoint/backups`, mounted into both `api` and `backup`, owned by uid 1000 (shown as `node` in the owner's terminal)                                                                    |
+
+**Settings in `.env`** (names only): `PLAN_EDIT_LOCK_ENFORCED=true`, `AUTH_REQUIRE_EMAIL_VERIFICATION=false`,
+`RETENTION_HIERARCHY_ENABLED` armed, `STAFF_EMAILS` set to the owner's address, mail through Resend SMTP
+(`MAIL_SMTP_URL`, `MAIL_FROM`), and `MAIL_ALERT_URL` and `HEARTBEAT_URL` set.
+
+**What the folder form changes.** A database in a folder is moved, copied or deleted as a folder: there is no
+`docker volume` command to run. Starting fresh is moving the folder aside with the stack stopped (that is how the
+owner switched to 1.1.0 on 2026-11-09, [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md)), and
+"removing the old volume" is deleting the old folder. Postgres creates and owns the files inside it; do not change
+their owner by hand.
+
+**Dockge's buttons.** **Update** pulls newer images and then starts the stack (`docker compose pull`, then
+`up -d`): that is the one that installs a release. **Deploy** saves the compose file and starts the stack with the
+images already on the server; it does **not** pull. **Restart** restarts the containers as they are.
+
+**Since 2026-11-09** the server runs 1.1.0 on a fresh, empty database (the 1.0 data was discarded by choice and the
+old folder deleted), backups run and pass `check`, retention expiry is armed, and the staff console and mail work.
+
 ## Deploying a release to a self-hosted host (Docker Compose / Dockge)
 
 **Publishing an image is not the same as deploying it.** A release builds and
@@ -609,7 +646,8 @@ Two ways to run it:
 **Redeploy steps (both approaches need the pull):**
 
 1. In **Dockge**, open the stack and click **Update** — it runs
-   `docker compose pull` then `docker compose up -d`. From the host CLI in the
+   `docker compose pull` then `docker compose up -d`. (**Deploy** does not pull: it starts the stack with the
+   images already on the server.) From the host CLI in the
    stack directory the equivalent is:
    ```bash
    docker compose pull        # fetch the new image (or the moved :latest)
@@ -707,8 +745,9 @@ running the inverse would un-verify accounts that earned it honestly. Do the CSP
      psql -U app -d app -v ON_ERROR_STOP=1 < scripts/verification-backfill.sql
    ```
 
-   `-f` would make psql look for the file **inside** the db container, which mounts only
-   `db-data:/var/lib/postgresql/data` — there is no host mount carrying it, so `-f` fails with
+   `-f` would make psql look for the file **inside** the db container, which mounts only its data
+   (`db-data:/var/lib/postgresql/data`, or a folder on a host like the owner's) — there is no host mount
+   carrying the script, so `-f` fails with
    "could not open file". This step said `-f` until 2026-08-09 and had never been run; it would
    have failed at the most delicate point in the programme. It only SELECTs; the UPDATE is
    commented out.
@@ -1013,7 +1052,11 @@ If the copy before an update cannot be made, or the database cannot be asked wha
 container prints an `UPDATE HELD` line, writes `UPDATE-HELD.txt` and exits non-zero **before**
 `prisma migrate deploy`. `set -e` in the entrypoint is what makes that a hold; removing it removes the
 hold. The database is unchanged. Docker restarts the container, so once the cause is fixed (usually
-disk space) the update completes by itself and `UPDATE-HELD.txt` is removed. The other ways out are
+disk space) the update completes by itself and `UPDATE-HELD.txt` is removed. It is removed **only** when that
+copy is then taken (`cmd_pre_migrate` in `apps/api/backup/schedulepoint-backup.sh`), so a hold that clears on a
+start with nothing pending leaves the file behind; delete such a leftover by hand. The owner found one dated
+2026-10-26 (the database not yet resolvable as `db` at start-up). Since 1.1.0 `preflight` refuses an unreachable
+database first (`cannot_read`) and writes no file, which closes that cause. The other ways out are
 pinning `API_IMAGE_TAG` to the previous version (valid because nothing was migrated) or removing the
 `/backups` volume line from `api`. Pending is decided by comparing the migration directories in
 `/app/prisma/migrations` with applied rows of `_prisma_migrations`, never by the exit code of
@@ -1251,6 +1294,13 @@ api:
 Empty — the default — means **nobody**. An allowlisted address must also have a **verified email**,
 unconditionally and regardless of `AUTH_REQUIRE_EMAIL_VERIFICATION`: without that, an allowlisted
 address that has never signed up is squattable, and whoever registers it first becomes staff.
+
+**So on a new database the console stays hidden until the confirmation email has been clicked**, even on a host
+with `AUTH_REQUIRE_EMAIL_VERIFICATION=false` like the owner's. That is what the owner met on 2026-11-09: the mail
+was slow, so they marked their own row confirmed by SQL (`UPDATE users SET email_verified = true WHERE email =
+'<address>'` through `docker compose exec db psql`), and the mail then arrived and confirmed it anyway. The SQL
+route is acceptable only for an address the operator controls, because it is exactly the check the rule above
+exists to make; the steps are in [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md), Part 3.
 
 **A malformed entry fails the boot**, loudly, rather than being ignored. That is deliberate: a typo
 here fails _closed_ — nobody becomes staff, the console 404s for the person it was configured for,

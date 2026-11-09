@@ -1,7 +1,12 @@
 # Start fresh on 1.1.0
 
-> **DRAFT.** This guide was written before 1.1.0 exists. Milestone M4's dress rehearsal runs every step on a
-> throwaway stack and corrects it. **Do not follow it on your real server until that note is gone.**
+> **Used once, never rehearsed.** The owner's server was switched to 1.1.0 on 2026-11-09. The planned practice run
+> ([`m4-rehearsal.md`](../specs/fresh-start-1-1/m4-rehearsal.md)) was skipped, and the owner chose to **discard the
+> 1.0 data** instead of keeping it: with the stack stopped they moved the database folder aside, clicked
+> **Update** in Dockge, signed up again on the empty database and later deleted the old folder
+> (`docs/DECISIONS.md`, 2026-11-09). The steps below were corrected to match what happened there, in particular
+> the **folder form** of each step (their database lives in a folder, not a named volume). Nobody has run every
+> step end to end. It is kept for reference and for any other server still on 1.0.
 
 **Who this is for:** whoever runs the SchedulePoint server. You do not need to be a developer. Every step is a
 thing to copy and paste, and each one says what you should see and what to do if you do not. The words used here
@@ -19,6 +24,22 @@ command is run in the folder that holds your compose file.
    plain words. That is on purpose: it changes nothing in your old data.
 4. What stays: your `.env` settings (passwords, mail, `STAFF_EMAILS`, alerts, the 90-day clear-out switch),
    nightly backups, and the product itself.
+
+**Which kind of database storage you have.** Look at the `db:` service in your compose file (in Dockge,
+**Edit**). There are two forms, and some steps differ between them:
+
+- **Named volume:** a line like `- db-data:/var/lib/postgresql/data`, plus a `volumes:` section at the bottom
+  naming `db-data`. This is what `docker-compose.release.yml` ships with.
+- **Folder (a "bind mount"):** a line like `- ./db:/var/lib/postgresql/data` or
+  `- /apps/schedulepoint/db:/var/lib/postgresql/data`. The database is an ordinary folder on the server. The
+  owner's server uses this form.
+
+**Running as root.** If your terminal prompt starts with `root@` (for example a terminal that is root inside a
+container, as on the owner's server), leave `sudo` out of every command below.
+
+**Dockge's buttons.** **Update** fetches newer images and then starts the stack (`docker compose pull` then
+`up -d`). **Deploy** saves and starts the stack with the images already on the server; it does **not** fetch a
+new version. Where this guide says "fetch 1.1.0", that is **Update**.
 
 **Time needed:** about 15 minutes before the release (Part 1), about 20 minutes on the day (Part 2) and about 10
 minutes afterwards (Part 3). Part 4 is for the day you want to go back, and Part 5 is for 30 days later.
@@ -148,9 +169,22 @@ at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the r
      db-data-1-1:
    ```
 
-   Change nothing else, and click **Save**. If your stack keeps its database in a folder (a line such as
-   `./db:/var/lib/postgresql/data`) instead of a named volume, change that folder name to a new one such as
-   `./db-1-1`. **If you are unsure which you have, stop and ask the maintainers.**
+   Change nothing else, and click **Save**.
+
+   **If your database is a folder instead** (see "Which kind of database storage you have" above), you do not
+   edit the compose file at all. With the stack stopped (step 3), **move the folder aside** so that 1.1.0 finds
+   no database where it looks and creates a new, empty one there. On the owner's server that was:
+
+   ```bash
+   mv /apps/schedulepoint/db /apps/schedulepoint/db-1.0-old
+   ```
+
+   Use your own folder's path (the part before `:/var/lib/postgresql/data` in the compose file; `./db` means the
+   `db` folder beside the compose file). Add `sudo` in front unless you are root. Moving, not deleting, keeps the
+   old database so you can go back (Part 4). If you are sure you want to throw the old data away, you may delete
+   the moved folder later (Part 5); the owner did.
+
+   **If you are unsure which form you have, stop and ask the maintainers.**
 
 5. If you pinned the versions in Part 1, remove the two `API_IMAGE_TAG` and `WEB_IMAGE_TAG` lines from `.env`
    now.
@@ -163,7 +197,7 @@ at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the r
    echo $GHCR_PAT | docker login ghcr.io -u <github-user> --password-stdin
    ```
 
-   Then:
+   Then (in Dockge there is no button for the version check, so use the terminal for this step):
 
    ```bash
    docker compose pull
@@ -173,7 +207,7 @@ at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the r
    **You should see:** `1.1.0`. If it prints `1.0.0`, the release has not published yet: wait and pull again.
    **Do not start until it says 1.1.0**, because 1.0.0 would build an old-style database on the new volume.
 
-7. Start it. In Dockge click **Deploy**. Or:
+7. Start it. In Dockge click **Update** (after the pull in step 6, **Deploy** works too). Or:
 
    ```bash
    docker compose up -d
@@ -192,10 +226,16 @@ at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the r
    ```
 
    `docker volume ls` should list a volume ending `_db-data-1-1` (your stack's name first, for example
-   `mystack_db-data-1-1`), and the old `_db-data` beside it. `docker compose ps` should show `db`, `api` and
+   `mystack_db-data-1-1`), and the old `_db-data` beside it. **Folder form:** instead, `ls /apps/schedulepoint`
+   (your stack folder) shows a new `db` folder beside the moved `db-1.0-old`. `docker compose ps` should show `db`, `api` and
    `backup` as `(healthy)` and `web` as `Up`. (`backup` can read `starting` for up to 10 minutes after a start;
    that is normal.) The database password for the new volume is the one in your `.env`, so nothing needs
    typing.
+
+   **If the log says the mail transport is not reachable** (for example "SMTP verification timed out"): on the
+   owner's server this happened once on the very first start and cleared after a stack restart (Dockge
+   **Restart**, or `docker compose restart`). If it still says so after a restart, check the mail settings in
+   `.env`.
 
    **If the page does not load** after 5 minutes:
 
@@ -217,7 +257,18 @@ at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the r
 1. Open SchedulePoint and **sign up again** with the same email address. Confirm your email: mail is still set
    up in `.env`.
 2. Create your organisation again.
-3. `STAFF_EMAILS` still applies: once your email is confirmed the staff console is available as before.
+3. `STAFF_EMAILS` still applies, but **only to a confirmed address**: the staff console stays hidden until you
+   have clicked the link in the confirmation email, even when `AUTH_REQUIRE_EMAIL_VERIFICATION=false`. Sign out
+   and in again after confirming. If the email is slow, wait for it (on the owner's server it arrived late). As a
+   last resort for **your own** address only, you can mark it confirmed in the database; this is what the owner
+   did, and it is safe only because you are vouching for an address you control:
+
+   ```bash
+   docker compose exec db psql -U app -d app -c "UPDATE users SET email_verified = true WHERE email = '<YOUR-EMAIL>';"
+   ```
+
+   (Use your `POSTGRES_USER` and `POSTGRES_DB` values if they are not `app`. `UPDATE 1` means it worked.)
+
 4. Take and check the first copy of the new database:
 
    ```bash
@@ -239,7 +290,10 @@ Your old data is exactly as you left it. **Do these in this order: the volume fi
 SchedulePoint started on the new volume would try to build an old-style database on top of a 1.1 one.
 
 1. Stop SchedulePoint (Dockge **Stop**, or `docker compose stop`).
-2. In the compose file, put the volume name back to `db-data` in both places.
+2. In the compose file, put the volume name back to `db-data` in both places. **Folder form:** move the folders
+   instead, keeping the 1.1 one: `mv /apps/schedulepoint/db /apps/schedulepoint/db-1-1` then
+   `mv /apps/schedulepoint/db-1.0-old /apps/schedulepoint/db` (your paths; `sudo` unless root). This is possible
+   only while the old folder still exists.
 3. **Switch the 90-day clear-out off before 1.0 starts.** In `.env` set:
 
    ```text
@@ -257,7 +311,7 @@ SchedulePoint started on the new volume would try to build an old-style database
    WEB_IMAGE_TAG=1.0.0
    ```
 
-5. Pull and start (`docker compose pull`, then `docker compose up -d`, or **Deploy** in Dockge). If the pull says
+5. Pull and start (`docker compose pull`, then `docker compose up -d`, or **Update** in Dockge). If the pull says
    `unauthorized` or `denied`, sign in first with the `docker login ghcr.io` command from Part 2 step 6. Then
    check it worked:
 
@@ -310,6 +364,15 @@ docker volume rm <OLD-VOLUME-NAME>
 
 **You should see:** the name printed back. If it says the volume is in use, you have the wrong one: do nothing
 and ask the maintainers.
+
+**Folder form:** delete the moved folder instead. Check the path twice: it must be the **old** one, never the
+`db` folder SchedulePoint is using.
+
+```bash
+rm -rf /apps/schedulepoint/db-1.0-old
+```
+
+(Your path; `sudo` in front unless you are root.) The owner did this soon after the switch, by choice.
 
 ---
 

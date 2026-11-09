@@ -624,28 +624,26 @@ A lighter-weight running log of smaller decisions is in
 
 ## 17. Known limitations & assumptions
 
-- **The staff console is live but unwired** (ADR-0086, 2026-08-09). Nine panel components exist
-  (`apps/web/src/features/staff/ui/`; five when this was written) and every route is audited; what does **not** exist yet is anybody receiving the two signals it added.
-  `MAIL_ALERT_URL` and `HEARTBEAT_URL` are compose edits on the host, both empty by default, and
-  until they are set a broken relay still reaches nobody — which is the exact failure
-  `docs/TECH_DEBT.md` #100 records, so that row stays **open on the operator half**. Likewise
-  `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
-  is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
-  opposite of the mistake the bullet below this one records.
+- **The staff console is live, and wired on the owner's host** (ADR-0086). `STAFF_EMAILS`,
+  `MAIL_ALERT_URL` and `HEARTBEAT_URL` are host settings, all empty by default (empty `STAFF_EMAILS` = nobody
+  is staff). An allowlisted address must also be **confirmed**, whatever `AUTH_REQUIRE_EMAIL_VERIFICATION` says.
+  The owner's host sets all three and the console works there (owner, 2026-11-09); `docs/TECH_DEBT.md` #100 is
+  still deferred until an alert is seen to arrive. On any other host, "shipped" does not mean "in use".
 - **Backups run only where an operator set them up** (ADR-0192). The `backup` service, the API's `/backups`
   mount and the closed database port exist only in a compose file the operator edits by hand
   (`docs/guides/back-up-and-restore.md`); without the mount an update migrates exactly as before and no
   copy is taken. With it, an update that changes the database is **held** if its copy cannot be made, and
-  copies live on the same disk as the database. The owner set this up on 2026-10-20; **after the 1.1.0 fresh
-  start nothing from 1.0 survives** (ADR-0215), and backups carry on as configured against the new database.
+  copies live on the same disk as the database. **The owner's host has run 1.1.0 on a fresh, empty database
+  since 2026-11-09** (ADR-0215; the 1.0 data was discarded by choice and the old folder deleted, `docs/DECISIONS.md`),
+  with backups running (first 1.1 copy checked the same day). Its layout, bind-mount folders under
+  `/apps/schedulepoint`, is the canonical deployment (`docs/DEPLOYMENT.md`, "The owner's deployment").
   `RETENTION_HIERARCHY_ENABLED` is never armed before a same-day `check` has passed on the host.
 - **Retention covers customer hierarchy too, and it is ON on the owner's host.** ADR-0096's expiry
   permanently deletes soft-deleted clients/projects/plans past `RETENTION_HIERARCHY_DAYS` (90) — see the
   hard-delete bullet below. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so a host that has not
   opted in has never permanently deleted anything and Recently deleted shows no countdown
-  ([`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). Before 1.1.0 the owner
-  armed it (2026-10-20) and its first run removed 9 test clients (`docs/DECISIONS.md`); the setting is kept
-  across the fresh start. On that host, do read "shipped" as "deleting".
+  ([`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). The owner armed it on
+  2026-10-20 and it stays armed on the 1.1.0 database. On that host, do read "shipped" as "deleting".
 - **Retention is enforced on four tables and not on `audit_events`, and the difference is a
   decision.** `csp_reports` (30 days), `mail_events` (12 months), `perf_probe_results`
   (365 days) and, since 2026-11-01, `crash_reports` (30 days after the crash was last reported,

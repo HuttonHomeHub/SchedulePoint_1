@@ -1,7 +1,7 @@
 # Fresh start 1.1 — database design
 
 - **Author:** database-architect, 2026-11-08
-- **Status:** Approved — by the product owner, 2026-11-08 (§12 records the answers). Design only: no migration, `schema.prisma` or code has been changed. **Implemented M0–M3 2026-11-09; M4 in progress** (documentation sweep done; rehearsal M4-T2 and the changeset M4-T3 to come).
+- **Status:** Approved — by the product owner, 2026-11-08 (§12 records the answers). Design only: no migration, `schema.prisma` or code has been changed. **Implemented and released 2026-11-09** as `api` and `web` 1.1.0 (PR #1292, Version Packages #1293). M4-T2, the rehearsal, was **not run**: the owner skipped it and switched their server the same day, discarding the 1.0 data ([`m4-rehearsal.md`](./m4-rehearsal.md); `docs/DECISIONS.md`, 2026-11-09).
 - **Scope:** the database half of the 1.1.0 release: the squashed baseline migration, the tidy folded
   into it, refusing a pre-1.1 database, the backup interaction, and how to prove the baseline is right.
   The feature spec and plan for the whole release are the feature-analyst's, in this folder.

@@ -1,6 +1,9 @@
 # Fresh start 1.1 — the practice run (M4-T2)
 
-- **Status:** Ready for the product owner to run — 2026-11-09. Results are recorded in the table at the end.
+- **Status:** **Not run.** The owner chose (2026-11-09) to skip the practice run, discarded the 1.0 data and
+  switched their server to the released 1.1.0 directly (`docs/DECISIONS.md`, 2026-11-09). The checklist below is
+  kept as written, unfilled; the guide it was meant to test is marked "used once, never rehearsed". Re-use it only
+  if another operator ever has to move a 1.0 database to 1.1.
 - **Why it is a checklist and not a log:** this needs Docker, and the cloud session that built 1.1.0 cannot run
   Docker. The owner chose (2026-11-09) to have CI run the automated checks on the pull request — including the image
   job's "Refuse a pre-1.1 database" step — and to run this practice by hand on a spare machine.

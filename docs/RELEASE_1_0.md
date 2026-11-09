@@ -145,7 +145,8 @@ Described here, **not performed**. We rehearsed it on a throwaway copy on 2026-1
    `WEB_IMAGE_TAG=0.202.0` (the last 0.x release, cut on 2026-11-08; re-read `git ls-remote --tags origin` at
    the time). Pinning also stops the updater pulling `latest` again. Database changes are not undone by this.
    **That target no longer applies once the database is a 1.1 one** (see "1.1.0 — the fresh start" below): a
-   0.x image cannot run on it. The way back from 1.1.0 is the old 1.0 volume and the 1.0.0 tags.
+   0.x image cannot run on it. The way back from 1.1.0 is the old 1.0 database and the 1.0.0 tags (on your
+   server the old database was deleted after the switch, so there is none).
 6. **Keep the cut small.** The four old fields were removed in their own release (`api` 0.106.0, row 9), so the
    cut itself changes only version numbers and changelogs. (The recycle-bin clear-out, the other permanent
    change, is already on: you switched it on 2026-10-20.)
@@ -173,6 +174,12 @@ What 1.0 knowingly ships without, in plain words (filled in 2026-11-08 from the 
 Written 2026-11-09. 1.0.0 was a private dress rehearsal and you said everything stored in it is test data, so
 **1.1.0 is the first public release**, and it starts clean.
 
+**Released on 2026-11-09**, and your server has run it since that day. PR #1292 and the Version Packages PR
+#1293 were merged; the release tagged `api-v1.1.0` and `web-v1.1.0` and published both images. You switched the
+same day **without the practice run, and chose to discard the 1.0 data**: the old database folder was moved
+aside and has since been deleted, 1.1.0 started on an empty one, you signed up and created your organisation
+again, and the first backup on 1.1.0 passed its check (`docs/DECISIONS.md`, 2026-11-09).
+
 - **It needs a new, empty database.** Nothing from 1.0 (your account, Wood Group, plans, baselines, guest
   links, the audit log) is carried over.
 - **It refuses the old database, and leaves it untouched.** If 1.1.0 is merged before you have followed the
@@ -180,10 +187,11 @@ Written 2026-11-09. 1.0.0 was a private dress rehearsal and you said everything 
 - **What was removed:** the 48 feature switches (everything they guarded is simply on), the code that fixed up
   rows older versions wrote, the old migrations (folded into one), and a few report fields that could only ever
   describe old data. Your `.env` settings, nightly backups and the clear-out switch carry on.
-- **How to go back:** keep the old database volume and pin both image tags to `1.0.0`. Never go back by changing
-  the tag alone, because 1.0.0 cannot read a 1.1 database.
-- **The steps are in** [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md) (still a draft until the
-  rehearsal has run). The decision is [ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md),
+- **How to go back:** on your server, **you cannot**: the old database folder is deleted. In general, going
+  back means the old database plus both image tags pinned to `1.0.0`. Never go back by changing the tag alone,
+  because 1.0.0 cannot read a 1.1 database.
+- **The steps are in** [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md) (used once on your
+  server, never rehearsed). The decision is [ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md),
   which records this as a one-time exception to what 1.0 promised.
 
 ## Words used on this page
