@@ -15,7 +15,7 @@ export const API_BASE_URL = '/api/v1';
 /** Base path for the Better Auth handler (sign-in/up/out/session). */
 export const AUTH_BASE_URL = '/api/auth';
 
-/** Local-storage key for the persisted theme preference. */
+/** Legacy local-storage key of the withdrawn theme preference; `ThemeProvider` only deletes it (ADR-0097). */
 export const THEME_STORAGE_KEY = 'schedulepoint-theme';
 
 /**
@@ -26,9 +26,9 @@ export const THEME_STORAGE_KEY = 'schedulepoint-theme';
 export const APP_VERSION: string = __APP_VERSION__;
 
 /**
- * Reads a boolean `VITE_` flag that defaults **ON**: enabled unless the operator
- * explicitly opts out with `"false"`/`"0"`. Used for shipped features that are on
- * by default but must stay switchable off (rollback / a controlled rollout).
+ * Reads a boolean `VITE_` flag that defaults **ON**: enabled unless built with
+ * `"false"`/`"0"`. Build-time only: a `VITE_` constant is inlined into the bundle, so no published
+ * image can switch one off (ADR-0088 D1) and a flag is a temporary seam, never a rollback.
  */
 export function flagDefaultOn(value: string | undefined): boolean {
   return value !== 'false' && value !== '0';

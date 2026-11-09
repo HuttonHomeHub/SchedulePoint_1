@@ -11,23 +11,22 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
 
 ## What shipped
 
-- **1.1.0, "the fresh start"** — PR #1292 (`feat(release)!`, merge `1deffb7e`) and the Version Packages PR #1293
-  (merge `bad52e5b`), both merged 2026-11-09. Tags `api-v1.1.0` and `web-v1.1.0`; Release run `42629151456`
-  green on all three jobs (version and tag, publish api, publish web).
-- **What 1.1.0 is:** one baseline migration (`20261109000000_baseline_1_1`) and a boot `preflight` that refuses a
-  pre-1.1 database without touching it; code and published shapes that only served old rows removed (the
-  one-time ADR-0190 exception, organisation export format **3.0**); all 48 web feature flags retired.
-  Schema tidy **T7** (`accounts.issuer` default) was **withdrawn**: Better Auth never writes `issuer`, so the
-  column keeps its `DEFAULT` (ADR-0107 D2 as amended).
-- **The live switch, 2026-11-09** (`docs/DECISIONS.md`, same date). The owner **skipped the practice run** (M4-T2,
-  [`m4-rehearsal.md`](specs/fresh-start-1-1/m4-rehearsal.md), recorded as not run) and **discarded all 1.0 data
-  by choice**: stack stopped, the database folder moved aside, Dockge **Update**, 1.1.0 started on an empty
-  folder, owner signed up and created the organisation again. The old folder has since been **deleted**, so
-  **there is no way back to 1.0 data** short of the 1.0 nightly copies still in the backups folder, which only
-  the 1.0.0 image can restore and which the 30-day tidy-up removes in time. The owner does not want them back.
-- **After the switch:** staff console reachable (once the owner's address was confirmed), mail sending,
-  first 1.1 backup `BACKUP FINISHED` then `CHECK PASSED` (1 organisation, 1 user), retention hierarchy expiry
-  armed as before.
+- **1.1.0, "the fresh start"** — PR #1292 and the Version Packages PR #1293, merged 2026-11-09 (tags
+  `api-v1.1.0`, `web-v1.1.0`). One baseline migration, a boot `preflight` that refuses a pre-1.1 database, all 48
+  web flags retired, organisation export format **3.0**. The owner switched the server to it the same day on a
+  fresh, empty database and discarded the 1.0 data by choice (`docs/DECISIONS.md`, 2026-11-09).
+- **The ten Dependabot bumps (#1282–#1291)** — one change, PR #1295 (merge `3b2ea050`), at the versions
+  Dependabot proposed, with `@hookform/resolvers` 7 included on the owner's say. All ten checks green on the head
+  that merged, after one whole-workflow re-run (the first run was marked failed with its API-test and image jobs
+  missing; cause not established).
+- **#576 closed as not a race, #575 done, and the reconciliation pass run** — one pull request from the branch
+  `claude/vibrant-dijkstra-tmdl7x`, **open and not merged: the owner decides**. #576's premise was wrong (the import
+  holds the project `FOR SHARE`, and the project delete takes its conflicting lock before it reads its plans), so it
+  closed with a test assertion and corrected comments instead of a code change. #575 deleted the legacy painter modes
+  (`visualRefresh`, `timeTrueLinks`, `linkRouting`) and the handle-origin linking path, 59 files, with the live-mode
+  paint output shown byte-identical before and after. The 2026-11-09 pass found the agent files, about a dozen
+  documents and a dozen register rows still describing retired flags or 1.0 shapes; see `docs/DECISIONS.md`
+  (2026-11-09, "The reconciliation pass at the 1.1.0 boundary") for the findings and what it did not establish.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -40,18 +39,19 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-Nothing is approved. Candidates, each needing the owner's say:
+Nothing is approved beyond the open pull request above. Candidates, each needing the owner's say:
 
-1. **Dependabot PRs** (ten open, all opened before 1.1.0 merged, so each needs a rebase first). Six are green.
-   Four fail only `check:claims`, which refuses a version bump until the cited lines are re-read:
-   #1289 better-auth 1.7.14 → 1.7.18, #1291 lucide-react, #1284 dev group (tailwindcss), #1282 nestjs group.
-   For #1289 the two `issuer` claims (ADR-0107 D2, schema-design T7) **were checked against 1.7.18 on
-   2026-11-09 and still hold word for word at the same lines**; 48 of the 56 better-auth claims hold, 8 have
-   moved lines and one anchor's text changed (`sign-in.mjs`, `createEmailVerificationToken` gained a
-   `{ userId }` argument). #1286 (`@hookform/resolvers` 6 → 7) is a major bump.
-2. **#575** (dead painter and gesture branches; trigger: the next painter change) and **#576** (project delete
-   racing an import; trigger: any change to project delete or import commit). Both still accurate on `main`.
-3. A **reconciliation pass** (`docs/RECONCILE.md`) is due at this epic boundary.
+1. **Merge the open pull request** once its checks are read on the current head (`CLAUDE.md` §19.9). Check its roster
+   against the run itself: one run this session read as failed with two jobs missing from the job list.
+2. **`docs/TECH_DEBT.md` #577** (13 dead test mocks for a retired flag, and two unused flag helpers; trigger: the next
+   change to those tests or the next proposed flag).
+3. **Hardening the reconciliation suggested, the owner's call:** override `dompurify` (under `jspdf`), `fast-uri` and
+   `seroval` to patched versions (the production audit is 37 advisories, 1 critical, none reachable as the product
+   uses them); and make the boot `preflight` refuse a `?schema=` other than `public`.
+4. **Whether to make the Baseline criticality columns NOT NULL.** #576 was the stated reason they stayed nullable and it
+   is closed; the remaining cause is a plan never recalculated. A schema change, so `database-architect` first, and an
+   owner decision.
+5. The **perf-probe** and **`providers.tsx`** notes in the watch list.
 
 ## Watch list
 
@@ -74,3 +74,11 @@ Nothing is approved. Candidates, each needing the owner's say:
 - Playwright: `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`.
 - Docker is not available in the cloud container.
 - Do not run Playwright or `scripts/e2e-local.sh` from more than one agent at once: one database, fixed ports.
+- **Set `PLAYWRIGHT_CHROMIUM_PATH` for every `scripts/e2e-local.sh web…` run.** Without it Playwright looks for a
+  `chromium_headless_shell-1248` build that is not installed and every browser test fails at launch (33 failures in 23
+  seconds on 2026-11-09). That is the container, not the change.
+- The clone starts shallow. `git fetch --unshallow origin main` makes `check:reconcile-due` and the reconciliation's
+  day-one-file query meaningful (1,205 commits).
+- `scripts/e2e-local.sh api` takes no file filter: it is the whole suite, about 15 minutes.
+- This session's branch is `claude/vibrant-dijkstra-tmdl7x`, the only branch it may push to; GitHub removes it when the
+  pull request merges, so start the next session's branch from `origin/main`.

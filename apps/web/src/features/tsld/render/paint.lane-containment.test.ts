@@ -128,10 +128,7 @@ function sceneOf(activities: readonly RenderActivity[], extra: Partial<TsldScene
     todayFraction: 0.4,
     monthBands: true,
     dataDateLine: true,
-    timeTrueLinks: true,
-    visualRefresh: true,
     lagHandles: true,
-    linkRouting: true,
     ...extra,
   };
 }
@@ -554,7 +551,7 @@ describe('FC-6 — every glyph and decoration draws inside its own lane', () => 
   it('hover ring stays inside its lane', () => {
     const bar = activityRect(activity({ id: 'h' }), VIEW, DATA_DATE);
     expect(bar).not.toBeNull();
-    const overlay: InteractionOverlay = { hover: bar, visualRefresh: true };
+    const overlay: InteractionOverlay = { hover: bar };
     const { ctx, ink } = inkRecordingCtx();
     paintInteractionLayer(ctx, overlay, SIZE, PALETTE);
     expect(ink.length).toBeGreaterThan(0);

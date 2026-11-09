@@ -28,16 +28,6 @@ describe('the canvas-draw scene', () => {
     expect(small.totalEdges).toBeGreaterThan(100);
   });
 
-  it('draws the shipped painter’s picture, not a stripped-down one', () => {
-    // Visual refresh, time-true links and orthogonal routing are all default-on shipped features
-    // (ADR-0052, ADR-0065). Measuring with them off would answer a question about a product nobody
-    // runs — and each of them costs the painter.
-    const { scene } = buildDrawScene(500);
-    expect(scene.visualRefresh).toBe(true);
-    expect(scene.timeTrueLinks).toBe(true);
-    expect(scene.linkRouting).toBe(true);
-  });
-
   it('puts a real number of bars on screen at BOTH presets', () => {
     // The non-vacuity floor, proved rather than asserted. ADR-0066's plan spanned 28 years and the
     // whole-plan zoom culled nine bars in ten; the resulting number looked like the budget being

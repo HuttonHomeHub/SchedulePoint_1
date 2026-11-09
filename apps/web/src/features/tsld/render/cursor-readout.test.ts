@@ -106,19 +106,6 @@ describe('cursorReadout — the day reported is the day committed', () => {
     };
     expect(read(state, { x: 100, y: 50 })).toBeNull();
   });
-
-  it('reports a date for every gesture that changes a date', () => {
-    const linking: GestureState = {
-      kind: 'linking',
-      sourceId: 'a',
-      sourceHandle: 'finishHandle',
-      point: { x: 200, y: 60 },
-      targetId: null,
-      type: 'FS',
-    };
-    // A link drag changes no date, so it reads as a plain date ruler under the pointer.
-    expect(read(linking, { x: 200, y: 60 })?.label).toBeTruthy();
-  });
 });
 
 describe('every readout names its own month (#148 M4)', () => {

@@ -224,7 +224,6 @@ function referenceCase(): { asap: Asap; layout: Layout; names: Map<string, strin
     ],
     edges: [],
     dataDate: '2026-01-01',
-    visualRefresh: true,
   };
   const view: Viewport = { pxPerDay: 12, originX: 40, originY: 32 };
   const [disc] = discsFor(control, view);

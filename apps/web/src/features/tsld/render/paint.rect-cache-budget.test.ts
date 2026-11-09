@@ -105,8 +105,6 @@ function hubScene(edgeCount: number): TsldScene {
     dataDate: DATA_DATE,
     view: quiet,
     isWorkingDay,
-    timeTrueLinks: true,
-    visualRefresh: true,
   };
 }
 

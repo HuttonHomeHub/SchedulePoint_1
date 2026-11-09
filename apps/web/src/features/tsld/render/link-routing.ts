@@ -58,14 +58,6 @@ export function dependencyPolyline(
 }
 
 /**
- * The shared orthogonal routing between two edge anchors — extracted so the legacy extreme-end
- * routing and the time-true anchor routing (ADR-0052) can never disagree on the line's shape.
- * Exported for the painter's refreshed link path (ADR-0052 M5), which composes it directly with
- * fanned-out anchors. `elbowShift` nudges the vertical elbow sideways so crowded parallel edges
- * don't collapse onto one vertical run; it is clamped inside the gap so the elbow never cuts
- * back across the anchored bar edge, and the default `0` keeps the legacy shape byte-for-byte.
- */
-/**
  * A lane's occupied horizontal spans, sorted by `x0` and non-overlapping after construction.
  * Screen pixels, for the frame this was built from.
  */
@@ -220,13 +212,20 @@ export const LEG_CLEARANCE_PX = 0.5;
 /**
  * The elbow's clearance from a bar edge, in CSS px.
  *
- * Used by the legacy elbow ({@link routeOrthogonal}), which draws every link while node-to-node
- * routing is off (`scene.linkRouting`).
+ * Used by the elbow ({@link routeOrthogonal}), which draws the fallback when a link's bar has no
+ * rect to route node-to-node.
  */
 export function corridorGap(view: Viewport): number {
   return Math.min(12, Math.max(4, view.pxPerDay));
 }
 
+/**
+ * The orthogonal routing between two edge anchors, the elbow the painter falls back to when a
+ * link's bar has no rect to route node to node, and the shape `dependencyPolyline` returns.
+ * `elbowShift` nudges the vertical elbow sideways so crowded parallel edges don't collapse onto
+ * one vertical run; it is clamped inside the gap so the elbow never cuts back across the anchored
+ * bar edge, and the default `0` keeps the plain elbow.
+ */
 export function routeOrthogonal(
   from: Point,
   to: Point,
@@ -587,35 +586,6 @@ export function lagAnchorPoints(
     pred: { x: predX, y: from.y + from.h / 2 },
     succ: { x: succX, y: to.y + to.h / 2 },
   };
-}
-
-/**
- * The dependency polyline routed through the time-true {@link lagAnchorPoints} (ADR-0052), with
- * the same orthogonal shape as {@link dependencyPolyline}. Null when either end has no geometry —
- * matching the legacy routing, so the painter's fallback needs no extra branch.
- */
-export function dependencyPolylineTimeTrue(
-  predecessor: RenderActivity,
-  successor: RenderActivity,
-  type: DependencyType,
-  lagDays: number,
-  view: Viewport,
-  dataDateIso: string,
-  walk: DayWalk,
-  cache?: RectCache,
-): Point[] | null {
-  const anchors = lagAnchorPoints(
-    predecessor,
-    successor,
-    type,
-    lagDays,
-    view,
-    dataDateIso,
-    walk,
-    cache,
-  );
-  if (!anchors) return null;
-  return routeOrthogonal(anchors.pred, anchors.succ, type, view);
 }
 
 /** Arrowhead length (px) along the final segment; the head is the same width across. */

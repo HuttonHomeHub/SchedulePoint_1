@@ -35,7 +35,6 @@ describe('one router per frame', () => {
     for (const fn of [
       'routeOrthogonal',
       'dependencyPolyline',
-      'dependencyPolylineTimeTrue',
       'routeNodeToNode',
       'routeNodeToNodeParts',
       'chooseRoutesByCrossing',

@@ -130,9 +130,6 @@ function paint(pxPerDay: number, edges?: RenderEdge[]) {
     edges: edges ?? all,
     dataDate: '2026-01-01',
     view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false, dayGrid: false, monthGrid: false },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);

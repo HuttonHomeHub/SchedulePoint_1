@@ -153,23 +153,6 @@ function firstEdgeMoveX(ctx: { moveTo: unknown }): number {
   return call[0];
 }
 
-/**
- * The x of the `lineTo` belonging to the first non-lane move.
- *
- * Paired by INDEX rather than by value: every line is one `moveTo` then one `lineTo`, so the nth
- * move and the nth line-to are the same segment. Picking the first `lineTo` outright would find a
- * lane hairline's, whose x is the canvas width — a plausible-looking number that is not the
- * successor anchor this case is about.
- */
-function firstEdgeLineToX(ctx: { moveTo: unknown; lineTo: unknown }): number {
-  const index = sceneMoveCalls(ctx).findIndex(([x]) => x !== 0);
-  if (index === -1) throw new Error('no edge line was drawn');
-  const lineTos = (ctx.lineTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
-  const call = lineTos[index];
-  if (!call) throw new Error('the edge move has no matching lineTo');
-  return call[0];
-}
-
 function firstVerticalMoveX(ctx: { moveTo: unknown }): number {
   const calls = (ctx.moveTo as ReturnType<typeof vi.fn>).mock.calls as [number, number][];
   const vertical = calls.find((call) => call[1] === 0);
@@ -184,7 +167,7 @@ describe('paintScene', () => {
     const visible = paintScene(ctx, scene, VIEW, SIZE, PALETTE, 2);
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(ctx.clearRect).toHaveBeenCalled();
-    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
+    expect(nonNodeFillRects(ctx)).toBe(1);
     expect(visible).toEqual(['t']);
   });
 
@@ -225,65 +208,6 @@ describe('paintScene', () => {
     expect(ctx.stroke).toHaveBeenCalled();
   });
 
-  it('encodes driving vs non-driving links without colour: heavier solid vs thin dashed (M3)', () => {
-    const ctx = mockCtx();
-    const pred = task({
-      id: 'p',
-      drawnStart: '2026-01-02',
-      drawnFinish: '2026-01-03',
-      laneIndex: 0,
-    });
-    const succ = task({
-      id: 's',
-      drawnStart: '2026-01-08',
-      drawnFinish: '2026-01-09',
-      laneIndex: 1,
-    });
-    const scene: TsldScene = {
-      activities: [pred, succ],
-      edges: [{ predecessorId: 'p', successorId: 's', type: 'FS', isDriving: false }],
-      dataDate: DATA_DATE,
-    };
-    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    // The non-driving pass sets a dash pattern; the driving pass would set a solid ([]).
-    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
-  });
-
-  it('outlines a critical bar with a non-colour cue (solid dash pattern)', () => {
-    const ctx = mockCtx();
-    const scene: TsldScene = {
-      activities: [task({ isCritical: true })],
-      edges: [],
-      dataDate: DATA_DATE,
-    };
-    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    // The bar is filled and then outlined, and the dash is reset afterwards.
-    expect(ctx.fillRect).toHaveBeenCalledTimes(1);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
-    expect(ctx.setLineDash).toHaveBeenCalledWith([]); // solid for critical
-  });
-
-  it('outlines a near-critical bar with a dashed pattern', () => {
-    const ctx = mockCtx();
-    const scene: TsldScene = {
-      activities: [task({ isNearCritical: true })],
-      edges: [],
-      dataDate: DATA_DATE,
-    };
-    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
-    expect(ctx.setLineDash).toHaveBeenCalledWith([3, 2]);
-  });
-
-  it('does not outline a non-critical bar', () => {
-    const ctx = mockCtx();
-    const scene: TsldScene = { activities: [task()], edges: [], dataDate: DATA_DATE };
-    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    expect(ctx.strokeRect).not.toHaveBeenCalled();
-    // The grid tiers set a dash and clear it; the bar must leave none in force.
-    expect(vi.mocked(ctx.setLineDash).mock.calls.at(-1)).toEqual([[]]);
-  });
-
   it('draws a selection ring on the selected activity', () => {
     const ctx = mockCtx();
     const scene: TsldScene = {
@@ -293,7 +217,10 @@ describe('paintScene', () => {
       selectedId: 't',
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    // The ring is the 2px-outset square (this context has no `roundRect`, so the rounded ring takes
+    // its square fallback); the other two strokes are the bar's nodes.
+    expect(ctx.strokeRect).toHaveBeenCalledWith(BAR_X - 2, BAR_Y - 2, BAR_W + 4, BAR_HEIGHT + 4);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(3);
   });
 
   it('marks the selected bar edges when edge handles are enabled, and not otherwise', () => {
@@ -307,45 +234,46 @@ describe('paintScene', () => {
     // Off (read-only surface): only the bar fill, no edge marks.
     const plain = mockCtx();
     paintScene(plain, scene(false), VIEW, SIZE, PALETTE);
-    expect(plain.fillRect).toHaveBeenCalledTimes(1);
+    expect(nonNodeFillRects(plain)).toBe(1);
     // On: the bar fill plus two edge-handle marks (start + finish).
     const editing = mockCtx();
     paintScene(editing, scene(true), VIEW, SIZE, PALETTE);
-    expect(editing.fillRect).toHaveBeenCalledTimes(3);
-    // The selection ring is still a single strokeRect either way.
-    expect(editing.strokeRect).toHaveBeenCalledTimes(1);
+    expect(nonNodeFillRects(editing)).toBe(3);
+    // The selection ring and the two nodes stroke the same either way.
+    expect(editing.strokeRect).toHaveBeenCalledTimes(plain.strokeRect.mock.calls.length);
   });
 
-  it('suppresses the edge marks for a resize-ineligible bar under direct manipulation (ADR-0052 M2)', () => {
-    const scene = (type: RenderActivity['type'], timeTrueLinks: boolean): TsldScene => ({
-      activities: [task({ id: 't', type })],
-      edges: [],
-      dataDate: DATA_DATE,
-      selectedId: 't',
-      showEdgeHandles: true,
-      timeTrueLinks,
-    });
-    // Flag on: the marks advertise RESIZE, and an LOE/WBS-summary duration isn't resizable —
-    // no marks (bar fill only). A plain task keeps its two marks.
-    const loe = mockCtx();
-    paintScene(loe, scene('LEVEL_OF_EFFORT', true), VIEW, SIZE, PALETTE);
-    expect(loe.fillRect).toHaveBeenCalledTimes(1);
-    const summary = mockCtx();
-    paintScene(summary, scene('WBS_SUMMARY', true), VIEW, SIZE, PALETTE);
-    expect(summary.fillRect).toHaveBeenCalledTimes(1);
-    const taskCtx = mockCtx();
-    paintScene(taskCtx, scene('TASK', true), VIEW, SIZE, PALETTE);
-    expect(taskCtx.fillRect).toHaveBeenCalledTimes(3);
-    // Flag off: today's link-draw affordance is untouched — an LOE still shows both marks.
-    const legacy = mockCtx();
-    paintScene(legacy, scene('LEVEL_OF_EFFORT', false), VIEW, SIZE, PALETTE);
-    expect(legacy.fillRect).toHaveBeenCalledTimes(3);
+  it('suppresses the edge marks for a resize-ineligible bar (ADR-0052 M2)', () => {
+    const fills = (type: RenderActivity['type'], showEdgeHandles: boolean): number => {
+      const ctx = mockCtx();
+      paintScene(
+        ctx,
+        {
+          activities: [task({ id: 't', type })],
+          edges: [],
+          dataDate: DATA_DATE,
+          selectedId: 't',
+          showEdgeHandles,
+        },
+        VIEW,
+        SIZE,
+        PALETTE,
+      );
+      return nonNodeFillRects(ctx);
+    };
+    // The marks advertise RESIZE, and an LOE/WBS-summary duration isn't resizable — turning the
+    // handles on adds nothing. A plain task gains its two marks.
+    expect(fills('LEVEL_OF_EFFORT', true)).toBe(fills('LEVEL_OF_EFFORT', false));
+    expect(fills('WBS_SUMMARY', true)).toBe(fills('WBS_SUMMARY', false));
+    expect(fills('TASK', true)).toBe(fills('TASK', false) + 2);
   });
 
   // The pin is a triangle whose tip (the last lineTo) sits on the constrained edge.
+  // The pin is outlined, so the outline's closing `lineTo` back to the first corner is last and the
+  // tip is the one before it.
   const pinTipX = (ctx: ReturnType<typeof mockCtx>): number => {
     const calls = ctx.lineTo.mock.calls;
-    return calls[calls.length - 1]![0] as number;
+    return calls[calls.length - 2]![0] as number;
   };
 
   it('draws a constraint pin on the START edge for a start-anchored constraint', () => {
@@ -383,7 +311,7 @@ describe('paintScene', () => {
     expect(pinTipX(finish)).toBeGreaterThan(pinTipX(start));
   });
 
-  it('marks a constrained milestone at its centre (an extra fill beyond the diamond)', () => {
+  it('marks a constrained milestone at its centre (two extra rects cut into the triangle)', () => {
     const plain = mockCtx();
     paintScene(
       plain,
@@ -396,7 +324,8 @@ describe('paintScene', () => {
       SIZE,
       PALETTE,
     );
-    expect(plain.fill).toHaveBeenCalledTimes(1); // just the diamond
+    expect(plain.fill).toHaveBeenCalledTimes(1); // just the triangle
+    const plainRects = plain.fillRect.mock.calls.length;
     const pinned = mockCtx();
     paintScene(
       pinned,
@@ -411,7 +340,8 @@ describe('paintScene', () => {
       SIZE,
       PALETTE,
     );
-    expect(pinned.fill).toHaveBeenCalledTimes(2); // diamond + pin
+    expect(pinned.fill).toHaveBeenCalledTimes(1); // the "!" is cut from the fill, not a pin
+    expect(pinned.fillRect.mock.calls.length).toBe(plainRects + 2); // stem + dot
   });
 
   it('leaves an unconstrained bar plain (no pin, so no path fill)', () => {
@@ -733,7 +663,9 @@ describe('paintInteractionLayer', () => {
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(ctx.clearRect).toHaveBeenCalled();
     expect(ctx.fillRect).toHaveBeenCalledTimes(1);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    // The selection outline plus the inner hairline (this context has no `roundRect`, so both take
+    // their square fallback).
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(2);
   });
 
   /**
@@ -750,16 +682,16 @@ describe('paintInteractionLayer', () => {
       { x: 60, y: 70, w: 22, h: 18 },
     ];
     paintInteractionLayer(ctx, { live: GHOST, peers }, SIZE, PALETTE);
-    // Live (1 fill + 1 stroke) + two peers (1 fill + 1 stroke each).
+    // Live (1 fill + 2 strokes) + two peers (1 fill + 1 stroke each).
     expect(ctx.fillRect).toHaveBeenCalledTimes(3);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(3);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(4);
     // Peers are faint, and the alpha is put back — a leaked alpha would fade every later shape.
     expect(ctx.globalAlpha).toBe(1);
 
     const bare = mockCtx();
     paintInteractionLayer(bare, { live: GHOST }, SIZE, PALETTE);
     expect(bare.fillRect).toHaveBeenCalledTimes(1);
-    expect(bare.strokeRect).toHaveBeenCalledTimes(1);
+    expect(bare.strokeRect).toHaveBeenCalledTimes(2);
   });
 
   it('draws a pending ghost as a dashed outline with no fill', () => {
@@ -768,66 +700,6 @@ describe('paintInteractionLayer', () => {
     expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
     expect(ctx.fillRect).not.toHaveBeenCalled();
-  });
-
-  it('draws a link rubber-band line, and rings the drop target when present', () => {
-    const ctx = mockCtx();
-    paintInteractionLayer(
-      ctx,
-      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST } },
-      SIZE,
-      PALETTE,
-    );
-    // A dashed line from anchor to pointer…
-    expect(ctx.moveTo).toHaveBeenCalledWith(5, 5);
-    expect(ctx.lineTo).toHaveBeenCalledWith(90, 60);
-    expect(ctx.setLineDash).toHaveBeenCalledWith([5, 3]);
-    expect(ctx.stroke).toHaveBeenCalled();
-    // …and a highlight ring around the valid target.
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
-  });
-
-  it('draws the link line but no target ring when over empty space', () => {
-    const ctx = mockCtx();
-    paintInteractionLayer(
-      ctx,
-      { link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: null } },
-      SIZE,
-      PALETTE,
-    );
-    expect(ctx.stroke).toHaveBeenCalled();
-    expect(ctx.strokeRect).not.toHaveBeenCalled();
-  });
-
-  it('rings an ILLEGAL drop target with the "can’t drop" dash (D5 legality pre-check)', () => {
-    const ctx = mockCtx();
-    paintInteractionLayer(
-      ctx,
-      {
-        link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST, targetLegal: false },
-      },
-      SIZE,
-      PALETTE,
-    );
-    // The illegal ring uses a distinct [3,3] dash — not colour alone (WCAG 1.4.1).
-    expect(ctx.setLineDash).toHaveBeenCalledWith([3, 3]);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
-  });
-
-  it('rings a LEGAL drop target solid (no "can’t drop" dash)', () => {
-    const ctx = mockCtx();
-    paintInteractionLayer(
-      ctx,
-      {
-        link: { from: { x: 5, y: 5 }, to: { x: 90, y: 60 }, targetRect: GHOST, targetLegal: true },
-      },
-      SIZE,
-      PALETTE,
-    );
-    // A ring IS drawn for a legal target (guards against the branch being dropped)…
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
-    // …and it is solid, never the illegal [3,3] dash.
-    expect(ctx.setLineDash).not.toHaveBeenCalledWith([3, 3]);
   });
 
   it('clears to nothing when idle (empty overlay)', () => {
@@ -841,9 +713,10 @@ describe('paintInteractionLayer', () => {
   it('draws the resize ghost like a live ghost PLUS its duration label (ADR-0052 M2)', () => {
     const ctx = mockCtx();
     paintInteractionLayer(ctx, { resize: { rect: GHOST, label: '7d' } }, SIZE, PALETTE);
-    // The tentative bar: solid fill + solid outline, matching the reposition/create ghost.
+    // The tentative bar: fill + selection outline + inner hairline, matching the reposition/create
+    // ghost.
     expect(ctx.fillRect).toHaveBeenCalledWith(GHOST.x, GHOST.y, GHOST.w, GHOST.h);
-    expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(2);
     // The live duration readout sits just above the ghost's left edge.
     expect(ctx.fillText).toHaveBeenCalledTimes(1);
     const [text, , y] = ctx.fillText.mock.calls[0]! as [string, number, number];
@@ -1488,7 +1361,6 @@ describe('paintScene — insight lenses', () => {
           barInk: new Map([['w', '#ink']]),
           // The refresh is what draws progress, and progress is now the only thing `barInk`
           // governs — see below.
-          visualRefresh: true,
         },
         VIEW,
         SIZE,
@@ -1612,56 +1484,12 @@ describe('paintScene — time-true links', () => {
     ...over,
   });
 
-  it('is byte-for-byte today’s paint when the flag is off, absent, or explicitly undefined (parity)', () => {
-    const base = recordingCtx();
-    paintScene(recordingCtx().ctx, linkScene(), VIEW, SIZE, PALETTE); // warm `labelWidths`, as above
-    paintScene(base.ctx, linkScene(), VIEW, SIZE, PALETTE);
-    const off = recordingCtx();
-    paintScene(off.ctx, linkScene({ timeTrueLinks: false }), VIEW, SIZE, PALETTE);
-    const explicit = recordingCtx();
-    paintScene(explicit.ctx, linkScene({ timeTrueLinks: undefined }), VIEW, SIZE, PALETTE);
-    expect(off.log).toEqual(base.log);
-    expect(explicit.log).toEqual(base.log);
-  });
-
-  it('draws a batched arrowhead fill at the successor end when the flag is on', () => {
-    const off = mockCtx();
-    paintScene(off, linkScene(), VIEW, SIZE, PALETTE);
-    expect(off.fill).not.toHaveBeenCalled(); // plain task bars: no path fill without arrowheads
+  it('draws a batched arrowhead fill at the successor end', () => {
     const on = mockCtx();
-    paintScene(on, linkScene({ timeTrueLinks: true }), VIEW, SIZE, PALETTE);
-    expect(on.fill).toHaveBeenCalledTimes(1); // one batched arrowhead pass for the driving edge
-    expect(on.fillStyle).not.toBe(''); // set — the head shares the edge colour (checked below)
-  });
-
-  it('paints the arrowheads in the edge colour — no new one-off colour', () => {
-    const { log } = ((): { log: string[] } => {
-      const r = recordingCtx();
-      paintScene(r.ctx, linkScene({ timeTrueLinks: true }), VIEW, SIZE, PALETTE);
-      return r;
-    })();
-    expect(log).toContain(`fillStyle=${PALETTE.edge}`);
-  });
-
-  it('retains the driving weight/dash emphasis (non-colour cue) with the flag on', () => {
-    const ctx = mockCtx();
-    const scene = linkScene({
-      timeTrueLinks: true,
-      edges: [
-        {
-          predecessorId: 'p',
-          successorId: 's',
-          type: 'FS',
-          isDriving: false,
-          lagDays: 2,
-          lagCalendar: 'PROJECT_DEFAULT',
-        },
-      ],
-    });
-    paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-    // The non-driving pass still strokes thin + dashed; the solid reset still happens.
-    expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
-    expect(ctx.setLineDash).toHaveBeenCalledWith([]);
+    paintScene(on, linkScene({}), VIEW, SIZE, PALETTE);
+    // Plain task bars and nodes fill through `fillRect` here, so the one path fill is the batched
+    // arrowhead pass for the driving edge.
+    expect(on.fill).toHaveBeenCalledTimes(1);
   });
 
   it('shifts the anchor by the walked lag (an SS lag departs INTO the predecessor bar)', () => {
@@ -1679,7 +1507,6 @@ describe('paintScene — time-true links', () => {
     const sameLane = task({ ...succ, laneIndex: 0, id: 's2' });
     const sceneWith = (lagDays: number): TsldScene =>
       linkScene({
-        timeTrueLinks: true,
         view: quiet,
         activities: [pred, sameLane],
         edges: [
@@ -1717,7 +1544,6 @@ describe('paintScene — time-true links', () => {
     const sameLane = task({ ...succ, laneIndex: 0, id: 's2' });
     const sceneFor = (lagCalendar: 'PROJECT_DEFAULT' | 'TWENTY_FOUR_HOUR'): TsldScene =>
       linkScene({
-        timeTrueLinks: true,
         view: quiet,
         activities: [pred, sameLane],
         edges: [
@@ -1735,18 +1561,20 @@ describe('paintScene — time-true links', () => {
     paintScene(elapsed, sceneFor('TWENTY_FOUR_HOUR'), VIEW, SIZE, PALETTE);
     const workingWalked = mockCtx();
     paintScene(workingWalked, sceneFor('PROJECT_DEFAULT'), VIEW, SIZE, PALETTE);
-    // The straight edge's lineTo is the successor anchor (the constrained point).
-    expect(firstEdgeLineToX(elapsed)).toBeCloseTo(144); // day 7
-    expect(firstEdgeLineToX(workingWalked)).toBeCloseTo(168); // day 9 (weekend skipped)
+    // The arrowhead is the last thing the scene draws, and its tip is the successor anchor (the
+    // constrained point) — the route itself steps through the gutter, so it is not one segment.
+    const tipX = (ctx: ReturnType<typeof mockCtx>): number =>
+      ctx.lineTo.mock.calls.at(-1)![0] as number;
+    expect(tipX(elapsed)).toBeCloseTo(144); // day 7
+    expect(tipX(workingWalked)).toBeCloseTo(168); // day 9 (weekend skipped)
   });
 
-  it('falls back to the extreme-end routing when dates are absent (no crash, no anchor math)', () => {
+  it('draws no link when an end has no dates (no crash, no anchor math)', () => {
     const ctx = mockCtx();
     const unscheduled = task({ id: 'u', drawnStart: null, drawnFinish: null, laneIndex: 1 });
     paintScene(
       ctx,
       linkScene({
-        timeTrueLinks: true,
         activities: [pred, unscheduled],
         edges: [
           {
@@ -1763,13 +1591,16 @@ describe('paintScene — time-true links', () => {
       SIZE,
       PALETTE,
     );
-    // The unscheduled endpoint has no geometry, so no edge line and no arrowhead — like today.
+    // The unscheduled endpoint has no geometry, so no edge line and no arrowhead.
     expect(ctx.fill).not.toHaveBeenCalled();
   });
 });
 
 // ── Bar visual refresh (ADR-0052 M4) ─────
 describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
+  const BADGE_FILLS = 1;
+  const BADGE_FILL_RECTS = 5;
+  const BADGE_STROKE_RECTS = 5;
   /** All decorative layers off so the recorded calls are the bars alone. */
   const quiet = {
     dayGrid: false,
@@ -1785,38 +1616,10 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     edges: [],
     dataDate: DATA_DATE,
     view: quiet,
-    visualRefresh: true,
     ...over,
   });
   /** A ctx whose roundRect is real enough to record (the modern-browser path). */
   const roundedCtx = () => ({ ...mockCtx(), roundRect: vi.fn() });
-
-  it('is byte-for-byte today’s paint when the flag is off, absent, or explicitly undefined (parity)', () => {
-    // A scene exercising every refreshed branch: critical + progress, near-critical, LOE,
-    // summary, milestone, constraint pin, selection ring, labels on — all must paint byte-for-
-    // byte today's when `visualRefresh` is off/absent/undefined.
-    const rich = (visualRefresh?: boolean): TsldScene => ({
-      activities: [
-        task({ id: 'a', isCritical: true, percentComplete: 50, constraint: 'start' }),
-        task({ id: 'b', isNearCritical: true, laneIndex: 1, percentComplete: 100 }),
-        task({ id: 'c', type: 'LEVEL_OF_EFFORT', laneIndex: 2 }),
-        task({ id: 'd', type: 'WBS_SUMMARY', laneIndex: 3 }),
-        task({ id: 'e', type: 'FINISH_MILESTONE', drawnFinish: '2026-01-02', laneIndex: 4 }),
-      ],
-      edges: [],
-      dataDate: DATA_DATE,
-      selectedId: 'a',
-      ...(visualRefresh === undefined ? {} : { visualRefresh }),
-    });
-    const base = recordingCtx();
-    paintScene(base.ctx, rich(), VIEW, SIZE, PALETTE);
-    const off = recordingCtx();
-    paintScene(off.ctx, rich(false), VIEW, SIZE, PALETTE);
-    const explicit = recordingCtx();
-    paintScene(explicit.ctx, { ...rich(), visualRefresh: undefined }, VIEW, SIZE, PALETTE);
-    expect(off.log).toEqual(base.log);
-    expect(explicit.log).toEqual(base.log);
-  });
 
   it('rounds the bar with roundRect when available, and falls back to fillRect when not', () => {
     const rounded = roundedCtx();
@@ -1972,7 +1775,6 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       refreshScene({
         activities: [pred, succ],
         edges: [{ predecessorId: 'p', successorId: 's', type: 'FS', isDriving: true }],
-        timeTrueLinks: true,
         isWorkingDay: () => true,
       }),
       VIEW,
@@ -2408,51 +2210,43 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(log).toContain('fillStyle=#override');
   });
 
-  it('outlines the constraint pin (badge-family consistency) under the refresh only', () => {
-    const scene = (visualRefresh: boolean): TsldScene => ({
-      activities: [task({ constraint: 'start' })],
+  it('outlines the constraint pin (badge-family consistency)', () => {
+    const scene = (constraint?: 'start'): TsldScene => ({
+      activities: [task(constraint ? { constraint } : {})],
       edges: [],
       dataDate: DATA_DATE,
       view: quiet,
-      visualRefresh,
     });
-    const legacy = mockCtx();
-    paintScene(legacy, scene(false), VIEW, SIZE, PALETTE);
-    const refreshed = mockCtx();
-    paintScene(refreshed, scene(true), VIEW, SIZE, PALETTE);
-    // Same pin shape (one path fill beyond the bar), plus one traced outline stroke under M4.
-    expect(legacy.fill).toHaveBeenCalledTimes(1);
-    expect(refreshed.fill).toHaveBeenCalledTimes(1);
-    expect(refreshed.stroke.mock.calls.length).toBe(legacy.stroke.mock.calls.length + 1);
+    const plain = mockCtx();
+    paintScene(plain, scene(), VIEW, SIZE, PALETTE);
+    const pinned = mockCtx();
+    paintScene(pinned, scene('start'), VIEW, SIZE, PALETTE);
+    // The pin is one path fill beyond the bar, plus one traced outline stroke.
+    expect(pinned.fill.mock.calls.length).toBe(plain.fill.mock.calls.length + 1);
+    expect(pinned.stroke.mock.calls.length).toBe(plain.stroke.mock.calls.length + 1);
   });
 
-  it('preserves the conflict / lane-overlap / over-allocation badges byte-for-byte in shape count', () => {
-    // The three warning badges are restyle-exempt (already outlined, one family): the refresh
-    // must not change their draw-call counts relative to a legacy paint of the same scene.
-    //
-    // **The refresh now draws two NODE glyphs the legacy path does not** (M3-T3), so the counts
-    // differ by exactly that and the assertion says so rather than being relaxed to an
-    // inequality. A node is one ground `fillRect` plus one rim `strokeRect` on the fallback context
-    // this case uses (NetPoint grammar M2-T3 fills every node with the ground).
-    const scene = (visualRefresh: boolean): TsldScene => ({
-      activities: [task({ visualConflict: true, laneOverlap: true })],
+  it('draws the conflict / lane-overlap / over-allocation badges with a fixed shape count', () => {
+    // The three warning badges are already outlined, one family. Their draw-call counts are pinned
+    // against the same bar without them, so a badge that gains or loses a shape fails here.
+    const scene = (badged: boolean): TsldScene => ({
+      activities: [task(badged ? { visualConflict: true, laneOverlap: true } : {})],
       edges: [],
       dataDate: DATA_DATE,
       view: quiet,
-      flaggedIds: new Set(['t']),
-      visualRefresh,
+      ...(badged ? { flaggedIds: new Set(['t']) } : {}),
     });
-    const legacy = mockCtx();
-    paintScene(legacy, scene(false), VIEW, SIZE, PALETTE);
-    const refreshed = mockCtx();
-    paintScene(refreshed, scene(true), VIEW, SIZE, PALETTE);
-    // Badge fills: the conflict triangle path (fill) is unchanged, and so are the squares and the
-    // histogram fillRects — the badges themselves are untouched by the row treatment.
-    expect(refreshed.fill.mock.calls.length).toBe(legacy.fill.mock.calls.length);
-    expect(refreshed.fillRect.mock.calls.length).toBe(legacy.fillRect.mock.calls.length + 2);
-    // The refreshed bar adds exactly TWO node glyphs, each one `fillRect` + one `strokeRect` on this
-    // fallback context. It adds no bar outline: M3-T3 removed that in favour of the node.
-    expect(refreshed.strokeRect.mock.calls.length).toBe(legacy.strokeRect.mock.calls.length + 2);
+    const plain = mockCtx();
+    paintScene(plain, scene(false), VIEW, SIZE, PALETTE);
+    const badged = mockCtx();
+    paintScene(badged, scene(true), VIEW, SIZE, PALETTE);
+    expect(badged.fill.mock.calls.length - plain.fill.mock.calls.length).toBe(BADGE_FILLS);
+    expect(badged.fillRect.mock.calls.length - plain.fillRect.mock.calls.length).toBe(
+      BADGE_FILL_RECTS,
+    );
+    expect(badged.strokeRect.mock.calls.length - plain.strokeRect.mock.calls.length).toBe(
+      BADGE_STROKE_RECTS,
+    );
   });
 
   it('marks the BREACHED edge: a start conflict at the start, an overrun bound at the finish', () => {
@@ -2465,23 +2259,19 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      * that was overrun sitting at the other end.
      *
      * The bar here is `rect.x = 72`, `rect.w = 48` (the same geometry the selection-ring case below
-     * pins). Without nodes (the legacy path) the triangle's base-left lands at 73 for a start mark
-     * and at 113 for a finish one. With nodes it lands just inboard of the node at the breached
-     * end: `NODE_REACH_PX + 1 = 10` in from each end, so 82 for a start mark and
+     * pins). The triangle's base-left lands just inboard of the node at the breached end:
+     * `NODE_REACH_PX + 1 = 10` in from each end, so 82 for a start mark and
      * `120 - 10 - CONFLICT_BADGE_W = 104` for a finish one (see the node-clearance case below).
      *
-     * Verified red against the pre-fix unconditional `rect.x`, which put both at 73.
+     * Verified red against the pre-fix unconditional `rect.x`, which put both at 73 on a bar
+     * without nodes.
      */
-    const badgeBaseX = (
-      reason: 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND',
-      visualRefresh: boolean,
-    ): number => {
+    const badgeBaseX = (reason: 'EARLIER_THAN_LOGIC' | 'LATER_THAN_BOUND'): number => {
       const ctx = mockCtx();
       paintScene(
         ctx,
         refreshScene({
           activities: [task({ visualConflict: true, visualConflictReason: reason })],
-          visualRefresh,
         }),
         VIEW,
         SIZE,
@@ -2491,10 +2281,8 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       if (!move) throw new Error('no conflict badge was drawn');
       return move[0];
     };
-    expect(badgeBaseX('EARLIER_THAN_LOGIC', false)).toBe(73);
-    expect(badgeBaseX('LATER_THAN_BOUND', false)).toBe(113);
-    expect(badgeBaseX('EARLIER_THAN_LOGIC', true)).toBe(82);
-    expect(badgeBaseX('LATER_THAN_BOUND', true)).toBe(104);
+    expect(badgeBaseX('EARLIER_THAN_LOGIC')).toBe(82);
+    expect(badgeBaseX('LATER_THAN_BOUND')).toBe(104);
   });
 
   it('keeps an overrun bound’s badge ON a bar narrower than the badge itself', () => {
@@ -2516,7 +2304,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      * between the nodes, and a bar too short to hold it there has it centred on the bar instead:
      * `61 + 2 / 2 - CONFLICT_BADGE_W / 2 = 59`, so the triangle spans 59..65 over a bar at 61..63.
      */
-    const baseLeft = (visualRefresh: boolean): number => {
+    const baseLeft = (): number => {
       const ctx = mockCtx();
       paintScene(
         ctx,
@@ -2528,7 +2316,6 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
               visualConflictReason: 'LATER_THAN_BOUND',
             }),
           ],
-          visualRefresh,
         }),
         { pxPerDay: 1, originX: 60, originY: 40 },
         SIZE,
@@ -2538,8 +2325,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
       if (!move) throw new Error('no conflict badge was drawn');
       return move[0];
     };
-    expect(baseLeft(false)).toBe(62);
-    expect(baseLeft(true)).toBe(59);
+    expect(baseLeft()).toBe(59);
   });
 
   it('marks a constrained milestone with a "!" inside its triangle, not a pin on its name', () => {
@@ -2547,7 +2333,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
      * TECH_DEBT #392 (product owner's choice, 2026-09-25): the pin hung above a milestone's centre
      * and printed over the middle of its bold name one row up. On the refreshed canvas the
      * constraint is a "!" cut into the triangle in the ground colour — two `fillRect`s centred on
-     * the milestone — and no pin path is drawn for it at all. The legacy diamond keeps the pin.
+     * the milestone — and no pin path is drawn for it at all.
      *
      * Verified red against the pre-fix branch, which drew the pin (three moveTo/lineTo vertices at
      * the triangle's top) and no ground-coloured rects.
@@ -2577,16 +2363,6 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     }
     // No pin: the pin's fill is `palette.edge`, and nothing else on this scene uses it.
     expect(log).not.toContain(`fillStyle=${PALETTE.edge}`);
-
-    const legacy = recordingCtx();
-    paintScene(
-      legacy.ctx,
-      refreshScene({ activities: [milestone], visualRefresh: false }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    expect(legacy.log).toContain(`fillStyle=${PALETTE.edge}`);
   });
 
   it('draws no edge cue inside a node’s reach (the product owner’s 2026-09-25 report)', () => {
@@ -2669,7 +2445,7 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     const refreshed = mockCtx();
     paintScene(
       refreshed,
-      { activities: [milestone], edges: [], dataDate: DATA_DATE, visualRefresh: true },
+      { activities: [milestone], edges: [], dataDate: DATA_DATE },
       VIEW,
       SIZE,
       PALETTE,
@@ -2677,65 +2453,45 @@ describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
     expect(refreshed.fillText.mock.calls[0]).toEqual(legacy.fillText.mock.calls[0]);
   });
 
-  it('keeps the overlap-badge lift clear of the (now outlined) constraint pin under the refresh', () => {
-    // A bar carrying BOTH the pin and the lane-overlap squares: the refresh must keep the
-    // existing stacking (lift) — same squares, same counts — while only adding the pin outline.
-    const both = (visualRefresh: boolean): TsldScene => ({
-      activities: [task({ constraint: 'start', laneOverlap: true })],
+  it('keeps the overlap-badge lift clear of the outlined constraint pin', () => {
+    // A bar carrying BOTH the pin and the lane-overlap squares: the squares lift so the two shape
+    // cues stack instead of colliding — same squares, same count, higher up.
+    const scene = (constraint: boolean): TsldScene => ({
+      activities: [task({ laneOverlap: true, ...(constraint ? { constraint: 'start' } : {}) })],
       edges: [],
       dataDate: DATA_DATE,
       view: quiet,
-      visualRefresh,
     });
-    const legacy = mockCtx();
-    paintScene(legacy, both(false), VIEW, SIZE, PALETTE);
-    const refreshed = mockCtx();
-    paintScene(refreshed, both(true), VIEW, SIZE, PALETTE);
-    // The two lifted squares are unchanged in count and position (their fillRects match, after
-    // the differing bar-body draws are accounted: legacy body 1 fillRect, refresh body 1 fillRect).
+    const plain = mockCtx();
+    paintScene(plain, scene(false), VIEW, SIZE, PALETTE);
+    const pinned = mockCtx();
+    paintScene(pinned, scene(true), VIEW, SIZE, PALETTE);
     const squares = (ctx: ReturnType<typeof mockCtx>) =>
       ctx.fillRect.mock.calls.filter((c) => c[2] === 5 && c[3] === 5); // OVERLAP_BADGE_S sides
-    expect(squares(refreshed)).toEqual(squares(legacy));
-    // The pin gains exactly one outline stroke; the squares keep their outlines.
-    expect(refreshed.stroke.mock.calls.length).toBe(legacy.stroke.mock.calls.length + 1);
+    expect(squares(plain)).toHaveLength(2);
+    expect(squares(pinned)).toHaveLength(2);
+    for (const [i, square] of squares(pinned).entries()) {
+      expect(square[1]).toBeLessThan(squares(plain)[i]![1] as number);
+    }
   });
 });
 
-describe('paintInteractionLayer — visual refresh + hover (ADR-0052 M4)', () => {
+describe('paintInteractionLayer — ghosts + hover (ADR-0052 M4)', () => {
   const GHOST = { x: 10, y: 10, w: 40, h: 18 };
   const roundedCtx = () => ({ ...mockCtx(), roundRect: vi.fn() });
 
-  it('is byte-for-byte the legacy overlay when the refresh fields are absent/off (parity)', () => {
-    const base = recordingCtx();
-    paintInteractionLayer(base.ctx, { live: GHOST }, SIZE, PALETTE);
-    const off = recordingCtx();
-    paintInteractionLayer(
-      off.ctx,
-      { live: GHOST, visualRefresh: false, hover: null },
-      SIZE,
-      PALETTE,
-    );
-    expect(off.log).toEqual(base.log);
-  });
-
-  it('draws the hover ring (hoverRing hue, 1.5px) under the refresh, below any ghost', () => {
+  it('draws the hover ring (hoverRing hue, 1.5px), below any ghost', () => {
     const { ctx, log } = recordingCtx();
-    paintInteractionLayer(ctx, { visualRefresh: true, hover: GHOST }, SIZE, PALETTE);
+    paintInteractionLayer(ctx, { hover: GHOST }, SIZE, PALETTE);
     expect(log).toContain(`strokeStyle=${PALETTE.hoverRing}`);
     expect(log).toContain('lineWidth=1.5');
     // Square fallback (mock has no roundRect): the ring is a strokeRect at rect ± 1.5.
     expect(log).toContain('strokeRect([8.5,8.5,43,21])');
   });
 
-  it('ignores a hover rect when the refresh is off (never a stray ring)', () => {
-    const ctx = mockCtx();
-    paintInteractionLayer(ctx, { hover: GHOST }, SIZE, PALETTE);
-    expect(ctx.strokeRect).not.toHaveBeenCalled();
-  });
-
   it('restyles the live ghost with rounded elevation-by-stroke (outer selection + inner inset)', () => {
     const rounded = roundedCtx();
-    paintInteractionLayer(rounded, { live: GHOST, visualRefresh: true }, SIZE, PALETTE);
+    paintInteractionLayer(rounded, { live: GHOST }, SIZE, PALETTE);
     // Rounded fill + two rounded strokes (outer selection ring, inner barStroke inset).
     expect(rounded.roundRect).toHaveBeenCalledTimes(3);
     expect(rounded.fill).toHaveBeenCalledTimes(1);
@@ -2743,19 +2499,14 @@ describe('paintInteractionLayer — visual refresh + hover (ADR-0052 M4)', () =>
     expect(rounded.strokeStyle).toBe(PALETTE.barStroke); // the last (inner) stroke
     // The square-fallback context degrades to rects, never throwing.
     const square = mockCtx();
-    paintInteractionLayer(square, { live: GHOST, visualRefresh: true }, SIZE, PALETTE);
+    paintInteractionLayer(square, { live: GHOST }, SIZE, PALETTE);
     expect(square.fillRect).toHaveBeenCalledTimes(1);
     expect(square.strokeRect).toHaveBeenCalledTimes(2);
   });
 
   it('restyles the resize ghost the same way, keeping its duration readout', () => {
     const rounded = roundedCtx();
-    paintInteractionLayer(
-      rounded,
-      { resize: { rect: GHOST, label: '7d' }, visualRefresh: true },
-      SIZE,
-      PALETTE,
-    );
+    paintInteractionLayer(rounded, { resize: { rect: GHOST, label: '7d' } }, SIZE, PALETTE);
     expect(rounded.roundRect).toHaveBeenCalledTimes(3);
     expect(rounded.fillText).toHaveBeenCalledTimes(1);
     expect(rounded.fillText.mock.calls[0]![0]).toBe('7d');
@@ -2812,46 +2563,7 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
     isWorkingDay,
     ...over,
   });
-  const refreshOn = (over: Partial<TsldScene> = {}): TsldScene =>
-    crowded({ timeTrueLinks: true, visualRefresh: true, ...over });
-
-  it('is byte-for-byte today’s paint on a CROWDED scene when the flag is off/absent/undefined', () => {
-    const base = recordingCtx();
-    paintScene(base.ctx, crowded({ selectedId: 'p' }), VIEW, SIZE, PALETTE);
-    const off = recordingCtx();
-    paintScene(
-      off.ctx,
-      crowded({ selectedId: 'p', timeTrueLinks: false, visualRefresh: false, hoverId: null }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    const explicit = recordingCtx();
-    paintScene(
-      explicit.ctx,
-      crowded({
-        selectedId: 'p',
-        timeTrueLinks: undefined,
-        visualRefresh: undefined,
-        hoverId: undefined,
-      }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    // A hover id must be inert while the refresh is off — no highlight without the flag.
-    const hoverWhileOff = recordingCtx();
-    paintScene(
-      hoverWhileOff.ctx,
-      crowded({ selectedId: 'p', visualRefresh: false, hoverId: 's1' }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    expect(off.log).toEqual(base.log);
-    expect(explicit.log).toEqual(base.log);
-    expect(hoverWhileOff.log).toEqual(base.log);
-  });
+  const refreshOn = (over: Partial<TsldScene> = {}): TsldScene => crowded({ ...over });
 
   it('rounds the elbows with arcTo when available, and degrades to hard corners when not', () => {
     const rounded = { ...mockCtx(), arcTo: vi.fn() };
@@ -2881,13 +2593,21 @@ describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
    * still guards determinism, which is the half fan-out was really for.
    */
   it('converges crowded finish-edge ends on ONE point, deterministically', () => {
+    // A link line starts at a `moveTo` whose first `lineTo` runs a real distance; the chevrons and
+    // arrowheads that also `moveTo` on the finish edge's vertical are a few pixels of barb.
     const startsAtFinishEdge = (scene: TsldScene): number[] => {
-      const ctx = mockCtx();
+      const { ctx, log } = recordingCtx();
       paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-      return ctx.moveTo.mock.calls
-        .filter((c) => c[0] === BAR_X + BAR_W)
-        .map((c) => c[1] as number)
-        .sort((a, b) => a - b);
+      const ys: number[] = [];
+      log.forEach((entry, i) => {
+        if (!entry.startsWith('moveTo(')) return;
+        const [x, y] = JSON.parse(entry.slice('moveTo('.length, -1)) as number[];
+        const next = log[i + 1];
+        if (x !== BAR_X + BAR_W || !next?.startsWith('lineTo(')) return;
+        const [nx, ny] = JSON.parse(next.slice('lineTo('.length, -1)) as number[];
+        if (Math.hypot(nx! - x, ny! - y!) > 12) ys.push(y!);
+      });
+      return ys.sort((a, b) => a - b);
     };
     const centre = BAR_Y + BAR_HEIGHT / 2;
     const ys = startsAtFinishEdge(refreshOn());
@@ -3052,8 +2772,6 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
     dataDate: DATA_DATE,
     view: quiet,
     isWorkingDay,
-    timeTrueLinks: true,
-    visualRefresh: true,
     lagHandles: true,
     ...over,
   });
@@ -3149,28 +2867,6 @@ describe('paintScene — draggable lag handles (ADR-0052 M3)', () => {
     expect(armed.log).not.toEqual(off.log); // the armed paint really does add something…
     expect(absent.log).toEqual(off.log); // …and absent is exactly not-armed (parity)
     expect(off.log).not.toContain(`strokeStyle=${PALETTE.handleHalo}`);
-  });
-
-  it('is byte-for-byte the no-handle paint when the refresh flag is off, even if armed (parity)', () => {
-    const base = recordingCtx();
-    paintScene(
-      base.ctx,
-      scene({ timeTrueLinks: false, visualRefresh: false, lagHandles: false, activeLagId: null }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    // A scene that still carries the handle fields while the render flag is off must not paint
-    // them — one env flag drives all three, so this is the flag-off gate.
-    const flagOff = recordingCtx();
-    paintScene(
-      flagOff.ctx,
-      scene({ timeTrueLinks: false, visualRefresh: false, activeLagId: 'd1' }),
-      VIEW,
-      SIZE,
-      PALETTE,
-    );
-    expect(flagOff.log).toEqual(base.log);
   });
 
   it('draws no handle for a zero-lag tie (its anchor is the resize handle, not a lag grab)', () => {

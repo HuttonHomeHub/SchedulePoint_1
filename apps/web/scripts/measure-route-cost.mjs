@@ -55,7 +55,7 @@ import { paintScene } from ${JSON.stringify(`${cwd}/src/features/tsld/render/pai
 import { resolveTsldPalette } from ${JSON.stringify(`${cwd}/src/features/tsld/render/palette.ts`)};
 globalThis.measurePaint = () => {
   const s = scaleScene(2000);
-  const scene = { activities: s.activities, edges: s.edges, dataDate: '2026-01-01', timeTrueLinks: true, visualRefresh: true, linkRouting: true, isWorkingDay: () => true };
+  const scene = { activities: s.activities, edges: s.edges, dataDate: '2026-01-01', isWorkingDay: () => true };
   const view = { pxPerDay: 14, originX: 40, originY: 32 };
   const canvas = document.getElementById('c');
   canvas.width = 1920;
@@ -75,7 +75,7 @@ globalThis.measurePaint = () => {
 };
 globalThis.measure = () => {
   const s = scaleScene(2000);
-  const scene = { activities: s.activities, edges: s.edges, dataDate: '2026-01-01', timeTrueLinks: true, visualRefresh: true, linkRouting: true, isWorkingDay: () => true };
+  const scene = { activities: s.activities, edges: s.edges, dataDate: '2026-01-01', isWorkingDay: () => true };
   const view = { pxPerDay: 14, originX: 40, originY: 32 };
   const vp = { x: 0, y: 0, w: 1920, h: 1080 };
   const byId = new Map(s.activities.map((a) => [a.id, a]));

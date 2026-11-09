@@ -111,7 +111,7 @@ export function layoutTextIndex(
   }
   return textIndexOf(
     sceneRowTextItems(
-      { activities: scene.activities, dataDate: scene.dataDate, visualRefresh: true },
+      { activities: scene.activities, dataDate: scene.dataDate },
       view,
       { width: right + view.originX, height: 0 },
       scene.text.toggles,
@@ -132,7 +132,7 @@ export function layoutLines(
   const all = new Set(byId.keys());
   const rectCache: RectCache = new Map();
   const { lines } = routeFrame(
-    { ...scene, timeTrueLinks: true, visualRefresh: true, linkRouting: true },
+    scene,
     view,
     all,
     byId,

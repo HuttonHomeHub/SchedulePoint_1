@@ -275,7 +275,7 @@ mail does not silently open a channel you have not read about here.
 
 This section said "two messages… there is no password-reset flow… the only route back is an
 operator resetting it in the database" until 2026-08-05. Password reset shipped with ADR-0074
-and is **default-on** (`VITE_PASSWORD_RESET`); `sendResetPassword` is configured, the web UI has
+and is **always on** (its `VITE_PASSWORD_RESET` flag retired in 1.1); `sendResetPassword` is configured, the web UI has
 both the request and the confirm screens, and a completed reset revokes every other session. The
 file contradicted itself 47 lines further down, where the Resend example already assumed reset
 mail was being sent.

@@ -230,9 +230,6 @@ export function useDiagramImage(args: {
         // gate would go quietly blind on exactly the composition it exists to watch. It refuses on
         // an unresolvable spread for that reason, and this shape keeps it honest.
         monthBands: layers.monthBands,
-        timeTrueLinks: layers.timeTrueLinks,
-        visualRefresh: layers.visualRefresh,
-        linkRouting: layers.linkRouting,
         dataDateLine: layers.dataDateLine,
         // **The five LENS keys, from the live scene via the handle** (#167 — closed). US-2's
         // wording is the contract: the export is MY picture, not a fixed one. A planner who

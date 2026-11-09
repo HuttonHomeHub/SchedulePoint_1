@@ -38,7 +38,6 @@ import {
   daysBetween,
   DEFAULT_VIEWPORT,
   dependencyPolyline,
-  dependencyPolylineTimeTrue,
   centerOnWorld,
   fitToContent,
   worldExtent,
@@ -395,48 +394,6 @@ describe('lagAnchorPoints', () => {
     const unscheduled = activity({ id: 'u', drawnStart: null, drawnFinish: null });
     expect(lagAnchorPoints(unscheduled, succ, 'FS', 2, VIEW, DATA_DATE, plan)).toBeNull();
     expect(lagAnchorPoints(pred, unscheduled, 'FS', 2, VIEW, DATA_DATE, plan)).toBeNull();
-  });
-});
-
-describe('dependencyPolylineTimeTrue', () => {
-  const pred = activity({ id: 'p', drawnFinish: '2026-01-03', laneIndex: 0 });
-  const succ = activity({
-    id: 's',
-    drawnStart: '2026-01-01',
-    drawnFinish: '2026-01-15',
-    laneIndex: 2,
-  });
-  const plan = makeWorkingDayWalk(working);
-
-  it('routes orthogonally THROUGH the time-true anchors', () => {
-    const line = dependencyPolylineTimeTrue(pred, succ, 'FS', 1, VIEW, DATA_DATE, plan)!;
-    const a = lagAnchorPoints(pred, succ, 'FS', 1, VIEW, DATA_DATE, plan)!;
-    expect(line).toHaveLength(4);
-    expect(line[0]).toEqual(a.pred);
-    expect(line.at(-1)).toEqual(a.succ);
-    expect(line[1]!.x).toBe(line[2]!.x); // still a vertical elbow
-  });
-
-  it('matches the legacy routing exactly for a zero-lag tie (the FS+0 no-visible-change case)', () => {
-    for (const type of ['FS', 'SS', 'FF', 'SF'] as const) {
-      expect(dependencyPolylineTimeTrue(pred, succ, type, 0, VIEW, DATA_DATE, plan)).toEqual(
-        dependencyPolyline(pred, succ, type, VIEW, DATA_DATE),
-      );
-    }
-  });
-
-  it('returns null when an endpoint has no geometry (the caller’s fallback contract)', () => {
-    const unscheduled = activity({ id: 'u', drawnStart: null });
-    expect(
-      dependencyPolylineTimeTrue(unscheduled, succ, 'FS', 2, VIEW, DATA_DATE, plan),
-    ).toBeNull();
-  });
-
-  it('collapses to a straight line between same-lane anchors', () => {
-    const sameLane = activity({ ...succ, laneIndex: 0, id: 's2' });
-    const line = dependencyPolylineTimeTrue(pred, sameLane, 'FS', 1, VIEW, DATA_DATE, plan)!;
-    expect(line).toHaveLength(2);
-    expect(line[0]!.y).toBe(line[1]!.y);
   });
 });
 

@@ -120,20 +120,19 @@ export function linkFactsOf(
 }
 
 /**
- * The router's plate sub-term input (spec D-5), or null where plates are not drawn: the refreshed
- * path at the detail tier. The room is the row text's LINE boxes, which the plate layer keeps off,
+ * The router's plate sub-term input (spec D-5), or null where plates are not drawn. The room is the row text's LINE boxes, which the plate layer keeps off,
  * and the glyph boxes.
  */
 export function plateScoringOf(
   facts: LinkFacts,
-  scene: Pick<RouteFrameScene, 'activities' | 'dataDate' | 'visualRefresh'>,
+  scene: Pick<RouteFrameScene, 'activities' | 'dataDate'>,
   view: Viewport,
   visibleIds: ReadonlySet<string>,
   byId: ReadonlyMap<string, RenderActivity>,
   rectCache: RectCache,
   textLayout: RowTextLayout,
 ): PlateScoring | null {
-  if (scene.visualRefresh !== true || !facts.platesOn) return null;
+  if (!facts.platesOn) return null;
   return {
     room: plateRoom(
       allItems(textLayout).map((item) => item.line),

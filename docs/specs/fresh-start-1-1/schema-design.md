@@ -773,8 +773,8 @@ CHECK ((budgeted_cost >= 0))`, `…_budgeted_expense_nonneg CHECK ((budgeted_exp
   capture copies both verbatim.
 - **T9** `baselines.hours_per_day_minutes` loses `DEFAULT 1440` (`calendars.hours_per_day_minutes` keeps
   its default, which is a real starting value for a new calendar).
-- **T8** not taken: comments only (`Baseline` criticality docblock now names TECH_DEBT #576 as the one
-  known path to a NULL rule; `BaselineActivity` and `Activity.totalFloatMinutes` docblocks rewritten).
+- **T8** not taken: comments only (`Baseline` criticality docblock named TECH_DEBT #576 as the one
+  known path to a NULL rule — corrected 2026-11-09, #576 closed as not a real race; `BaselineActivity` and `Activity.totalFloatMinutes` docblocks rewritten).
 
 The generated part of the file was re-derived (`prisma migrate diff --from-empty --to-schema-datamodel`)
 and differs from the file only in the three marked `NULLS NOT DISTINCT` hand edits, as before.

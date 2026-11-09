@@ -114,10 +114,7 @@ try {
   const row = (label, r) =>
     `  ${label.padEnd(12)} p50 ${r.p50.toFixed(2)}ms   p95 ${r.p95.toFixed(2)}ms   max ${r.max.toFixed(2)}ms`;
   const blocks = result.results.map(
-    (r) =>
-      `\n  ── ${r.zoom} (${r.pxPerDay}px/day) ──\n${row('routing off', r.off)}\n${row('routing on', r.on)}\n` +
-      `  delta        p50 ${(r.on.p50 - r.off.p50).toFixed(2)}ms   ` +
-      `p95 ${(r.on.p95 - r.off.p95).toFixed(2)}ms`,
+    (r) => `\n  ── ${r.zoom} (${r.pxPerDay}px/day) ──\n${row('routing', r.result)}`,
   );
   console.log(
     `\n[ADR-0065 T21 / ADR-0066 M4.3] Chromium ${headed ? 'headed' : 'HEADLESS'} ` +

@@ -346,6 +346,15 @@ describe.skipIf(!hasDatabase)('Create against a delete of its parent (below HTTP
     expect(result.removeResult.status).toBe('fulfilled');
     expect(await orphans(w)).toEqual({ plans: 0, projects: 0 });
     expect(await prisma.plan.count({ where: { projectId: w.projectId, deletedAt: null } })).toBe(0);
+    // The swept plan's activities go with it. The project delete cannot read its plan list while the
+    // import holds the project `FOR SHARE`, so a committed import is always in the list it locks and
+    // cascades (`docs/TECH_DEBT.md` #576, closed by this reading). A live activity under a deleted plan
+    // is the state that row feared: dated by a recalculation while the plan's stamp is skipped.
+    expect(
+      await prisma.activity.count({
+        where: { plan: { projectId: w.projectId }, deletedAt: null },
+      }),
+    ).toBe(0);
   });
 
   it('an XER import that read its project before the delete committed is refused 404', async () => {

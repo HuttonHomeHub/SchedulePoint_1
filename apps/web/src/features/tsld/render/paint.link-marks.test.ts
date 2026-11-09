@@ -76,9 +76,6 @@ function paint(activities: RenderActivity[], edges: RenderEdge[], extra: Partial
     edges,
     dataDate: DATA_DATE,
     view: { ...DEFAULT_VIEW_TOGGLES, ...NO_GRID, labels: true, dates: false },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
     ...extra,
   };
@@ -149,9 +146,6 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
         edges: [edge({ predecessorId: 'A', successorId: 'B' })],
         dataDate: DATA_DATE,
         view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false },
-        visualRefresh: true,
-        timeTrueLinks: true,
-        linkRouting: true,
         isWorkingDay: () => true,
       },
       { ...VIEW, pxPerDay: 1 },
@@ -360,9 +354,6 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
         edges: ss,
         dataDate: DATA_DATE,
         view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false },
-        visualRefresh: true,
-        timeTrueLinks: true,
-        linkRouting: true,
         isWorkingDay: () => true,
       },
       { ...VIEW, pxPerDay: 3 },
@@ -370,13 +361,5 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
       PALETTE,
     );
     expect(dots(log)).toEqual([]);
-  });
-
-  it('keeps the legacy dashed non-driving pass when the refresh is off (the rollback)', () => {
-    const log = paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })], {
-      visualRefresh: false,
-    });
-    expect(log).toContain('setLineDash([[4,3]])');
-    expect(strokeInks(log)).toContain(PALETTE.edge);
   });
 });

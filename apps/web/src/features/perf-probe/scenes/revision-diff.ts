@@ -409,9 +409,6 @@ export async function runRevisionDiff(
     activities: source.activities,
     edges: source.edges,
     dataDate: '2026-01-01',
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
   };
 
   const idleInterval = opts.idleInterval ?? (await measureIdleInterval(60));

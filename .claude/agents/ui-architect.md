@@ -71,7 +71,7 @@ The frontend is not a blank slate; most "new" structure has a precedent.
   17 when this line was written, 18 after ADR-0077 §9 and is computed by closure
   since ADR-0097. `styles/token-architecture.test.ts` owns the number.
 - **The canvas render layer is pure** and framework-free (`features/tsld/render/`);
-  the component layer owns flags, React and the DOM a11y mirror.
+  the component layer owns configuration, React and the DOM a11y mirror.
 - **Server state in TanStack Query, URL state in TanStack Router**, forms via
   RHF + Zod (ADR-0004/0005/0007). Client state stays minimal and co-located.
 - **Swimlanes reach the canvas only through `projectSwimlanes`**

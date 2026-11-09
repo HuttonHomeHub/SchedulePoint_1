@@ -31,8 +31,8 @@ review; you do not edit code. Assume an adversarial user.
   Treat any code that widens `GuestPrincipal` toward `Principal`, or that accepts
   a plan/org id from a **request param** rather than from the token, as blocking:
   the guest scope comes from the token alone. Share resolution is uniform-404.
-- **`@Public()` is a short list, and this is the whole of it** (re-derived 2026-09-08):
-  auth routes, invitation-accept, `/api/v1/share/*` (ADR-0051 F-M3), the CSP report
+- **`@Public()` is a short list, and this is the whole of it** (re-derived 2026-11-09):
+  auth routes (including `POST …/email-verification/confirm`), invitation **preview** (accept needs a session), `/api/v1/share/*` (ADR-0051 F-M3), the CSP report
   sink (`modules/csp/csp-report.controller.ts`), `/version` and the two `/health`
   routes. A new `@Public()` endpoint needs an explicit justification in review. Note
   the CSP sink is an unauthenticated **write** — the only one — so it is rate-limited

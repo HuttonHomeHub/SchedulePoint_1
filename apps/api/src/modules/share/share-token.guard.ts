@@ -35,7 +35,7 @@ export const SHARE_TOKEN_PREFIX = 'sp_share_';
  * ENTIRELY from the token row; a guest supplies no id, so there is nothing to tamper with
  * (anti-IDOR by construction).
  *
- * Dark in F-M1 (no route uses it yet); F-M3 attaches it to the guest read controller.
+ * Attached to `ShareGuestController` since F-M3.
  */
 @Injectable()
 export class ShareTokenGuard implements CanActivate {

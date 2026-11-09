@@ -572,7 +572,7 @@ would not exercise the code being budgeted.
    One trap worth recording, because it produced a much prettier and entirely false number first: a
    generated plan laid out nose-to-tail spans **28 years** at 2,000 activities, so the "whole plan"
    zoom culled roughly nine bars in ten and reported 4.6 ms p95. It looked like the budget being met.
-   The layout now runs a phase's bands concurrently (`apps/web/scripts/scale-scene.ts`), which puts the plan
+   The layout now runs a phase's bands concurrently (`apps/web/src/features/perf-probe/scenes/scale-scene.ts`), which puts the plan
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
@@ -1953,6 +1953,8 @@ it did not have.
 
 **Status:** deferred · **Verified:** 2026-09-11 · **Raised:** 2026-08-09 · **Size:** S
 
+_(Re-read 2026-11-09: the owner has set `STAFF_EMAILS`, `MAIL_ALERT_URL` and `HEARTBEAT_URL` on the host and the console works there (`CLAUDE.md` §17), but closing condition (1) needs an alert **seen to arrive**, which nothing has recorded yet. The row stays deferred.)_
+
 > **Reclassified `open` → `deferred` on 2026-09-11, and the row's own argument for staying open is
 > preserved rather than overruled.** That argument is about not **closing** — "a row closed on an
 > intention is a row that says the signal reaches someone when it may not" — and `deferred` closes
@@ -2260,7 +2262,7 @@ blocked the epic.
    > so the caveat at the top of this row does not apply to the 2026-09-13 date the way it applies
    > to the 2026-09-10 one. Item 1: `ToolbarItemRenderApi` still carries exactly five fields and no
    > `busy`, and the sentence quoted above is still on `activeKind` word for word. Item 2:
-   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:239`, re-read 2026-11-07; was `:234`), and
+   > `EXPORT_LEGEND` is still a hand-authored array (`render-export-image.ts:237`, re-read 2026-11-07; was `:234`), and
    > `wbsGroupLabelById` / `composeListboxRowText` are both still single producers with two
    > consumers each, so the contrast the item draws still holds. Nothing changed; the value is that
    > the date now means what a reader will take it to mean.
@@ -2435,9 +2437,11 @@ rather than being rushed:
 **1. `csp_reports` and `mail_events` have no retention sweep, and one of them is written by an
 unauthenticated endpoint. (CLOSED 2026-08-10 — ADR-0087.)** ADR-0085 D3 settled the period at 12
 months and nothing enforced it —
-`apps/api/prisma/migrations/20260809160000_csp_reports/migration.sql` still says so in its own
-comment ("the true retention today is forever"), and **that comment cannot be corrected**, because a
-landed migration is checksummed; `docs/DATABASE.md` carries the current statement instead. The
+the `csp_reports` migration said so in its own comment ("the true retention today is forever"), and
+that comment could not be corrected while the migration was checksummed. **That file is gone since 1.1.0
+(re-read 2026-11-09):** the one baseline migration replaced the 1.0 history (kept at tag `api-v1.0.0`),
+and `grep -i forever` on `20261109000000_baseline_1_1/migration.sql` finds nothing; `docs/DATABASE.md`
+carries the current statement. The
 security review's point sharpened the priority rather than adding a new fact: the CSP write path
 needs **no credential**, and stripping only the query string from `blocked_uri`/`document_uri`
 leaves the path, so unique rows are trivially mintable at 20 per request × 60 requests/minute per IP.
@@ -2557,7 +2561,8 @@ The reviewer measured 43 ms → 0.05 ms and recommended it; the database-archite
 the **real** table (five rows, one heap page) at 0.036 ms and recommended deferring, because the
 43 ms came from a synthetic million-row population that no longer exists. Deferred against a trigger
 rather than a date — build it when unverified accounts on the deployed installation reach five
-figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
+figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` (since 1.1.0 only a `-- was:`
+pointer to it remains, `baseline_1_1/migration.sql:1594`; the file is at tag `api-v1.0.0`) so the question is
 not reopened from scratch.
 
 ### 118a. `audit_events`' 12-month `auth.*` period is unenforced, and that is ADR-0085 D1's decision
@@ -2566,7 +2571,8 @@ not reopened from scratch.
 
 > **Restatused from `unverified` to `standing` on 2026-09-09: this is a decision nobody can pick up,
 > not work somebody owes.** Verified intact — the `BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE`
-> triggers are `ENABLE ALWAYS` (`20260803170000_audit_events/migration.sql:110-122`) and **no later
+> triggers are `ENABLE ALWAYS` (re-pointed 2026-11-09 to `20261109000000_baseline_1_1/migration.sql:2009-2010`;
+> the 1.0 file `20260803170000_audit_events/migration.sql:110-122` is at tag `api-v1.0.0`) and **no later
 > migration relaxes them**; `retention-boundary.structural.spec.ts:43-65` asserts `RETENTION_TABLES`
 > **by equality** with `audit_events` in the forbidden set. ADR-0085 D1 refused to trade the
 > structural guarantee for the period, and D6's build trigger has not fired.
@@ -2702,8 +2708,9 @@ double-submit apart from a slow one. Left open rather than guessed at.
 > **Reclassified `open` → `deferred` on 2026-09-11, on two sentences this row already contains.**
 > _"This is ordinary Postgres behaviour and not a defect in the design"_ and _"there is time, and
 > nothing to do today"_ are a decision, not a backlog item — and the trigger is named in the same
-> paragraph: **the first enablement against a real backlog**, about a week away for `csp_reports`
-> and a year for `mail_events`. The row also forbids acting before then in as many words: _"Do none
+> paragraph: **the first enablement against a real backlog**, about 30 days after 2026-11-09 for
+> `csp_reports` and a year for `mail_events` (both tables were recreated empty by the 1.1.0 fresh start, so the
+> clocks restarted). The row also forbids acting before then in as many words: _"Do none
 > of them without measuring first"_, because the cheapest-looking remedy (raising `RUN_CAP`) trades
 > a bounded connection hold for a faster vacuum, which is the opposite of what that cap exists for.
 > `open` invites exactly that edit.
@@ -2756,8 +2763,8 @@ exactly the runner's loop — and watched `pg_stat_user_tables`:
 **This is ordinary Postgres behaviour and not a defect in the design.** It is recorded because the
 ADR and the docblocks assert the sweep is bounded and say nothing about the table staying clean, and
 those are different claims. The place it will actually be met is the **first enablement against a
-real backlog**, which on the deployed host is **about a week away** for `csp_reports` and a year for
-`mail_events` — so there is time, and nothing to do today.
+real backlog**, which on the deployed host is about 30 days after 2026-11-09 for `csp_reports` and a year for
+`mail_events` (both recreated empty by the 1.1.0 fresh start, so the clocks restarted) — so there is time, and nothing to do today.
 
 If it ever matters, the remedies in order of cost are: watch `n_dead_tup` rather than assume it
 self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept tables; or raise
@@ -3054,7 +3061,7 @@ were not re-measured and stand as dated.
 `{ timeout: 15_000 }` with the reason written at each site. Today's run shows both halves of that
 closure failing at once, in **one job, one shard, one browser**:
 
-- **A widened site failed anyway.** `e2e/dependencies.spec.ts:98` — which carries the 15 s wait and
+- **A widened site failed anyway.** `e2e/dependencies.spec.ts:100` — which carries the 15 s wait and
   a comment explaining it — missed the `create your organisation` heading on the initial attempt
   **and both retries**, all three at 15 s.
 - **An un-widened neighbour failed too.** `e2e/members.spec.ts:24` is the identical assertion at the
@@ -3096,7 +3103,7 @@ means a reader who follows its first suggestion will spend seven minutes finding
 
 **The spread was never measured when `#182` closed, and it is the finding.** Counted today across
 every e2e suite, the same positive assertion appears at **61 sites**. **Four** carry
-`{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:31` and `:98`, and
+`{ timeout: 15_000 }` — `e2e/clients.spec.ts:27`, `e2e/dependencies.spec.ts:32` and `:98`, and
 `e2e-narrow-shell/narrow-shell.spec.ts:61`. The other **57 are at the 5 s default**. In the base
 journey alone there are **13** sites, of which **10** were left untouched: `activities:26`,
 `auth:37`, `baselines:23`, `members:24` and `:52`, `navigator-crud:21`, `plans:22`,
@@ -3119,7 +3126,7 @@ trace named below is still the first task.
 
 **What that measurement DID establish, and it is useful here:** a base-journey test issues its
 requests in a **4.8–6.8 second burst** and then spends the rest of its twenty seconds idle. Whatever
-is costing `dependencies.spec.ts:98` more than 15 s, it is not a queue of its own requests.
+is costing `dependencies.spec.ts:100` more than 15 s, it is not a queue of its own requests.
 
 **The wait is measured, and it removes "marginal" from the vocabulary of this row.** Ten runs of
 `e2e/dependencies.spec.ts` locally (chromium, `--repeat-each=5 --workers=1 --trace on`, all ten
@@ -3153,7 +3160,7 @@ ruled out in `#314`. The trace remains the first task; what it should be read fo
 the browser was on**, not how long anything took.
 
 **What is NOT established, stated plainly because the remedy depends on it.** Why
-`dependencies.spec.ts:98` failed three consecutive times at 15 s is **unknown**. Three-for-three at
+`dependencies.spec.ts:100` failed three consecutive times at 15 s is **unknown**. Three-for-three at
 three times the original margin is not the signature of a marginal wait, so "widen it again" is the
 one response the evidence does not support. A trace was captured
 (`playwright-report-web-shard-1`, artifact 10312829458) and has **not** been read; reading it is
@@ -4215,7 +4222,7 @@ the better pattern sitting one directory over.
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
-**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two panel labels are `aria-label`s at `activity-bottom-panel.tsx:432` and `:592`, its chrome `Surface` opens at `:498-499`, `chrome-band.tsx:74` and `toolbar-styles.ts:112` are unmoved, the Gantt sweep case is `command-surface.spec.ts:1297-1326`, `SelectionActionsBar` is mounted at `plan-workspace-toolbar.tsx:2064`, and `resolveDockStrip` is called at `TsldPanel.tsx:1907`
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two panel labels are `aria-label`s at `activity-bottom-panel.tsx:432` and `:592`, its chrome `Surface` opens at `:498-499`, `chrome-band.tsx:74` and `toolbar-styles.ts:112` are unmoved, the Gantt sweep case is `command-surface.spec.ts:1297-1326`, `SelectionActionsBar` is mounted at `plan-workspace-toolbar.tsx:1958`, and `resolveDockStrip` is called at `TsldPanel.tsx:1846`
 
 **Five of the six are resolved; one remains, and it is spec-gated** (swept 2026-09-11, item by
 item). (b), (c) and (d) closed between 2026-08-31 and 2026-09-09, (e) closed as stale and (f) was
@@ -4307,7 +4314,7 @@ happening — recorded here so it is a decision rather than an omission.
 > exist in that view.
 >
 > **Three citations in this item were wrong, and two of them were wrong inside the journey too.**
-> The bar renders at `plan-workspace-toolbar.tsx:2064` (`:1331` when this was written, since moved), not `:1151` (which is a `clearPlacement`
+> The bar renders at `plan-workspace-toolbar.tsx:1958` (`:1331` when this was written, since moved), not `:1151` (which is a `clearPlacement`
 > gate object); the two labels are at `activity-bottom-panel.tsx:163,325` (now `:432,592`), not `:155,317` (which are
 > `hostsPlanSlots` props). The spec repeated both — the second under a comment reading _"Names read
 > from `activity-bottom-panel.tsx:155,317` rather than guessed"_. The **names** were read and the
@@ -4404,7 +4411,7 @@ Not re-filed here, because the same finding in two places is how a register star
 itself. _(This said "already filed as #204(b)" until 2026-09-09, which overstates it: #204(b) names
 `hover:bg-accent/60` and `bg-warning/15` and does **not** name `bg-foreground/5`. The reasoning
 transfers and the utility does not, so the honest word is the class. It is still live, at
-`toolbar-styles.ts:112` (was `:119`), now consumed by `features/plan-actions/selection-actions.tsx:1504` and
+`toolbar-styles.ts:112` (was `:119`), now consumed by `features/plan-actions/selection-actions.tsx:1447` and
 `features/tsld/toolbar/diagram-viewport-cluster.tsx:56`; the pointers this named, `selection-actions.tsx:1005` and
 `Deck.tsx:237`, are gone — `Deck.tsx` no longer calls `toolbarCardVariants` (#285), and the selection bar moved
 to `features/plan-actions/`.)_
@@ -4503,7 +4510,7 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > **What is stale.** The item is written about a _toolbar item_ going `isVisible: false`, with
 > `Toolbar`'s roving-tabindex repair as the thing that fails to move `document.activeElement`.
 > ADR-0115 moved `clear-visual-placement` **off the command surface onto the selection bar**
-> (`plan-workspace-toolbar.tsx:826-828` says so in as many words), where it is **omitted** outside
+> (`plan-workspace-toolbar.tsx:793-795` says so in as many words), where it is **omitted** outside
 > Visual mode on ADR-0082's discriminator rather than hidden by a toolbar visibility flag. So the
 > named mechanism cannot be what happens.
 >
@@ -4528,8 +4535,8 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > whatever focus is on it.
 >
 > **Measured 2026-09-11, and (c) is SETTLED the other way: the hazard is REAL and it is a WCAG 2.2
-> §2.4.3 failure, level A.** `apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts`
-> drives two Planner sessions: A holds the pen on a Visual-mode plan with an activity selected and
+> §2.4.3 failure, level A.** `apps/web/measure-toolbar/tech-debt-204c-mode-flip-focus.spec.ts` (since deleted; see above)
+> drove two Planner sessions: A holds the pen on a Visual-mode plan with an activity selected and
 > focus **on** `Clear visual start` (asserted, not assumed); B flips the plan to `EARLY` through
 > the public API holding no pen; A's client is then woken after the 30 s `staleTime`.
 >
@@ -4597,7 +4604,7 @@ this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0
 > > Class 3 inside the sentence recording a decision. Two pieces of evidence, both read rather than
 > > recalled:
 > >
-> > - `TsldPanel.tsx:1029-1033` states the rule and its failure mode in as many words —
+> > - `TsldPanel.tsx:985-989` states the rule and its failure mode in as many words —
 > >   _"Announced INSIDE the focus callback, and that ordering is load-bearing: focusing the listbox
 > >   fires its `onFocus` default-select, which announces the row it lands on. Announced first,
 > >   '2 activities deleted.' is spoken and then immediately overwritten by a row description."_
@@ -4716,7 +4723,7 @@ ScheduleHealthPanel.tsx:364-365`) and nothing in `HealthPrintDocument.tsx`
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` in the re-read notes below (the documented gesture is `docs/UX_STANDARDS.md:111-113`, the undo/redo pair's `useTooltip({` is `tsld-toolbar-items.tsx:2648`, `<PlanShortcutsHelp` is `plan-workspace-toolbar.tsx:2724`, the `markerRow` default is `render-export-image.ts:344`, the reservation case is `export-image.test.ts:353-368`) · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` in the re-read notes below (the documented gesture is `docs/UX_STANDARDS.md:111-113`, the undo/redo pair's `useTooltip({` is `tsld-toolbar-items.tsx:2487`, `<PlanShortcutsHelp` is `plan-workspace-toolbar.tsx:2593`, the `markerRow` default is `render-export-image.ts:339`, the reservation case is `export-image.test.ts:353-368`) · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass; and on 2026-11-01 the first item below was
@@ -4759,7 +4766,7 @@ until 2026-09-09:
   > read "the shortcuts sheet is keyboard-shaped and **unmounted from the Gantt-less panels
   > anyway**". The sheet has mounted **once for the whole workspace, above both views**, since
   > ADR-0095 M5 closed `#137` on 2026-08-18 — eleven days before this row was raised
-  > (`plan-workspace-toolbar.tsx:1900-1911`, and `TsldPanel.tsx:3193-3198` records the removal). So
+  > (`plan-workspace-toolbar.tsx:1794-1805`, and `TsldPanel.tsx:3097-3102` records the removal). So
   > the sheet **is** a candidate home, and the clause that excused not considering it described the
   > previous arrangement. The finding survives on its other half: the sheet is keyboard-shaped, and
   > this is a pointer gesture. Re-derived at the same time — `HierarchyTree` carries a **second**
@@ -4781,28 +4788,28 @@ until 2026-09-09:
   > dormant. The claim to make is "no production item", which is what the pass meant and not what it
   > checked.
   >
-  > **2. `plan-workspace-toolbar.tsx:1900-1911`** does not contain the shortcuts-sheet mount and
+  > **2. `plan-workspace-toolbar.tsx:1794-1805`** does not contain the shortcuts-sheet mount and
   > never did: `<PlanShortcutsHelp` sits at **`:1941`** today and at **`:1937`** at `69207b1d^`,
   > while `:1900-1911` was the export-error banner on both sides. **The conclusion holds** — the
   > sheet is mounted once for the whole workspace above both views, which is the fact the struck
   > clause turned on; only the line range was invented.
   >
   > **Everything else re-derives exact**, including the parts easiest to get wrong:
-  > `render-export-image.ts:190` is `const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;` (a
+  > `render-export-image.ts:188` is `const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;` (a
   > **basename-only** citation, `#101`'s blind spot — it resolves, and a reader guessing a directory
   > will not find it), `export-image.test.ts:286-298` is the `it('reserves EXPORT_MARKER_ROW by
 default, in both extents')` case down to the phrase this row quotes, and
-  > `tsld-toolbar-items.tsx:1984` is the `useTooltip({` of the bespoke undo/redo pair.
+  > `tsld-toolbar-items.tsx:1830` is the `useTooltip({` of the bespoke undo/redo pair.
   >
   > _(Re-read 2026-10-26, the cites having drifted: `<PlanShortcutsHelp` is at
-  > `plan-workspace-toolbar.tsx:2556`; the `markerRow` default is at
-  > `features/tsld/export/render-export-image.ts:344`; the undo/redo pair's `useTooltip({` is at
-  > `tsld-toolbar-items.tsx:2624`. The conclusions above are unchanged.)_
+  > `plan-workspace-toolbar.tsx:2425`; the `markerRow` default is at
+  > `features/tsld/export/render-export-image.ts:339`; the undo/redo pair's `useTooltip({` is at
+  > `tsld-toolbar-items.tsx:2463`. The conclusions above are unchanged.)_
   >
   > _(Re-read again 2026-10-31, the cites having drifted again: the gesture is documented at
   > `docs/UX_STANDARDS.md:111-113` (was `:102-104,127`) and `docs/DESIGN_SYSTEM.md:1584` (was `:1001`);
-  > `<PlanShortcutsHelp` is at `plan-workspace-toolbar.tsx:2724`; the undo/redo pair's `useTooltip({` is at
-  > `tsld-toolbar-items.tsx:2648` (`UndoRedoControl`, `:2620`); `TsldPanel.tsx:3193-3198`, the note that the
+  > `<PlanShortcutsHelp` is at `plan-workspace-toolbar.tsx:2593`; the undo/redo pair's `useTooltip({` is at
+  > `tsld-toolbar-items.tsx:2487` (`UndoRedoControl`, `:2620`); `TsldPanel.tsx:3097-3102`, the note that the
   > sheet is no longer mounted there, is now `:4030-4034`; the `markerRow` default is still `:344`, and
   > the reservation case is `export-image.test.ts:353-368` (was `:286-298`, cited twice in this row);
   > `HierarchyTree`'s long-press is in `features/navigator/components/HierarchyTree.tsx` at `:33-34`,
@@ -4819,7 +4826,7 @@ default, in both extents')` case down to the phrase this row quotes, and
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
   span carries an empty strip between the title separator and the diagram. Cosmetic,
   low-frequency, consistent with the on-screen ruler's own resting state.
-  > **Re-derived 2026-09-11 and still exactly true.** `render-export-image.ts:190` is
+  > **Re-derived 2026-09-11 and still exactly true.** `render-export-image.ts:188` is
   > `input.markerRow ?? EXPORT_MARKER_ROW` — unconditional on whether any marker paints — and
   > `export-image.test.ts:286-298` pins the reservation in both extents, so the blank strip is
   > gated behaviour rather than an oversight nobody noticed. **It is therefore not a coding task
@@ -5006,7 +5013,7 @@ its reason rather than quietly dropped.
   > says ("a 168 px column beside a 72 px strip") — and removing a prop is a **component
   > public-contract change**, which ADR-0105 lists flatly as a trigger whatever the blast radius.
   > Measured blast radius, so the next reader does not have to: **two** consumers
-  > (`ResourceStackChart.tsx:66` passes it, `resource-strip-panel.tsx:375` does not, being `row`; both re-read 2026-10-26),
+  > (`ResourceStackChart.tsx:66` passes it, `resource-strip-panel.tsx:374` does not, being `row`; both re-read 2026-10-26),
   > and the prop has no other reader. Small, and still the decision the trigger exists to catch.
 - ~~**The plan describes a third stacking mode, `Kind`, that was never built.**~~ **BUILT
   2026-09-01.** `StackBy` is `'resource' | 'group' | 'kind'`; the invariance gate now compares all
@@ -5221,8 +5228,10 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                                                              | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 576 | A project delete can soft-delete a plan an import commits in between, leaving its activities dated while its stamp is skipped            | 2026-11-09 | **Closed — the race was not there.** The row's premise was a gap between the delete's plan read (`hierarchy-lifecycle.service.ts`, project branch) and its `updateMany`. The delete takes the project row `FOR NO KEY UPDATE` **before** that read (`lockProjectRowForDelete`), and both ways a plan is created — `PlansService.create` and `InterchangeService.commit` — hold the project `FOR SHARE` for their whole transaction (`lockActiveProjectChainForShare`, #531), which conflicts with it. So an import either commits first (the delete then reads and cascades its plan and activities) or waits and is refused 404 once the project is deleted; the m3-inventory trace (§4) had not seen the import's lock. `hierarchy-create-race.e2e-spec.ts` already drove the interleave and now also asserts no live activity is left under the swept project. The `updateMany` by `projectId` stays: it is the stricter choice, since a plan outside the resolved list would be stamped rather than left active under a deleted project. The Baseline criticality columns stay nullable for the other cause (a plan never recalculated); whether to make them NOT NULL is a schema decision for the owner. See `docs/DECISIONS.md`, 2026-11-09.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 121 | The base Playwright journey proved editing in a world no shipped bundle can produce                                                      | 2026-11-08 | **Closed.** `apps/web/playwright.config.ts` no longer pins `VITE_TSLD_EDITING` or `VITE_PLAN_EDIT_LOCK`; every base-journey spec that edits takes the pen through the UI with `takeThePen` (`apps/web/e2e-support/pen.ts`: presses **Start editing**, then asserts **Stop editing** and the status line "You’re editing this plan."), never over the API. Converted: `activities` ×1, `baselines` ×3 (the pen is taken again after each reload that precedes an edit, since a reload releases it), `dependencies` ×2, `schedule` ×2, and `tsld` ×1, which the row had not listed but which edits through the same dialog. No base-journey assertion depended on a read-only TSLD, so none moved to a Viewer. `PLAN_EDIT_LOCK_ENFORCED` stays at its default. Evidence: `scripts/e2e-local.sh web` green three runs running, 34 passed each (2026-11-08); it was red on `baselines` before the second reload was handled (`New activity` absent, status "No one is editing this plan.").                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 318 | A baseline's frozen float cannot be re-framed, so a day-factor change reads as variance                                                  | 2026-11-08 | **Closed.** [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md): float stored and compared in minutes, one frame; NULL minutes are "not comparable" and counted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 575 | Legacy painter and gesture modes left after the flag retirement                                                                          | 2026-11-09 | **Closed.** `visualRefresh`, `timeTrueLinks` and `linkRouting` are gone from `TsldScene`, `InteractionOverlay`, `SceneLayers`, the export and the probes, and with them the legacy bar layer, the dashed/solid link passes, the selected-link slack chip, the extreme-end and time-true-only routes (`dependencyPolylineTimeTrue`), the diamond milestone tracer and the square ghosts. The gesture machine lost its handle-origin `linking` state (`startHandle` / `finishHandle` into `linking`, `sourceHandle`, `modifiersToLinkType`), the `link` rubber-band overlay and `liveLink` with it; `TsldCanvas` still downgrades an unarmed edge zone to a body hit, because that is what lets a press there reposition. The painter's call log for the shipped mode is byte-identical before and after on the golden's maximal and minimal scenes (the minimal scene's snapshot was the one that moved, because it had been painting the legacy mode). The two A/B measurement harnesses that compared routing off against on (`link-routing-bench.ts`, `crossing-probe.ts`'s `routingOff`) now report the one remaining route.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 571 | A downstream plan reads an upstream's date until that upstream is recalculated after the instant release                                 | 2026-11-09 | **Closed by ADR-0215 (the 1.1.0 fresh start).** Its subject was a plan last computed before the instant release (ADR-0212). 1.1.0 starts on an empty database and the image refuses any other, so every plan is calculated by code that persists its instants beside its dates; the one-time boot recalculation went with the re-derivation services. `remoteInstantMissingCount` stays as the derivation's fallback for a plan that has never been calculated.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 565 | A plan stores a zero-span activity's date, not its instant, so a cross-plan link cannot always read what one plan keeps                  | 2026-11-07 | **Closed.** [ADR-0212](adr/0212-a-plan-keeps-the-instant-beside-the-date.md): the engine reports the placed and late instants, a recalculation persists them beside the dates, the derivation reads a current one (else the date), linked plans are recalculated once at first start, and the organisation export carries them (format 2.4). Five of the 24 fixture cases (`cross-plan-milestone-fixture.spec.ts`) were a week off and now equal one plan. The sixth, a finish milestone on the weekend calendar cut at `M -> K`, is the upstream plan's own float basis and **stays by design** (ADR-0212 D7). The residual for a plan linked later is **#571**.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 566 | An MSPDI report says every calendar was created in this project while the mapper puts a resource calendar in the shared library          | 2026-11-07 | **Closed.** The adapter finding now names the exception (a calendar an imported resource holds goes to the shared organisation library) and ADR-0053 §5 carries a dated amendment; wording only, nothing an import creates changed. Pinned in `packages/interchange/src/mspdi-adapter.spec.ts`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -5853,7 +5862,7 @@ drift report on the way. Written down here so the next check is one command.
 
 **The trigger has not fired.** It reads _"when a sixth table joins the pattern, or sooner if another
 unexplained cross-spec FK failure appears"_. One migration has landed since this row was verified —
-`20260909120000_perf_probe_sweep_columns` — and it adds columns to an existing table rather than a
+`20260909120000_perf_probe_sweep_columns` (a pre-1.1 name: the baseline holds it as a `-- was:` entry, tag `api-v1.0.0`) — and it adds columns to an existing table rather than a
 model, so no table has joined; and no cross-spec FK failure has been reported. Checked rather than
 assumed, because `#298` and `#249` both had triggers that had fired unnoticed.
 
@@ -5975,7 +5984,7 @@ This row's own caveat said its entries were checked as a list and any one might 
 incidentally. One had been, halfway, which is the case that caveat exists for.
 
 - **1 — DONE, and it was half fixed already.** The _response_ DTO already said it
-  (`revision-compare.dto.ts:414`, "which also returns `links`"); the **query** DTO's description —
+  (`revision-compare.dto.ts:394`, "which also returns `links`"); the **query** DTO's description —
   the one a caller reads in the OpenAPI spec — did not. Now says so, and says there is no separate
   `links` include value, so asking for `ghosts` is how a caller gets both. Had this been struck on
   the first grep it would have been struck wrongly.
@@ -5994,14 +6003,14 @@ incidentally. One had been, halfway, which is the case that caveat exists for.
 
 **Still open, each verified against the code today:**
 
-- **3** stands (`TsldPanel.tsx:269-296` — the five `compare*` props are still separate; was `:260-271`, re-read 2026-10-26). **Not done here
+- **3** stands (`TsldPanel.tsx:256-283` — the five `compare*` props are still separate; was `:260-271`, re-read 2026-10-26). **Not done here
   because it is a component's public contract**, which ADR-0105 makes a spec-and-approval change
   whatever its size.
 - **4** stands. It is a **visual design decision** — choosing a treatment that separates
   "incident to my selection" from "changed in the comparison" without reaching for colour alone —
   and not a defect with one right answer.
 - **5** stands, and the verification is exact: `setRevisionFrom` has **one** caller in the whole
-  file, the picker's `onFromChange` (`plan-workspace-toolbar.tsx:2107`; was `:1510`). Nothing clears the pair on
+  file, the picker's `onFromChange` (`plan-workspace-toolbar.tsx:1979`; was `:1510`). Nothing clears the pair on
   close. **Not done because the remedy is a product decision**: clear the pair on close, which
   removes an overlay a planner may have opened deliberately, or keep it and caption it. ADR-0127
   D8b made the overlay default-on, which makes that choice sharper rather than easier.
@@ -6419,7 +6428,7 @@ than having to remember to look.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
-**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two `slice(0, cap)` are `apps/api/src/modules/baselines/revision-ghosts.ts:231,305`, `REVISION_ROW_CAP` is `schedule.service.ts:270`, `takeBothSides` is `schedule.service.ts:280`, the DTO reads `REVISION_LINK_STATES` at `revision-compare.dto.ts:518`, the inline union is `packages/types/src/index.ts:4089`, `hasRevisionPair` is `plan-workspace-toolbar.tsx:479`, `print-document.ts:74` is unmoved and the colour-literal selectors are `packages/config/eslint/react.js:69,77` · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the two `slice(0, cap)` are `apps/api/src/modules/baselines/revision-ghosts.ts:224,305`, `REVISION_ROW_CAP` is `schedule.service.ts:259`, `takeBothSides` is `schedule.service.ts:269`, the DTO reads `REVISION_LINK_STATES` at `revision-compare.dto.ts:496`, the inline union is `packages/types/src/index.ts:4056`, `hasRevisionPair` is `plan-workspace-toolbar.tsx:457`, `print-document.ts:74` is unmoved and the colour-literal selectors are `packages/config/eslint/react.js:69,77` · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
 
 **Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
 a list of deferred findings, and on **2026-09-10** it was checked as a LIST — that the epic which
@@ -6487,7 +6496,7 @@ a gap its sibling had documented.
 
 **(d)** ~~`RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
 literal with no backing tuple~~ — **CLOSED 2026-09-11.** `REVISION_LINK_STATES` is the missing
-tuple, `RevisionLinkState` derives from it, and `revision-compare.dto.ts:518` (was `:351`) reads the identifier.
+tuple, `RevisionLinkState` derives from it, and `revision-compare.dto.ts:496` (was `:351`) reads the identifier.
 The wire values are unchanged; what changes is that a fourth state reaches the DTO without anybody
 editing it, which is the whole of what the header's "every `enum:` is DERIVED" promises. The header
 said so with a footnote naming this exception, and the footnote is now a closure note rather than a
@@ -6502,7 +6511,7 @@ standing caveat.
 > - **Three are hand-copies of a union that lives in `@repo/types`** and are the same class as this
 >   item: `enum: ['CODE']` against `CrossPlanCorrelationKey`, `enum: ['NO_COMMON_CODES']` against
 >   `CrossPlanNotAssessableReason`, and `enum: ['SIDE_NOT_SCHEDULED', 'NO_COMMON_CODES']` against the
->   inline union at `packages/types/src/index.ts:4089` (was `:3122`). **Two of those three unions are themselves
+>   inline union at `packages/types/src/index.ts:4056` (was `:3122`). **Two of those three unions are themselves
 >   bare types rather than tuples**, so closing them means adding the tuple first — exactly the work
 >   this item just did, three times over, and on a union with **one** member where a tuple is
 >   arguable rather than obvious.
@@ -6516,7 +6525,7 @@ standing caveat.
 **(e)** ~~`docs/API.md`'s **existing, untouched** description of the plan-nested route's
 `ghosts`/`links` says "Neither is capped"~~ — **CLOSED 2026-09-11.** The claim was verified against
 the code rather than taken from this row: `revision-ghosts.ts:151,225` (now `:231,305`, in `modules/baselines/`) both `slice(0, cap)` and
-return the pre-cap `total`, and `schedule.service.ts:270` sets `REVISION_ROW_CAP = 200` (was `:227`). So the
+return the pre-cap `total`, and `schedule.service.ts:259` sets `REVISION_ROW_CAP = 200` (was `:227`). So the
 paragraph described the state that shipped for one review cycle before two independent reviews
 caught it, which that file's own docblock records. `docs/API.md` (the paragraph is at `:2505-2514` now; `:1193` when this was written) names the cap, names the
 two total fields (`ghostsTotal`/`linksTotal`), and carries the correction's date and reason rather
@@ -6556,7 +6565,7 @@ component, but a planner may expect to click through from the list they were tol
 **(i)** ~~The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
 terms even when reached through the cross-plan picker, where the planner chose a _plan_~~ —
 **CLOSED 2026-10-20.** The literal symptom was already gone: `hasRevisionPair` counts a chosen plan
-(`plan-workspace-toolbar.tsx:479`, was `:376`, `:315` before that), so the cross-plan path meets no refusal. What remained was
+(`plan-workspace-toolbar.tsx:457`, was `:376`, `:315` before that), so the cross-plan path meets no refusal. What remained was
 "two revisions" when one choice suffices and a plan is also a valid choice; it now reads "Choose
 what to compare in Compare revisions… first", pinned negatively in `compare-overlay-refusal.test.ts`.
 
@@ -6675,9 +6684,9 @@ re-derive the diagnosis from four confusing failures.
 > reading is the obvious one: see `#302`, where the general rule was measured, drafted, and then
 > rejected on exactly this row.
 >
-> _(Re-read 2026-10-26: the port guard's loop is now `scripts/e2e-local.sh:224` (was `:214`, re-read 2026-11-07), and
-> `apps/web/package.json` declares **51** `test:e2e:*` scripts beside the base journey, so the
-> `43 of 44` denominator would read 51 of 52 today. The line cite and count above were exact on
+> _(Re-read 2026-10-26: the port guard's loop is now `scripts/e2e-local.sh:305` (was `:214`, re-read 2026-11-07), and
+> `apps/web/package.json` declares **50** `test:e2e:*` scripts (51 until `authoring-flow-off` was deleted in 1.1.0) beside the base journey, so the
+> `43 of 44` denominator would read 50 of 51 today (re-counted 2026-11-09; `authoring-flow-off` was deleted). The line cite and count above were exact on
 > their date.)_
 
 ### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
@@ -6979,7 +6988,7 @@ That is why #118 item 4 reads as one missing row and is not.
 **One claim in the spec is OVERSTATED and is corrected here rather than inherited.** It calls the
 1.04:1 pair "not hypothetical" on the strength of `tabs.tsx:169` writing `bg-card text-foreground`.
 That line is real; the containment is not. **There are two `<Tabs` consumers in the product** —
-`ActivityEditorSession.tsx:753` (was `ActivityEditorDialog.tsx:650`) and, since P6 activity codes M3,
+`ActivityEditorSession.tsx:724` (was `ActivityEditorDialog.tsx:650`) and, since P6 activity codes M3,
 `features/codes/components/CodesDialog.tsx:419` (re-counted 2026-10-31) — and each is inside a modal `<Dialog>`, which sits in the browser's top layer
 and is inside no surface scope at all. So every one of the 34 is **latent**, which is what #118 item
 4 concluded and what `surface.tsx:62-65` already says in its own words ("latent rather than live
@@ -7010,7 +7019,7 @@ inability to run anything.
 > and it is why "latent" is a measurement of today rather than a property.
 
 **What IS live, and passes by luck:** `CreateActivityPopover` paints `bg-card` (`:73`) with
-`text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:3718`, **inside** the
+`text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:3610`, **inside** the
 `<Surface tone="canvas">` opened at `:3312` (re-read 2026-10-26; were `:2946` and `:2864`). It measures 6.00:1 and is asserted nowhere.
 
 **The allow-list's stated reason was wrong for three of its entries, and is corrected.**
@@ -7952,7 +7961,7 @@ shape this epic's own gates exist to catch, one level up, raised by the M5 test-
 The remedy is a name and probably a split (`check:gates`?), which touches the roster gate's own
 population and `prepush.sh`'s derived list — a shared-gate change, hence a row.
 
-_(Re-counted 2026-10-26: the chain is now **17** suites, from `doc-register.test.mjs` through
+_(Re-counted 2026-11-09: the chain is now **18** suites — `check-baseline-name.test.mjs` joined it with 1.1.0, which is the trigger firing; it was **17** on 2026-10-26, from `doc-register.test.mjs` through
 `prepush-output.test.mjs` — `grep -o '"check:doc-register": "[^"]*"' package.json` — still
 named for the first; the shape and the remedy are unchanged.)_
 
@@ -8070,7 +8079,7 @@ name.
 
 ### 320. Four findings the diagnostics gate pass recorded rather than folded
 
-**Status:** open · **Verified:** 2026-10-31, by opening the cited code: the diagnostics `SET LOCAL statement_timeout = '3s'` is `staff-diagnostics.repository.ts:63`, the export's `'30s'` is `organization-export/organization-export.repository.ts:255`, and no other `statement_timeout` is set in `apps/api/src`; `staff-boundary.structural.spec.ts` still holds its three original checks (`:76`, `:112`, `:118`) beside the S-3 block's pinned positive (`:230`) · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-10-31, by opening the cited code: the diagnostics `SET LOCAL statement_timeout = '3s'` is `staff-diagnostics.repository.ts:63`, the export's `'30s'` is `organization-export/organization-export.repository.ts:246`, and no other `statement_timeout` is set in `apps/api/src`; `staff-boundary.structural.spec.ts` still holds its three original checks (`:76`, `:112`, `:118`) beside the S-3 block's pinned positive (`:230`) · **Raised:** 2026-09-13 (ADR-0140 M4) · **Size:** M · **Owner:** repo
 
 Six specialists reviewed the diagnostics epic and sixteen defects were folded with regression tests.
 These four were not, each for a reason, and they are here rather than in the gate-pass write-up so
@@ -8111,7 +8120,7 @@ others" is not.
 _(Narrowed 2026-10-26: this read "no statement timeout on any raw query" until then. Two now set
 `SET LOCAL statement_timeout` inside their transaction — the diagnostics route's `'3s'`
 (`staff-diagnostics.repository.ts:63`) and the organisation export's `'30s'`
-(`organization-export/organization-export.repository.ts:255`, was `:243`) — so the diagnostics tail this item worried about is
+(`organization-export/organization-export.repository.ts:246`, was `:243`) — so the diagnostics tail this item worried about is
 bounded. What is left is the rest of the application's raw SQL, and the decision about a default.)_
 ADR-0140 D6 establishes
 that the diagnostics route sequentially scans by design and its cost is untested past ~102,000
@@ -8579,7 +8588,7 @@ change with a design question in it, not a mechanical substitution.
 
 ### 366. Four findings from the Part C gate pass that are not defects in the diff
 
-**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the command is `label: 'Arrange'` at `tsld-toolbar-items.tsx:3525`, the rule it collides with is `docs/UX_STANDARDS.md:240-247`, `canEdit` is at `TsldPanel.tsx:322` (its #114.1 note `:326`), `TsldPanel` is mounted at `plan-workspace-toolbar.tsx:1575`, `canAutoArrange: canEditSchedule` is `use-tsld-toolbar-context.tsx:607`, and the offer's gate is `arrangeOfferAvailable` at `TsldPanel.tsx:1899`, whose `!lateOverlayActive` arrives through the host's `canEdit` at `plan-workspace-toolbar.tsx:1440` · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
+**Status:** open · **Verified:** 2026-10-31, by opening every `path:line` below: the command is `label: 'Arrange'` at `tsld-toolbar-items.tsx:3525`, the rule it collides with is `docs/UX_STANDARDS.md:240-247`, `canEdit` is at `TsldPanel.tsx:300` (its #114.1 note `:326`), `TsldPanel` is mounted at `plan-workspace-toolbar.tsx:1481`, `canAutoArrange: canEditSchedule` is `use-tsld-toolbar-context.tsx:587`, and the offer's gate is `arrangeOfferAvailable` at `TsldPanel.tsx:1838`, whose `!lateOverlayActive` arrives through the host's `canEdit` at `plan-workspace-toolbar.tsx:1346` · **Raised:** 2026-09-22 (diagram-legibility M-C5, the
 accessibility / UX / component reviews) · **Size:** S · **Owner:** web
 
 Each was raised as non-blocking against the `Arrange` offer (ADR-0149 D6) and each is really about
@@ -8595,21 +8604,21 @@ shared with the Gantt. Deliberately not renamed inside the epic that introduced 
 
 **(b) The offer is omitted from a Planner who has simply not taken the pen**, which is right for a
 Viewer and wrong for them. `canEdit` fuses role and pen into one boolean before `TsldPanel` sees it
-(`TsldPanel.tsx:301,322-326`), so the strip **cannot** distinguish "your role forbids this" from
+(`TsldPanel.tsx:279,322-326`), so the strip **cannot** distinguish "your role forbids this" from
 "take the pen first" and therefore cannot write the second sentence. That is #114.1 reaching a
 second consumer: the sibling Deck command shades with `scheduleRefusal('auto-arrange')` because it
 has the unfused facts. Fixing (b) means fixing #114.1; shading without them would put a false
 sentence on screen, which is the defect #114 records shipping.
 
 **(c) "Dismissed for the session" is really "dismissed for this mount."** Switching to the Gantt and
-back remounts `TsldPanel` (mounted at `plan-workspace-toolbar.tsx:1575`, was `:1418`) and the offer returns.
-`PlacementMigrationNotice` solves the same problem with `localStorage`, per plan per user. Not
+back remounts `TsldPanel` (mounted at `plan-workspace-toolbar.tsx:1481`, was `:1418`) and the offer returns.
+(The `PlacementMigrationNotice` that once solved the same problem with `localStorage` was deleted in 1.1.0.) Not
 obviously wrong — the offer is a live fact about the current layout and a returning planner may want
 it again — but the docblock should say _mount_ until somebody decides which it is.
 
-**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:607`, was `:604`) is looser than its own
+**(d) `canAutoArrange: canEditSchedule`** (`use-tsld-toolbar-context.tsx:587`, was `:604`) is looser than its own
 docblock claims ("editing **and** an `onAutoArrange` handler") and looser than
-`arrangeOfferAvailable`, which also folds in `!lateOverlayActive` (through the host's `canEdit`, `plan-workspace-toolbar.tsx:1440`, and `editingEnabled` at `TsldPanel.tsx:1834`). No live defect: in the one real
+`arrangeOfferAvailable`, which also folds in `!lateOverlayActive` (through the host's `canEdit`, `plan-workspace-toolbar.tsx:1346`, and `editingEnabled` at `TsldPanel.tsx:1775`). No live defect: in the one real
 host both handlers are unconditionally defined. It is the "one correct pattern applied to a control
 and not its neighbour" shape, with the offer now being the neighbour that has it.
 
@@ -8660,7 +8669,7 @@ in the same order, so they are unlikely to invert. The absolute numbers, though,
 identity attribution reads.
 
 **The fix this row owes:** the recorder-based harness cannot count by identity, because a recorded
-path carries no link id (ADR-0149 D1). The NetPoint evaluator (`scripts/netpoint-evaluate.ts`,
+path carries no link id (ADR-0149 D1). The NetPoint evaluator (`apps/web/scripts/netpoint-evaluate.ts`,
 `setAttribution('identity')`) can, because it builds the painter's digest-verified line set with the
 edge in hand. That evaluator is what FC-N0 now compares the product counter against. What is left is
 to retire the positional counter, or label it at every call site, so a later reading does not quote a
@@ -8678,7 +8687,7 @@ raised and did not block on.
 1. **A dismissed Arrange offer does not come back when the overlap count grows** (UX).
    `arrangeOfferDismissed` in `TsldPanel.tsx` is one boolean per plan. Dismissing at "1 activity
    overlaps another in its lane" and then editing into fifteen overlaps offers nothing again. The
-   placement-migration notice that shares the rule is about a one-time fact, and this count is live.
+   count is live, which a one-time dismissal never was (the placement-migration notice once shared the rule; it was deleted in 1.1.0).
    Whether a materially larger count should re-arm the offer is a product decision.
 2. **Arrange can be opened while a write is still settling** (UX). `openAutoArrange` does not check
    `writeBusy` or a pending recalculation. The positions batch is versioned, so a stale start
@@ -8842,7 +8851,8 @@ activity list is measured slow.
 press after `api-v0.78.0`) · **Size:** S (the decision) · **Owner:** web
 
 The two ADR-0162 staff diagnostics, read by the product owner on the deployed host at
-2026-09-28T07:39:46Z:
+2026-09-28T07:39:46Z, **on a database the owner discarded on 2026-11-09 (ADR-0215): these figures are history,
+and the reopen trigger below is unchanged:**
 
 - `zero-duration-tasks`: **58 of 504** tasks, across **2 plans** in one organisation;
 - `zero-duration-tasks-resourced`: **56 of those 58** hold a live resource assignment.
@@ -8957,19 +8967,19 @@ measurement. **Trigger:** the next epic touching canvas selection, or a reading 
 **Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (not reproduced on demand in the container, below; `e2e/combobox.ts`, `use-optimistic-select.ts` and `PlanCalendarPicker.tsx` read) ·
 **Raised:** 2026-10-01 (reading the csp evidence for #420) · **Size:** S · **Owner:** web
 
-`e2e/schedule.spec.ts:128` "a planner picks the plan calendar and recalculates on it (accessible)" failed
+`e2e/schedule.spec.ts:130` "a planner picks the plan calendar and recalculates on it (accessible)" failed
 its first attempt and passed on retry, so the shard was green (the base suite reported "1 flaky").
 It timed out inside `e2e/combobox.ts:51`: the `Standard` option resolved and was asserted visible, the
 click found it "not stable", then "not visible" for the rest of the 30 s — so the listbox **closed after
 it was shown**, without the click landing. Seen on 2026-10-01 (run `36823079172`, web shard 1) and on
 2026-10-03 (run `37150846578`, #770, Chromium); neither run's trace is any longer available, because traces are
-kept `on-first-retry` (`playwright.config.ts:16`) and uploaded with `retention-days: 7` (`ci.yml:1291`, in the shard-named upload step; was `:1169-1176`).
+kept `on-first-retry` (`playwright.config.ts:16`) and uploaded with `retention-days: 7` (`ci.yml:1273`, in the shard-named upload step; was `:1169-1176`).
 
 **Reading the code (a hypothesis, not a finding):** `chooseComboboxOption` retries only the _open_ inside
 `toPass` (`combobox.ts:45-48`), then asserts and clicks the option as separate, un-retried steps (`:50-51`),
 and its last assertion, `toHaveValue(optionName)` (`:54`), passes on the **optimistic** value
 (`use-optimistic-select.ts:46-47`: `displayed = optimistic ?? serverValue`, busy until the refetch lands). The test
-calls it twice back to back (`schedule.spec.ts:165-166`), so the second call can start while the first save is
+calls it twice back to back (`schedule.spec.ts:167-168`), so the second call can start while the first save is
 still running and the first call can return before its save settled.
 
 **Reproduction attempted, 2026-10-11, and not achieved.** The calendar part of that test was run in Chromium
@@ -9142,6 +9152,8 @@ On signing off the built toolbar after seeing the after photographs, the owner a
 **Status:** deferred (on a trigger) · **Verified:** 2026-10-16 (job logs of run 38931889491, below); 2026-10-13 (ADR-0138 "Acceptance reading, 2026-10-13": `ci.yml` push runs 38362835289, 38371797515, 38379361804 and 38388415840 on `main`; per-shard job wall read from the run's jobs)
 **Raised:** 2026-10-13 (pre-1-0-hardening M1 acceptance) · **Size:** S · **Owner:** web/ci
 
+_(2026-11-09: deleting the `authoring-flow-off` suite in 1.1.0 took 25 s off shard 4 and the web total went 3,975 to 3,950 s in `scripts/e2e-durations.json`; the pack was deliberately not redone, so the spreads below are about 25 s off for shard 4.)_
+
 ADR-0138's re-pack projected an 18 s spread and measured 36 / 206 / 235 / 210 s. The slowest shard is 1,047 to 1,067 s on all four runs, so the point of the re-pack (a shorter wait) is met; the plan's "four within ~120 s" is not. The shortest shard rotates (shard 4, 4, 2, 2), which reads as run-to-run variation in the suites rather than a shard the pack under-filled, so no second re-pack was made on one reading (plan Task 1.2 step 4).
 
 **Next:** if the same shard is shortest or longest again, re-derive `scripts/e2e-durations.json` from more than three runs before packing. **Trigger:** the same shard is the shortest, or the longest, on three consecutive `main` runs, or ADR-0138's fifth-shard trigger fires. Not work now.
@@ -9170,9 +9182,9 @@ The test read its banner-flicker counter as 1 where it asserts 0, once, in a loc
 
 **Status:** open · **Verified:** 2026-10-13 (`apps/api/src/main.ts:36-50`, `docs/TECH_DEBT.md` row 15 in the early table) · **Raised:** 2026-10-13 (the 1.0 checklist review) · **Size:** M · **Owner:** api
 
-`docs/RELEASE_1_0.md` and ADR-0190 call the REST API a contract, and nothing machine-checks that it did not change. The OpenAPI document is generated at start-up and served at `/api/docs` **only when the server is not production** (`apps/api/src/main.ts:36-50`); no spec file is written out, committed or diffed in CI. `main.ts:40` sets `.setVersion('1.0')`, a label for the URL version that will read as the package version once 1.0 ships, so `info.version` needs a decision when the file exists. Row 15 (OpenAPI accuracy gaps) means the document describes bare DTOs rather than the `{ data, meta }` envelope, so a diff of it would miss envelope changes.
+`docs/RELEASE_1_0.md` and ADR-0190 call the REST API a contract, and nothing machine-checks that it did not change. The OpenAPI document is generated at start-up and served at `/api/docs` **only when the server is not production** (`apps/api/src/main.ts:36-50`); no spec file is written out, committed or diffed in CI. `main.ts:40` sets `.setVersion('1.0')`, a label for the URL version that read, when this was written, as the package version once 1.0 shipped (1.0 shipped 2026-11-08 and the package is now 1.1.0; re-read 2026-11-09, the call is unchanged), and that will read as the package version once 1.0 ships, so `info.version` needs a decision when the file exists. Row 15 (OpenAPI accuracy gaps) means the document describes bare DTOs rather than the `{ data, meta }` envelope, so a diff of it would miss envelope changes.
 
-**Next:** export the document to a committed file from a script, fix `info.version`, and diff it in CI against `main` so a removed field or changed type fails with a message. **Trigger:** the owner decides 1.0 waits on it (checklist line 12), or a program outside this repository starts to depend on `/api/v1`. Not work now.
+**Next:** export the document to a committed file from a script, fix `info.version`, and diff it in CI against `main` so a removed field or changed type fails with a message. **Trigger:** a program outside this repository starts to depend on `/api/v1` (the other trigger, "1.0 waits on it", is moot: 1.0 shipped 2026-11-08). Not work now.
 
 ### 508. The TSLD diagram keeps its own colours under a Windows contrast theme
 
@@ -9235,16 +9247,16 @@ Milestone 3's hook builds a `Blob` from the response and saves it, so the browse
 
 A ZIP writes its entries one after another, so a table's JSON file and its CSV file are two reads of the same rows, and that doubling is most of the export's time. At the brief's upper bound it is the difference between 2.6 and 5.2 minutes (extrapolated), against a 5-minute line, and the added memory (+273 to +292 MB on a fresh process, bounded by V8's garbage collection and not by the size) sits just over its 256 MB line. Separately: the large org-level tables are read by a primary-key scan filtered on `organization_id`, which the planner chose and which is cheap with one organisation; on a server where many organisations' rows interleave, that filter reads the others' rows as well. Measured with two organisations it removed about as many rows as it returned. A composite index would be a schema change and goes through database-architect.
 
-**Added by the review fold (2026-10-14):** a small organisation on a large multi-tenant database may full-scan the primary-key-ordered pages and filter by `organization_id` (`organization-export.repository.ts:133`, the `org` filter on every page read). A composite `(organization_id, id)` index would fix it, but it is a schema change for database-architect, and the `EXPLAIN` harness must be re-run on a multi-tenant host first.
+**Added by the review fold (2026-10-14):** a small organisation on a large multi-tenant database may full-scan the primary-key-ordered pages and filter by `organization_id` (`organization-export.repository.ts:130`, the `org` filter on every page read). A composite `(organization_id, id)` index would fix it, but it is a schema change for database-architect, and the `EXPLAIN` harness must be re-run on a multi-tenant host first.
 
 **Next:** the owner's decision on the upper-bound figures (the measurement record's verdict), then, if wanted, the single-read variant (a worker thread for the CSV pass, ADR-0194 D3's second rung) and an `EXPLAIN` on a many-organisation fixture. **Trigger:** an organisation's export measured over five minutes, or a server with more than a handful of organisations each holding a hundred thousand rows.
 
 ### 517. The organisation export's throttle is per address and runs before sign-in, and a slow client holds a snapshot
 
-**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`apps/api/src/app.module.ts:165-166` (was `:160-163`, re-read 2026-11-07), guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:226-248`, the transaction and its timeout)
+**Status:** deferred (on a trigger) · **Verified:** 2026-10-26 (`apps/api/src/app.module.ts:163-164` (was `:160-163`, re-read 2026-11-07), guard order; `organization-export.controller.ts` `ORGANIZATION_EXPORT_THROTTLE`; `organization-export.repository.ts:217-239`, the transaction and its timeout)
 **Raised:** 2026-10-14 (organisation export M2 review) · **Size:** S · **Owner:** api
 
-Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:165-166`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
+Two limits of the export's protections, neither a defect today. (a) `ThrottlerGuard` runs before `AuthenticationGuard` (`app.module.ts:163-164`) and keys by client address, with 3 requests per 10 minutes on this route (`@Throttle`), so on a shared NAT other people's attempts can answer the real admin 429. A nuisance only: it refuses and reads nothing. (b) A slow client holds the export's snapshot, and so its `xmin` horizon, for up to the 10-minute transaction timeout (`EXPORT_TRANSACTION_TIMEOUT_MS`, `repository.ts:248`); an operator-set `idle_in_transaction_session_timeout` would cut slow downloads off sooner. At most 2 exports run per process (`MAX_CONCURRENT_EXPORTS`), which bounds the harm.
 
 **Next:** none until the trigger. **Trigger:** a report of an admin throttled behind a shared address, or vacuum lag traced to an export snapshot.
 
@@ -9325,18 +9337,10 @@ Pre-existing and unchanged by #569: the controls are reachable (their centres hi
 
 **Next:** identify the covering element from the readings and decide whether the bar's gap or the neighbour's box should change. **Trigger:** a report of a mis-pressed selection-bar control on a touch screen, or the next change to the selection bar's layout.
 
-### 575. Legacy painter and gesture modes left after the flag retirement
+### 577. Test mocks and helpers for retired web flags are still in the tree
 
-**Status:** open · **Verified:** 2026-11-09, by reading `TsldCanvas.tsx` and the files listed below after the web flags were retired (ADR-0215 D8) · **Raised:** 2026-11-09 (flag retirement, M1-T9) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-11-09, by `grep -rln "LIBRARY_SCOPING_ENABLED" apps/web/src` (19 files, none in `config/`) and `grep -rn "flagDefaultOn\|flagDefaultOff" apps/web/src` (no consumer outside `config/env`) during the 2026-11-09 reconciliation pass · **Raised:** 2026-11-09 (reconciliation pass, the agent-files review) · **Size:** S · **Owner:** web
 
-The scene and overlay fields `visualRefresh`, `timeTrueLinks` and `linkRouting` are now constant `true` in production (`TsldCanvas.tsx`), but their `false` branches remain, reachable only from tests and fixtures: `render/paint.ts`, `render/route-frame.ts`, `render/row-text-layout.ts`, `render/layout-objective.ts`, `render/link-facts.ts`, `render/link-routing.ts`, `render/scene-layers.ts`, `toolbar/commands/use-diagram-image.ts`, `export/render-export-image.ts`, `perf-probe/scenes/canvas-draw.ts` and `perf-probe/scenes/revision-diff.ts`. Separately, `interaction/gesture-machine.ts`'s handle-origin linking path (`startHandle` / `finishHandle` into `linking`, about line 481, with `sourceHandle` and `modifiersToLinkType`) is unreachable, because `TsldCanvas` downgrades every handle hit to a body hit. Removing either touches golden snapshots, which is why it was not folded into the retirement. Until it lands, a reader can mistake a dead branch for a supported mode.
+The 1.1.0 flag retirement removed every `VITE_` flag from `apps/web/src/config/env.ts` but left residue that only a test or a reader meets. Thirteen web test files still `vi.mock('@/config/env', …)` with `LIBRARY_SCOPING_ENABLED: true`, a constant `env.ts` no longer exports (for example `calendars/components/CalendarFormDialog.scope.test.tsx`, `plans/components/PlanCalendarPicker.scope.test.tsx`, `activities/components/ActivityCreateDialog.scope.test.tsx`); the mock is dead and implies a switch that does not exist, and about six further files carry comments saying the flag is "pinned OFF". Separately, `flagDefaultOn` and `flagDefaultOff` in `env.ts` have no caller besides their own test, so they keep a flag mechanism alive that nothing uses. `providers.tsx` also nests `AppErrorBoundary` inside `QueryClientProvider` and `ThemeProvider`, so a throw in either provider is not caught by the boundary; both are trivial today, which is why this is a note and not a defect.
 
-**Next:** delete the three fields' `false` branches and the handle-origin linking path together, regenerating the golden snapshots in the same change. **Trigger:** the next painter change, or the 1.1.x follow-up.
-
-### 576. A project delete can soft-delete a plan an import commits in between, leaving its activities dated while its stamp is skipped
-
-**Status:** open · **Verified:** 2026-11-09, by reading `apps/api/src/common/hierarchy/hierarchy-lifecycle.service.ts` (the project delete resolves its plan list at about line 513, then soft-deletes plans by `projectId` at about line 526) against the interchange import's commit · **Raised:** 2026-11-09 (fresh-start M3-T0 inventory, `docs/specs/fresh-start-1-1/m3-inventory.md`, the Q3 trace) · **Size:** S · **Owner:** api
-
-A project delete reads the list of plans it will lock, then soft-deletes every plan with that `projectId`. An imported plan committed between those two statements is soft-deleted without having been locked, so a recalculation that was already queued for it can write activity dates while the plan's schedule stamp is skipped. Nothing a planner sees today depends on it — the plan is in Recently deleted — but it is the one path found that can leave dated activities on an unstamped plan, which is why the baseline criticality columns stay nullable (ADR-0215, M3-T0 Q3). It is an existing integrity bug, not old data, so the fresh start does not fix it.
-
-**Next:** soft-delete by the resolved id list rather than by `projectId`, or take the plan locks for the `projectId` set inside the same transaction, with an API e2e that interleaves a project delete and an import commit. **Trigger:** any change to project delete or to the import commit, or making the baseline criticality columns NOT NULL.
+**Next:** delete the 13 dead mocks and the stale "pinned OFF/ON" comments, and decide whether to keep `flagDefaultOn`/`flagDefaultOff` for a future flag (ADR-0084) or delete them with their test. **Trigger:** the next change to any of those test files, or the next time a flag is proposed.

@@ -22,8 +22,10 @@ not edit code.
 
 - **Per-package release tags** (`api-vX.Y.Z` / `web-vX.Y.Z`, ADR-0027) — the single
   aggregate tag was superseded after it silently skipped a web-only release.
-- **The image self-migrates** (ADR-0018): the entrypoint runs `prisma migrate deploy`,
-  so a recreate _is_ the deploy. That makes migration-role permissions a deployment
+- **The image self-migrates** (ADR-0018): the entrypoint runs `preflight` first (ADR-0215 D2: it
+  refuses a pre-1.1, unreadable or non-SchedulePoint database and never writes; its order before
+  `pre-migrate` is load-bearing, and `ci.yml`'s "Refuse a pre-1.1 database" step goes red if it is
+  removed), then `pre-migrate`, then `prisma migrate deploy`, so a recreate _is_ the deploy. That makes migration-role permissions a deployment
   concern (`btree_gist` needs `CREATE`-on-database — TECH_DEBT #32).
 - **A `backup` service runs beside the API (ADR-0192).** It is the API image with a different
   entrypoint (`apps/api/backup/schedulepoint-backup.sh`), not a second image, so Watchtower moves the
@@ -52,7 +54,7 @@ not edit code.
   migrations itself, so the shards are genuinely parallel; suites _within_ a shard are still
   sequential, because those share that job's database and ports. `fail-fast: false` is deliberate —
   a red shard must not cancel the other three.
-- **A new flag-on journey adds a step AND a shard condition.** Every suite step carries
+- **A new journey suite adds a step AND a shard condition.** Every suite step carries
   `if: ${{ matrix.shard == N }}`, and `check:e2e-roster` fails if a step declares no shard
   condition (E4) or names a shard the matrix does not declare (E5). The assignment is
   longest-processing-time-first from `scripts/e2e-durations.json`, so a new suite goes on the

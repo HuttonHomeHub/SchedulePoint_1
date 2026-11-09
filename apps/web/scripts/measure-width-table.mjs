@@ -90,9 +90,6 @@ scenes.push({
     ...scale,
     view: { ...probe.DEFAULT_VIEW_TOGGLES },
     dataDate: scale.dataDate ?? '2026-01-05',
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
   },
 });
 

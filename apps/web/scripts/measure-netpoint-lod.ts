@@ -142,9 +142,6 @@ function reference(): Plan {
       isDriving: true,
     })),
     dataDate: isoOf(0),
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
   });
   return {
     name: 'NetPoint reference',

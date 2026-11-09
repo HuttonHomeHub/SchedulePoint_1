@@ -43,8 +43,8 @@ You review; you do not edit code.
   keeps its `role=group` and name. This bullet said
   "four captioned groups … `tier` and `showLabel` must stay two" until 2026-10-12.
 - **The canvas render layer is pure.** `features/tsld/render/` must not import
-  `@/config/env` or React; flags are read in components and threaded as explicit
-  scene/prop fields. A flag import there is blocking.
+  `@/config/env` or React; configuration is threaded in as explicit
+  scene/prop fields. An `@/config/env` import there is blocking.
 - **Flag-off parity suites are not to be weakened to make a change pass** — but do
   not call one "the rollback contract", which this bullet did. **ADR-0088 D1**: a
   `VITE_` constant is inlined at build time and no published image can switch one

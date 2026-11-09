@@ -8,8 +8,6 @@ import {
   beginRoundedRect,
   drawPolyline,
   drawRoundedPolyline,
-  traceMilestoneDiamond,
-  traceMilestoneGlyph,
   traceMilestoneTriangle,
 } from './layers/shapes';
 import { labelWidths } from './layers/text-measure';
@@ -64,7 +62,6 @@ import {
   LABEL_FONT,
   MILESTONE_LABEL_FONT,
   activityRect,
-  edgeGapDays,
   feasibleWindowRect,
   LABEL_PAD_PX,
   LABEL_LINE_H,
@@ -148,7 +145,7 @@ export interface TsldPalette {
   // ── Bar visual refresh (ADR-0052 M4) ──────────
   /** The calm hairline definition stroke around every refreshed non-critical bar (the border
    * token) — deliberately quieter than the foreground `outline`, so the emphasised critical /
-   * near-critical outlines pop against it. Read only when `TsldScene.visualRefresh` is on. */
+   * near-critical outlines pop against it. */
   barStroke: string;
   /** The idle-hover ring (muted-foreground) — visually lighter than the `selection` ring so
    * hover and selection never read as the same state. A transient pointer affordance twinned
@@ -346,31 +343,11 @@ export interface TsldScene {
    * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
    * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
   flaggedIds?: ReadonlySet<string> | undefined;
-  // ── Canvas direct manipulation M1 (ADR-0052) ──────
-  /** Time-true link rendering: anchor each dependency at the point in time its lag actually
-   * constrains — `lagDays` walked from the constrained edge on the relationship's lag calendar
-   * (`isWorkingDay`; `TWENTY_FOUR_HOUR` elapsed) — and tip it with a directional arrowhead at the
-   * successor end. Absent/false ⇒ the legacy extreme-end routing, no arrowheads ⇒ byte-for-byte
-   * today's paint (the flag-off parity gate). */
-  timeTrueLinks?: boolean | undefined;
-  // ── Canvas direct manipulation M4 (ADR-0052) ────
-  /** The activity-bar visual refresh (ADR-0052 M4): rounded bar shape with a calm hairline
-   * definition stroke, a heavier critical/near-critical emphasis outline (dash cue retained,
-   * WCAG 1.4.1), the shape-bounded in-bar progress fill (`percentComplete`, LOD-culled), the
-   * LOE-bracket / WBS-summary-tab glyphs, an outlined constraint pin, and the rounded selection
-   * ring. A separate scene field from `timeTrueLinks` so each render change stays independently
-   * testable, but fed from the SAME env flag — there is exactly ONE flag-off parity gate.
-   * Absent/false ⇒ byte-for-byte today's bar layer.
-   *
-   * Under M5 the same field also gates the **link** refresh: rounded elbows on the orthogonal
-   * routing and the incident-link highlight for `selectedId`/`hoverId`. M5's fan-out and dashed
-   * lag-run are retired (ADR-0151 D4; no link is dashed — `docs/DESIGN_SYSTEM.md`). */
-  visualRefresh?: boolean | undefined;
   // ── Canvas direct manipulation M5 (ADR-0052) ────
   /** The idle-hovered bar's activity id (published by the canvas from the SAME already-armed
    * hover classify the M4 hover ring reads — editing surfaces only): its incident links draw
    * transiently highlighted, mirroring the persistent `selectedId` highlight (the keyboard/AT
-   * equivalent — WCAG 2.1.1). Only read under `visualRefresh`; absent ⇒ no hover highlight. */
+   * equivalent — WCAG 2.1.1). Absent ⇒ no hover highlight. */
   hoverId?: string | null | undefined;
   /**
    * Draw a visible **grab handle** at every draggable lag anchor (the ADR-0052 M3 discoverability
@@ -388,19 +365,6 @@ export interface TsldScene {
    * read when {@link TsldScene.lagHandles} is on; absent ⇒ every handle draws at rest.
    */
   activeLagId?: string | null | undefined;
-  // ── Canvas link routing (ADR-0064 M2) ──────────────────────
-  /**
-   * Route a link's vertical corridor **around** the bars between its two lanes rather than through
-   * them. Read only on the refreshed link path (`visualRefresh`), which is the one branch that
-   * composes `routeOrthogonal` directly; the two legacy branches go through
-   * `dependencyPolyline`/`dependencyPolylineTimeTrue`, which do not take obstacles, so they cannot
-   * change shape whatever this field says.
-   *
-   * Absent/false ⇒ the painter never builds the interval index and never passes one ⇒ the geometry
-   * takes its no-obstacle default ⇒ **byte-for-byte today's edge layer**. That is the parity gate,
-   * and it is structural: there is one route function, not two.
-   */
-  linkRouting?: boolean | undefined;
 }
 
 /** Half-size (px) of the square drawn at a bar's start/finish edge to mark it grabbable. */
@@ -613,16 +577,6 @@ function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void
 }
 
 /**
- * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
- * a solid outline for critical, a dashed outline for near-critical, and `null` (no
- * outline) otherwise. Paired with the fill colour and the panel's visible legend.
- *
- * **Two consumers, and they are not the same shape.** The legacy (non-refresh) bar layer still
- * outlines the BAR with it. The refreshed path outlines a **milestone diamond** — which has no
- * node to carry the rung — and never a bar: a `[3, 2]` period is wider than a 5 px bar outline,
- * which is the whole reason the bar's rung moved to its nodes (`criticalityRung`).
- */
-/**
  * A milestone's outline width per rung (NetPoint grammar M5, spec §4.2 G8): the triangle's
  * non-colour channel for criticality, by weight. On schedule draws no outline.
  */
@@ -630,12 +584,6 @@ const MILESTONE_OUTLINE_W: Readonly<Record<'critical' | 'near', number>> = {
   critical: EMPHASIS_STROKE_W,
   near: 1.5,
 };
-
-function criticalDash(activity: RenderActivity): number[] | null {
-  if (activity.isCritical) return [];
-  if (activity.isNearCritical) return [3, 2];
-  return null;
-}
 
 /** Dash pattern of the lag-run depiction (ADR-0052 M5) — visibly "waiting", not a solid tie. */
 const LAG_RUN_DASH: readonly number[] = [2, 2];
@@ -708,17 +656,10 @@ function drawLagHandles(
  * the top of the bar, or — where the edge carries a node — just clear of the node's rim (see the
  * caller, and {@link edgeCuePlacement}). A **shape** cue — not colour — so a set constraint reads
  * without relying on hue (WCAG 1.4.1); the panel's legend names it, and the parallel
- * listbox spells the constraint out for AT. Under the visual refresh (`outlined`, ADR-0052
- * M4) it gains the same foreground outline the other three badges already carry — a pure
- * consistency restyle: the shape, position, legend entry and AT text are untouched.
+ * listbox spells the constraint out for AT. It carries the same foreground outline the other
+ * three badges do (ADR-0052 M4), so the four read as one family.
  */
-function drawConstraintPin(
-  ctx: Ctx2D,
-  edgeX: number,
-  tipY: number,
-  palette: TsldPalette,
-  outlined = false,
-): void {
+function drawConstraintPin(ctx: Ctx2D, edgeX: number, tipY: number, palette: TsldPalette): void {
   const ax = edgeX - CONSTRAINT_PIN_W / 2;
   const bx = edgeX + CONSTRAINT_PIN_W / 2;
   const topY = tipY - CONSTRAINT_PIN_H;
@@ -728,18 +669,16 @@ function drawConstraintPin(
   ctx.lineTo(bx, topY);
   ctx.lineTo(edgeX, tipY);
   ctx.fill();
-  if (outlined) {
-    // Traced over the same triangle (closed manually — the Ctx2D surface has no closePath),
-    // matching the conflict badge's outline treatment so the four badges read as one family.
-    ctx.strokeStyle = palette.outline;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(ax, topY);
-    ctx.lineTo(bx, topY);
-    ctx.lineTo(edgeX, tipY);
-    ctx.lineTo(ax, topY);
-    ctx.stroke();
-  }
+  // Traced over the same triangle (closed manually — the Ctx2D surface has no closePath),
+  // matching the conflict badge's outline treatment so the four badges read as one family.
+  ctx.strokeStyle = palette.outline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ax, topY);
+  ctx.lineTo(bx, topY);
+  ctx.lineTo(edgeX, tipY);
+  ctx.lineTo(ax, topY);
+  ctx.stroke();
 }
 
 /** The milestone constraint mark's stem and dot, in CSS px (see {@link drawMilestoneConstraintMark}). */
@@ -763,7 +702,7 @@ const MILESTONE_BANG_DOT_H = 1.8;
  * The mark is cut from the fill, so it reads against every rung's colour and every Colour-by lens
  * fill: the pair is ground-on-fill, the same pair that makes the triangle visible on the ground at
  * all. Stem and dot sit in the triangle's upper, wider part: the dot's bottom is 3.2 px below the
- * centre, where the triangle is still 4.5 px wide. The legacy (flag-off) diamond keeps the pin.
+ * centre, where the triangle is still 4.5 px wide.
  */
 function drawMilestoneConstraintMark(
   ctx: Ctx2D,
@@ -957,7 +896,7 @@ interface EdgeCuePlacement {
  *   where the bar is too short to hold it between its nodes it is centred on the bar instead;
  * - the **histogram** is right-anchored inboard of the finish node rather than on it.
  *
- * A bar without nodes — the legacy path, a milestone, an LOE or a summary — returns exactly the
+ * A bar without nodes — a milestone, an LOE or a summary — returns exactly the
  * positions the painter used before, so those glyphs and the golden log for them do not move.
  */
 function edgeCuePlacement(
@@ -1082,10 +1021,9 @@ function paintNodes(
 }
 
 /**
- * Draw one **refreshed** activity bar (ADR-0052 M4, `scene.visualRefresh`). Called with the
+ * Draw one activity bar (ADR-0052 M4). Called with the
  * bar's fill (`barColour`) already set and `globalAlpha` at the bar's dim state; restores alpha
- * to 1 before the outline (so the criticality shape cue survives a filter dim, like the legacy
- * path). Per glyph family:
+ * to 1 before the outline (so the criticality shape cue survives a filter dim). Per glyph family:
  *
  * - **bar** — a rounded fill (`BAR_RADIUS`; square fallback where `roundRect` is absent) with a
  *   calm hairline `barStroke` definition stroke, OR the heavier critical/near-critical emphasis
@@ -1414,12 +1352,11 @@ export function paintScene(
   }
 
   // Layer 2: dependency edges (only when an endpoint is visible). Driving edges — the
-  // ties that set their successor's start (M3) — are drawn emphasised: a heavier SOLID
-  // line, versus a thin DASHED line for non-driving ties. The weight + dash encode
-  // "driver" without relying on colour (WCAG 1.4.1), mirroring the bar criticality cue.
-  // Two batched passes so each dash/width state is set once, not per edge.
+  // ties that set their successor's start (M3) — are drawn emphasised: a heavier line than
+  // non-driving ties. The weight encodes "driver" without relying on colour (WCAG 1.4.1),
+  // mirroring the bar criticality cue; the link language below batches them by ink and weight.
   // Lag runs (ADR-0052 M5) are collected during the edge passes but painted ABOVE the bars
-  // (layer 3.2) — an on-bar depiction under the bars would be invisible. Refresh-only.
+  // (layer 3.2) — an on-bar depiction under the bars would be invisible.
   let lagRuns: LagRun[] | null = null;
   // The draggable lag anchors' handle centres, collected in the same pass as the runs and painted
   // just above them (layer 3.2) — the affordance sits ON the bar, so it must clear the bar layer.
@@ -1478,7 +1415,6 @@ export function paintScene(
     view,
     size,
     toggles,
-    visualRefresh: scene.visualRefresh === true,
     reservesTextRows,
     measure: measureLabel,
     // The canvas label (NetPoint grammar M4-T1): the name, with the code before it only while
@@ -1507,14 +1443,13 @@ export function paintScene(
       textIndexOf(allItems(textLayout)),
       plateScoringOf(linkFacts, scene, view, visibleIds, byId, rectCache, textLayout),
     );
-    const { workingWalk, refresh, glyphs, lineOf, lines } = route;
+    const { lineOf, lines } = route;
     lagRuns = route.lagRuns;
     lagHandlePoints = route.lagHandlePoints;
     routed = route;
-    const highlightIds = refresh ? linkHighlightIds(scene.selectedId, scene.hoverId) : null;
+    const highlightIds = linkHighlightIds(scene.selectedId, scene.hoverId);
     /**
-     * **The link language** (NetPoint-layout M2, spec §4.7, ADR-0154) — the refreshed path only;
-     * flag-off keeps the legacy dashed/solid passes below byte for byte.
+     * **The link language** (NetPoint-layout M2, spec §4.7, ADR-0154).
      *
      * - A **driving** link is 2 px solid in its rung's ink (`linkRung`): critical only when both
      *   ends are critical. Drivingness is carried by WEIGHT, criticality also by the endpoints' node
@@ -1538,11 +1473,10 @@ export function paintScene(
      * The polyline a link's HEAD is built from (NetPoint grammar M2-T3, spec §4.13 A1). Where the
      * link ends on a node, the node paints over its last {@link NODE_REACH_PX} px, so the head is
      * built from the line with that length removed and stops at the rim. Only where a node is
-     * actually drawn: the refreshed path, a task bar, and a tip on one of its two node centres (a
+     * actually drawn: a task bar, and a tip on one of its two node centres (a
      * time-true lag anchor mid-bar has no node). The stroked line is never trimmed.
      */
     const headLineFor = (edge: RenderEdge, line: Point[]): Point[] => {
-      if (scene.visualRefresh !== true) return line;
       const succ = byId.get(edge.successorId);
       if (!succ) return line;
       const succRect = activityRect(succ, view, scene.dataDate, rectCache);
@@ -1617,15 +1551,10 @@ export function paintScene(
         // relationship's lag anchor to the successor's constrained edge (`linkGapSpan`).
         const gap = gapOf(edge, pred, succ);
         // Chevrons first and the terminal head last, so each link's head is the final subpath it
-        // emits — the same order the legacy pass gives, which is what a recorder reads a head by.
+        // emits, which is what a recorder reads a head by.
         bucket.marks.push(...chevronsAlong(line));
-        if (workingWalk) {
-          const headLine = headLineFor(edge, line);
-          const head = glyphs
-            ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
-            : arrowhead(headLine);
-          if (head) bucket.marks.push(head);
-        }
+        const head = arrowhead(headLineFor(edge, line), ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX);
+        if (head) bucket.marks.push(head);
         const plateText = plateTextOf(edge, gap);
         if (plateText !== null) {
           plates.push({ text: plateText, line, ink: bucket.ink });
@@ -1664,73 +1593,7 @@ export function paintScene(
       ctx.lineWidth = 1;
       ctx.strokeStyle = palette.edge;
     };
-    const drawEdges = (driving: boolean, highlighted = false): void => {
-      const heads: [Point, Point, Point][] = [];
-      ctx.beginPath();
-      for (const edge of scene.edges) {
-        if (edge.isDriving !== driving) continue;
-        // With a highlight active, the base passes skip incident edges and the highlight passes
-        // draw ONLY them (on top, restyled). No highlight ⇒ the predicate is never consulted.
-        if (highlightIds && edgeTouches(edge, highlightIds) !== highlighted) continue;
-        const line = lines.get(edge);
-        if (!line) continue;
-        if (refresh) drawRoundedPolyline(ctx, line);
-        else drawPolyline(ctx, line);
-        if (workingWalk) {
-          // The routed head (T17) is longer along the line but no wider — legible where a Month-zoom
-          // link is a few pixels of rule, without a barb crossing its neighbour in a fanned bundle.
-          // It rides the routing flag, so flag-off is the same five-pixel head it has always been.
-          const headLine = headLineFor(edge, line);
-          const head = glyphs
-            ? arrowhead(headLine, ARROWHEAD_ROUTED_PX, ARROWHEAD_HALF_W_PX)
-            : arrowhead(headLine);
-          if (head) heads.push(head);
-        }
-      }
-      ctx.stroke();
-      // Arrowheads fill after the pass's stroke in one batched path. They share the pass's line
-      // colour (the edge colour; the selection colour on a highlight pass) — the driving cue
-      // stays the line weight + dash (WCAG 1.4.1), so no new colour is introduced.
-      if (heads.length > 0) {
-        ctx.fillStyle = highlighted ? palette.selection : palette.edge;
-        ctx.beginPath();
-        for (const [tip, left, right] of heads) {
-          ctx.moveTo(tip.x, tip.y);
-          ctx.lineTo(left.x, left.y);
-          ctx.lineTo(right.x, right.y);
-          ctx.lineTo(tip.x, tip.y); // close manually (the Ctx2D surface has no closePath)
-        }
-        ctx.fill();
-      }
-    };
-    if (refresh) {
-      paintLinkLanguage();
-    } else {
-      ctx.strokeStyle = palette.edge;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
-      drawEdges(false); // non-driving: thin, dashed
-      ctx.setLineDash([]);
-      ctx.lineWidth = 2;
-      drawEdges(true); // driving: heavier, solid
-      ctx.lineWidth = 1;
-      // Incident-link highlight passes (ADR-0052 M5): the selected/hovered bar's ties re-draw on
-      // top, one weight step heavier in the selection colour — a WEIGHT change with the colour, and
-      // each pass keeps its dash state, so neither the highlight nor the driving cue is colour-only
-      // (WCAG 1.4.1); the ring token clears the 3:1 non-text bar on the canvas ground (1.4.11).
-      // Selection is the keyboard/AT-reachable equivalent of the pointer hover (WCAG 2.1.1).
-      if (highlightIds) {
-        ctx.strokeStyle = palette.selection;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 3]);
-        drawEdges(false, true); // highlighted non-driving: heavier, still dashed
-        ctx.setLineDash([]);
-        ctx.lineWidth = 3;
-        drawEdges(true, true); // highlighted driving: heaviest, solid
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = palette.edge;
-      }
-    }
+    paintLinkLanguage();
 
     /*
      * **Layer 2.4: the comparison's changed logic** (ADR-0127) — the differentiating half, because
@@ -1854,7 +1717,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true); // closed — stroke-only
+        traceMilestoneTriangle(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -1908,7 +1771,7 @@ export function paintScene(
         ) {
           continue;
         }
-        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true);
+        traceMilestoneTriangle(ctx, cx, cy, MILESTONE_RADIUS, true);
         ctx.stroke();
         if (ghost.removed) strikeThrough(ctx, cx - MILESTONE_RADIUS, cy, MILESTONE_RADIUS * 2);
         continue;
@@ -1982,7 +1845,7 @@ export function paintScene(
           continue;
         }
         if (dimmed) ctx.globalAlpha = DIMMED_ALPHA;
-        traceMilestoneGlyph(ctx, cx, cy, MILESTONE_RADIUS, true, scene.visualRefresh === true); // closed — stroke-only
+        traceMilestoneTriangle(ctx, cx, cy, MILESTONE_RADIUS, true); // closed — stroke-only
         ctx.stroke();
         if (dimmed) ctx.globalAlpha = 1;
       } else {
@@ -2060,13 +1923,10 @@ export function paintScene(
     ctx.stroke();
   }
 
-  // Layer 3: activity bars + milestone diamonds. **On the LEGACY path** critical/near-critical
-  // activities get a solid/dashed outline on the bar itself (a non-colour cue for criticality —
-  // WCAG 1.4.1); the refreshed path carries the same three rungs on the node glyph instead, and
-  // `drawRefreshedBar` uses `dash` only for a milestone's own outline.
+  // Layer 3: activity bars + milestone triangles. Criticality's non-colour cue (WCAG 1.4.1) rides
+  // the node glyph's three rungs, and a milestone's own outline.
   for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
-    const dash = criticalDash(activity);
     // Filter lens: a dimmed (non-matching) bar recedes via reduced alpha, but its criticality outline
     // is drawn at full strength below (alpha restored), so the shape cue survives the dim (WCAG 1.4.1
     // — never colour/emphasis alone). Absent `dimmedIds` ⇒ this is a no-op ⇒ byte-for-byte parity.
@@ -2078,68 +1938,33 @@ export function paintScene(
     const dimmed = gestureSource || (scene.dimmedIds?.has(id) ?? false);
     ctx.globalAlpha = dimmed ? (gestureSource ? GESTURE_SOURCE_ALPHA : DIMMED_ALPHA) : 1;
     ctx.fillStyle = barColour(activity, palette, scene.barFill);
-    if (scene.visualRefresh) {
-      // M4 refreshed bar body (shape/progress/emphasis/glyphs) — the lens fill above still
-      // decides the colour; the refresh restyles only shape/structure. Restores alpha itself.
-      drawRefreshedBar(ctx, activity, rect, palette, scene, view);
-    } else if (isMilestone(activity.type)) {
-      // A diamond centred in the bounding box.
-      const cx = rect.x + rect.w / 2;
-      const cy = rect.y + rect.h / 2;
-      traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS);
-      ctx.fill();
-      ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
-      if (dash) {
-        ctx.strokeStyle = palette.outline;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash(dash);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    } else {
-      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-      ctx.globalAlpha = 1; // outline + badges below stay full-strength even on a dimmed bar
-      if (dash) {
-        ctx.strokeStyle = palette.outline;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash(dash);
-        ctx.strokeRect(rect.x + 0.75, rect.y + 0.75, rect.w - 1.5, rect.h - 1.5);
-        ctx.setLineDash([]);
-      }
-    }
+    // The bar body (shape/progress/emphasis/glyphs) — the lens fill above still decides the
+    // colour. Restores alpha itself, before the outline, so the criticality shape cue survives a
+    // filter dim.
+    drawRefreshedBar(ctx, activity, rect, palette, scene, view);
   }
 
   // Layer 3.1: the NODES (NetPoint grammar M2-T3, spec §4.2 G4) — after every bar body, so a shared
   // node is never half-covered by the bar it joins, and before the badges, so a constraint pin
-  // (whose apex touches the bar edge a node is centred on) stays on top. Refresh path only: the
-  // legacy path carries criticality on the bar outline and has never drawn a node.
-  if (scene.visualRefresh)
-    paintNodes(ctx, nodeMarks(frame.laneRows().values()), palette, scene.barFill);
+  // (whose apex touches the bar edge a node is centred on) stays on top.
+  paintNodes(ctx, nodeMarks(frame.laneRows().values()), palette, scene.barFill);
 
   for (const [id, rect] of rects) {
     const activity = byId.get(id)!;
     // Where each edge cue sits: clear of the node on a bar that draws them, exactly where it always
     // was on one that does not (`edgeCuePlacement`, the product owner's 2026-09-25 report).
-    const cues = edgeCuePlacement(
-      activity,
-      rect,
-      scene.visualRefresh === true && barGlyphKind(activity.type) === 'bar',
-    );
+    const cues = edgeCuePlacement(activity, rect, barGlyphKind(activity.type) === 'bar');
     // A set date constraint pins the bar's start or finish edge — mark that edge (a milestone,
     // having no width, is marked at its centre). A cheap per-bar shape, drawn only for the
     // constrained + visible activities, so it stays within the draw budget (ADR-0026).
     if (activity.constraint) {
-      if (isMilestone(activity.type) && scene.visualRefresh === true) {
+      if (isMilestone(activity.type)) {
         // The refreshed milestone is a filled triangle, and its constraint is a "!" cut into it
         // (`drawMilestoneConstraintMark`) rather than a pin hung above it on the name row.
         drawMilestoneConstraintMark(ctx, rect.x + rect.w / 2, rect.y + rect.h / 2, palette);
       } else {
-        const edgeX = isMilestone(activity.type)
-          ? rect.x + rect.w / 2
-          : activity.constraint === 'finish'
-            ? rect.x + rect.w
-            : rect.x;
-        drawConstraintPin(ctx, edgeX, cues.pinTipY, palette, scene.visualRefresh === true);
+        const edgeX = activity.constraint === 'finish' ? rect.x + rect.w : rect.x;
+        drawConstraintPin(ctx, edgeX, cues.pinTipY, palette);
       }
     }
     // Placement conflict (ADR-0033): never auto-moved, only flagged. The mapping seam gates this to
@@ -2176,12 +2001,10 @@ export function paintScene(
     }
   }
 
-  // Layer 3.2: lag-run depiction (ADR-0052 M5, refresh-only) — the horizontal stretch between a
+  // Layer 3.2: lag-run depiction (ADR-0052 M5) — the horizontal stretch between a
   // bar edge and its walked lag anchor, as a dashed hairline in the edge colour OVER the bar (the
   // run is on-bar geometry; under the bars it would be invisible), so lag reads as waiting time.
   // Batched into one stroke; collected during the edge passes, so it is O(visible lagged edges).
-  // `lagRuns` is only ever allocated under `visualRefresh` + time-true links ⇒ flag-off this whole
-  // block is skipped ⇒ byte-for-byte parity.
   if (lagRuns && lagRuns.length > 0) {
     ctx.strokeStyle = palette.edge;
     ctx.lineWidth = 1;
@@ -2303,68 +2126,6 @@ export function paintScene(
       if (win.rightCapInsideBar) traceWindowCap(ctx, win.rightCapX, win.rect);
     }
     ctx.stroke();
-  }
-
-  // Layer 3.58: relationship SLACK on the selected activity's links (ADR-0054 §5) — the gap in
-  // days each tie leaves, answering "why is this activity waiting?". Scoped to the selection: a
-  // number on every edge is unreadable at real network sizes. A driving edge's gap is 0 by
-  // definition and is skipped, so what remains is exactly the non-binding slack worth reading.
-  //
-  // **The legacy path only, since NetPoint grammar M3-T3**: the refreshed path labels every waiting
-  // link (the link language, above), so drawing this chip there too would be two marks for one fact
-  // (ADR-0093's defect). Kept here as the flag-off rollback, byte for byte.
-  if (
-    scene.visualRefresh !== true &&
-    toggles.linkSlack === true &&
-    scene.selectedId &&
-    typeof ctx.fillText === 'function' &&
-    typeof ctx.measureText === 'function'
-  ) {
-    const selected = scene.selectedId;
-    ctx.font = LABEL_FONT;
-    ctx.textBaseline = 'bottom';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = palette.labelBeside;
-    for (const edge of scene.edges) {
-      if (edge.predecessorId !== selected && edge.successorId !== selected) continue;
-      const pred = byId.get(edge.predecessorId);
-      const succ = byId.get(edge.successorId);
-      const predRect = rects.get(edge.predecessorId);
-      const succRect = rects.get(edge.successorId);
-      if (!pred?.drawnStart || !pred.drawnFinish || !succ?.drawnStart || !succ.drawnFinish)
-        continue;
-      if (!predRect || !succRect) continue; // both ends culled off-screen ⇒ nothing to annotate
-      const gap = edgeGapDays({
-        type: edge.type,
-        predStartDay: axisDayOf(pred.type, scene.dataDate, pred.drawnStart),
-        predFinishDay: axisDayOf(pred.type, scene.dataDate, pred.drawnFinish),
-        succStartDay: axisDayOf(succ.type, scene.dataDate, succ.drawnStart),
-        succFinishDay: axisDayOf(succ.type, scene.dataDate, succ.drawnFinish),
-        lagDays: edge.lagDays ?? 0,
-      });
-      if (gap <= 0) continue; // driving / binding: no slack to report
-      // Anchor the annotation on the endpoints the RELATIONSHIP actually constrains, not always
-      // the predecessor's right edge: an SS tie runs start→start and an FF tie finish→finish, so a
-      // fixed right-edge midpoint would float the number away from the line it explains.
-      const predX = edge.type === 'SS' || edge.type === 'SF' ? predRect.x : predRect.x + predRect.w;
-      const succX = edge.type === 'FF' || edge.type === 'SF' ? succRect.x + succRect.w : succRect.x;
-      const midX = (predX + succX) / 2;
-      const midY = (predRect.y + predRect.h / 2 + (succRect.y + succRect.h / 2)) / 2;
-      // Drawn on the same filled+outlined chip the lag and cursor readouts use — a bare fillText
-      // lands on bars, grid lines and other links with no guaranteed contrast.
-      const text = `${gap}d`;
-      const cw = ctx.measureText(text).width + LABEL_PAD_PX * 2;
-      ctx.fillStyle = palette.bar;
-      ctx.fillRect(midX - cw / 2, midY - SLACK_CHIP_H / 2, cw, SLACK_CHIP_H);
-      ctx.strokeStyle = palette.barStroke;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-      ctx.strokeRect(midX - cw / 2 + 0.5, midY - SLACK_CHIP_H / 2 + 0.5, cw - 1, SLACK_CHIP_H - 1);
-      ctx.fillStyle = palette.labelInside;
-      ctx.fillText(text, midX, midY + SLACK_CHIP_H / 2 - 3);
-    }
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
   }
 
   // Layer 3.6: activity labels (ADR-0026 D1), drawn from `textLayout.names` (placed by
@@ -2590,7 +2351,7 @@ export function paintScene(
       const rect = rects.get(id);
       if (!rect) continue;
       const ring: Rect = { x: rect.x - 2, y: rect.y - 2, w: rect.w + 4, h: rect.h + 4 };
-      if (scene.visualRefresh && beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
+      if (beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
       else ctx.strokeRect(ring.x, ring.y, ring.w, ring.h);
     }
   }
@@ -2601,18 +2362,17 @@ export function paintScene(
     if (selected && rect) {
       ctx.strokeStyle = palette.selection;
       ctx.lineWidth = 2;
-      // Under the refresh the ring rounds with the bar (radius tracks BAR_RADIUS at the ring's
-      // 2px offset) so the two shapes read as one crisp outline; square fallback / flag-off is
-      // byte-for-byte today's ring. Never colour-only: the ring is itself the shape cue, and
-      // selection stays keyboard-reachable via the listbox.
+      // The ring rounds with the bar (radius tracks BAR_RADIUS at the ring's 2px offset) so the
+      // two shapes read as one crisp outline; the square ring is the fallback where `roundRect` is
+      // absent. Never colour-only: the ring is itself the shape cue, and selection stays
+      // keyboard-reachable via the listbox.
       const ring: Rect = { x: rect.x - 2, y: rect.y - 2, w: rect.w + 4, h: rect.h + 4 };
-      if (scene.visualRefresh && beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
+      if (beginRoundedRect(ctx, ring, BAR_RADIUS + 2)) ctx.stroke();
       else ctx.strokeRect(ring.x, ring.y, ring.w, ring.h);
-      // With direct manipulation on (`timeTrueLinks` mirrors the ADR-0052 flag) the edge marks
-      // advertise the *resize* handles, so a bar whose duration can't be resized (LOE / WBS
-      // summary) draws none — matching classifyHit's refusal. Flag-off keeps today's link-draw
-      // affordance byte-for-byte (milestones were already excluded).
-      const marksSuppressed = scene.timeTrueLinks && !isResizeEligibleType(selected.type);
+      // The edge marks advertise the *resize* handles, so a bar whose duration can't be resized
+      // (LOE / WBS summary) draws none — matching classifyHit's refusal (milestones were already
+      // excluded).
+      const marksSuppressed = !isResizeEligibleType(selected.type);
       if (scene.showEdgeHandles && selected && !isMilestone(selected.type) && !marksSuppressed) {
         const cy = rect.y + rect.h / 2;
         ctx.fillStyle = palette.selection;
@@ -2629,20 +2389,6 @@ export function paintScene(
   }
 
   return [...visibleIds];
-}
-
-/**
- * A dependency rubber-band in flight: a straight line from the source bar's grabbed edge
- * (`from`) to the live pointer (`to`), plus the drop target's rect when the pointer is over a
- * valid successor (drawn as a highlight so the drop is discoverable — ADR-0026 D5).
- */
-export interface LinkOverlay {
-  from: Point;
-  to: Point;
-  targetRect: Rect | null;
-  /** Whether the hovered target is a legal drop (no self/duplicate/cycle, ADR-0026 D5). An illegal
-   * target rings in the critical colour with a dashed "can't drop" outline. Defaults to legal. */
-  targetLegal?: boolean;
 }
 
 /** A duration resize in flight (ADR-0052 M2): the tentative bar plus its live duration label. */
@@ -2688,8 +2434,6 @@ export interface InteractionOverlay {
   live?: Rect | null;
   /** A dropped edit awaiting the authoritative recalc (dashed "saving" outline). */
   pending?: Rect | null;
-  /** A dependency being drawn (rubber-band + target highlight). */
-  link?: LinkOverlay | null;
   /** The picked predecessor while the two-click link tool waits for its second click (M5): a solid
    * highlight ring so "now click the successor" reads. */
   linkPick?: Rect | null;
@@ -2697,15 +2441,11 @@ export interface InteractionOverlay {
   resize?: ResizeOverlay | null;
   /** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
   lag?: LagOverlay | null;
-  // ── Bar visual refresh (ADR-0052 M4) ──────────
-  /** Restyle the live/resize ghosts (rounded, elevation-by-inner-inset-stroke — never
-   * shadow/blur) and enable the hover ring. Absent/false ⇒ byte-for-byte the legacy overlay. */
-  visualRefresh?: boolean;
   /** The idle-hovered bar's rect (published by the canvas while the resize/lag zones are armed):
    * a light `hoverRing` outline around the bar, visually quieter than the selection ring and
    * cleared when the pointer leaves. A transient pointer affordance twinned with the cursor
    * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
-   * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
+   * OUTSIDE the bar so it obscures no label or badge. */
   hover?: Rect | null;
   // ── Live feedback (ADR-0054 §1–§2) ──────────────────────────
   /** Full-fidelity detail for the in-flight `live`/`resize` ghost, so a drag reads as the bar
@@ -2768,7 +2508,7 @@ export interface CursorChip {
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):
  * the **live** ghost (the bar being drawn/moved), a **pending** ghost (a dropped edit awaiting
- * the authoritative recalc, dashed), and/or a **link** rubber-band (dependency-draw, 2.3). All
+ * the authoritative recalc, dashed), and/or a picked link endpoint's ring. All
  * are plain screen shapes the caller computed from the gesture; this layer never touches the
  * base layer, so a gesture repaints only this cheap surface. An empty overlay clears it.
  */
@@ -2782,8 +2522,7 @@ export function paintInteractionLayer(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
 
-  const { live, pending, link, linkPick, resize, lag } = overlay;
-  const refresh = overlay.visualRefresh === true;
+  const { live, pending, linkPick, resize, lag } = overlay;
 
   // The marquee sweep (M2-T5). Drawn before every other overlay shape so a ghost or chip that
   // happens to sit inside it still reads on top — the marquee is a region, not an object.
@@ -2826,7 +2565,7 @@ export function paintInteractionLayer(
     ctx.setLineDash([]);
   }
 
-  if (refresh && overlay.hover) {
+  if (overlay.hover) {
     // The idle-hover ring (M4): a light rounded outline in the hover hue, drawn FIRST so every
     // in-flight ghost/ring paints over it. Thinner + quieter than the selection ring (2px
     // selection colour), so hover and selection never read as the same state.
@@ -2859,40 +2598,17 @@ export function paintInteractionLayer(
     ctx.setLineDash([]);
   }
 
-  if (link) {
-    // Ring the drop target first, so the line draws over it. A legal target rings solid in the
-    // selection colour; an illegal one (self/duplicate/cycle) rings dashed in the critical colour
-    // so it reads as "can't drop here" before release — colour AND dash, not colour alone (D5).
-    if (link.targetRect) {
-      const t = link.targetRect;
-      const illegal = link.targetLegal === false;
-      ctx.strokeStyle = illegal ? palette.critical : palette.selection;
-      ctx.lineWidth = 2;
-      ctx.setLineDash(illegal ? [3, 3] : []);
-      ctx.strokeRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4);
-      ctx.setLineDash([]);
-    }
-    ctx.strokeStyle = palette.selection;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 3]);
-    ctx.beginPath();
-    ctx.moveTo(link.from.x, link.from.y);
-    ctx.lineTo(link.to.x, link.to.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // The shared refreshed drag-ghost treatment (M4): a rounded fill with the selection outline
-  // plus an inner inset hairline in the bar-definition stroke — "elevation" approximated by the
-  // double stroke, never a shadow/blur (draw budget). Square fallback where roundRect is absent;
-  // flag-off callers never reach it. Reads as "the bar, lifted", obscuring no label or badge.
+  // The shared drag-ghost treatment (M4): a rounded fill with the selection outline plus an inner
+  // inset hairline in the bar-definition stroke — "elevation" approximated by the double stroke,
+  // never a shadow/blur (draw budget). Square fallback where roundRect is absent. Reads as "the
+  // bar, lifted", obscuring no label or badge.
   const detail = overlay.ghost;
 
   /**
    * The ghost's own bar detail (ADR-0054 §1): the milestone diamond where the type calls for it,
    * the in-bar progress band, and the inside label — the same three things that make the real bar
-   * recognisable. Drawn only when the caller supplies `overlay.ghost`, so the flag-off path paints
-   * the ADR-0052 ghost byte-for-byte. Text is guarded like every other label pass so a text-less
+   * recognisable. Drawn only when the caller supplies `overlay.ghost`, so a caller without one
+   * paints the ADR-0052 ghost. Text is guarded like every other label pass so a text-less
    * test context never throws.
    */
   const ghostDetail = (r: Rect): void => {
@@ -2966,36 +2682,18 @@ export function paintInteractionLayer(
   }
 
   if (live) {
-    if (refresh) {
-      refreshedGhost(live);
-      ghostDetail(live);
-    } else {
-      ctx.fillStyle = palette.bar;
-      ctx.fillRect(live.x, live.y, live.w, live.h);
-      ctx.strokeStyle = palette.selection;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([]);
-      ctx.strokeRect(live.x + 0.5, live.y + 0.5, live.w - 1, live.h - 1);
-    }
+    refreshedGhost(live);
+    ghostDetail(live);
   }
 
   if (resize) {
-    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline; the
-    // refreshed treatment under M4) so the two in-flight edits read the same, plus a live
+    // The resize ghost mirrors the reposition/create `live` ghost (fill + solid outline) so the
+    // two in-flight edits read the same, plus a live
     // duration readout just above the bar — the number a planner is actually choosing (ADR-0052
     // M2). Guarded like `paintResourceStrip`'s label so a text-less test context never throws.
     const r = resize.rect;
-    if (refresh) {
-      refreshedGhost(r);
-      ghostDetail(r);
-    } else {
-      ctx.fillStyle = palette.bar;
-      ctx.fillRect(r.x, r.y, r.w, r.h);
-      ctx.strokeStyle = palette.selection;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([]);
-      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
-    }
+    refreshedGhost(r);
+    ghostDetail(r);
     if (typeof ctx.fillText === 'function') {
       ctx.font = LABEL_FONT;
       ctx.textBaseline = 'bottom';

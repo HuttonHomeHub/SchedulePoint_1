@@ -27,6 +27,10 @@ fail-closed CHECK read `Note`; for a scope discriminator read `Calendar`.
 
 ## SchedulePoint invariants — conventions this schema already commits to
 
+- **The history starts at `20261109000000_baseline_1_1` (ADR-0215).** Never edit it: a migration is
+  checksummed when it lands, and a schema change is a new migration after the baseline. The image's
+  boot `preflight` refuses a database that is not on that lineage, and the 84-migration 1.0 history
+  is at tag `api-v1.0.0`.
 - **Prisma cannot express partial indexes, CHECK or EXCLUDE constraints**, so those
   live in the migration as raw SQL with a documenting comment in the model and
   **no** `@@index` declaration. A declared full index the database does not have

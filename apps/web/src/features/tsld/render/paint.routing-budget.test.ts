@@ -5,7 +5,6 @@ import { glyphIndex, routeNodeToNode } from './link-score';
 import { paintScene, type Ctx2D, type TsldPalette, type TsldScene } from './paint';
 import {
   activityRect,
-  ARROWHEAD_PX,
   ARROWHEAD_ROUTED_PX,
   LANE_HEIGHT,
   type RenderActivity,
@@ -23,13 +22,9 @@ import { textIndexOf } from './text-index';
  * geometry alone — `link-routing.test.ts` proves what `routeOrthogonal` returns; this proves what
  * the **painter** does with it.
  *
- * 1. **Flag-off is the picture it has always been.** Not "we did not intend to change it" — the
- *    emitted path is transcribed and compared coordinate by coordinate. The parity is structural
- *    (one route function, whose obstacle parameter the painter simply does not pass), so this suite
- *    exists to keep that structure from being quietly refactored into two code paths. The flag
- *    carries two changes — the corridor and the T17 arrowhead — so the corridor assertions compare
- *    the **line**, and the head has its own test. Comparing the trace whole would fail for the one
- *    reason those tests are not about.
+ * 1. **A link joins node to node and steps around the bars between its lanes.** The emitted path is
+ *    transcribed and asserted coordinate by coordinate. The corridor assertions compare the
+ *    **line**, and the head has its own test, so each fails for the one reason it is about.
  * 2. **The cost is bounded and proportionate.** Node-to-node routing (ADR-0158) adds a per-frame
  *    glyph index over the culled set plus, per edge, at most eleven shapes, each scored once with a
  *    binary search into each lane it touches. The failure mode this guards is
@@ -146,7 +141,6 @@ function edge(predecessorId: string, successorId: string): RenderEdge {
 function paint(
   activities: RenderActivity[],
   edges: RenderEdge[],
-  linkRouting: boolean,
   pxPerDay = 12,
 ): { path: string[]; lineTo: number; ms: number } {
   const ctx = recordingCtx();
@@ -170,10 +164,6 @@ function paint(
       lateOverlay: false,
       monthBands: false,
     },
-    // The routing is reached only through the refreshed link path, which is the shipping default.
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting,
   };
   const started = performance.now();
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);
@@ -211,9 +201,9 @@ function corridorCrossings(path: readonly string[]): number[] {
 function linkPolyline(path: readonly string[]): string[] {
   // **Skip the lane hairlines first** (workspace redesign M4-T2). They are the surface's structure
   // and have no toggle, so they are now the first subpaths in every recorded scene — and each is a
-  // full-width horizontal rule, identical between a flag-on and a flag-off paint. Taking "the first
-  // subpath" without this returned one of them, so the assertion compared a lane rule with itself
-  // and reported the routing flag as inert while it was working perfectly.
+  // full-width horizontal rule. Taking "the first subpath" without this returned one of them, so
+  // the assertion compared a lane rule with itself and reported the routing as inert while it was
+  // working perfectly.
   const subpaths: string[][] = [];
   for (const cmd of path) {
     if (cmd.startsWith('M')) subpaths.push([cmd]);
@@ -242,23 +232,12 @@ const CLEAR: RenderActivity[] = [task('a', 0, 0, 5), task('b', 2, 10, 5)];
 /** The same pair with a bar standing in the middle lane, straddling the corridor. */
 const BLOCKED: RenderActivity[] = [task('a', 0, 0, 5), task('b', 2, 10, 5), task('x', 1, 4, 4)];
 
-describe('link routing — the painter-level flag-off parity gate', () => {
-  it('still draws straight through the obstacle when the flag is off', () => {
-    // The positive form of the parity claim. "Flag-off equals flag-off" would be a tautology; what
-    // has to be true is that flag-off is the OLD picture — the corridor sitting inside the blocking
-    // bar's span, exactly where it has always been drawn.
-    const crossings = corridorCrossings(paint(BLOCKED, [edge('a', 'b')], false).path);
-    expect(crossings.length).toBeGreaterThan(0);
-    expect(crossings.some((x) => x >= OBSTACLE_X0 && x <= OBSTACLE_X1)).toBe(true);
-  });
-
-  it('joins a clear link node to node with the flag ON', () => {
-    // Node-to-node links M2 (ADR-0158): with routing on, every link leaves its predecessor's node
-    // and enters its successor's, so even a clear corridor is redrawn. The elbow the flag-off path
-    // draws bends 5 px from the finish node, inside its disc; the routed line drops straight out
-    // of the node (VH) and runs along the successor's lane into its start node from the west.
-    const on = linkPolyline(paint(CLEAR, [edge('a', 'b')], true).path);
-    expect(on).not.toEqual(linkPolyline(paint(CLEAR, [edge('a', 'b')], false).path));
+describe('link routing — the painter-level gate', () => {
+  it('joins a clear link node to node', () => {
+    // Node-to-node links M2 (ADR-0158): every link leaves its predecessor's node and enters its
+    // successor's, so even a clear corridor drops straight out of the node (VH) and runs along the
+    // successor's lane into its start node from the west.
+    const on = linkPolyline(paint(CLEAR, [edge('a', 'b')]).path);
     const pts = on.map((cmd) => {
       const m = /^[ML](-?[\d.]+),(-?[\d.]+)$/.exec(cmd)!;
       return { x: Number(m[1]), y: Number(m[2]) };
@@ -269,17 +248,9 @@ describe('link routing — the painter-level flag-off parity gate', () => {
     expect(pts.at(-1)!.y).toBe(2 * LANE_HEIGHT + LANE_HEIGHT / 2);
   });
 
-  it('is wired — a blocked corridor draws a different LINE with the flag on', () => {
-    // The one test that would catch the flag being declared and never read. Compared on the line
-    // alone, so it cannot be satisfied by the arrowhead change (which happens on every edge).
-    expect(linkPolyline(paint(BLOCKED, [edge('a', 'b')], true).path)).not.toEqual(
-      linkPolyline(paint(BLOCKED, [edge('a', 'b')], false).path),
-    );
-  });
-
-  it('draws the longer routed arrowhead with the flag on, and the legacy one without', () => {
-    // The T17 half of the flag, asserted where it is actually emitted rather than only in the pure
-    // vertex math: the head is the last subpath, and its tip-to-barb run is the head's length.
+  it('draws the longer routed arrowhead', () => {
+    // The T17 head, asserted where it is actually emitted rather than only in the pure vertex
+    // math: the head is the last subpath, and its tip-to-barb run is the head's length.
     const headOf = (path: readonly string[]): number => {
       const pts = path.slice(path.length - 4).map((cmd) => {
         const m = /^[ML](-?[\d.]+),(-?[\d.]+)$/.exec(cmd)!;
@@ -287,12 +258,11 @@ describe('link routing — the painter-level flag-off parity gate', () => {
       });
       return Math.abs(pts[0]!.x - pts[1]!.x);
     };
-    expect(headOf(paint(CLEAR, [edge('a', 'b')], false).path)).toBeCloseTo(ARROWHEAD_PX);
-    expect(headOf(paint(CLEAR, [edge('a', 'b')], true).path)).toBeCloseTo(ARROWHEAD_ROUTED_PX);
+    expect(headOf(paint(CLEAR, [edge('a', 'b')]).path)).toBeCloseTo(ARROWHEAD_ROUTED_PX);
   });
 
   it('never draws through the bar it stepped around', () => {
-    const crossings = corridorCrossings(paint(BLOCKED, [edge('a', 'b')], true).path);
+    const crossings = corridorCrossings(paint(BLOCKED, [edge('a', 'b')]).path);
     // It must still get there — a route that vanished would also satisfy "not through the bar".
     expect(crossings.length).toBeGreaterThan(0);
     for (const x of crossings) {
@@ -334,19 +304,6 @@ function denseEdges(): RenderEdge[] {
 }
 
 describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
-  it('draws no more points than the elbow it replaces, and the fixture exercises it', () => {
-    const activities = densePlan();
-    const edges = denseEdges();
-    const off = paint(activities, edges, false, 2);
-    const on = paint(activities, edges, true, 2);
-    // Node-to-node links M2 (ADR-0158): the longest shape (HVH, VHV) is four points, the same as
-    // the flag-off elbow, so routing can never add segments. The heads trim at a node but keep
-    // their vertex count.
-    expect(on.lineTo).toBeLessThanOrEqual(off.lineTo);
-    // …and the fixture actually routes: without this the ceiling is met by a pass that never ran.
-    expect(on.lineTo).not.toBe(off.lineTo);
-  });
-
   it('tries at most eleven shapes per link across the whole dense plan (FC-T8 a)', () => {
     const activities = densePlan();
     const byId = new Map(activities.map((a) => [a.id, a]));
@@ -389,7 +346,7 @@ describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
     const view: Viewport = { pxPerDay: 12, originX: 0, originY: 0 };
     const glyphs = glyphIndex(activities, view, DATA_DATE);
     const layout = sceneRowText(
-      { activities, dataDate: DATA_DATE, visualRefresh: true },
+      { activities, dataDate: DATA_DATE },
       view,
       { width: 100_000, height: 0 },
       FIXED_WIDTH_TEXT.toggles,
@@ -441,15 +398,13 @@ describe('link routing — draw-budget gate at 2,000 activities (T19)', () => {
   it('reports its measurement so the T21 default-on decision is made on data', () => {
     const activities = densePlan();
     const edges = denseEdges();
-    const off = paint(activities, edges, false, 2);
-    const on = paint(activities, edges, true, 2);
+    const on = paint(activities, edges, 2);
     // Printed, not asserted: absolute timings on a CI runner are noise, and this stub cannot
     // measure GPU rasterisation. T21 re-confirms in a real browser beside the pre-change baseline.
     // eslint-disable-next-line no-console
     console.log(
-      `[ADR-0064 T19] ${DENSE_COUNT} activities / ${edges.length} edges — routing off ` +
-        `${off.ms.toFixed(2)}ms, on ${on.ms.toFixed(2)}ms (+${(on.ms - off.ms).toFixed(2)}ms, ` +
-        `${on.lineTo - off.lineTo} extra segments)`,
+      `[ADR-0064 T19] ${DENSE_COUNT} activities / ${edges.length} edges — routing ` +
+        `${on.ms.toFixed(2)}ms, ${on.lineTo} segments`,
     );
     expect(on.ms).toBeGreaterThan(0);
   });

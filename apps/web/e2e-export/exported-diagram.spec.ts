@@ -113,8 +113,8 @@ test.describe('The exported diagram', () => {
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
       { name: 'Blind and reinforce', laneIndex: 2, durationDays: 16 },
     ]);
-    // **Two links, deliberately, and across lanes.** The fixture had none, so `linkRouting` and
-    // `timeTrueLinks` — two of the seven layers this milestone restored — were unassertable on it,
+    // **Two links, deliberately, and across lanes.** The fixture had none, so link routing and
+    // time-true link anchoring — two of the seven layers this milestone restored — were unassertable on it,
     // and ADR-0065 is the sharpest instance of the defect: a line drawn through an unrelated bar
     // makes the reader disprove a relationship the picture appears to assert. A journey that
     // cannot see a link cannot see that.

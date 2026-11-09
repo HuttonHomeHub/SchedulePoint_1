@@ -53,7 +53,7 @@ You review; you do not edit code.
 - **Budgets are gated by call-count tests, not timings** — CI timings are noise.
   If you propose a budget assertion, propose it in that shape.
 - **The render layer is pure**: `features/tsld/render/` imports neither React nor
-  `@/config/env`. Flags are threaded in as scene fields.
+  `@/config/env`. Configuration is threaded in as scene fields.
 - **The hidden pane pauses.** The single-pane workspace is retired (ADR-0181); what
   `TsldCanvas.tsx`'s IntersectionObserver still guards is the diagram row hidden by the
   short-body swap to the activities panel (ADR-0180) or scrolled off-screen — the rAF

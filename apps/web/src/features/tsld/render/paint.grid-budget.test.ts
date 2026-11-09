@@ -182,14 +182,15 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
   it('strokes the grid in exactly three batched passes — one per tier', () => {
     // **Four batches, and the fourth is not the grid's** (workspace redesign M4-T2). The lane
     // hairlines are a layer of their own, drawn in one batch immediately after the tiers, and these
-    // counters are scene-wide rather than layer-scoped. Asserted exactly rather than as
-    // `toBeLessThanOrEqual`, which would stop this gate noticing the next layer that arrives —
-    // and noticing is its whole job.
+    // counters are scene-wide rather than layer-scoped. `strokeStyleSets` reads one higher: the
+    // plan's one bar writes its nodes' rim ink (measured: the same scene with no activity reads
+    // four). Asserted exactly rather than as `toBeLessThanOrEqual`, which would stop this gate
+    // noticing the next layer that arrives — and noticing is its whole job.
     const drawn = paint(VIEW);
     expect(drawn.passes).toHaveLength(3);
     expect(drawn.beginPath).toBe(4);
     expect(drawn.stroke).toBe(4);
-    expect(drawn.strokeStyleSets).toBe(4);
+    expect(drawn.strokeStyleSets).toBe(5);
     // Every line is one moveTo + one lineTo, whatever the batching.
     expect(drawn.moveTo).toBe(drawn.lineTo);
     expect(drawn.moveTo).toBeGreaterThan(0);

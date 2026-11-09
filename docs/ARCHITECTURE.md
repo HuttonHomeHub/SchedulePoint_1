@@ -280,10 +280,10 @@ property of the system, not a feature detail.
   [`.env.example`](../.env.example).
 - The web client reads only `VITE_`-prefixed variables, and only through
   `apps/web/src/config/env.ts` — never `import.meta.env` scattered through code.
-- **Feature flags are the release mechanism** for large frontend changes. A flag
-  defaults **off** while its quality gates are open and is flipped **on** in a
-  deliberate enablement step. The flag-off path keeps a **parity suite**; that
-  suite is the rollback contract and is never weakened to make a change easier.
+- **There are no web feature flags** (all 48 were retired in 1.1, ADR-0215 D8; `pnpm check:flags`
+  reads 0 live). A `VITE_` constant is inlined at build time, so it was never a rollback: the
+  rollback is image-tag pinning (`docs/DEPLOYMENT.md`). A flag added in future follows ADR-0084 and
+  ADR-0088 (an enablement date, a retirement batch) and keeps a flag-off parity suite until it is retired.
 - No environment-specific values are hard-coded; no secrets in the repo.
 
 ## 9. Observability

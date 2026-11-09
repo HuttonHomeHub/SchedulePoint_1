@@ -220,11 +220,11 @@ export class BaselinesService {
 
         const criticalityRule: CriticalityRule | null =
           mirrors.scheduleCriticalPathDefinition === null
-            ? // Never recalculated, or a plan whose activities were dated by an import that raced a
-              // project delete (its recalculation dates the activities while the stamp skips the
-              // soft-deleted plan; `hierarchy-lifecycle.service.ts` resolves a project's plan list
-              // before it locks; `docs/TECH_DEBT.md` #576). All four are NULL together —
-              // ck_plans_schedule_criticality_all_or_none is what makes testing ONE of them total.
+            ? // Never recalculated. (An import racing a project delete was once suspected of leaving
+              // dated activities on an unstamped plan; it cannot, because both take the project row
+              // lock before the delete reads its plans — `docs/TECH_DEBT.md` #576, closed.) All four
+              // are NULL together — ck_plans_schedule_criticality_all_or_none is what makes testing
+              // ONE of them total.
               null
             : {
                 criticalPathDefinition: mirrors.scheduleCriticalPathDefinition,

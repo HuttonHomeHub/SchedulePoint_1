@@ -406,7 +406,8 @@ the absence of lane copies: a plan nobody laid out freezes none and is still `FU
 assignment of that code **verbatim**, a soft-deleted value too), `code_lane_index` and
 `code_lane_updated_at` (the activity's code lane for that code and value, both `NULL` when it was never
 placed there). Under any other source the three activity columns are `NULL` and that is complete. The
-organisation export already lists all of them (format 2.3).
+organisation export lists the three activity columns since format 2.3; `code_snapshot_level` is not
+exported since 3.0 (it has one value).
 
 ### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
 

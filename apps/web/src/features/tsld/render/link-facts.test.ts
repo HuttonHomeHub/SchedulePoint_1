@@ -93,17 +93,16 @@ describe('plateScoringOf', () => {
     activities: [A, B],
     edges: [edge({ lagDays: 2 })],
     dataDate: DATA_DATE,
-    visualRefresh: true,
     isWorkingDay: () => true,
   };
   const byId = new Map([
     ['A', A],
     ['B', B],
   ]);
-  const layout = (visualRefresh: boolean) => {
+  const layout = () => {
     const cache = new Map();
     const text = sceneRowText(
-      { ...scene, visualRefresh },
+      scene,
       DETAIL,
       { width: 1200, height: 400 },
       DEFAULT_VIEW_TOGGLES,
@@ -115,7 +114,7 @@ describe('plateScoringOf', () => {
 
   it('gives the router each lagged link’s plate width, and nothing for an unlagged one', () => {
     const facts = linkFactsOf(SCENE, DETAIL, DEFAULT_VIEW_TOGGLES, measure);
-    const { cache, text } = layout(true);
+    const { cache, text } = layout();
     const scoring = plateScoringOf(facts, scene, DETAIL, new Set(['A', 'B']), byId, cache, text)!;
     expect(scoring).not.toBeNull();
     const lagged = scene.edges[0]!;
@@ -127,13 +126,9 @@ describe('plateScoringOf', () => {
     expect(allItems(text).length).toBeGreaterThan(0);
   });
 
-  it('is null off the refreshed path and where plates are not drawn', () => {
-    const { cache, text } = layout(false);
+  it('is null where plates are not drawn', () => {
+    const { cache, text } = layout();
     const ids = new Set(['A', 'B']);
-    const facts = linkFactsOf(SCENE, DETAIL, DEFAULT_VIEW_TOGGLES, measure);
-    expect(
-      plateScoringOf(facts, { ...scene, visualRefresh: false }, DETAIL, ids, byId, cache, text),
-    ).toBeNull();
     const working = linkFactsOf(SCENE, WORKING, DEFAULT_VIEW_TOGGLES, measure);
     expect(plateScoringOf(working, scene, WORKING, ids, byId, cache, text)).toBeNull();
   });

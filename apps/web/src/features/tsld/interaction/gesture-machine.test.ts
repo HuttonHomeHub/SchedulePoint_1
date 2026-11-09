@@ -3,13 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LANE_HEIGHT } from '../render/render-model';
 import { makeWorkingDayWalk, type Viewport } from '../render/render-model';
 
-import {
-  IDLE,
-  modifiersToLinkType,
-  reduce,
-  type GestureCtx,
-  type GestureState,
-} from './gesture-machine';
+import { IDLE, reduce, type GestureCtx, type GestureState } from './gesture-machine';
 
 // pxPerDay 10, origin 0 → day = floor(x/10), lane = floor(y/28).
 const VIEW: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
@@ -637,15 +631,16 @@ describe('gesture-machine: finish-edge resize (ADR-0052 M2)', () => {
     expect(r.intent).toBeUndefined();
   });
 
-  it('flag-off parity: startHandle/finishHandle hits still start the linking rubber-band', () => {
-    // Without the resize vocabulary (classifyHit called with no options — the flag-off path), a
-    // bar-end press classifies as start/finishHandle and behaves exactly as before this milestone.
+  it('starts no gesture from an unarmed edge zone (the canvas passes it as a body hit)', () => {
+    // There is no edge-drag link (ADR-0052 §1): linking is the two-click tool. An edge zone the
+    // machine is handed raw arms nothing.
     const r = reduce(
       IDLE,
       { type: 'pointerDown', point: { x: 58, y: 40 }, hit: { kind: 'finishHandle', id: 'a' } },
       ctx('select'),
     );
-    expect(r.state).toMatchObject({ kind: 'linking', sourceId: 'a', sourceHandle: 'finishHandle' });
+    expect(r.state).toEqual(IDLE);
+    expect(r.intent).toBeUndefined();
   });
 });
 
@@ -825,100 +820,6 @@ describe('gesture-machine: lag-anchor drag (ADR-0052 M3)', () => {
 
   it('cancels a lag drag on escape with no intent', () => {
     const r = reduce(move(grabLag(), 75), { type: 'escape' }, ctx('select'));
-    expect(r.state).toEqual(IDLE);
-    expect(r.intent).toBeUndefined();
-  });
-});
-
-describe('gesture-machine: dependency-draw', () => {
-  it('maps modifiers to a dependency type (plain FS, Shift SS, Alt FF)', () => {
-    expect(modifiersToLinkType(undefined)).toBe('FS');
-    expect(modifiersToLinkType({ shift: false, alt: false })).toBe('FS');
-    expect(modifiersToLinkType({ shift: true, alt: false })).toBe('SS');
-    expect(modifiersToLinkType({ shift: false, alt: true })).toBe('FF');
-    expect(modifiersToLinkType({ shift: true, alt: true })).toBe('SS'); // shift wins the tiebreak
-  });
-
-  const grabHandle = (
-    kind: 'startHandle' | 'finishHandle',
-    modifiers?: { shift: boolean; alt: boolean },
-  ) =>
-    reduce(
-      IDLE,
-      {
-        type: 'pointerDown',
-        point: { x: 90, y: 12 },
-        hit: { kind, id: 'a' },
-        ...(modifiers ? { modifiers } : {}),
-      },
-      ctx('select'),
-    ).state;
-
-  it('starts a rubber-band from an edge handle in select mode', () => {
-    expect(grabHandle('finishHandle')).toEqual({
-      kind: 'linking',
-      sourceId: 'a',
-      sourceHandle: 'finishHandle',
-      point: { x: 90, y: 12 },
-      targetId: null,
-      type: 'FS',
-    });
-  });
-
-  it('tracks the hovered target and live modifier type as the pointer moves', () => {
-    const moved = reduce(
-      grabHandle('finishHandle'),
-      {
-        type: 'pointerMove',
-        point: { x: 200, y: 40 },
-        hit: { kind: 'body', id: 'b' },
-        modifiers: { shift: true, alt: false },
-      },
-      ctx('select'),
-    );
-    expect(moved.state).toMatchObject({ kind: 'linking', targetId: 'b', type: 'SS' });
-  });
-
-  it('ignores the source itself as a drop target while moving', () => {
-    const moved = reduce(
-      grabHandle('startHandle'),
-      { type: 'pointerMove', point: { x: 95, y: 12 }, hit: { kind: 'startHandle', id: 'a' } },
-      ctx('select'),
-    );
-    expect(moved.state).toMatchObject({ kind: 'linking', targetId: null });
-  });
-
-  it('commits a link intent on release over another activity (type from modifiers)', () => {
-    const up = reduce(
-      grabHandle('finishHandle'),
-      { type: 'pointerUp', hit: { kind: 'body', id: 'b' }, modifiers: { shift: false, alt: true } },
-      ctx('select'),
-    );
-    expect(up.state).toEqual(IDLE);
-    expect(up.intent).toEqual({ kind: 'link', predecessorId: 'a', successorId: 'b', type: 'FF' });
-  });
-
-  it('cancels with no intent when released over empty space', () => {
-    const up = reduce(
-      grabHandle('finishHandle'),
-      { type: 'pointerUp', hit: { kind: 'empty' } },
-      ctx('select'),
-    );
-    expect(up.state).toEqual(IDLE);
-    expect(up.intent).toBeUndefined();
-  });
-
-  it('cancels with no intent when released back on the source', () => {
-    const up = reduce(
-      grabHandle('finishHandle'),
-      { type: 'pointerUp', hit: { kind: 'finishHandle', id: 'a' } },
-      ctx('select'),
-    );
-    expect(up.intent).toBeUndefined();
-  });
-
-  it('cancels a link on escape', () => {
-    const r = reduce(grabHandle('finishHandle'), { type: 'escape' }, ctx('select'));
     expect(r.state).toEqual(IDLE);
     expect(r.intent).toBeUndefined();
   });
