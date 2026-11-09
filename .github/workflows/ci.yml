@@ -1766,8 +1766,7 @@ jobs:
           [ "$(history)" = "$history_before" ] || fail '_prisma_migrations changed'
           [ "$(tables)" = "$tables_before" ] || fail 'the old database was changed'
           [ "$(sudo ls -1A "$BACKUP_DIR" | sort)" = "$files_before" ] || fail 'a file was written to the backups folder'
-
-          sql 'DROP DATABASE legacy' postgres
+          # The `legacy` database is not dropped here: "Tear down" below runs always and removes the volume.
 
       - name: Dump container logs on failure
         if: failure()

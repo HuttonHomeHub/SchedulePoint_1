@@ -132,6 +132,10 @@ by 1.0.
 5. If you pinned the versions in Part 1, remove the two `API_IMAGE_TAG` and `WEB_IMAGE_TAG` lines from `.env`
    now.
 
+   **The `backup` service is not stopped by this refusal.** It is deliberately not checked at boot, so on the old
+   volume it keeps taking nightly copies of the 1.0 database until you switch the stack to the new volume in
+   step 4. Only the API refuses to start on a database from before 1.1.
+
 6. Fetch 1.1.0 and **confirm the version before you start it** (2 minutes):
 
    ```bash

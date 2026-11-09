@@ -136,7 +136,7 @@ as_super "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='app'\"" | grep -q 1 
 as_super "psql -qc \"ALTER ROLE app SUPERUSER;\"" >/dev/null
 as_super "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='app_test'\"" | grep -q 1 \
   || as_super "psql -qc \"CREATE DATABASE app_test OWNER app;\""
-echo "ready: ${DATABASE_URL}"
+echo "ready: $(printf '%s' "$DATABASE_URL" | sed 's#://[^@/ ]*@#://[redacted]@#')"
 
 # --- 2. One run per database ------------------------------------------------
 #
@@ -166,6 +166,13 @@ DB_LOCK_KEY=349
 db_conninfo="${DATABASE_URL%%\?*}" # libpq rejects Prisma's `?schema=public`
 lock_db_name="${db_conninfo##*/}"
 lock_conninfo="${db_conninfo%/*}/postgres"
+# The name is interpolated into SQL below (the lock key, the lineage reset), so it is checked first.
+case "$lock_db_name" in
+  '' | *[!A-Za-z0-9_]*)
+    echo "DATABASE_URL names a database whose name is not letters, digits and underscores; refusing to run." >&2
+    exit 1
+    ;;
+esac
 lock_objid="hashtext('${lock_db_name}')"
 coproc DBLOCK { PGAPPNAME="e2e-local[$$]" psql -qtA "$lock_conninfo"; }
 trap 'kill "${DBLOCK_PID:-}" 2>/dev/null || true' EXIT
@@ -217,18 +224,35 @@ lineage="$(psql -qtA "$db_conninfo" -c "SELECT CASE
     ELSE 'current' END" 2>/dev/null || true)"
 case "$lineage" in
   pre-1.1 | baseline-changed)
-    case "$lock_db_name" in
-      '' | *[!A-Za-z0-9_]*)
-        echo "Refusing to reset a database whose name is not letters, digits and underscores: '${lock_db_name}'." >&2
-        exit 1
-        ;;
+    # The reset DROPs a database, so it is limited to one that is plainly a throwaway: named app_test or
+    # *_test, on this machine. Anything else is described and left for its owner to reset by hand;
+    # E2E_ALLOW_RESET=1 is the explicit override.
+    db_authority="${db_conninfo#*://}"
+    db_authority="${db_authority%%/*}"
+    db_host="${db_authority##*@}"
+    case "$db_host" in
+      \[*) db_host="${db_host#\[}"; db_host="${db_host%%\]*}" ;;
+      *) db_host="${db_host%%:*}" ;;
     esac
+    reset_ok=0
+    case "$lock_db_name" in app_test | *_test) case "$db_host" in '' | localhost | 127.0.0.1 | ::1 | /* | %2[Ff]*) reset_ok=1 ;; esac ;; esac
+    if [ "$reset_ok" != 1 ] && [ "${E2E_ALLOW_RESET:-}" != 1 ]; then
+      echo "${lock_db_name} (host '${db_host:-local socket}') has lineage ${lineage}, and the run will not drop it:" >&2
+      echo "only app_test or *_test on localhost is reset automatically. Reset it by hand, or set E2E_ALLOW_RESET=1." >&2
+      exit 1
+    fi
     if [ "$lineage" = pre-1.1 ]; then
       echo "${lock_db_name} was built from migrations before the 1.1 baseline (${baseline_dir}); dropping and recreating it."
     else
       echo "${lock_db_name}'s ${baseline_dir} row does not match this checkout's migration.sql (sha256 ${baseline_sum%"${baseline_sum#????????????}"}...); dropping and recreating it."
     fi
     db_owner="$(psql -qtA "$lock_conninfo" -c "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = '${lock_db_name}'")"
+    case "$db_owner" in
+      *[!A-Za-z0-9_]*)
+        echo "Refusing to reset ${lock_db_name}: its owner '${db_owner}' is not letters, digits and underscores." >&2
+        exit 1
+        ;;
+    esac
     psql -q -v ON_ERROR_STOP=1 "$lock_conninfo" \
       -c "DROP DATABASE \"${lock_db_name}\" WITH (FORCE)" \
       -c "CREATE DATABASE \"${lock_db_name}\" OWNER \"${db_owner:-app}\""

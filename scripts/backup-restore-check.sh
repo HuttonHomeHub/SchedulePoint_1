@@ -30,7 +30,8 @@
 #   6. pruning, the status file, `health`, `list`, and every refusal `check` and `restore` make;
 #      and a real `restore` swaps in a copy identical to the source and keeps the old database;
 #   7. `preflight` (ADR-0215) decides correctly for each lineage — fresh, empty migrations table, 1.1
-#      baseline, baseline plus a later migration, 1.0, mixed, unknown, unreachable — writing nothing; and a
+#      baseline, baseline plus a later migration, 1.0, mixed (with and without a finished 1.0 row), failed
+#      or rolled-back rows, unknown, unreadable, unreachable — writing nothing; and a
 #      1.0 copy is counted by `check` with a note and refused by `restore`.
 #
 # The script's exit status is the only result. It creates and drops databases named bkt_*/…_check_*/
@@ -267,7 +268,6 @@ present() { grep -Eq -- "$1" <<<"$2"; }
 absent() { ! present "$1" "$2"; }
 all_present() { local l="$1" r; shift; for r in "$@"; do present "$r" "$l" || return 1; done; }
 
-redacted_only() { contains "$OUT" "[redacted]" && ! contains "$OUT" s3cr3t; }
 no_secret() { ! grep -rq "s3cr3t" "$1" && ! contains "$OUT" s3cr3t; }
 same_as_source() { # <database> — 0 when its fingerprint equals the source's
   fingerprint "$1" >"$work/fp.$1" && diff -q "$work/fp.source" "$work/fp.$1" >/dev/null
@@ -617,7 +617,9 @@ expect "a credential-bearing URL never reaches the output or UPDATE-HELD.txt" \
 
 RC=0
 OUT="$( (export PGDATABASE="postgresql://$PGUSER:s3cr3t-pw@$PGHOST/x"; bk now) 2>&1)" || RC=$?
-expect "an error that quotes a connection string is redacted" redacted_only
+expect "a refused database name is not echoed back (it may be a connection string with a password)" \
+  failed_with "may only use letters, digits and underscores"
+expect "...so no secret reaches the output" test "$(grep -c s3cr3t <<<"$OUT")" -eq 0
 
 BK_MIGS="$EXTRA"
 HELD="$(newdir)"
@@ -696,6 +698,23 @@ LEGACY_NAME="20260709142606_add_identity_tables"
 LATER_NAME="20271231000000_a_later_release"
 migs_table="CREATE TABLE _prisma_migrations (migration_name text, finished_at timestamptz, rolled_back_at timestamptz)"
 add_row() { dbq "$1" "INSERT INTO _prisma_migrations (migration_name, finished_at) VALUES ('$2', now())" >/dev/null; }
+# add_row_as <database> <name> finished|unfinished|rolled_back — a row as Prisma leaves it after a failure or a resolve.
+add_row_as() {
+  case $3 in
+    finished) add_row "$1" "$2" ;;
+    unfinished) dbq "$1" "INSERT INTO _prisma_migrations (migration_name) VALUES ('$2')" >/dev/null ;;
+    rolled_back) dbq "$1" "INSERT INTO _prisma_migrations (migration_name, rolled_back_at) VALUES ('$2', now())" >/dev/null ;;
+  esac
+}
+# pf_db <suffix> <name:state>… — a database with a migrations table and these rows; its name is in PF_DB.
+pf_db() {
+  PF_DB="bkt_pf_$1_$$"
+  shift
+  make_db "$PF_DB"
+  dbq "$PF_DB" "$migs_table" >/dev/null
+  local r
+  for r in "$@"; do add_row_as "$PF_DB" "${r%%:*}" "${r#*:}"; done
+}
 migs_of() { dbq "$1" "SELECT coalesce(string_agg(migration_name || '/' || coalesce(finished_at::text, '-') || '/' || coalesce(rolled_back_at::text, '-'), ',' ORDER BY migration_name), 'none') FROM _prisma_migrations"; }
 pf() { # <database> — preflight against it, with a backups folder that must stay empty
   BK_DIR="$(newdir)"
@@ -756,6 +775,36 @@ add_row "$PF_MIXED" "$LEGACY_NAME"
 add_row "$PF_MIXED" "$BASELINE"
 pf "$PF_MIXED"
 expect "preflight: the baseline beside a 1.0 migration (a 1.0 image was started on it) is refused" refused_with mixed_lineage
+expect "...and never offers a return to 1.0 for it" test "$(grep -c API_IMAGE_TAG <<<"$OUT")" -eq 0
+expect "...and, with a finished 1.0 row, does not offer the resolve remedy either" test "$(grep -c 'migrate resolve' <<<"$OUT")" -eq 0
+expect "...and says the database is damaged" out_has "damaged"
+expect "...and wrote no file" no_file_written
+
+pf_db mixedunf "$LEGACY_NAME:unfinished" "$BASELINE:finished"
+before="$(migs_of "$PF_DB")"
+pf "$PF_DB"
+expect "preflight: mixed with only unfinished 1.0 rows is refused" refused_with mixed_lineage
+expect "...naming the resolve command for the row" out_has "prisma migrate resolve --rolled-back $LEGACY_NAME"
+expect "...and never suggesting a return to 1.0" test "$(grep -c API_IMAGE_TAG <<<"$OUT")" -eq 0
+expect "...and repairing nothing" test "$(migs_of "$PF_DB")" = "$before"
+expect "...and wrote no file" no_file_written
+
+pf_db rolled "$BASELINE:rolled_back" "$LEGACY_NAME:rolled_back"
+pf "$PF_DB"
+expect "preflight: every row rolled back is fresh, so a resolved first boot can finish" accepted_as fresh
+expect "...and wrote no file" no_file_written
+
+pf_db failbase "$BASELINE:unfinished"
+pf "$PF_DB"
+expect "preflight: a failed baseline alone is refused as failed_migration" refused_with failed_migration
+expect "...naming the row and the resolve command" out_has "prisma migrate resolve --rolled-back $BASELINE"
+expect "...and wrote no file (no pre-migrate copy to take on each restart)" no_file_written
+
+pf_db failafter "$BASELINE:finished" "$LATER_NAME:unfinished"
+pf "$PF_DB"
+expect "preflight: the baseline plus a failed later migration is refused as failed_migration" refused_with failed_migration
+expect "...naming the failed row" out_has "prisma migrate resolve --rolled-back $LATER_NAME"
+expect "...and wrote no file" no_file_written
 
 PF_UNKNOWN="bkt_pf_unknown_$$"
 make_db "$PF_UNKNOWN"
@@ -770,6 +819,20 @@ dbq "$PF_STRANGE" "$migs_table" >/dev/null
 add_row "$PF_STRANGE" "$LATER_NAME"
 pf "$PF_STRANGE"
 expect "preflight: rows that are neither 1.0 nor the baseline are refused (fail closed)" refused_with unknown_database
+
+if [ "$TOOLS" != docker ]; then
+  # A psql that answers the counts query with `||1`: the three fields must each be checked, since their
+  # concatenation is the digits of a valid answer.
+  fakebin="$(newdir)"
+  real_psql="$(command -v psql)"
+  printf '#!/bin/sh\ncase "$*" in *"count(*) FILTER"*) echo "||1"; exit 0 ;; esac\nexec "%s" "$@"\n' "$real_psql" >"$fakebin/psql"
+  chmod 755 "$fakebin/psql"
+  pf_db malformed "$BASELINE:finished"
+  BK_DIR="$(newdir)"
+  RC=0
+  OUT="$( (export PGDATABASE="$PF_DB" BACKUP_CHECK_PATH_PREFIX="$fakebin"; bk preflight) 2>&1)" || RC=$?
+  expect "preflight: a malformed count answer (||1) fails closed as cannot_read" refused_with cannot_read
+fi
 
 BK_DIR="$(newdir)"
 RC=0

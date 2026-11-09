@@ -376,6 +376,9 @@ database you had is **kept**, not deleted.
    database; the steps are in [`start-fresh-on-1-1.md`](./start-fresh-on-1-1.md), Part 4. A restore under
    1.1 needs a copy made by 1.1.
 
+   The `backup` service is not refused at boot the way the API is: on a database from before 1.1 it keeps taking
+   copies, which is the protection you want until you have switched to the new database.
+
 5. **If the recycle bin's clear-out is on, and you are restoring to get back something it removed,
    switch it off first.** Skip this step if you never switched the clear-out on. If you came from Part 4 of the clear-out guide, you have already done this: check the line says `false`, then go on. In Dockge, open the
    stack's `.env` (the "Env" box) and set this line, then click **Save** (do not Deploy yet; step 6
