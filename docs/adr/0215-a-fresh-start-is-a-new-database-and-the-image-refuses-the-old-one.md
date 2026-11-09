@@ -1,6 +1,6 @@
 # ADR-0215: A fresh start is a new database, and the image refuses the old one
 
-- **Status:** Proposed — drafted 2026-11-08 in M0 of the 1.1.0 plan; Accepted at M4, once the dress rehearsal has run.
+- **Status:** Accepted — 2026-11-09 (drafted 2026-11-08 in M0 of the 1.1.0 plan; M0 to M3 built, the dress rehearsal M4-T2 still to run on a Docker host).
 - **Date:** 2026-11-08
 - **Deciders:** Product owner (spec, schema design and plan approved 2026-11-08; answers in
   [`docs/DECISIONS.md`](../DECISIONS.md), 2026-11-08) and Claude Code (feature-analyst, database-architect).

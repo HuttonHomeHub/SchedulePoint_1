@@ -1,6 +1,6 @@
 # Feature Spec: SchedulePoint 1.1.0 — the fresh start
 
-- **Status:** Approved — by the product owner, 2026-11-08. Q1: option **E** (remove the unreachable fields, values, the placement-migration route and export file, recorded as a one-time exception in the new ADR). Q2: release freeze accepted. Version **1.1.0**, not 2.0.0, recorded as the same one-time exception. Every other question in this folder takes its recommended default, including `schema-design.md` §12 (answers recorded there).
+- **Status:** Approved — by the product owner, 2026-11-08. Q1: option **E** (remove the unreachable fields, values, the placement-migration route and export file, recorded as a one-time exception in the new ADR). Q2: release freeze accepted. Version **1.1.0**, not 2.0.0, recorded as the same one-time exception. Every other question in this folder takes its recommended default, including `schema-design.md` §12 (answers recorded there). **Implemented M0–M3 2026-11-09; M4 in progress** (documentation sweep done; rehearsal M4-T2 and the changeset M4-T3 to come).
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-11-08
 - **Tracking issue / epic:** no register row; the scope is the product owner's six decisions of 2026-11-08 (recorded

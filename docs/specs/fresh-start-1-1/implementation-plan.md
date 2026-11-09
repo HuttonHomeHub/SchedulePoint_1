@@ -1,7 +1,7 @@
 # Implementation Plan: SchedulePoint 1.1.0 — the fresh start
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-11-08 (answers recorded in the spec's header and §1).
+- **Status:** Approved — by the product owner, 2026-11-08 (answers recorded in the spec's header and §1). **Implemented M0–M3 2026-11-09; M4 in progress** (documentation sweep done; rehearsal M4-T2 and the changeset M4-T3 to come).
 - **Owner:** product owner; built by the **builder** agent, schema by the **database-architect**
 
 ## Breakdown

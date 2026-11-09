@@ -35,6 +35,7 @@ browser-native team use. See the full product context in
 > Read the code before assuming anything is missing — this banner said the
 > opposite for months after it stopped being true, which is exactly the failure
 > it now warns against.
+> **1.1.0 is the fresh start** (ADR-0215): a new empty database, and the image refuses a 1.0 one untouched.
 >
 > Since 2026-07-31 the **application** has a test bed of its own (ADR-0066): a
 > catalogue of documented seeded plans and hostile cases (37 at launch, 40 on
@@ -419,14 +420,14 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0015** _(Superseded by ADR-0057)_ — Template-driven feature development → [`0015-template-driven-feature-development.md`](docs/adr/0015-template-driven-feature-development.md)
 - **ADR-0016** _(Accepted)_ — Core identity & tenancy model + organisation role set → [`0016-core-identity-tenancy-role-model.md`](docs/adr/0016-core-identity-tenancy-role-model.md)
 - **ADR-0017** _(Accepted; single-aggregate-tag scheme superseded by ADR-0027)_ — Release tagging & image publishing via GitHub Actions → [`0017-release-tagging-and-image-publishing.md`](docs/adr/0017-release-tagging-and-image-publishing.md)
-- **ADR-0018** _(Accepted; amended by ADR-0192)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
+- **ADR-0018** _(Accepted; amended by ADR-0192 and ADR-0215)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
 - **ADR-0019** _(Accepted)_ — Shared workspace packages ship compiled output → [`0019-shared-package-build-contract.md`](docs/adr/0019-shared-package-build-contract.md)
 - **ADR-0020** _(Accepted)_ — CI builds and smoke-boots the container images → [`0020-ci-image-smoke-boot.md`](docs/adr/0020-ci-image-smoke-boot.md)
 - **ADR-0021** _(Accepted)_ — Activity dependency graph — the DAG invariant & service-layer cycle prevention → [`0021-dependency-graph-dag-invariant.md`](docs/adr/0021-dependency-graph-dag-invariant.md)
 - **ADR-0022** _(Accepted)_ — CPM execution & persistence model (synchronous endpoint + engine-owned write) → [`0022-cpm-execution-and-persistence-model.md`](docs/adr/0022-cpm-execution-and-persistence-model.md)
 - **ADR-0023** _(Accepted; amended by ADR-0036 and ADR-0155)_ — CPM scheduling date convention (continuous-internal / inclusive-display) → [`0023-cpm-scheduling-date-convention.md`](docs/adr/0023-cpm-scheduling-date-convention.md)
 - **ADR-0024** _(Accepted; amended by ADR-0036)_ — Working-day calendars (model, engine integration & scope) → [`0024-working-day-calendars.md`](docs/adr/0024-working-day-calendars.md)
-- **ADR-0025** _(Accepted)_ — Baselines — snapshot-copy model, one-active-per-plan invariant & server-side working-day variance → [`0025-baselines-snapshot-and-variance.md`](docs/adr/0025-baselines-snapshot-and-variance.md)
+- **ADR-0025** _(Accepted; amended by ADR-0215)_ — Baselines — snapshot-copy model, one-active-per-plan invariant & server-side working-day variance → [`0025-baselines-snapshot-and-variance.md`](docs/adr/0025-baselines-snapshot-and-variance.md)
 - **ADR-0026** _(Accepted; §8 amended 2026-11-01)_ — TSLD canvas — Canvas 2D rendering, coordinate/viewport model, interaction & accessibility architecture → [`0026-tsld-canvas-rendering-and-architecture.md`](docs/adr/0026-tsld-canvas-rendering-and-architecture.md)
 - **ADR-0027** _(Accepted)_ — Per-package release tagging & per-image versions → [`0027-per-package-release-tagging.md`](docs/adr/0027-per-package-release-tagging.md)
 - **ADR-0028** _(Accepted)_ — Single-editor plan edit-lock (advisory lease + peer hand-off + write gate) → [`0028-plan-edit-lock.md`](docs/adr/0028-plan-edit-lock.md)
@@ -591,11 +592,11 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
 - **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
 - **ADR-0189** _(Accepted; amends ADR-0185 D3 and D8 V1–V4)_ — A shape on the toolbar is a control → [`0189-a-shape-on-the-toolbar-is-a-control.md`](docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md)
-- **ADR-0190** _(Accepted)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
+- **ADR-0190** _(Accepted; one-time exception recorded by ADR-0215)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
 - **ADR-0191** _(Accepted)_ — A contrast theme is the reader's palette → [`0191-a-contrast-theme-is-the-readers-palette.md`](docs/adr/0191-a-contrast-theme-is-the-readers-palette.md)
-- **ADR-0192** _(Accepted; amends ADR-0018)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
+- **ADR-0192** _(Accepted; amends ADR-0018; amended by ADR-0215)_ — A backup is a file the image writes, and a restore never overwrites → [`0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md`](docs/adr/0192-a-backup-is-a-file-the-image-writes-and-a-restore-never-overwrites.md)
 - **ADR-0193** _(Accepted; amends ADR-0096 D4 and D9)_ — A permanent delete is previewed by the code that performs it, and arming is a host act → [`0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md`](docs/adr/0193-a-permanent-delete-is-previewed-by-the-code-that-performs-it.md)
-- **ADR-0194** _(Accepted; implements ADR-0085 D4 and D5; D2's float unit corrected 2026-10-17, format 2.0)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
+- **ADR-0194** _(Accepted; implements ADR-0085 D4 and D5; D2's float unit corrected 2026-10-17, format 2.0; amended by ADR-0215)_ — An organisation's export is a promised format, streamed on the request → [`0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md`](docs/adr/0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md)
 - **ADR-0195** _(Accepted; amends ADR-0053 §3 and ADR-0096's bin contract)_ — A library row comes back as it was, or not at all → [`0195-a-library-row-comes-back-as-it-was-or-not-at-all.md`](docs/adr/0195-a-library-row-comes-back-as-it-was-or-not-at-all.md)
 - **ADR-0196** _(Accepted; amends ADR-0162 D2)_ — A redundant link is one no duration could make matter → [`0196-a-redundant-link-is-one-no-duration-could-make-matter.md`](docs/adr/0196-a-redundant-link-is-one-no-duration-could-make-matter.md)
 - **ADR-0197** _(Accepted; amends ADR-0035 §21 and §24)_ — A derived span states its own length, and the engine is what measures it → [`0197-a-derived-span-states-its-own-length.md`](docs/adr/0197-a-derived-span-states-its-own-length.md)
@@ -613,10 +614,10 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0209** _(Accepted; amends ADR-0050's notes mapping row)_ — An imported note is the importer's, and a SchedulePoint note travels as text under its own topic → [`0209-an-imported-note-is-the-importers.md`](docs/adr/0209-an-imported-note-is-the-importers.md)
 - **ADR-0210** _(Accepted for M0–M4; M5 and M6 wait for a real P6 export; amends ADR-0025, ADR-0051 §4 via ADR-0205, ADR-0194 and ADR-0206 A2/A7)_ — An activity code is plan data, and a code type is a swimlane source → [`0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md`](docs/adr/0210-an-activity-code-is-plan-data-and-a-code-type-is-a-swimlane-source.md)
 - **ADR-0211** _(Accepted)_ — A crash report is the screen's, never the person's → [`0211-a-crash-report-is-the-screens-never-the-persons.md`](docs/adr/0211-a-crash-report-is-the-screens-never-the-persons.md)
-- **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
+- **ADR-0212** _(Accepted; amends ADR-0161's parity domain and ADR-0045 §2; D4 amended by ADR-0215)_ — A plan keeps the instant beside the date, and a cross-plan link reads it → [`0212-a-plan-keeps-the-instant-beside-the-date.md`](docs/adr/0212-a-plan-keeps-the-instant-beside-the-date.md)
 - **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
-- **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
-- **ADR-0215** _(Proposed; amends ADR-0018, ADR-0192, ADR-0194, ADR-0107 D2, ADR-0025, ADR-0212 D4 and ADR-0214; records a one-time exception to ADR-0190)_ — A fresh start is a new database, and the image refuses the old one → [`0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md`](docs/adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)
+- **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194; amended by ADR-0215)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
+- **ADR-0215** _(Accepted; amends ADR-0018, ADR-0192, ADR-0194, ADR-0107 D2, ADR-0025, ADR-0212 D4 and ADR-0214; records a one-time exception to ADR-0190)_ — A fresh start is a new database, and the image refuses the old one → [`0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md`](docs/adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
@@ -631,23 +632,20 @@ A lighter-weight running log of smaller decisions is in
   `STAFF_EMAILS`: empty means nobody is staff, which is the safe default and also means the console
   is unreachable until an operator opts in. Do not read "shipped" as "in use" for this epic — the
   opposite of the mistake the bullet below this one records.
-- **Backups run on the owner's host since 2026-10-20, and only where an operator set them up** (ADR-0192).
-  The `backup` service, the API's `/backups` mount and the closed database port exist only in a compose
-  file the operator edits by hand (`docs/guides/back-up-and-restore.md`); without the mount an update
-  migrates exactly as before and no copy is taken. The owner did those steps on 2026-10-20 and `check`
-  passed twice that day (`docs/DECISIONS.md`). Copies live on the same disk as the database, and
-  with the mount an update that changes the database is **held** if its copy cannot be made. Any
-  other host is unprotected until its operator does the same, and `RETENTION_HIERARCHY_ENABLED` is
-  never armed before a same-day `check` has passed on the host.
-- **Retention covers customer hierarchy too, and it is ON on the owner's host since 2026-10-20.**
-  ADR-0096's expiry permanently deletes soft-deleted clients/projects/plans past
-  `RETENTION_HIERARCHY_DAYS` (90) — see the hard-delete bullet below for what that
-  means. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so on any host
-  that has not opted in, nothing has ever been permanently deleted and
-  Recently deleted shows no countdown (the preview is a command; the steps are
-  [`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). The owner
-  armed it on 2026-10-20 after a same-day `check`; its first run removed 9 test clients deleted
-  2026-07-21 (`docs/DECISIONS.md`). On that host, do read "shipped" as "deleting".
+- **Backups run only where an operator set them up** (ADR-0192). The `backup` service, the API's `/backups`
+  mount and the closed database port exist only in a compose file the operator edits by hand
+  (`docs/guides/back-up-and-restore.md`); without the mount an update migrates exactly as before and no
+  copy is taken. With it, an update that changes the database is **held** if its copy cannot be made, and
+  copies live on the same disk as the database. The owner set this up on 2026-10-20; **after the 1.1.0 fresh
+  start nothing from 1.0 survives** (ADR-0215), and backups carry on as configured against the new database.
+  `RETENTION_HIERARCHY_ENABLED` is never armed before a same-day `check` has passed on the host.
+- **Retention covers customer hierarchy too, and it is ON on the owner's host.** ADR-0096's expiry
+  permanently deletes soft-deleted clients/projects/plans past `RETENTION_HIERARCHY_DAYS` (90) — see the
+  hard-delete bullet below. `RETENTION_HIERARCHY_ENABLED` defaults to **`false`**, so a host that has not
+  opted in has never permanently deleted anything and Recently deleted shows no countdown
+  ([`docs/guides/switch-on-the-clear-out.md`](docs/guides/switch-on-the-clear-out.md)). Before 1.1.0 the owner
+  armed it (2026-10-20) and its first run removed 9 test clients (`docs/DECISIONS.md`); the setting is kept
+  across the fresh start. On that host, do read "shipped" as "deleting".
 - **Retention is enforced on four tables and not on `audit_events`, and the difference is a
   decision.** `csp_reports` (30 days), `mail_events` (12 months), `perf_probe_results`
   (365 days) and, since 2026-11-01, `crash_reports` (30 days after the crash was last reported,
@@ -710,7 +708,7 @@ A lighter-weight running log of smaller decisions is in
   in the database. Export is `GET …/plans/:id/export/:format` for XER and MSPDI
   (ADR-0050 M4) plus the TSLD's CSV/PNG/PDF and the printed programme
   (ADR-0059 M4). The org-wide export is **Export data** in the rail, `POST …/organizations/:slug/export`
-  (ADR-0194), first used on the owner's server on 2026-10-20.)
+  (ADR-0194); its 1.0 file format was cut down at 1.1.0 by ADR-0215.)
 - **Hosting is decided** (settled 2026-08-01, `docs/TECH_DEBT.md` #5): Docker
   Compose on the product owner's host, with releases pulled automatically. A
   _different_ target — managed host, or self-hosted Kubernetes — has not been

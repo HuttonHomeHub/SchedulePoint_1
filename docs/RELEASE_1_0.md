@@ -141,12 +141,11 @@ Described here, **not performed**. We rehearsed it on a throwaway copy on 2026-1
    app). **With the automatic updater on (ADR-0047), merging the Version Packages pull request is the
    production deploy, a few minutes later**, and the new image applies any database changes by itself when it
    restarts (ADR-0018). A server pinned to a 0.x version stays put.
-5. **Rolling back:** set `API_IMAGE_TAG=0.106.0` and `WEB_IMAGE_TAG=0.202.0` (the last 0.x release, cut on
-   2026-11-08; re-read `git ls-remote --tags origin` at the time). Pinning also stops the updater pulling
-   `latest` again. Database changes are not undone by this; undoing one needs a new, compensating change.
-   **You also decided on 2026-11-08 that every plan is wiped when 1.0 rolls out** (only you have used the
-   product), so nothing before 1.0 needs to keep working afterwards. The wipe is yours to do, after a backup
-   whose check has passed; it is not part of the cut's automation.
+5. **Rolling back:** while the database is still a 1.0 one, set `API_IMAGE_TAG=0.106.0` and
+   `WEB_IMAGE_TAG=0.202.0` (the last 0.x release, cut on 2026-11-08; re-read `git ls-remote --tags origin` at
+   the time). Pinning also stops the updater pulling `latest` again. Database changes are not undone by this.
+   **That target no longer applies once the database is a 1.1 one** (see "1.1.0 — the fresh start" below): a
+   0.x image cannot run on it. The way back from 1.1.0 is the old 1.0 volume and the 1.0.0 tags.
 6. **Keep the cut small.** The four old fields were removed in their own release (`api` 0.106.0, row 9), so the
    cut itself changes only version numbers and changelogs. (The recycle-bin clear-out, the other permanent
    change, is already on: you switched it on 2026-10-20.)
@@ -166,8 +165,26 @@ What 1.0 knowingly ships without, in plain words (filled in 2026-11-08 from the 
 - **No automatic API breaking-change check.** A change that breaks the web API is caught by review and tests,
   not by a saved copy of the API description (row 12, #507).
 - **The small faults listed above** (#419, #294, #477, #490, #570, #572, #573), each waiting on its own trigger.
-- **Old baselines.** A baseline taken before `api` 0.106.0 shows "Float change unknown" in comparisons; this
-  goes away with the 1.0 wipe.
+- **Old baselines.** None exist any more: 1.1.0 starts on an empty database, so the "Float change unknown"
+  comparison for baselines from before `api` 0.106.0 went with the old data.
+
+## 1.1.0 — the fresh start
+
+Written 2026-11-09. 1.0.0 was a private dress rehearsal and you said everything stored in it is test data, so
+**1.1.0 is the first public release**, and it starts clean.
+
+- **It needs a new, empty database.** Nothing from 1.0 (your account, Wood Group, plans, baselines, guest
+  links, the audit log) is carried over.
+- **It refuses the old database, and leaves it untouched.** If 1.1.0 is merged before you have followed the
+  guide, SchedulePoint will not start and says why in plain words. It changes nothing.
+- **What was removed:** the 48 feature switches (everything they guarded is simply on), the code that fixed up
+  rows older versions wrote, the old migrations (folded into one), and a few report fields that could only ever
+  describe old data. Your `.env` settings, nightly backups and the clear-out switch carry on.
+- **How to go back:** keep the old database volume and pin both image tags to `1.0.0`. Never go back by changing
+  the tag alone, because 1.0.0 cannot read a 1.1 database.
+- **The steps are in** [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md) (still a draft until the
+  rehearsal has run). The decision is [ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md),
+  which records this as a one-time exception to what 1.0 promised.
 
 ## Words used on this page
 

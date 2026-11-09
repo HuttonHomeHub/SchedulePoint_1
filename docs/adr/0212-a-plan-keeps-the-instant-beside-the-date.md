@@ -15,6 +15,8 @@
 - **Spec:** [`docs/specs/cross-plan-instants/`](../specs/cross-plan-instants/)
   (`docs/TECH_DEBT.md` #565)
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** D4's freshness marker read for an older run goes with the re-derivation services, which 1.1.0 removes.
+
 ## Context
 
 ADR-0161 made a cross-plan link produce the dates the same link produces inside one plan, to the minute,

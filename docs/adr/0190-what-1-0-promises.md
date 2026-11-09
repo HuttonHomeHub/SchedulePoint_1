@@ -10,6 +10,8 @@
 - **Date:** 2026-10-13
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** records a one-time exception: 1.1.0 is a fresh start rather than a promise-keeping upgrade, and is a minor version, not a major (D7).
+
 ## Context
 
 `CLAUDE.md` §10 says that while pre-1.0 "breaking changes bump the **minor**" and that "the move to 1.0 is a

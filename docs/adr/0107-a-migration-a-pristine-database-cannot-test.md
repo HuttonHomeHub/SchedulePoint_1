@@ -12,6 +12,8 @@
   [M5 decision](../specs/better-auth-1-7-account-issuer/m5-web-decision.md).
 - **Register row:** `docs/TECH_DEBT.md` #176.
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** D2's migration-proof specs went with the migrations they proved, and its sentence that Better Auth always writes `issuer` explicitly is corrected: it never does, so the column's `DEFAULT` stays.
+
 ## Context
 
 Better Auth 1.7 scopes account identity by an `issuer` column: `TEXT NOT NULL`, no default, declared

@@ -650,8 +650,8 @@ jobs:
       # click" — is now structural: every deck item is laid out by flex line-breaking, which
       # cannot place a child outside its container.
 
-      # Flag-ON canvas-first authoring journey (playwright.authoring.config.ts) serving the app with
-      # VITE_CANVAS_AUTHORING on (layered on the editing/pen flags), so building a
+      # Canvas-first authoring journey (playwright.authoring.config.ts) serving the app as shipped
+      # (the flag it once pinned, VITE_CANVAS_AUTHORING, is retired), so building a
       # plan directly on the canvas — blank-canvas first draw, inline start date, auto-recalc,
       # on-canvas milestones, two-click linking — is exercised end to end (ADR-0032). Runs last,
       # after the prior runs tear down their servers, reusing the ports.
@@ -668,8 +668,8 @@ jobs:
         if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:programme
 
-      # Flag-ON Notes journey (playwright.notes.config.ts) serving the app with VITE_NOTES on (on the
-      # legacy stacked plan-detail page with the pen off — notes are not pen-gated), so adding, editing
+      # Notes journey (playwright.notes.config.ts) serving the app as shipped (the VITE_NOTES flag is
+      # retired; the pen is off — notes are not pen-gated), so adding, editing
       # and deleting an activity note, the per-row count badge tracking it, and an axe pass are
       # exercised end to end (ADR-0046). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (notes flag on)
@@ -702,9 +702,8 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:resource-view
 
-      # Flag-ON schedule interchange (XER import) journey (playwright.interchange.config.ts) serving
-      # the app with VITE_SCHEDULE_INTERCHANGE on (layered on the canvas authoring + editing/pen
-      # flags), so the whole import loop — "Import from file…", the dry-run review dialog
+      # Schedule interchange (XER import) journey (playwright.interchange.config.ts) serving the app
+      # as shipped (VITE_SCHEDULE_INTERCHANGE is retired), so the whole import loop — "Import from file…", the dry-run review dialog
       # + report table, and Confirm import committing and opening the new plan — is exercised end to
       # end (Stage C2 M1, ADR-0050). Runs last, after the prior runs tear down their servers, reusing
       # the ports.
@@ -758,8 +757,8 @@ jobs:
         if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:calendar-shifts
 
-      # Flag-ON sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app with
-      # VITE_SUB_DAY_DURATIONS on. It proves what a mocked fetch structurally cannot (ADR-0070): that
+      # Sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app as shipped
+      # (VITE_SUB_DAY_DURATIONS is retired). It proves what a mocked fetch structurally cannot (ADR-0070): that
       # `4h` is stored as 240 minutes on a calendar whose day is 480 and not 1440 — a wrong factor
       # errors nowhere, it just stores three times the work — that a bare number still converts on
       # the plan's own day, that an unrelated rename does not flatten a sub-day value through the
@@ -876,8 +875,8 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
-      # Flag-ON Gantt view journey (playwright.gantt.config.ts) serving the app with VITE_GANTT_VIEW
-      # on (layered on the canvas authoring + editing/pen flags), proving ADR-0059's
+      # Gantt view journey (playwright.gantt.config.ts) serving the app as shipped (VITE_GANTT_VIEW is
+      # retired), proving ADR-0059's
       # claims end to end: an activity authored on the diagram is the same row in the Gantt with the
       # dates the engine computed, `?view=gantt` survives a reload, and the grid is arrow-navigable
       # and axe-clean. Runs after the prior suites tear down their servers, reusing the ports.
@@ -951,8 +950,8 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:netpoint-grammar
 
-      # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
-      # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
+      # WBS improvements journey (playwright.wbs.config.ts) as shipped (VITE_WBS_IMPROVEMENTS is
+      # retired) AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
       # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the
       # versions the multi-select sends are only really checked here), dissolving a summary loses no
       # activity (counted at the API, not read off the screen), the cascade-delete warning states
@@ -1001,8 +1000,8 @@ jobs:
 
       # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
       # enforced at the API. **The first journey in this repository to run in Visual mode at all** —
-      # the other fourteen canvas configs once pinned VITE_SCHEDULING_MODES off (no config pins it
-      # now: the flag is retired), each for a good local reason, and the unrecorded consequence was that the one placement rule a planner exercises
+      # the other fourteen canvas configs once pinned VITE_SCHEDULING_MODES off (the flag is retired,
+      # so none pins it now), each for a good local reason, and the unrecorded consequence was that the one placement rule a planner exercises
       # by dragging a bar had no end-to-end coverage. That is exactly where a defect had been
       # sitting: a `Snap to grid` toggle that appeared to do the snapping while the engine did it
       # unconditionally, and whose own contribution was to write a Saturday drop back as Friday —
@@ -1128,7 +1127,7 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:export
 
-      # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
+      # Audit log journey (playwright.audit.config.ts), the app as shipped (VITE_AUDIT_LOG is retired, ADR-0072).
       # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
       # be wrong about a row it invented. Against a real API and database this proves the producers
       # fire inside the transactions that succeeded (six real actions, six findable rows), that a
@@ -1160,9 +1159,8 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:account-verify
 
-      # ADR-0086, staff-console M3. **Not a flag-on suite** — every sibling pins a `VITE_` constant
-      # and this one pins a SERVER variable, `STAFF_EMAILS`, because staff-ness is a server fact the
-      # bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
+      # ADR-0086, staff-console M3. It pins a SERVER variable, `STAFF_EMAILS`, because staff-ness
+      # is a server fact the bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
       # entry point (ADR-0081 §2), and this epic had already paid for that rule: M2 passed 1,589
       # unit tests and could not serve one request. This suite earned its keep on its first green
       # run too — it caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already

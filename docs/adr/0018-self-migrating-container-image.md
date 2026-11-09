@@ -10,6 +10,8 @@
 > database is touched. Where no folder is mounted, nothing changes. (The entrypoint call itself lands in the
 > milestone after the one that ships the command.)
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** the entrypoint gains a first step, the boot `preflight`, that refuses a pre-1.1 database before anything else runs (the database is left untouched).
+
 ## Context
 
 The API owns the database schema via Prisma migrations. Something must run
