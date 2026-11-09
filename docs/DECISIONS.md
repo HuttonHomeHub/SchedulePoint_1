@@ -10,14 +10,14 @@ get an ADR instead (and may be linked from here).
 
 ---
 
-## 2026-11-09 — Nine of the ten Dependabot bumps (#1282–#1291) are taken together; #1286 is held
+## 2026-11-09 — The ten Dependabot bumps (#1282–#1291) are taken together
 
-**What was decided.** #1282–#1285, #1287–#1291 land as one change off `main`, as #1262 did on 2026-11-07, at the
+**What was decided.** #1282–#1291 land as one change off `main`, as #1262 did on 2026-11-07, at the
 versions Dependabot proposed (installed pinned exactly, then the carets restored): `@nestjs/{common,core,
 platform-express,testing}` 12.3.3, `@nestjs/config` 12.1.0, `@nestjs/swagger` 12.1.0, `better-auth` 1.7.18 (api and
 web), `lucide-react` 1.70.0, `tailwindcss` and `@tailwindcss/vite` 4.3.4, `vite` 8.3.6, `@vitejs/plugin-react` 6.2.1,
 `@swc/core` 1.16.22, `rimraf` 6.1.4, `vitest` and `@vitest/coverage-v8` 5.1.0 (the pnpm catalog moves with them),
-`globals` 17.14.0, `fast-xml-parser` 5.12.0 and `@tanstack/react-virtual` 3.14.26. `better-call` moved 1.4.4 to
+`@hookform/resolvers` 7.0.3, `globals` 17.14.0, `fast-xml-parser` 5.12.0 and `@tanstack/react-virtual` 3.14.26. `better-call` moved 1.4.4 to
 1.4.5 and `@better-auth/core` to 1.7.18 transitively.
 
 **Claims re-read, not re-stamped.** All 74 registered citations on the eight re-stamped packages were compared
@@ -32,9 +32,9 @@ two `issuer` claims (ADR-0107 D2, schema T7) hold word for word.
 in. `user.changeEmail` is not enabled and the ordinary branch is unchanged, so nothing here changes. The comment
 in `email-verification.service.ts` that said enabling it "creates a session" now says what 1.7.18 does.
 
-**Held: #1286 (`@hookform/resolvers` 6.0.2 to 7.0.3).** Its one breaking change is the typebox adapter (peer
+**Taken with the rest, on the owner's say: #1286 (`@hookform/resolvers` 6.0.2 to 7.0.3).** Its one breaking change is the typebox adapter (peer
 `typebox` ^1 instead of `@sinclair/typebox`); the code uses only `zodResolver`, and `zod/` in the two tarballs is
-byte-identical. Taken separately on the owner's say.
+byte-identical, so nothing the product uses changes.
 
 **No changeset**, as with #1262: nothing a user sees changes.
 
