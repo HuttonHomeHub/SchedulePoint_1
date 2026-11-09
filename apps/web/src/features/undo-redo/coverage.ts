@@ -152,7 +152,6 @@ export const COVERAGE: Readonly<Record<string, Coverage>> = {
 
   // Engine outputs
   useCriticalPathTest: excluded(REASON.engineOutput),
-  useRecalculate: excluded(REASON.engineOutput),
   useRecalculateProgramme: excluded(REASON.engineOutput),
 
   // Not this plan's content

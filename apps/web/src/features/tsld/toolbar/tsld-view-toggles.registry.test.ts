@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { TSLD_VIEW_TOGGLE_KEYS } from './tsld-toolbar-items';
 
-import { CANVAS_DATA_DATE_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
-
 /**
  * Pins the `View▾` toggle registry (ADR-0054 §3–§5, tsld-toolbar-canvas-refinements F8).
  *
@@ -18,12 +16,12 @@ import { CANVAS_DATA_DATE_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env
  * explicit assertion of its contents. `Late-start overlay` joined this list when the panel was
  * regrouped into Structure / Markers / Insight overlays: it used to be a special-cased checkbox
  * rendered outside `VIEW_TOGGLES` (and so outside this pin) — now it's an ordinary
- * `VIEW_TOGGLE_META` entry like every other insight layer, still gated on its own flag.
+ * `VIEW_TOGGLE_META` entry like every other insight layer.
  *
  * `Month bands` (tsld-toolbar-canvas-refinements M5, F7b) joined the Structure group the same
  * way — the toggle lets a user switch the ground layer off for the session.
  *
- * `WBS band` (ADR-0063) is the newest Structure member, gated on `VITE_WBS_IMPROVEMENTS`. It is
+ * `WBS band` (ADR-0063) is the newest Structure member. It is
  * the entry this test was written for: the band's whole paint layer is unreachable without it.
  */
 describe('TSLD View▾ toggle registry', () => {
@@ -34,7 +32,7 @@ describe('TSLD View▾ toggle registry', () => {
       'yearGrid',
       // The alternating month-band ground (F7b).
       'monthBands',
-      // The ADR-0063 pinned WBS band — gated on VITE_WBS_IMPROVEMENTS. It sits with its Structure
+      // The ADR-0063 pinned WBS band. It sits with its Structure
       // group-mates rather than at the end: the order here is the order of the menu.
       'wbsBand',
       // **The first member this menu holds that the CANVAS does not paint** (Gantt editing M4).
@@ -47,9 +45,8 @@ describe('TSLD View▾ toggle registry', () => {
       // dense programme is a thicket, and a selected row's own links draw regardless, so the
       // off-state still answers "why is this bar here?".
       'logicLinks',
-      // The data-date status line (canvas status & feedback M1) — gated on VITE_CANVAS_DATA_DATE,
-      // default-on 2026-08-07. It sits immediately before Today because the two are one decision:
-      // they are the canvas's two vertical time markers and a planner reads them as a pair.
+      // The data-date status line (canvas status & feedback M1). It sits immediately before Today because the two are one
+      // decision: they are the canvas's two vertical time markers and a planner reads them as a pair.
       'dataDate',
       'today',
       'nonWorking',
@@ -71,15 +68,9 @@ describe('TSLD View▾ toggle registry', () => {
     ]);
   });
 
-  it('gates the remaining flagged layers on their own flags, and nothing else', () => {
-    // `logicLinks` is deliberately NOT in this list of gated entries: the Gantt-editing epic has no
-    // feature flag at all (the product owner's Q4 choice), so it is offered wherever the menu is.
-    // Counted below rather than gated above — the count is what catches an entry added by
-    // accident, and an ungated entry still has to be added on purpose.
-    expect(WBS_IMPROVEMENTS_ENABLED).toBe(true);
-    expect(CANVAS_DATA_DATE_ENABLED).toBe(true);
-    // 16 since NetPoint grammar M4-T1 added `activityCodes` and `centreItem`, both ungated: they
-    // switch text on an existing layer, so there is no flag for them to follow.
+  it('offers exactly the layers listed above, and nothing else', () => {
+    // The count is what catches an entry added by accident; an entry still has to be added on
+    // purpose. 16 since NetPoint grammar M4-T1 added `activityCodes` and `centreItem`.
     expect(TSLD_VIEW_TOGGLE_KEYS).toHaveLength(16);
   });
 });

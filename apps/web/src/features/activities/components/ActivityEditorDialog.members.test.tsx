@@ -8,15 +8,11 @@ import { ActivityEditorDialog } from './ActivityEditorDialog';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 /**
- * The **Members** tab (`VITE_WBS_IMPROVEMENTS`) — a WBS summary's contents, in the editor.
+ * The **Members** tab — a WBS summary's contents, in the editor.
  *
  * Its sibling suite (`…members.flag-off.test.tsx`) pins the other flag state, which is the rollback
  * contract; both are kept, per the ADR-0053 M6 precedent.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return {

@@ -14,7 +14,6 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 
 import { Button } from '@/components/ui/button';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 
 /**
  * The plan workspace's header **overflow menu** (ADR-0030, spec re-homing table): the
@@ -82,11 +81,9 @@ export function PlanActionsMenu({
         <MenuItem onSelect={() => setDialog('calendar')}>
           <CalendarDays aria-hidden="true" className="size-4" /> Schedule settings…
         </MenuItem>
-        {EARNED_VALUE_ENABLED ? (
-          <MenuItem onSelect={() => setDialog('earned-value')}>
-            <DollarSign aria-hidden="true" className="size-4" /> Earned value…
-          </MenuItem>
-        ) : null}
+        <MenuItem onSelect={() => setDialog('earned-value')}>
+          <DollarSign aria-hidden="true" className="size-4" /> Earned value…
+        </MenuItem>
         <MenuItem onSelect={() => setDialog('resource-histogram')}>
           <BarChart3 aria-hidden="true" className="size-4" /> Resource histogram…
         </MenuItem>

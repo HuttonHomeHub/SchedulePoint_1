@@ -25,7 +25,7 @@ export type ActivityEditorTab =
   | 'notes'
   /** Who changed this activity, its links and its resources (ADR-0174) — read-only for every role. */
   | 'history'
-  /** A WBS summary's membership (`VITE_WBS_IMPROVEMENTS`) — present only on a `WBS_SUMMARY`. */
+  /** A WBS summary's membership — present only on a `WBS_SUMMARY`. */
   | 'members';
 
 /** Why the editor is being opened. Maps to a tab — and, for steps, to a focus target within it. */

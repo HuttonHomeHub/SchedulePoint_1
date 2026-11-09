@@ -56,7 +56,6 @@ import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
-import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED } from '@/config/env';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
@@ -885,7 +884,7 @@ export function ToolbarPlanWorkspace({
   // whole row and the diagram column is `inert`. A render clamp only: the stored width is never
   // rewritten, so a width dragged at 1440 is back at 1440 after a visit at 640.
   const notesPanel = useNotesPanelPrefs();
-  const notesDockActive = NOTES_ENABLED && model.notesOpen;
+  const notesDockActive = model.notesOpen;
   const { bounds: notesBounds, onResize: onNotesResize } = useRightDockSize(
     notesPanel,
     NOTES_PANEL_MIN_WIDTH,
@@ -1330,15 +1329,13 @@ export function ToolbarPlanWorkspace({
   // Canvas-first authoring makes the empty canvas an *interactive, drawable* surface, so it must not
   // be shown while the activities/dependencies are still loading — an empty array then reads as a
   // genuinely blank plan and invites a draw into data that's about to arrive (ux review). Until they
-  // resolve, show a loading placeholder distinct from the empty state. (Flag-off the empty canvas is
-  // inert, so this window is harmless and we keep the byte-for-byte render.)
+  // resolve, show a loading placeholder distinct from the empty state.
   //
   // The same holds for swimlanes (ADR-0202): while their list is on its way the FIRST paint stays in
   // this state rather than painting the swimlane-free layout and then jumping every bar into its
   // swimlane. Once the panel has painted it is never unmounted for a swimlane list: a toggle made
   // later would otherwise drop focus to <body> and lose the selection and the viewport.
-  const loadingBeforeSwimlanes =
-    CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
+  const loadingBeforeSwimlanes = model.activities.isPending || model.dependencies.isPending;
   const [panelPainted, setPanelPainted] = useState(false);
   const canvasLoading = loadingBeforeSwimlanes || (swimlaneScene.pending && !panelPainted);
   if (!canvasLoading && !panelPainted) setPanelPainted(true);
@@ -1603,8 +1600,7 @@ export function ToolbarPlanWorkspace({
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3). Always passed like onReposition;
-      // the canvas only arms them under `VITE_CANVAS_DIRECT_MANIPULATION`, so flag-off is
-      // byte-for-byte.
+      // the canvas arms them only for an editor who may resize and link.
       onResize={model.onTsldResize}
       onLag={model.onTsldLag}
       onLink={model.onTsldLink}
@@ -1645,7 +1641,7 @@ export function ToolbarPlanWorkspace({
       onDuplicateActivity={(a) => void model.onDuplicateActivity(a)}
       onDuplicateBand={model.onDuplicateBand}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
-      // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
+      // toolbar item decides its own visibility. Progress is role-gated via
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.
       onResources={model.onResourcesActivity}
       onProgress={model.onProgressActivity}
@@ -2109,8 +2105,8 @@ export function ToolbarPlanWorkspace({
   );
 
   // The docked-notes panel content (entry-route win 1) — the shared `SheetHeader` (title + Close, which
-  // toggles the dock shut) over a scrollable, unbounded `PlanNotesSection`. Built once and placed in the
-  // right column. `headingRef` keeps the flag-off scroll target wired.
+  // toggles the dock shut) over a scrollable `PlanNotesSection`. Built once and placed in the
+  // right column.
   const notesDockContent = (
     // A named landmark for the dock (a11y) — "Plan notes panel" so it doesn't collide with the inner
     // note-thread region. Escape closes it (the non-modal dock has no native cancel) and returns focus
@@ -2131,13 +2127,11 @@ export function ToolbarPlanWorkspace({
       <SheetHeader title="Plan notes" onClose={closeNotes} closeLabel="Close plan notes" />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {/* `chromeless`: the SheetHeader "Plan notes" above is the single header + this `<section>` is
-            the landmark, so PlanNotesSection drops its own heading/description/card (ux review). */}
+            the landmark, so PlanNotesSection carries no heading, description or card of its own (ux review). */}
         <PlanNotesSection
           orgSlug={model.orgSlug}
           planId={model.planId}
           canWrite={model.canWriteNotes}
-          bounded={false}
-          chromeless
         />
       </div>
     </section>

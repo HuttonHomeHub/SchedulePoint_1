@@ -24,14 +24,6 @@ vi.mock(
   () => import('../render/test-support/in-process-optimise'),
 );
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: true,
-    CANVAS_AUTHORING_FLOW_ENABLED: true,
-  };
-});
 
 const NO_DEPS: DependencySummary[] = [];
 

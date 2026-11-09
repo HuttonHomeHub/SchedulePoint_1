@@ -12,10 +12,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
  * real command that opens the member `ShareLinksDialog` (`openShare`), additionally gated on the caller
  * holding `plan:share` (`ctx.canShare`) — a non-holder sees it shaded with a reason (shade-don't-hide).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({ summaryContent: null, ...over });

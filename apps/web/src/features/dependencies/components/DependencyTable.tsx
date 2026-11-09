@@ -19,8 +19,7 @@ export type Endpoint = 'predecessor' | 'successor';
 /**
  * One direction's links — the predecessors table or the successors table.
  *
- * Extracted from `DependencyEditor` unchanged (it was `DirectionTable`) so both the Logic **dialog**
- * and the Logic **tab** render the same table rather than two that drift.
+ * Rendered by the Logic panel in the activity editor's Logic tab, once per direction.
  */
 export function DependencyTable({
   query,

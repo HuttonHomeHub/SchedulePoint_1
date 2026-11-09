@@ -10,10 +10,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * chord still fires, the undo stack just quietly stops recording. Hence one assertion each, at the
  * seam rather than through the panel.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-}));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 
@@ -27,7 +23,6 @@ vi.mock('@/features/wbs', async (importOriginal) => ({
 }));
 vi.mock('@/features/notes', () => ({ ActivityNotesSection: () => null }));
 vi.mock('@/features/plans', () => ({ PlanFormDialog: () => null }));
-vi.mock('@/features/resources', () => ({ ActivityResourcesDialog: () => null }));
 
 /** Captures what the editor was handed, so the seams can be asserted without the real panel. */
 const editorProps = vi.fn();
@@ -79,13 +74,10 @@ function makeModel(over: Record<string, unknown> = {}): Model {
     canProgress: true,
     canWriteNotes: true,
     logicActivity: undefined,
-    logicRevealNotes: false,
     setLogicActivity: vi.fn(),
     recordDependencyRemove,
     recordDependencyEdit,
     nudgeDependencyLag,
-    resourcesActivity: undefined,
-    setResourcesActivity: vi.fn(),
     progressActivity: undefined,
     setProgressActivityId: vi.fn(),
     stepsActivity: undefined,

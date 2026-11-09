@@ -41,7 +41,6 @@ import { FieldGateLock, resolveFieldGate, useFieldGate } from '@/components/ui/f
 import { CheckboxField, SelectField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
@@ -138,7 +137,7 @@ function seedMoney(minorUnits: number | null): string {
 }
 
 /**
- * The assignment's **cost & actuals** editor (EV4b, ADR-0042), shown behind `VITE_EARNED_VALUE` on a
+ * The assignment's **cost & actuals** editor (EV4b, ADR-0042), shown on a
  * writable row: a budgeted-cost override (blank = derive from budgeted units × the resource rate at EV
  * read time), an actual cost, and actual units of work done — the inputs the Earned-Value read consumes.
  * Money is entered in MAJOR units (e.g. dollars) and stored in minor units. One grouped Save persists
@@ -855,8 +854,8 @@ export function AssignmentRow({
             </Button>
           </div>
           {/* Cost & actuals (EV4b, ADR-0042) — the EV read's per-assignment inputs, behind the
-              flag and the caller's cost-read gate. */}
-          {EARNED_VALUE_ENABLED && canReadCost ? (
+              caller's cost-read gate. */}
+          {canReadCost ? (
             <AssignmentCostFields
               orgSlug={orgSlug}
               planId={planId}

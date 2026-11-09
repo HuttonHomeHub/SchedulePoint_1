@@ -30,7 +30,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
-import { NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
 import {
   MAKE_MILESTONE_LABEL,
@@ -410,7 +409,7 @@ export function ActivitiesTable({
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
   /**
    * Per-activity note counts (ADR-0046), route-composed like `varianceByActivityId` from ONE batch
-   * query (never per-row). When present (the plan's counts loaded behind `VITE_NOTES`), a row with
+   * query (never per-row). When present (the plan's counts loaded), a row with
    * ≥1 note shows a small count badge beside its name. A shared `@repo/types` shape, so activities
    * stays dependency-free of the notes feature's data layer.
    */
@@ -535,14 +534,10 @@ export function ActivitiesTable({
       ? null
       : swimlanes.assignment;
   const selectableIds = useMemo(
-    () =>
-      WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null || codeBulk !== undefined
-        ? new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id))
-        : new Set<string>(),
-    [loadedActivities, swimlaneAssignment, codeBulk],
+    () => new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id)),
+    [loadedActivities],
   );
-  const wbsBulkAssignActive =
-    WBS_IMPROVEMENTS_ENABLED && loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
+  const wbsBulkAssignActive = loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
   // The selection column serves both bars: it appears when either has somewhere to file things.
   const bulkAssignActive =
     wbsBulkAssignActive || swimlaneAssignment !== null || codeBulk !== undefined;
@@ -622,7 +617,7 @@ export function ActivitiesTable({
       // Members — only on a summary, because it is the only row that can hold anything. Any member
       // may look (the panel shades its controls with a reason rather than hiding them), so this is
       // not gated on `canEditSchedule`: seeing what is in a grouping is a read.
-      if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+      if (activity.type === 'WBS_SUMMARY') {
         actions.push({
           key: 'members',
           label: 'Members',
@@ -713,7 +708,7 @@ export function ActivitiesTable({
         // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
         // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
         // the non-destructive one has to be visible at the moment the destructive one is chosen.
-        if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+        if (activity.type === 'WBS_SUMMARY') {
           actions.push({
             key: 'dissolve',
             label: 'Dissolve',
@@ -819,8 +814,8 @@ export function ActivitiesTable({
           // asked for.
           const driverMissing = activity.resourceDriverMissing;
           // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
-          // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
-          const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
+          // the map is supplied and the row has ≥1 note (the badge hides at zero).
+          const noteCount = noteCountByActivityId?.get(activity.id) ?? 0;
           return (
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{activity.name}</span>

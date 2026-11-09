@@ -22,8 +22,7 @@ import {
 } from './support';
 
 /**
- * **The flag-on authoring-flow journey** (ADR-0064 T10), with `VITE_CANVAS_AUTHORING_FLOW` on and
- * the pen enforced at the API.
+ * **The authoring-flow journey** (ADR-0064 T10), with the pen enforced at the API.
  *
  * The unit suites cover each surface in isolation; what only a browser can show is that they
  * compose — that the band states the pick the canvas actually holds, that the keyboard path and

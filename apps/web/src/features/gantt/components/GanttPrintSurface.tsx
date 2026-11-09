@@ -28,7 +28,6 @@ import {
 import { buildRulerTicks } from '../layout/ruler-ticks';
 import type { GanttColumnKey } from '../model/gantt-view-state';
 
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BarDateSource } from '@/lib/bar-dates';
 import { codeCellText, type CodeColumn } from '@/lib/code-columns';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
@@ -178,7 +177,7 @@ export function GanttPrintSurface({
   // than on the screen that found it.
   const predecessorNames = predecessorNamesBySuccessor(dependencies);
   const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
-    unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+    unassignedBucket: true,
     barDateSource,
   });
   const span = rowsDateSpan(rows, barDateSource);

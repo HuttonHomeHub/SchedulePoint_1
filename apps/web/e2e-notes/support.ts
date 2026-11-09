@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **Notes** suite (`VITE_NOTES`, Notes M3, ADR-0046) on the plan
- * workspace. Same hierarchy-driving approach as the other flag-on suites; activities are added
+ * Journey helpers for the **Notes** suite (Notes M3, ADR-0046) on the plan
+ * workspace. Same hierarchy-driving approach as the other suites; activities are added
  * through the activities panel once the spec has taken the pen (`e2e-support/pen.ts`).
  */
 

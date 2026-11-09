@@ -22,8 +22,6 @@ export interface DockStripInput {
   readonly showDiagram: boolean;
   readonly activityCount: number;
   readonly mode: string;
-  /** `CANVAS_AUTHORING_FLOW_ENABLED` — passed in so the rule stays testable in both states. */
-  readonly authoringFlowEnabled: boolean;
   /**
    * Whether the one-time placement migration (one-planning-surface M-I) has something to say about
    * this plan AND this reader has not already dismissed it. One boolean rather than a count and a
@@ -119,12 +117,7 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
    * Arrange offer and the migration notice are both standing facts that do not expire.
    */
   if (input.hasLayoutResolvedNotice) return 'layout-resolved';
-  if (
-    input.authoringFlowEnabled &&
-    input.showDiagram &&
-    input.activityCount === 0 &&
-    input.mode === 'select'
-  ) {
+  if (input.showDiagram && input.activityCount === 0 && input.mode === 'select') {
     return 'empty';
   }
   /**

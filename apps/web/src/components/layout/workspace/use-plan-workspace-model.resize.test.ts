@@ -12,30 +12,17 @@ import { anActivity } from '@/test/activity-fixture';
  * `PATCH durationDays` — durationType / EV / accrual / constraints round-trip verbatim, never
  * silently cleared — under the exact reposition contract: optimistic version, 409 → non-destructive
  * conflict (nothing recorded, never re-sent), 423 → the shared pen contract, follow-up recalc via
- * the coalesced auto-recalc (authoring on) or the inline recalculate (authoring off), and a
- * flag-guarded coalescable `durationResizeCommand` on the undo stack.
+ * the coalesced auto-recalc, and a
+ * coalescable `durationResizeCommand` on the undo stack.
  */
 
 const h = vi.hoisted(() => ({
-  authoring: false,
   record: vi.fn(),
   updateMutateAsync: vi.fn(),
   setVisualStartMutateAsync: vi.fn(),
-  recalcMutateAsync: vi.fn(),
   notify: vi.fn(),
   onWriteRejected: vi.fn(),
 }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    get CANVAS_AUTHORING_ENABLED() {
-      return h.authoring;
-    },
-    NOTES_ENABLED: false,
-  };
-});
 
 // Keep the real command builders (they're pure); swap only the history store for a record spy.
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
@@ -86,7 +73,6 @@ vi.mock('@/features/dependencies', () => ({
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/features/schedule', () => ({
-  useRecalculate: () => ({ mutateAsync: h.recalcMutateAsync }),
   usePlanAutoRecalc: () => ({ notify: h.notify }),
 }));
 
@@ -148,10 +134,8 @@ const SAVED_START_RESIZE: ActivitySummary = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.authoring = false;
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, durationDays: 8, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue(SAVED_START_RESIZE);
-  h.recalcMutateAsync.mockResolvedValue(undefined);
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
 });
 
@@ -185,19 +169,8 @@ describe('onTsldResize (ADR-0052 M2)', () => {
         levelingPriority: 7,
       }),
     );
-    // Authoring off → the inline authoritative recalc ran (the pre-coalescer contract).
-    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
-    expect(h.notify).not.toHaveBeenCalled();
-  });
-
-  it('notifies the coalesced auto-recalc instead of the inline recalc when authoring is on', async () => {
-    h.authoring = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await result.current.onTsldResize({ activityId: 'a1', durationDays: 8 });
-    });
+    // The follow-up recalc goes to the coalesced auto-recalc.
     expect(h.notify).toHaveBeenCalledTimes(1);
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
   });
 
   it('records ONE coalescable durationResizeCommand', async () => {
@@ -228,7 +201,6 @@ describe('onTsldResize (ADR-0052 M2)', () => {
         'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.',
     });
     expect(h.record).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
     expect(h.notify).not.toHaveBeenCalled();
   });
 
@@ -245,7 +217,7 @@ describe('onTsldResize (ADR-0052 M2)', () => {
 
     expect(outcome).toEqual({ applied: false, conflict: null });
     expect(h.onWriteRejected).toHaveBeenCalledWith(err);
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
+    expect(h.notify).not.toHaveBeenCalled();
   });
 
   it('no-ops on an identical duration (no PATCH, no recalc) and on an unknown activity', async () => {
@@ -260,21 +232,7 @@ describe('onTsldResize (ADR-0052 M2)', () => {
     });
     expect(outcome).toEqual({ applied: false, conflict: null });
     expect(h.updateMutateAsync).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
-  });
-
-  it('a recalc refusal after a landed resize is non-fatal (applied:true + advisory conflict)', async () => {
-    h.recalcMutateAsync.mockRejectedValue(new Error('recalc busy'));
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    let outcome;
-    await act(async () => {
-      outcome = await result.current.onTsldResize({ activityId: 'a1', durationDays: 8 });
-    });
-    expect(outcome).toEqual({
-      applied: true,
-      conflict:
-        'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-    });
+    expect(h.notify).not.toHaveBeenCalled();
   });
 });
 
@@ -313,7 +271,7 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
     // The full-definition path is NOT used — a placement never writes a constraint, and this is
     // the assertion the deleted EARLY case's mirror image became.
     expect(h.updateMutateAsync).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
+    expect(h.notify).toHaveBeenCalledTimes(1);
   });
 
   /**
@@ -379,6 +337,6 @@ describe('onTsldResize — start edge (ADR-0052 M3, mode-aware §3)', () => {
         'This plan changed since you opened it — your resize wasn’t applied. Refresh to see the latest.',
     });
     expect(h.record).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
+    expect(h.notify).not.toHaveBeenCalled();
   });
 });

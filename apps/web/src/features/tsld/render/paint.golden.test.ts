@@ -269,7 +269,7 @@ const MAXIMAL: TsldScene = {
   linkRouting: true,
 };
 
-/** The flag-off shape: every optional field absent. The rollback contract's picture. */
+/** The minimal shape: every optional field absent. */
 const MINIMAL: TsldScene = {
   activities: ACTIVITIES,
   edges: EDGES,
@@ -316,7 +316,7 @@ describe('paintScene — whole-scene golden (ADR-0078 S1)', () => {
     expect(logOf(MAXIMAL)).toMatchSnapshot();
   });
 
-  it('emits a stable ordered call log for the flag-off scene', () => {
+  it('emits a stable ordered call log for the minimal scene', () => {
     expect(logOf(MINIMAL)).toMatchSnapshot();
   });
 
@@ -389,7 +389,7 @@ describe('paintScene — whole-scene golden (ADR-0078 S1)', () => {
     }).toMatchSnapshot();
   });
 
-  it('records a strictly smaller log for the flag-off scene', () => {
+  it('records a strictly smaller log for the minimal scene', () => {
     // Guards the snapshots from the other direction: if an extraction accidentally made an
     // optional layer unconditional, the two logs converge and this fails — whereas both snapshots
     // would simply be re-recorded.

@@ -6,7 +6,6 @@ import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormSection } from '@/components/ui/form-layout';
-import { CANVAS_DIRECT_MANIPULATION_ENABLED, NOTES_ENABLED } from '@/config/env';
 import {
   ActivityCreateDialog,
   ActivityEditorDialog,
@@ -296,9 +295,7 @@ export function ActivityCrudDialogs({
           onAdded: model.recordDependencyAdd,
           onRemoved: model.recordDependencyRemove,
           onEdited: model.recordDependencyEdit,
-          ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
-            ? { onNudgeLag: model.nudgeDependencyLag }
-            : {}),
+          ...(model.canManageLogic ? { onNudgeLag: model.nudgeDependencyLag } : {}),
           ...(intended
             ? {
                 crossPlanSlot: (
@@ -309,15 +306,15 @@ export function ActivityCrudDialogs({
                     onAdded={model.recordCrossPlanLinkAdd}
                     onRemoved={model.recordCrossPlanLinkRemove}
                     canManageLogic={model.canManageLogic}
-                    // `intended` is already narrowed truthy by this branch's own condition, so
-                    // this section is always showing its subject when it renders at all.
+                    // The slot only exists while an activity is open, so the section always has
+                    // its subject when it renders.
                     enabled
                   />
                 ),
               }
             : {}),
         }}
-        {...(NOTES_ENABLED && intended
+        {...(intended
           ? {
               notesSlot: (
                 <ActivityNotesSection
@@ -330,9 +327,8 @@ export function ActivityCrudDialogs({
                   // inside the editor, because the slot is a `ReactNode` the editor cannot
                   // reach into.
                   autoFocusComposer={model.editorIntent?.focusNotes === true}
-                  // Same reasoning as the cross-plan slot above: `intended` is already
-                  // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
-                  // intended`).
+                  // Same reasoning as the cross-plan slot above: the slot exists only while
+                  // an activity is open.
                   enabled
                 />
               ),

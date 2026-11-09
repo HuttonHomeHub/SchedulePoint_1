@@ -3,8 +3,8 @@ import { expect, type Page } from '@playwright/test';
 import { pickAddKind } from '../e2e-support/toolbar';
 
 /**
- * Journey helpers for the flag-ON **canvas-first authoring** suite (`VITE_CANVAS_AUTHORING`,
- * ADR-0032). Same hierarchy-driving approach as the other flag-on suites. The distinguishing trait
+ * Journey helpers for the **canvas-first authoring** suite (ADR-0032). Same hierarchy-driving
+ * approach as the other suites. The distinguishing trait
  * of this layer: opening a brand-new plan lands on a **draw-ready blank canvas** (anchored to today),
  * so the journey authors the plan on the canvas — no activities-table detour, no "set start first",
  * no manual Recalculate.

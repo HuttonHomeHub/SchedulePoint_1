@@ -38,7 +38,7 @@ const h = vi.hoisted(() => ({
   batchPositions: vi.fn(),
   createDependency: vi.fn(),
   createPlaced: vi.fn(),
-  recalculate: vi.fn(),
+  notifyRecalc: vi.fn(),
 }));
 
 // This suite validates pen-gating + the reposition seams. It ran against the ADR-0030 workspace
@@ -50,13 +50,6 @@ const h = vi.hoisted(() => ({
 // went with it (ADR-0084 D5). This one is real pen-gating coverage that merely happened to be
 // hosted there. Deleting it would have lost coverage under cover of a retirement, which is exactly
 // what D5 must not become.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  // These seams assert the flag-off reposition→inline-recalc path; authoring (now default-on) routes
-  // recalc through the coalescer instead, so pin it off here (the coalescer has its own unit tests).
-  CANVAS_AUTHORING_ENABLED: false,
-}));
-
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme', planId: h.planId }),
@@ -189,15 +182,11 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useCreateDependency: () => ({ mutateAsync: h.createDependency }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
-  DependencyEditor: ({ canManageLogic }: { canManageLogic: boolean }) => (
-    <div data-testid="dependency-editor" data-can-manage={String(canManageLogic)} />
-  ),
 }));
 
 vi.mock('@/features/schedule', () => ({
-  useRecalculate: () => ({ mutateAsync: h.recalculate }),
   usePlanAutoRecalc: () => ({
-    notify: vi.fn(),
+    notify: h.notifyRecalc,
     flush: vi.fn(),
     isPending: false,
     pendingEdits: 0,
@@ -280,7 +269,7 @@ beforeEach(() => {
     h.batchPositions,
     h.createDependency,
     h.createPlaced,
-    h.recalculate,
+    h.notifyRecalc,
   ]) {
     fn.mockReset().mockResolvedValue(undefined);
   }
@@ -348,11 +337,11 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     const outcome = await onReposition({ activityId: 'a1', laneIndex: 2 });
     expect(h.repositionLane).toHaveBeenCalledWith({ activityId: 'a1', laneIndex: 2, version: 3 });
     expect(h.updateActivity).not.toHaveBeenCalled();
-    expect(h.recalculate).not.toHaveBeenCalled();
+    expect(h.notifyRecalc).not.toHaveBeenCalled();
     expect(outcome).toEqual({ applied: true, conflict: null });
   });
 
-  it('a day change hand-places through the placement seam, then recalculates', async () => {
+  it('a day change hand-places through the placement seam, then hands the recalc to the coalescer', async () => {
     h.pen = pen({ holdsPen: true });
     renderScreen();
     const onReposition = h.tsld.props?.onReposition as (i: unknown) => Promise<unknown>;
@@ -366,7 +355,7 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     );
     expect(h.updateActivity).not.toHaveBeenCalled();
     expect(h.repositionLane).not.toHaveBeenCalled();
-    expect(h.recalculate).toHaveBeenCalledTimes(1);
+    expect(h.notifyRecalc).toHaveBeenCalledTimes(1);
     expect(outcome).toEqual({ applied: true, conflict: null });
   });
 
@@ -399,19 +388,6 @@ describe('PlanDetailScreen — reposition seam (#24d)', () => {
     const outcome = await onReposition({ activityId: 'a1', laneIndex: 2 });
     expect(outcome.applied).toBe(false);
     expect(outcome.conflict).toMatch(/changed since you opened/i);
-  });
-
-  it('a day change that lands but fails to recalc is applied with a non-fatal conflict', async () => {
-    h.pen = pen({ holdsPen: true });
-    h.recalculate.mockRejectedValue(new Error('recalc down'));
-    renderScreen();
-    const onReposition = h.tsld.props?.onReposition as (
-      i: unknown,
-    ) => Promise<{ applied: boolean; conflict: string | null }>;
-    const outcome = await onReposition({ activityId: 'a1', startDay: 5 });
-    expect(h.setVisualStart).toHaveBeenCalledTimes(1);
-    expect(outcome.applied).toBe(true); // the move persisted…
-    expect(outcome.conflict).toMatch(/couldn.t recalculate/i); // …dates stay stale until next recalc
   });
 });
 

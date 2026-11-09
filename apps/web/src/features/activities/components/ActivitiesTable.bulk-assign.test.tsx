@@ -1,24 +1,20 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
 /**
- * The table's **multi-select** (WBS improvements M4b), with `VITE_WBS_IMPROVEMENTS` forced on.
+ * The table's **multi-select** (WBS improvements M4b).
  *
  * The bar itself is unit-tested next to its own model; this suite pins the things only the table
  * can get wrong — which rows offer a checkbox, when the column appears at all, and the tri-state
  * select-all. The last is the quiet one: `indeterminate` is a DOM property with no attribute, so
  * "some selected" rendered as unchecked would tell a screen-reader user their selection was gone.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 const BASE: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
   id: 'a1',

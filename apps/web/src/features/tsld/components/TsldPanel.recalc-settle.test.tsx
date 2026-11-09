@@ -15,10 +15,6 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
  * canvas, then the coalescer's `recalcPending` going true and back to false with whatever the server
  * produced. `recalcPending` is the SHARED flag, so the manual flush travels this same path.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-}));
 
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));

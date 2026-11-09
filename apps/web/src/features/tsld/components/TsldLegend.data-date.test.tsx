@@ -1,21 +1,15 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
- * Canvas status & feedback M1: with `VITE_CANVAS_DATA_DATE` on, the legend names the new mark — a
+ * Canvas status & feedback M1: the legend names the data-date mark — a
  * solid vertical beside the dashed `Today` one, so the two status lines are distinguishable in the
- * key exactly as they are on the canvas (shape, not hue — WCAG 1.4.1). The flag is forced ON here
- * (default-off until the epic's M6 gate); the flag-off absence is pinned by
- * `TsldLegend.data-date-off.test.tsx`, which stays the rollback contract after any default flip.
+ * key exactly as they are on the canvas (shape, not hue — WCAG 1.4.1).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DATA_DATE_ENABLED: true,
-}));
 
 import { TsldLegend } from './TsldLegend';
 
-describe('TsldLegend — the data-date entry (flag on)', () => {
+describe('TsldLegend — the data-date entry', () => {
   it('keys the data-date line beside Today', () => {
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });

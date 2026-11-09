@@ -7,9 +7,8 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// The flag-ON canvas-nav registry: isolate-logic / next-conflict / snap-to-grid swap their placeholders
-// for real controls. Scheduling modes are on (default) so the Visual-mode snap gates apply. The flag-off
-// stubs are covered by `tsld-toolbar.test.tsx` (which leaves CANVAS_NAV_ENABLED at its default off).
+// The canvas-nav registry: isolate-logic / next-conflict / snap-to-grid are real controls with
+// their own gates (`tsld-toolbar.test.tsx` covers the rest of the registry).
 
 const spies = {
   toggleIsolate: vi.fn(),

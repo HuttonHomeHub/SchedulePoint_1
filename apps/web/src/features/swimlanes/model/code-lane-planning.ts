@@ -1,6 +1,5 @@
 import type { ActivityCodeLaneInput, ActivitySummary } from '@repo/types';
 
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { SwimlaneInput } from '@/features/tsld';
 import { deriveDiagramSource } from '@/features/tsld/model/derive-diagram-source';
 import { swimlaneEditContext } from '@/features/tsld/model/swimlane-edit-context';
@@ -33,7 +32,7 @@ function editContextOf(args: CodeLanePlanningInput) {
   // The projection the diagram draws, band toggle included, so a lane chosen "free" is free in the
   // picture on screen whether or not swimlanes are shown (the same rule Move to swimlane… follows).
   const diagram = deriveDiagramSource(activities, {
-    wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: wbsBandOn },
+    wbsBand: { toggleOn: wbsBandOn },
     swimlanes: input,
     source: barDateSource,
     dataDate,

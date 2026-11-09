@@ -82,7 +82,7 @@ describe('the Duration column', () => {
   });
 
   it('degrades to whole working days when the calendar factor is unavailable', () => {
-    // Not a guess and not a blank: the same rendering the flag-off build produces.
+    // Not a guess and not a blank: the same whole-day rendering a host with no calendar factor has always produced.
     const half = activity({ durationDays: 0, durationMinutes: 240 });
     expect(durationColumn?.value(half, 'early', undefined)).toBe('0 d');
   });

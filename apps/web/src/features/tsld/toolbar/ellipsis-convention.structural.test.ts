@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
@@ -29,11 +29,6 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
  * to assume the gate covers it. Stating the blind spot is the point; ADR-0090 M5's axe scan was
  * green and meaningless for exactly the opposite reason.
  */
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 
 describe('toolbar labels — the `…` convention', () => {
   const items = buildTsldToolbarItems();

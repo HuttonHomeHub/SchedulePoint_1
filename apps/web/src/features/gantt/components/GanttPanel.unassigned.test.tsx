@@ -6,17 +6,12 @@ import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The derived **Unassigned** row in the Gantt (WBS improvements M3), with `VITE_WBS_IMPROVEMENTS`
- * forced on. Where the bucket sits and what it contains is the row model's business and is tested
+ * The derived **Unassigned** row in the Gantt (WBS improvements M3). Where the bucket sits and what it contains is the row model's business and is tested
  * there; what this file pins is the treatment the row model cannot express — that the row is
  * **non-interactive as an activity** (it opens nothing, it selects nothing, it has no bar and no
  * variance) while still being a full member of the grid for the keyboard and for assistive
  * technology.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({

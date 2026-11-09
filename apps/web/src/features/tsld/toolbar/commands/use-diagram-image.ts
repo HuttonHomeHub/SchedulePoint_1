@@ -29,7 +29,6 @@ import { barDateSourceFor, toRenderEdges } from '../../render/to-render-model';
 import { wbsBandBars } from '../../render/wbs-band';
 
 import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspace-model';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import {
   RESOURCE_STRIP_HEIGHT,
   type TsldCanvasHandle,
@@ -189,7 +188,7 @@ export function useDiagramImage(args: {
       // scene still paints. With the band on, summaries live in the band and not in the diagram —
       // exactly as they do on screen.
       const diagram = deriveDiagramSource(activities, {
-        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        wbsBand: { toggleOn: viewToggles.wbsBand ?? false },
         swimlanes,
         source,
         dataDate,

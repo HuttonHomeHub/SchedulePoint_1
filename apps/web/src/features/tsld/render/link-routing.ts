@@ -527,7 +527,7 @@ function orderSameExtentRuns(
   }
 }
 
-// ── Time-true lag anchoring + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+// ── Time-true lag anchoring + arrowheads (ADR-0052 M1) ──
 
 /** The screen points a dependency's two ends anchor at (each on its bar's vertical centre). */
 export interface LagAnchors {
@@ -700,7 +700,7 @@ export function trimPolylineEnd(points: readonly Point[], distance: number): Poi
   return out;
 }
 
-// ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+// ── Link visual refresh (ADR-0052 M5) ──
 
 /** Target corner radius (px) of a refreshed link elbow — small, so the line reads as routed
  * wiring (softened, not curved). Clamped per corner to half the adjoining segment lengths. */

@@ -37,7 +37,6 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ARCHIVED_BADGE, isArchivedRow } from '@/lib/library-filters';
 
@@ -520,10 +519,10 @@ export function ActivityResourcesPanel({
                       })}
                     />
                   ) : null}
-                  {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag and the
+                  {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the
                     caller's cost-read gate. Money in MAJOR units (×100 → minor on submit); budgeted
                     cost is an optional override of the units × rate derivation. */}
-                  {EARNED_VALUE_ENABLED && canReadCost ? (
+                  {canReadCost ? (
                     <>
                       <TextField
                         label="Budgeted cost"

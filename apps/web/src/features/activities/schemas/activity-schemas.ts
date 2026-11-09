@@ -242,9 +242,8 @@ export const activityFormSchema = z
     // like `durationType`, always seeded from the row. `physicalPercentComplete` feeds the `PHYSICAL`
     // measure only — an integer 0–100, blank → `undefined` (unset). `budgetedExpense` / `actualExpense`
     // are lump-sum activity costs entered in MAJOR units (×100 → minor on submit, ÷100 to seed); optional,
-    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). All only
-    // editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a stored value round-trips
-    // even when the fields are hidden.
+    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). Always
+    // seeded from the row so a stored value round-trips even when a field is hidden.
     percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
     // Cost accrual (M7 rung 5, ADR-0044 §32): how the activity's cost is time-phased in the EV read's
     // Planned Value (START/UNIFORM/END). A plain enum attribute like `percentCompleteType` (default

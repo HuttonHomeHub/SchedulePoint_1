@@ -61,7 +61,7 @@ function mount(
     over.bulkMoveMany ??
     vi.fn<TsldBulkOperations['moveMany']>(() => Promise.resolve({ applied: true, conflict: null }));
   const diagramSource = deriveDiagramSource(activities, {
-    wbsBand: { enabled: false, toggleOn: false },
+    wbsBand: { toggleOn: false },
     swimlanes,
     source: 'visual',
     dataDate: DATA_DATE,

@@ -16,7 +16,6 @@
 import type { ColourLegend, ColourMode } from '../render/lenses';
 import { NEAR_CRITICAL_DOT_R, NODE_RIM_W } from '../render/render-model';
 
-import { CANVAS_DATA_DATE_ENABLED, CANVAS_DIRECT_MANIPULATION_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 type LegendItem =
@@ -39,7 +38,6 @@ type LegendItem =
   | { label: string; progress: true }
   | { label: string; lag: true }
   | { label: string; window: true }
-  | { label: string; slack: true }
   | { label: string; text: true };
 
 /** The Critical / Near-critical / On-schedule key — **fill AND node**, because the canvas draws
@@ -73,71 +71,55 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
     label: 'Non-working',
     swatch: { backgroundColor: 'var(--muted)', border: '1px solid var(--border)' },
   },
-  // The data-date status line (canvas status & feedback M1, `VITE_CANVAS_DATA_DATE`) — a SOLID
+  // The data-date status line (canvas status & feedback M1) — a SOLID
   // vertical beside the dashed Today one, listed first because it sits left of today on a statused
   // programme. The swatch mirrors the canvas channel exactly: shape (solid vs dashed) and weight
-  // (2px vs 1.5px) carry the distinction, never hue alone (WCAG 1.4.1). Flag-off the legend
-  // renders byte-identically (the parity gate).
-  ...(CANVAS_DATA_DATE_ENABLED ? [{ label: 'Data date', dataDate: true } as const] : []),
+  // (2px vs 1.5px) carry the distinction, never hue alone (WCAG 1.4.1).
+  { label: 'Data date', dataDate: true } as const,
   { label: 'Today', today: true },
-  // Logic ties, matching the canvas. **The link language** (NetPoint-layout M2, ADR-0154) is drawn
-  // only on the refreshed canvas, so its key rides the same flag; flag-off keeps the legacy pair
-  // byte for byte. Drivingness is WEIGHT, criticality the rung's ink plus the endpoints' nodes, and
+  // Logic ties, matching the canvas. **The link language** (NetPoint-layout M2, ADR-0154) is
+  // what the canvas draws. Drivingness is WEIGHT, criticality the rung's ink plus the endpoints' nodes, and
   // the waiting time is a GAP LABEL in working days (NetPoint grammar M3-T3, which retired the
   // waiting dash) — so neither the legacy "Non-driving link — dashed" row nor the M2 "Waiting time"
   // dash row survives here: a key naming a mark the canvas no longer paints is the ADR-0151 M6 defect.
-  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
-    ? [
-        {
-          label: 'Driving link — critical',
-          line: 'solid',
-          ink: 'var(--destructive)',
-          weight: 2,
-        } as const,
-        {
-          label: 'Driving link — near-critical',
-          line: 'solid',
-          ink: 'var(--warning)',
-          weight: 2,
-        } as const,
-        // The violet link family (NetPoint grammar M3, spec §4.2 G5), never the button's blue.
-        { label: 'Driving link', line: 'solid', ink: 'var(--canvas-link)', weight: 2 } as const,
-        {
-          label: 'Non-driving link',
-          line: 'solid',
-          ink: 'var(--canvas-link-minor)',
-          weight: 1,
-        } as const,
-        { label: 'Gap in working days', gapLabel: true } as const,
-        { label: 'Direction', chevron: true } as const,
-        { label: 'Lag on a link', lagPlate: true } as const,
-        // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12).
-        { label: 'Link joins partway along', attachDot: true } as const,
-      ]
-    : [
-        // A driving link (heavier solid) sets its successor's start; a non-driving link (thin
-        // dashed) carries slack (M3).
-        { label: 'Driving link', line: 'solid' } as const,
-        { label: 'Non-driving link', line: 'dashed' } as const,
-      ]),
-  // The M4/M5 visual-refresh shape vocabulary (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`):
+  {
+    label: 'Driving link — critical',
+    line: 'solid',
+    ink: 'var(--destructive)',
+    weight: 2,
+  } as const,
+  {
+    label: 'Driving link — near-critical',
+    line: 'solid',
+    ink: 'var(--warning)',
+    weight: 2,
+  } as const,
+  // The violet link family (NetPoint grammar M3, spec §4.2 G5), never the button's blue.
+  { label: 'Driving link', line: 'solid', ink: 'var(--canvas-link)', weight: 2 } as const,
+  {
+    label: 'Non-driving link',
+    line: 'solid',
+    ink: 'var(--canvas-link-minor)',
+    weight: 1,
+  } as const,
+  { label: 'Gap in working days', gapLabel: true } as const,
+  { label: 'Direction', chevron: true } as const,
+  { label: 'Lag on a link', lagPlate: true } as const,
+  // Where a link joins partway along a bar (NetPoint grammar M3-T5, spec G12).
+  { label: 'Link joins partway along', attachDot: true } as const,
+  // The M4/M5 visual-refresh shape vocabulary (ADR-0052):
   // the LOE bracketed span, the WBS-summary bracket/tab glyph, the in-bar progress band, and the
-  // dashed lag (waiting-time) run — all shape cues, never colour alone (WCAG 1.4.1). Flag-off the
-  // legend renders byte-identically (the parity gate).
-  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
-    ? [
-        // A milestone is a downward triangle (NetPoint grammar M5, spec §4.2 G8), filled in its rung's
-        // colour and outlined by weight when critical or near, as the criticality rows above say.
-        { label: 'Milestone', milestone: true } as const,
-        // A constrained milestone carries a "!" cut into its triangle rather than the task pin,
-        // which would sit on its name (`drawMilestoneConstraintMark`, TECH_DEBT #392).
-        { label: 'Constrained milestone', milestone: true, constrained: true } as const,
-        { label: 'Level of effort', loe: true } as const,
-        { label: 'WBS summary', summary: true } as const,
-        { label: 'Progress', progress: true } as const,
-        { label: 'Lag run (on the bar)', lag: true } as const,
-      ]
-    : []),
+  // dashed lag (waiting-time) run — all shape cues, never colour alone (WCAG 1.4.1).
+  // A milestone is a downward triangle (NetPoint grammar M5, spec §4.2 G8), filled in its rung's
+  // colour and outlined by weight when critical or near, as the criticality rows above say.
+  { label: 'Milestone', milestone: true } as const,
+  // A constrained milestone carries a "!" cut into its triangle rather than the task pin,
+  // which would sit on its name (`drawMilestoneConstraintMark`, TECH_DEBT #392).
+  { label: 'Constrained milestone', milestone: true, constrained: true } as const,
+  { label: 'Level of effort', loe: true } as const,
+  { label: 'WBS summary', summary: true } as const,
+  { label: 'Progress', progress: true } as const,
+  { label: 'Lag run (on the bar)', lag: true } as const,
   // Placement-conflict cue (ADR-0033) — an outlined warning triangle on a bar placed outside its
   // feasible window. **Unconditional since the collapse** (one-planning-surface M-F-T5): it was
   // listed only under `SCHEDULING_MODES_ENABLED` because a conflict needed a hand-placed start and
@@ -155,11 +137,6 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // absent* — drift is zero everywhere in Early mode by construction — and that whole apology
   // disappears with the shape: a bracket with no drift simply starts at the bar.
   { label: 'Feasible window — earliest to latest', window: true } as const,
-  // The selection-scoped slack chip is the legacy link path's (NetPoint grammar M3-T3): the
-  // refreshed path labels every waiting link instead, keyed above as a gap.
-  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
-    ? []
-    : [{ label: 'Link slack (days)', slack: true } as const]),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
   // mini-histogram, in the warning hue with a foreground outline (shape, not colour — WCAG 1.4.1).
   { label: 'Over-allocated', overAllocation: true } as const,
@@ -537,24 +514,6 @@ export function TsldLegend({
               <span
                 className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
                 style={{ width: 8, height: 8, backgroundColor: 'var(--canvas-bar)' }}
-              />
-            </span>
-          ) : 'slack' in item ? (
-            <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
-              {/* The outlined chip the canvas prints the gap in, on the selected activity's links.
-                  `--primary` + `--border`, because that is what the painter draws it with
-                  (`paint.ts` layer 3.5: `palette.bar` fill + `palette.barStroke` stroke). This
-                  swatch was `--card` (`docs/TECH_DEBT.md` #162) — a token ADR-0097 made a RESET,
-                  deliberately absent from the canvas scope's rebind closure, so even correctly
-                  scoped the legend showed a different colour from the thing it describes. */}
-              <span
-                className="rounded-[2px]"
-                style={{
-                  width: 14,
-                  height: 10,
-                  backgroundColor: 'var(--primary)',
-                  border: '1px solid var(--border)',
-                }}
               />
             </span>
           ) : 'line' in item ? (

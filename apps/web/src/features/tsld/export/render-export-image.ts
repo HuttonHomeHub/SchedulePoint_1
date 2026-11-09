@@ -28,8 +28,6 @@ import {
   type ExportGutterFrame,
 } from './export-swimlane-gutter';
 
-import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
-
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
  * `docs/specs/export-print/` §Milestone 2). It creates its **own** canvas
@@ -248,11 +246,8 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   // holds both.
   //
   // The data-date status line (canvas status & feedback M1) is drawn SOLID, before Today, per the
-  // marker-channel table. Flag-off it is absent, so the export legend is byte-for-byte the prior
-  // row (the parity gate).
-  ...(CANVAS_DATA_DATE_ENABLED
-    ? [{ label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const]
-    : []),
+  // marker-channel table.
+  { label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const,
   { label: 'Today', kind: 'today', colour: (p) => p.today },
   { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },

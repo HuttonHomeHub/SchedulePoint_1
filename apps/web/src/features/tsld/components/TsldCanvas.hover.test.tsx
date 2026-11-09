@@ -5,18 +5,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * Hover threading through the canvas (ADR-0052 M4/M5, component seam): the idle pointer-move
  * classify must publish the hovered bar's rect to the interaction layer (the hover ring) and its
  * id into the scene (the incident-link highlight), clear both on pointer-leave, suppress the ring
- * on the already-selected bar (no stacked double outline), and publish NOTHING flag-off (the
- * parity gate). The painters are mocked so the published overlay/scene are observable in jsdom
- * (which has no real 2D context); the paint output itself is covered by `paint.test.ts`.
+ * on the already-selected bar (no stacked double outline). The painters are mocked so the
+ * published overlay/scene are observable in jsdom (which has no real 2D context); the paint output
+ * itself is covered by `paint.test.ts`.
  */
-const flags = vi.hoisted(() => ({ directManipulation: true }));
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  get CANVAS_DIRECT_MANIPULATION_ENABLED() {
-    return flags.directManipulation;
-  },
-}));
 
 const paintMocks = vi.hoisted(() => ({
   // Loosely-typed parameters so the recorded calls are inspectable (`calls[i][1]` is the
@@ -114,7 +106,6 @@ const lastScene = (): TsldScene => paintMocks.paintScene.mock.calls.at(-1)?.[1] 
 describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    flags.directManipulation = true;
     // jsdom has no 2D context; a truthy stub lets the rAF loop reach the (mocked) painters.
     HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({});
   });
@@ -218,22 +209,5 @@ describe('TsldCanvas — hover threading (ADR-0052 M4/M5)', () => {
     // …and drop on release, so the next hover decides afresh.
     fireEvent.pointerUp(canvas, { clientX: 180, clientY: LANE_MID_1, pointerId: 1 });
     await waitFor(() => expect(lastScene().activeLagId).toBeNull());
-  });
-
-  it('publishes nothing when the flag is off (the parity gate)', async () => {
-    flags.directManipulation = false;
-    const { canvas } = renderCanvas();
-    fireEvent.pointerMove(canvas, { clientX: 70, clientY: LANE_MID_0, pointerId: 1 });
-    await waitFor(() => expect(paintMocks.paintScene).toHaveBeenCalled());
-    for (const call of paintMocks.paintScene.mock.calls) {
-      expect((call[1] as TsldScene).hoverId).toBeNull();
-      // The lag handles ride the same gate — flag-off nothing is armed, so nothing paints.
-      expect((call[1] as TsldScene).lagHandles).toBe(false);
-      expect((call[1] as TsldScene).activeLagId ?? null).toBeNull();
-    }
-    for (const call of paintMocks.paintInteractionLayer.mock.calls) {
-      expect((call[1] as InteractionOverlay).hover ?? null).toBeNull();
-      expect((call[1] as InteractionOverlay).visualRefresh).toBe(false);
-    }
   });
 });

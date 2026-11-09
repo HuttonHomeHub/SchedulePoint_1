@@ -9,29 +9,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * `PATCH /dependencies/:id` echoing the row's unchanged type + lag calendar at the live version —
  * exactly `useUpdateDependency`'s input — under the reposition contract: 409 → non-destructive
  * conflict (nothing recorded, never re-sent), 423 → the shared pen contract, follow-up recalc via
- * the coalesced auto-recalc (authoring on) or the inline recalculate (authoring off), and a
- * flag-guarded coalescable `lagDragCommand` on the undo stack.
+ * the coalesced auto-recalc, and a
+ * coalescable `lagDragCommand` on the undo stack.
  */
 
 const h = vi.hoisted(() => ({
-  authoring: false,
   record: vi.fn(),
   updateDependencyMutateAsync: vi.fn(),
-  recalcMutateAsync: vi.fn(),
   notify: vi.fn(),
   onWriteRejected: vi.fn(),
 }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    get CANVAS_AUTHORING_ENABLED() {
-      return h.authoring;
-    },
-    NOTES_ENABLED: false,
-  };
-});
 
 // Keep the real command builders (they're pure); swap only the history store for a record spy.
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
@@ -115,7 +102,6 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useUpdateDependency: () => ({ mutateAsync: h.updateDependencyMutateAsync }),
 }));
 vi.mock('@/features/schedule', () => ({
-  useRecalculate: () => ({ mutateAsync: h.recalcMutateAsync }),
   usePlanAutoRecalc: () => ({ notify: h.notify }),
 }));
 
@@ -159,9 +145,7 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.authoring = false;
   h.updateDependencyMutateAsync.mockResolvedValue(SAVED);
-  h.recalcMutateAsync.mockResolvedValue(undefined);
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
 });
 
@@ -185,19 +169,8 @@ describe('onTsldLag (ADR-0052 M3)', () => {
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 6,
     });
-    // Authoring off → the inline authoritative recalc ran (the pre-coalescer contract).
-    expect(h.recalcMutateAsync).toHaveBeenCalledTimes(1);
-    expect(h.notify).not.toHaveBeenCalled();
-  });
-
-  it('notifies the coalesced auto-recalc instead of the inline recalc when authoring is on', async () => {
-    h.authoring = true;
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await result.current.onTsldLag({ dependencyId: 'd1', lagDays: 5 });
-    });
+    // The follow-up recalc goes to the coalesced auto-recalc.
     expect(h.notify).toHaveBeenCalledTimes(1);
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
   });
 
   it('records ONE coalescable lagDragCommand', async () => {
@@ -241,7 +214,6 @@ describe('onTsldLag (ADR-0052 M3)', () => {
         'This plan changed since you opened it — the lag wasn’t changed. Refresh to see the latest.',
     });
     expect(h.record).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
     expect(h.notify).not.toHaveBeenCalled();
   });
 
@@ -258,7 +230,7 @@ describe('onTsldLag (ADR-0052 M3)', () => {
 
     expect(outcome).toEqual({ applied: false, conflict: null });
     expect(h.onWriteRejected).toHaveBeenCalledWith(err);
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
+    expect(h.notify).not.toHaveBeenCalled();
   });
 
   it('no-ops on an identical lag (no PATCH, no recalc) and on an unknown dependency', async () => {
@@ -273,20 +245,6 @@ describe('onTsldLag (ADR-0052 M3)', () => {
     });
     expect(outcome).toEqual({ applied: false, conflict: null });
     expect(h.updateDependencyMutateAsync).not.toHaveBeenCalled();
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled();
-  });
-
-  it('a recalc refusal after a landed change is non-fatal (applied:true + advisory conflict)', async () => {
-    h.recalcMutateAsync.mockRejectedValue(new Error('recalc busy'));
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    let outcome;
-    await act(async () => {
-      outcome = await result.current.onTsldLag({ dependencyId: 'd1', lagDays: 5 });
-    });
-    expect(outcome).toEqual({
-      applied: true,
-      conflict:
-        'Lag changed, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-    });
+    expect(h.notify).not.toHaveBeenCalled();
   });
 });

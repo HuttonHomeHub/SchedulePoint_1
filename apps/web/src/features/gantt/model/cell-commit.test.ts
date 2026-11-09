@@ -83,7 +83,7 @@ describe('cellWriteFields', () => {
     expect(fieldsOf(cellWriteFields('duration', '4h', ctx()))).toEqual({ durationMinutes: 240 });
   });
 
-  it('sends whole days when the factor is unavailable — the flag-off path', () => {
+  it('sends whole days when the factor is unavailable', () => {
     expect(fieldsOf(cellWriteFields('duration', '3', ctx({ hoursPerDay: undefined })))).toEqual({
       durationDays: 3,
     });

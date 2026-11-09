@@ -10,20 +10,11 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 /**
  * **The Marquee select toolbar item** (`docs/specs/canvas-multi-select/` M2-T4).
  *
- * `VITE_CANVAS_MULTI_SELECT` is derived from `VITE_CANVAS_DIRECT_MANIPULATION`, so both are mocked
- * on — a build with multi-select on and direct manipulation off cannot exist, and mocking only the
- * derived flag would test a state the product never reaches (the search-nav precedent).
- *
  * The assertion that carries the design is the **pen** one: this is the first tool in group 4 that
  * is not `penGated`, because selecting is a read (the ADR-0063 M4b rule). The rest of the authoring
  * cluster shades as one set when the pen is not held, and if the marquee had joined it by
  * inheritance a Viewer would be unable to sweep a rectangle to look at something.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-  CANVAS_MULTI_SELECT_ENABLED: true,
-}));
 
 const toggleMarqueeMode = vi.fn();
 

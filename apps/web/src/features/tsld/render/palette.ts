@@ -148,8 +148,8 @@ export function resolveTsldPalette(root: Element): TsldPalette {
   return {
     canvasGround: token('--canvas', '#fcfdff'),
     gridLine: token('--border', '#e0e0e0'),
-    // Time-axis gridline tiers — `gridLine` above stays the
-    // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
+    // Time-axis gridline tiers — `gridLine` above is the single tone the export strokes its axis
+    // with; these three are the day/month/year tiers the painter draws (see `paint.ts`).
     gridLineDay: token('--canvas-grid-day', '#eceeef'),
     gridLineMonth: token('--canvas-grid-month', '#cfd2d5'),
     gridLineYear: token('--canvas-grid-year', '#b2b7bb'),
@@ -191,7 +191,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     // Today pill ink — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
     todayInk: token('--destructive-foreground', '#ffffff'),
-    // The data-date status line + pill (`VITE_CANVAS_DATA_DATE`) — the FOREGROUND/BACKGROUND pair,
+    // The data-date status line + pill — the FOREGROUND/BACKGROUND pair,
     // deliberately NOT `--color-info`: in all three themes info is a near neighbour of the
     // `--color-primary` bar fill, and a "distinct" line in the bar hue is not distinct (spec CQ-1,
     // measured). Foreground is the strongest neutral already in the palette and pairs 1:1 with

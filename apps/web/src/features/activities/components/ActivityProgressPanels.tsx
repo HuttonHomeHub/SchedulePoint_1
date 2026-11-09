@@ -27,7 +27,6 @@ import { FieldGrid } from '@/components/ui/form-layout';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 /**
@@ -246,42 +245,37 @@ export function ValueMeasurePanel({
             {error}
           </p>
         ) : null}
-        {EARNED_VALUE_ENABLED ? (
-          <>
-            {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
-              overriding this" legible at a glance instead of two rows apart. */}
-            <ActivityMeasureFields
-              form={form}
-              {...(stepsWin
-                ? {
-                    physicalGate: {
-                      writable: false,
-                      reason: `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`,
-                    },
-                  }
-                : {})}
-            />
+        {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
+          overriding this" legible at a glance instead of two rows apart. */}
+        <ActivityMeasureFields
+          form={form}
+          {...(stepsWin
+            ? {
+                physicalGate: {
+                  writable: false,
+                  reason: `Weighted steps are setting this to ${Math.round(rolled)}%. Clear the steps to enter a value by hand.`,
+                },
+              }
+            : {})}
+        />
 
-            {measure === 'UNITS' ? (
-              <p className="text-muted-foreground text-sm">
-                Units come from resource assignments.{' '}
-                {onOpenResources ? (
-                  <Button type="button" variant="ghost" onClick={onOpenResources}>
-                    Open Resources to change them
-                  </Button>
-                ) : (
-                  'Open Resources to change them.'
-                )}
-              </p>
-            ) : null}
+        {measure === 'UNITS' ? (
+          <p className="text-muted-foreground text-sm">
+            Units come from resource assignments.{' '}
+            {onOpenResources ? (
+              <Button type="button" variant="ghost" onClick={onOpenResources}>
+                Open Resources to change them
+              </Button>
+            ) : (
+              'Open Resources to change them.'
+            )}
+          </p>
+        ) : null}
 
-            {stepsWin ? (
-              <p className="text-muted-foreground text-sm">
-                From weighted steps:{' '}
-                <strong className="text-foreground">{Math.round(rolled)}%</strong>
-              </p>
-            ) : null}
-          </>
+        {stepsWin ? (
+          <p className="text-muted-foreground text-sm">
+            From weighted steps: <strong className="text-foreground">{Math.round(rolled)}%</strong>
+          </p>
         ) : null}
         <ScopeSaveBar
           gate={gate}

@@ -30,18 +30,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * for some other reason could not make these pass.
  */
 
-const h = vi.hoisted(() => ({ authoring: true, notify: vi.fn() }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    get CANVAS_AUTHORING_ENABLED() {
-      return h.authoring;
-    },
-    NOTES_ENABLED: false,
-  };
-});
+const h = vi.hoisted(() => ({ notify: vi.fn() }));
 
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -147,7 +136,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.authoring = true;
   h2.activities = [TASK, SUMMARY];
 });
 
@@ -209,14 +197,6 @@ describe('a hand-placement participates in auto-recalc (structureSignature)', ()
     const { rerender } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     h2.activities = [{ ...TASK, laneIndex: 7 }, SUMMARY];
-    rerender();
-    expect(h.notify).not.toHaveBeenCalled();
-  });
-
-  it('is inert when authoring is off (auto-recalc gated at the hook level)', () => {
-    h.authoring = false;
-    const { rerender } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    h2.activities = [{ ...TASK, visualStart: '2026-01-12' }, SUMMARY];
     rerender();
     expect(h.notify).not.toHaveBeenCalled();
   });

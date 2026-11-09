@@ -5,9 +5,9 @@ import type { RenderActivity, Viewport } from './render-model';
 import { recordingCtx } from './test-support/recording-ctx';
 
 /**
- * **The flag-off parity gate for the data-date line** (`VITE_CANVAS_DATA_DATE`, canvas status &
- * feedback M1) — the rollback contract, kept rather than weakened after any future default flip
- * (the ADR-0053 M6 rule).
+ * **The painter-level gate for the data-date line** (canvas status & feedback M1): the layer
+ * is a scene field (`dataDateLine`, set from the reader's `View▾` toggle), and a scene without it
+ * must paint exactly as it did before the layer existed.
  *
  * The claim is structural: `TsldScene.dataDateLine` absent ⇒ `dataDateX` stays null ⇒ the layer
  * adds not one call and the Today branch is byte-for-byte the pre-change painter. This suite
@@ -15,8 +15,8 @@ import { recordingCtx } from './test-support/recording-ctx';
  * (the `paint.test.ts` recording-proxy convention) and asserting three things:
  *
  * 1. absent · explicitly-undefined · explicitly-false paint **byte-identically** — so a stale
- *    persisted preference arriving after a rollback changes nothing;
- * 2. the flag-off log never touches the data-date palette entries or labels — the layer's
+ *    persisted preference changes nothing;
+ * 2. the log without the field never touches the data-date palette entries or labels — the layer's
  *    fingerprint is absent, not merely rearranged;
  * 3. the same scene with the field **true** records a *different* log — which is what makes the
  *    equality assertions above meaningful rather than vacuously green. (Also verified by
@@ -116,7 +116,7 @@ const CORPUS: ReadonlyArray<[string, TsldScene]> = [
   ],
 ];
 
-describe('data-date line — flag-off parity over a fixture corpus (the rollback contract)', () => {
+describe('data-date line — the absent field paints as before, over a fixture corpus', () => {
   // The label-width memo is module-scope and keyed by text (see `paint.dates-budget.test.ts`):
   // warm it for the whole corpus first, so a first-paint memo fill cannot masquerade as a
   // between-scene difference in the byte-for-byte comparisons below.
@@ -137,7 +137,7 @@ describe('data-date line — flag-off parity over a fixture corpus (the rollback
       expect(explicitFalse.log).toEqual(absent.log);
     });
 
-    it(`leaves no data-date fingerprint in the flag-off log — ${name}`, () => {
+    it(`leaves no data-date fingerprint in the log without the field — ${name}`, () => {
       const { ctx, log } = recordingCtx();
       paintScene(ctx, scene, VIEW, SIZE, PALETTE);
       expect(log.some((entry) => entry.includes(PALETTE.dataDate))).toBe(false);

@@ -82,17 +82,6 @@ vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
   }),
 }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
-  // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
-  // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
-  CANVAS_AUTHORING_ENABLED: false,
-  // Stage E (ADR-0049): force the (dark-by-default) resource-view flag on so the `resource-view` toggle
-  // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
-  // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
-}));
-
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via
 // `onSnapshot`) and clears it on unmount — enough to prove the workspace forwards `resourceStrip` (B7).
 vi.mock('./resource-strip-panel', async () => {
@@ -230,7 +219,6 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
-  DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 
 // The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom. Record its props so the
@@ -373,7 +361,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
         name: 'Fit to plan',
       }),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
   /**
@@ -1053,7 +1041,7 @@ describe('the short-body swap', () => {
       renderScreen();
       resizeBody(365);
       expand();
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
       expect(canvasUi()?.mode).toBe('select');
       nextFrame();
@@ -1072,7 +1060,7 @@ describe('the short-body swap', () => {
     it('puts an armed tool away on entering the swap, and says so for that opening only', () => {
       renderScreen();
       resizeBody(365);
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expect(canvasUi()?.mode).toBe('add-activity');
 
       expand();
@@ -1098,7 +1086,7 @@ describe('the short-body swap', () => {
     it('does not disarm a tool when the body is not short', () => {
       renderScreen();
       resizeBody(800);
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expand();
       expect(canvasUi()?.mode).toBe('add-activity');
     });
@@ -1273,7 +1261,7 @@ describe('a dock that has taken the row', () => {
   it('puts an armed drawing tool away when a dock takes the row and the diagram goes out of reach', () => {
     renderScreen();
     measure(640);
-    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     const mode = () => (h.tsldProps.current?.['canvasUi'] as { mode: string } | undefined)?.mode;
     expect(mode()).toBe('add-activity');
 

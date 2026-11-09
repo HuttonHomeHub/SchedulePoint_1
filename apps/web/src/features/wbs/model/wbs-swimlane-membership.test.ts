@@ -240,7 +240,7 @@ describe('the WBS band and WBS swimlanes together', () => {
   }));
 
   it('a summary the band lifts out takes no lane, so it is not drawn twice, while its swimlane stays', () => {
-    const band = deriveWbsBandSource(dated, { enabled: true, toggleOn: true, source: 'early' });
+    const band = deriveWbsBandSource(dated, { toggleOn: true, source: 'early' });
     expect(band.sceneActivities.some((a) => a.id === 'struct')).toBe(false);
 
     const input = wbsSwimlaneInput(dated, 2);

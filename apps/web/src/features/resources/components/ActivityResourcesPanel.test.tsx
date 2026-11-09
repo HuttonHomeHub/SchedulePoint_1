@@ -11,10 +11,6 @@ import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 // Pinned OFF for the same reason the sibling dialog suite pins it: this asserts the BASE surface
 // (a flat native `<select>`), not the flag's searched `Combobox`.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 

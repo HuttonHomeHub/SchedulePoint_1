@@ -1,7 +1,6 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
 import { EarnedValuePanel } from '@/features/earned-value';
 import {
@@ -158,33 +157,25 @@ export function PlanChromeDialogs({
               canEdit={model.canWrite}
             />
           </SettingsSection>
-          {EARNED_VALUE_ENABLED ? (
-            <SettingsSection title="Earned value">
-              <PlanEarnedValueSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
+          <SettingsSection title="Earned value">
+            <PlanEarnedValueSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
         </div>
       </Dialog>
 
-      {EARNED_VALUE_ENABLED ? (
-        <Dialog
-          open={dialog === 'earned-value'}
-          onClose={onClose}
-          title="Earned value"
-          description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
-          size="lg"
-        >
-          <EarnedValuePanel
-            orgSlug={model.orgSlug}
-            planId={model.planId}
-            activities={model.activities.data ?? []}
-          />
-        </Dialog>
-      ) : null}
+      <Dialog
+        open={dialog === 'earned-value'}
+        onClose={onClose}
+        title="Earned value"
+        description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
+        size="lg"
+      >
+        <EarnedValuePanel
+          orgSlug={model.orgSlug}
+          planId={model.planId}
+          activities={model.activities.data ?? []}
+        />
+      </Dialog>
 
       <Dialog
         open={dialog === 'resource-histogram'}

@@ -7,13 +7,9 @@ import { TsldPanel } from './TsldPanel';
 import { anActivity } from '@/test/activity-fixture';
 
 // This file exercises the M1 read-only surface; the editing surface is covered by
-// TsldPanel.editing.test.tsx. Canvas-first authoring defaults ON (it mounts a drawable canvas in place of
-// the empty/recalc-prompt states), so pin it OFF too; its behaviour is covered by
-// TsldPanel.authoring.test.tsx.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: false };
-});
+// TsldPanel.editing.test.tsx. The empty / recalc-prompt states below are the ones with no timeline
+// anchor (`dataDate` null): with an anchor the canvas mounts blank and drawable instead
+// (TsldPanel.authoring.test.tsx).
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return anActivity({
@@ -46,8 +42,8 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 const NO_DEPS: DependencySummary[] = [];
 
 describe('TsldPanel', () => {
-  it('shows an empty state when the plan has no activities', () => {
-    render(<TsldPanel activities={[]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
+  it('shows an empty state when the plan has no activities and no timeline anchor', () => {
+    render(<TsldPanel activities={[]} dependencies={NO_DEPS} dataDate={null} />);
     expect(screen.getByText(/No activities to diagram yet/)).toBeInTheDocument();
   });
 
@@ -68,9 +64,9 @@ describe('TsldPanel', () => {
     );
   });
 
-  it('prompts to recalculate when the schedule is not yet computed', () => {
+  it('prompts to recalculate when the schedule is not yet computed and there is no timeline anchor', () => {
     const uncomputed = activity({ earlyStart: null, earlyFinish: null });
-    render(<TsldPanel activities={[uncomputed]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
+    render(<TsldPanel activities={[uncomputed]} dependencies={NO_DEPS} dataDate={null} />);
     expect(screen.getByText(/Recalculate the schedule to plot/)).toBeInTheDocument();
     expect(screen.getByText(/appears once the schedule has been calculated/)).toBeInTheDocument();
   });

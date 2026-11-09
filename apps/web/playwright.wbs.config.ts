@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **WBS improvements** epic (`VITE_WBS_IMPROVEMENTS`,
- * ADR-0063, `docs/specs/wbs-improvements/`) — bulk membership, the pinned canvas band, the derived
+ * End-to-end configuration for the **WBS improvements** epic (ADR-0063,
+ * `docs/specs/wbs-improvements/`) — bulk membership, the pinned canvas band, the derived
  * Unassigned bucket, and dissolve.
  *
  * The pen is on and **enforced at the API** (`PLAN_EDIT_LOCK_ENFORCED`). That is the whole reason
@@ -63,15 +63,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              VITE_WBS_IMPROVEMENTS: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

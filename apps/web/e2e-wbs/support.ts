@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
 /**
- * Journey helpers for the flag-ON **WBS improvements** suite (`VITE_WBS_IMPROVEMENTS`, ADR-0063,
+ * Journey helpers for the **WBS improvements** suite (ADR-0063,
  * `docs/specs/wbs-improvements/`). The onboarding + client/project/plan helpers mirror
  * `e2e-gantt/support.ts`; the actor is the org's Org Admin, which satisfies everything here.
  *

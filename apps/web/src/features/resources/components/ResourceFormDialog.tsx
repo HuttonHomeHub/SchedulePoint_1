@@ -24,7 +24,6 @@ import {
 } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
 import { ARCHIVED_BADGE, isArchivedRow, matchesLibraryQuery } from '@/lib/library-filters';
@@ -391,21 +390,19 @@ function ResourceForm({
                     setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                   })}
                 />
-                {EARNED_VALUE_ENABLED ? (
-                  <TextField
-                    label="Cost per unit"
-                    type="number"
-                    min={0}
-                    step="any"
-                    inputMode="decimal"
-                    readOnly={readOnly}
-                    hint="The cost per unit of work this resource does, shown in each plan’s own currency when Earned Value reads it. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
-                    error={errors.costPerUnit?.message}
-                    {...register('costPerUnit', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                ) : null}
+                <TextField
+                  label="Cost per unit"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  readOnly={readOnly}
+                  hint="The cost per unit of work this resource does, shown in each plan’s own currency when Earned Value reads it. Earned Value derives an assignment’s budgeted cost from units × this rate. Leave blank for no rate."
+                  error={errors.costPerUnit?.message}
+                  {...register('costPerUnit', {
+                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                  })}
+                />
               </FieldGrid>
             </FormSection>
           )}

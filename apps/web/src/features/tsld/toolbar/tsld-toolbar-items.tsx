@@ -118,14 +118,6 @@ import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
 import { useTooltip } from '@/components/ui/tooltip';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_DATA_DATE_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-  EARNED_VALUE_ENABLED,
-  NOTES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
-} from '@/config/env';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import {
   CONFLICT_READOUT_ICON,
@@ -709,71 +701,67 @@ function lensLadderEntries(): readonly PromotableEntry<TsldToolbarContext>[] {
 }
 
 /**
- * **Single source of truth** for every `View▾` toggle: its group, its label, and (for a flag-gated
- * item) whether it is currently offered. `Record<keyof TsldViewToggles, …>` makes this a **compile
+ * **Single source of truth** for every `View▾` toggle: its group and its label. `Record<keyof TsldViewToggles, …>` makes this a **compile
  * error**, not a silent gap, if `TsldViewToggles` ever gains a key nobody assigned here — the
  * direct strengthening of the guard whose absence let two ADR-0054 toggles get silently dropped by
  * a bad search-and-replace while the release notes claimed they shipped. Object key order is
  * insertion order (guaranteed for non-integer string keys), which is also the order `View▾` lists
  * within each group — one ordering, not two structures that can drift apart.
  */
-const VIEW_TOGGLE_META: Record<
-  keyof TsldViewToggles,
-  { group: ViewToggleGroupId; label: string; enabled?: boolean }
-> = {
-  dayGrid: { group: 'structure', label: 'Day grid' },
-  monthGrid: { group: 'structure', label: 'Month grid' },
-  yearGrid: { group: 'structure', label: 'Year grid' },
-  monthBands: { group: 'structure', label: 'Month bands' },
-  wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
-  // The Gantt's dependency arrows (M4). Listed under `structure` because that is what it is —
-  // the shape of the programme rather than a marker on it — and it lives in `View ▾` rather than
-  // on Row 1 or Row 2 deliberately (spec SC-6): those rows are already the subject of two epics
-  // spent fitting them, and a toggle nobody presses twice a session does not earn a slot there.
-  //
-  // No `enabled` gate: this epic has no feature flag (the product owner's Q4 choice), so the item
-  // is offered wherever the menu is. On the canvas it is inert — the diagram has always drawn its
-  // logic — which is honest rather than confusing: the toggle says what the VIEW shows, and the
-  // view that ignores it is the one already showing everything.
-  logicLinks: { group: 'structure', label: 'Logic links' },
-  // The data-date status line (canvas status & feedback M1) — listed before Today because on a
-  // statused programme the data date sits left of (before) today, and the menu order should read
-  // in diagram order. Flag-off it is filtered out, so `View▾` offers no such toggle (the parity
-  // claim in the spec's US-1).
-  dataDate: { group: 'markers', label: 'Data date line', enabled: CANVAS_DATA_DATE_ENABLED },
-  today: { group: 'markers', label: 'Today line' },
-  nonWorking: { group: 'markers', label: 'Non-working' },
-  labels: { group: 'markers', label: 'Labels' },
-  // NetPoint grammar M4-T1 (spec §4.13 C1): beside `labels`, both default off.
-  activityCodes: { group: 'markers', label: 'Activity codes' },
-  centreItem: { group: 'markers', label: 'Duration & float' },
-  dates: { group: 'insight', label: 'Dates' },
-  // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
-  // drawn twice and became one bracket, so the control describes the same overlay under a name
-  // that matches the picture. The KEY stays `floatTails` because renaming it would touch three
-  // consumers and the whole `TsldViewToggles` contract to say nothing new.
-  //
-  // **NOT because it preserves a planner's state — there is none to preserve.** The plan's risk
-  // note said so and it is false: `use-tsld-canvas-ui-state.ts` holds these in
-  // `useState(DEFAULT_VIEW_TOGGLES)` and calls them "never persisted" in its own docblock, so the
-  // toggle already resets on every mount under either name. The first version of this comment
-  // repeated the plan's sentence; it is corrected here rather than left to be cited later.
-  floatTails: { group: 'insight', label: 'Feasible window' },
-  // Renamed from `Link slack` (NetPoint grammar M3-T3): it now labels every waiting link's gap in
-  // working days rather than the selection's slack. The key keeps its name for the reason given
-  // for `floatTails` above.
-  linkSlack: { group: 'insight', label: 'Link gaps' },
-  // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
-  // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
-  // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
-  // with nothing to be gated on. Ungating it is what stops the collapse taking a working read-only
-  // lens away as collateral.
-  lateOverlay: { group: 'insight', label: 'Late-start overlay' },
-};
+const VIEW_TOGGLE_META: Record<keyof TsldViewToggles, { group: ViewToggleGroupId; label: string }> =
+  {
+    dayGrid: { group: 'structure', label: 'Day grid' },
+    monthGrid: { group: 'structure', label: 'Month grid' },
+    yearGrid: { group: 'structure', label: 'Year grid' },
+    monthBands: { group: 'structure', label: 'Month bands' },
+    wbsBand: { group: 'structure', label: 'WBS band' },
+    // The Gantt's dependency arrows (M4). Listed under `structure` because that is what it is —
+    // the shape of the programme rather than a marker on it — and it lives in `View ▾` rather than
+    // on Row 1 or Row 2 deliberately (spec SC-6): those rows are already the subject of two epics
+    // spent fitting them, and a toggle nobody presses twice a session does not earn a slot there.
+    //
+    // No `enabled` gate: this epic has no feature flag (the product owner's Q4 choice), so the item
+    // is offered wherever the menu is. On the canvas it is inert — the diagram has always drawn its
+    // logic — which is honest rather than confusing: the toggle says what the VIEW shows, and the
+    // view that ignores it is the one already showing everything.
+    logicLinks: { group: 'structure', label: 'Logic links' },
+    // The data-date status line (canvas status & feedback M1) — listed before Today because on a
+    // statused programme the data date sits left of (before) today, and the menu order should read
+    // in diagram order.
+    dataDate: { group: 'markers', label: 'Data date line' },
+    today: { group: 'markers', label: 'Today line' },
+    nonWorking: { group: 'markers', label: 'Non-working' },
+    labels: { group: 'markers', label: 'Labels' },
+    // NetPoint grammar M4-T1 (spec §4.13 C1): beside `labels`, both default off.
+    activityCodes: { group: 'markers', label: 'Activity codes' },
+    centreItem: { group: 'markers', label: 'Duration & float' },
+    dates: { group: 'insight', label: 'Dates' },
+    // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
+    // drawn twice and became one bracket, so the control describes the same overlay under a name
+    // that matches the picture. The KEY stays `floatTails` because renaming it would touch three
+    // consumers and the whole `TsldViewToggles` contract to say nothing new.
+    //
+    // **NOT because it preserves a planner's state — there is none to preserve.** The plan's risk
+    // note said so and it is false: `use-tsld-canvas-ui-state.ts` holds these in
+    // `useState(DEFAULT_VIEW_TOGGLES)` and calls them "never persisted" in its own docblock, so the
+    // toggle already resets on every mount under either name. The first version of this comment
+    // repeated the plan's sentence; it is corrected here rather than left to be cited later.
+    floatTails: { group: 'insight', label: 'Feasible window' },
+    // Renamed from `Link slack` (NetPoint grammar M3-T3): it now labels every waiting link's gap in
+    // working days rather than the selection's slack. The key keeps its name for the reason given
+    // for `floatTails` above.
+    linkSlack: { group: 'insight', label: 'Link gaps' },
+    // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
+    // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
+    // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
+    // with nothing to be gated on. Ungating it is what stops the collapse taking a working read-only
+    // lens away as collateral.
+    lateOverlay: { group: 'insight', label: 'Late-start overlay' },
+  };
 
 function visibleViewToggleKeysIn(group: ViewToggleGroupId): ReadonlyArray<keyof TsldViewToggles> {
   return (Object.keys(VIEW_TOGGLE_META) as Array<keyof TsldViewToggles>).filter(
-    (key) => VIEW_TOGGLE_META[key].group === group && VIEW_TOGGLE_META[key].enabled !== false,
+    (key) => VIEW_TOGGLE_META[key].group === group,
   );
 }
 
@@ -813,7 +801,7 @@ function viewToggleKeysFor(
   });
 }
 
-/** The keys `View▾` actually offers (every group, flag-off-gated members excluded), exported so a
+/** The keys `View▾` actually offers (every group), exported so a
  * test can pin the registry against drift. */
 export const TSLD_VIEW_TOGGLE_KEYS: ReadonlyArray<keyof TsldViewToggles> =
   VIEW_TOGGLE_GROUP_ORDER.flatMap(({ id }) => visibleViewToggleKeysIn(id));
@@ -1641,10 +1629,10 @@ function PlanAnalysisControl({
           <Layers aria-hidden="true" className="size-4" />
           Baselines…
         </MenuItem>
-        {/* Baselines… is this menu's anchor: flag-independent, so the menu never empties and its
+        {/* Baselines… is this menu's anchor: always present, so the menu never empties and its
             trigger is on the bar at every width. Every row below leaves for the bar while the
             viewport has room for it (toolbar-redesign M5) and is back here below that. */}
-        {EARNED_VALUE_ENABLED && !entryOnBar(EARNED_VALUE_ENTRY, ctx) ? (
+        {!entryOnBar(EARNED_VALUE_ENTRY, ctx) ? (
           <MenuItem onSelect={() => ctx.openEarnedValue()}>
             <DollarSign aria-hidden="true" className="size-4" />
             Earned value…
@@ -3119,8 +3107,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // two-row amendment): Add, Link, Auto-arrange, note/snap/clear, then Recalculate and Undo/Redo —
     // moved here from the Object/History groups so the pen-gated set is contiguous. Plan & deliverable
     // actions (baselines, calendar, export…) stay live on the same row because they don't need the pen.
-    // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
-    // Add split-button (ADR-0032 M4), a menu-button that also picks the draw kind (task / milestone).
+    // Add activity — the canvas-first Add split-button (ADR-0032 M4), a menu-button that also picks
+    // the draw kind (task / milestone).
     /**
      * **The pen, at the head of the row it unlocks** (console epic M5-T2).
      *
@@ -3207,14 +3195,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(ADD_ACTION) ?? undefined,
       /**
-       * **`isActive` sits OUTSIDE the flag branch, and that is a fix rather than a tidy-up**
-       * (foot-row epic M7, architecture gate B2).
+       * **`isActive` is declared even though the item renders itself, and that is a fix rather
+       * than a tidy-up** (foot-row epic M7, architecture gate B2).
        *
-       * It used to live only in the flag-off arm, because only that arm needed it to drive a
-       * `ToolbarButton`'s pressed state — `AddActivityControl` computes `armed` from the same
-       * context and passes its own `pressed`. So with `VITE_CANVAS_AUTHORING` on, which is every
-       * shipped build, **the registry did not know this tool was armed**, and neither did anything
-       * reading `ResolvedToolbarItem.active`.
+       * `AddActivityControl` computes `armed` from the same context and passes its own `pressed`,
+       * so a `render` item that does not also declare `isActive` leaves **the registry unaware that
+       * this tool is armed**, and so is anything reading `ResolvedToolbarItem.active`.
        *
        * That became load-bearing when `Deck` gained "a group holding an armed tool refuses to fold"
        * (M2): `hasActive` reads exactly this field, so the guard fired for `marquee-select` — the
@@ -3232,13 +3218,11 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // rather than inferred — `state-ladder.structural.test.ts` reads this set, and the split
       // button's own default would satisfy the paint while leaving the set unstated.
       activeKind: 'armed',
-      ...(CANVAS_AUTHORING_ENABLED
-        ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
-        : { onActivate: (ctx) => ctx.toggleAddActivity() }),
+      render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} />,
     },
     // Link split-button (ADR-0032 M5, ADR-0031 amendment) — one menu-button that arms link-mode and
-    // picks FS/SS/FF, mirroring Add. Shown **always** when canvas-first authoring is on
-    // (shade-don't-hide) and pen-gated, so a viewer sees it disabled rather than missing.
+    // picks FS/SS/FF, mirroring Add. Shown **always** (shade-don't-hide) and pen-gated, so a viewer sees it
+    // disabled rather than missing.
     {
       id: 'link-tool',
       group: 'tools',
@@ -3247,7 +3231,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       label: 'Link activities',
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(LINK_ACTION) ?? undefined,
-      isVisible: () => CANVAS_AUTHORING_ENABLED,
       // See `add-activity` above: a `render` item that publishes only its own `pressed` leaves the
       // registry — and therefore `Deck`'s no-fold-while-armed guard — blind to an armed tool.
       isActive: (ctx) => ctx.isLinking,
@@ -3269,25 +3252,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
      * **Not `penGated`.** Selecting is a read (the ADR-0063 M4b rule), so a Viewer may sweep; the
      * bulk actions the selection opens carry their own gates and say why they are shut.
      *
-     * Flag-off the item is **absent**, not shaded — a "Coming soon" placeholder is for a control
-     * whose slot the planner can see is coming, and nothing in today's toolbar reserves this one.
      */
-    ...(CANVAS_MULTI_SELECT_ENABLED
-      ? [
-          {
-            id: 'marquee-select',
-            group: 'tools' as const,
-            row: 'strip' as const,
-            order: 2,
-            label: 'Select',
-            description: 'Marquee-select activities on the canvas',
-            icon: <SquareDashedMousePointer className="size-4" />,
-            isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
-            activeKind: 'armed' as const,
-            onActivate: (ctx: TsldToolbarContext) => ctx.toggleMarqueeMode(),
-          },
-        ]
-      : []),
+    {
+      id: 'marquee-select',
+      group: 'tools' as const,
+      row: 'strip' as const,
+      order: 2,
+      label: 'Select',
+      description: 'Marquee-select activities on the canvas',
+      icon: <SquareDashedMousePointer className="size-4" />,
+      isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
+      activeKind: 'armed' as const,
+      onActivate: (ctx: TsldToolbarContext) => ctx.toggleMarqueeMode(),
+    },
     {
       id: 'auto-arrange',
       group: 'tools',
@@ -3382,10 +3359,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // measurement) went with it; a command that is offered only when it can change something needs
     // no rank at all. `ctx.recalculate` and `ctx.canRecalc` stay on the context — the status bar's
     // control calls the same function through the same gate.
-    // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2).
-    // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2). Flag-off these are the
-    // ADR-0031 "Coming soon" placeholders (byte-for-byte the current bar); flag-on they are the real
-    // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.
+    // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2): the real pen-gated commands,
+    // disabled from `canUndo`/`canRedo` with a dynamic accessible name.
     ...undoRedoToolbarItems(),
 
     // Legend + Resource view, back on Row 1 (workspace-chrome M4) — see `promotedLensItems`.
@@ -3559,7 +3534,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     },
     // `share` folded INTO the Share & export menu in ADR-0090 M2-T4 — see `ExportMenuControl`.
     // Comments — reveals + focuses the plan-level notes thread (toolbar quick-wins F2). Read action for
-    // every role; absent when `VITE_NOTES` is off (there is nothing to reveal).
+    // every role.
     {
       id: 'comments',
       // **Panels, not Plan** (toolbar-redesign M2-T2): Comments opens a panel beside the diagram, which
@@ -3574,7 +3549,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // `--container-roomy`, CQ-2).
       labelVisibility: 'never' as const,
       description: "Show the plan's comments beside the diagram",
-      isVisible: () => NOTES_ENABLED,
       // Comments is a genuine TOGGLE for the docked notes panel, so it carries pressed state
       // (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
       isActive: (ctx) => ctx.notesOpen,

@@ -9,10 +9,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
 
 // The convergence flag ON. Its sibling suite (`…convergence.flag-off.test.tsx`) pins the other
 // state, which is the rollback contract — both are kept, per ADR-0053 M6.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  NOTES_ENABLED: true,
-}));
 
 const REQUESTS: { url: string; method: string }[] = [];
 

@@ -8,12 +8,6 @@ import {
 } from '@repo/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_DATA_DATE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-} from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
@@ -136,7 +130,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
-import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import {
   SelectionActionsBar,
@@ -331,13 +324,12 @@ export interface TsldPanelProps {
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
   /** Route-composed bar-end resize handler (ADR-0052 M2 finish edge, M3 start edge): the
    * full-definition `PATCH durationDays` (+ `visualStart` for a start drag) +
-   * recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the bar-end
+   * recalc. Its presence arms the bar-end
    * resize handles + the `Shift+←/→` duration nudge. Resolves with a conflict message when
    * refused (stale version); rejects on real error. */
   onResize?: (input: TsldResizeInput) => Promise<TsldResizeOutcome>;
   /** Route-composed lag-drag handler (ADR-0052 M3): `PATCH /dependencies/:id` echoing the
-   * unchanged type + lag calendar + recalc. Only reachable under
-   * `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the drawn lag-anchor grab zones.
+   * unchanged type + lag calendar + recalc. Its presence arms the drawn lag-anchor grab zones.
    * Resolves with a conflict message when refused (stale version); rejects on real error. */
   onLag?: (input: TsldLagInput) => Promise<TsldLagOutcome>;
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
@@ -450,11 +442,10 @@ export interface TsldPanelProps {
   /** Delete an activity (host-owned confirm) — the docked selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
-   * Dissolve the selected WBS summary — remove the grouping and keep the work
-   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 §8).
-   * Optional: absent ⇒ the action is inert, and the `dissolve` item is itself flag-gated in
-   * {@link selectionActionItems} and hidden for a non-summary selection, so flag-off is
-   * byte-for-byte.
+   * Dissolve the selected WBS summary — remove the grouping and keep the work.
+   * The host owns the confirm dialog and the mutation (ADR-0026 §8).
+   * Optional: absent ⇒ the action is inert; the `dissolve` item in {@link selectionActionItems} is
+   * hidden for a non-summary selection.
    */
   onDissolveSummary?: (activity: ActivitySummary) => void;
   /**
@@ -760,10 +751,9 @@ export function TsldPanel({
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
-  // first activity on a blank plan. Flag-off (or once a start is set) this is exactly the prop, so
-  // the legacy path is byte-for-byte unchanged. The first structural write pins `plannedStart` to
+  // first activity on a blank plan. Once a start is set this is exactly the prop. The first structural write pins `plannedStart` to
   // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
-  const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
+  const dataDate = dataDateProp ?? todayIso ?? null;
   const announce = useAnnounce();
   // What a recalculation SETTLED, as opposed to what an edit promised. The edit paths below note the
   // activity they wrote; this speaks the result once the schedule stops moving. Keyed by the host's
@@ -1066,7 +1056,7 @@ export function TsldPanel({
   useEffect(() => {
     recalcHoldRef.current = recalcHold;
   });
-  const pickIsOpen = CANVAS_AUTHORING_FLOW_ENABLED && linkPickedId !== null;
+  const pickIsOpen = linkPickedId !== null;
   useEffect(() => {
     if (!pickIsOpen) return;
     const seam = recalcHoldRef.current;
@@ -1079,9 +1069,8 @@ export function TsldPanel({
    * stored: every input already exists, and a second copy of "which tool is armed" is exactly the
    * kind of state that drifts from the one the canvas actually obeys.
    */
-  const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
-    ? null
-    : mode === 'marquee'
+  const modeStatement: CanvasModeStatement | null =
+    mode === 'marquee'
       ? // **`marquee` is KEPT.** `marquee-select` is a plain `ToolbarButton` whose label stays
         // `Select` when armed (the `marquee-select` registration in `tsld-toolbar-items.tsx`, whose
         // `label` is the literal `'Select'`) — only the pressed wash changes.
@@ -1150,8 +1139,7 @@ export function TsldPanel({
    * swept by an effect that can run a frame late and let a bulk action name a row that is gone.
    */
   const selectedActivities = useMemo(
-    () =>
-      CANVAS_MULTI_SELECT_ENABLED ? activities.filter((a) => selection.ids.includes(a.id)) : [],
+    () => activities.filter((a) => selection.ids.includes(a.id)),
     [activities, selection.ids],
   );
 
@@ -1250,7 +1238,7 @@ export function TsldPanel({
   const diagramSource = useMemo(
     () =>
       deriveDiagramSource(activities, {
-        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        wbsBand: { toggleOn: viewToggles.wbsBand ?? false },
         swimlanes,
         source: barDateSource,
         dataDate,
@@ -1799,7 +1787,7 @@ export function TsldPanel({
       // CURSOR, not the selection, so selecting alone left it on whichever row the planner had last
       // walked to — a reveal (undo, a duplicate, a search hit) that selected the right bar and told a
       // screen reader about the wrong one (WCAG 4.1.2).
-      if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(signal.id);
+      setActiveIdRaw(signal.id);
       // Move DOM focus into the parallel listbox so `aria-activedescendant` is actually conveyed and an
       // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not
       // just hears the announcement. Guarded to this conflict-cycle path so ordinary canvas selection
@@ -1815,17 +1803,15 @@ export function TsldPanel({
   }, [navState.selectSignal, activities, setSelectedId, setActiveIdRaw]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
-  // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
-  // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
-  // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
-  // bars simply don't paint (`paint.ts` skips `drawnStart === null`).
-  const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
+  // The interactive canvas mounts once there's a timeline origin. Canvas-first authoring
+  // (ADR-0032) mounts a **blank, draw-ready** canvas before any recalc so the first activity can be
+  // placed on it; uncalculated bars simply don't paint (`paint.ts` skips `drawnStart === null`).
+  const showDiagram = dataDate !== null;
 
   const editingEnabled = showDiagram && canEdit && onCreate !== undefined;
   // The plural-move capability exists only where the keymap will honour it: the hint is a claim
   // about what Alt+arrow does, so it needs the same conditions the keydown branch needs.
   const canMovePlural =
-    CANVAS_MULTI_SELECT_ENABLED &&
     editingEnabled &&
     onReposition !== undefined &&
     bulk?.moveMany !== undefined &&
@@ -1900,7 +1886,6 @@ export function TsldPanel({
     showDiagram,
     activityCount: activities.length,
     mode,
-    authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
     hasPlacementMigrationNotice: placementMigrationNotice != null,
     hasTouchGestureHint: touchGestureHint != null,
     hasArrangeOffer: arrangeOfferAvailable,
@@ -2040,20 +2025,15 @@ export function TsldPanel({
    * because the canvas paints no separate cursor ring — the ring and the Enter target agreed by
    * construction, which is what let it past a visual read.
    */
-  const activeId: string | null = !CANVAS_MULTI_SELECT_ENABLED
-    ? selectedId
-    : activeIdRaw && activities.some((a) => a.id === activeIdRaw)
-      ? activeIdRaw
-      : selectedId;
+  const activeId: string | null =
+    activeIdRaw && activities.some((a) => a.id === activeIdRaw) ? activeIdRaw : selectedId;
 
   const select = (id: string | null, modifier?: SelectModifier): void => {
     // Pointing at a row — by click or by arrow — moves the cursor there. Only Space, Ctrl/Cmd+A and
     // the marquee change the selection without moving it, which is exactly the distinction the
     // separate cursor exists to hold.
-    if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(id);
-    // Flag-off the canvas never passes a modifier, so this is the single-selection handler it has
-    // always been, statement for statement.
-    if (CANVAS_MULTI_SELECT_ENABLED && modifier && id) {
+    setActiveIdRaw(id);
+    if (modifier && id) {
       setSelection((current) => {
         const next =
           modifier === 'toggle'
@@ -2086,7 +2066,6 @@ export function TsldPanel({
    * is information.
    */
   const selectRegion = (ids: readonly string[], additive: boolean): void => {
-    if (!CANVAS_MULTI_SELECT_ENABLED) return;
     setSelection((current) => {
       const next = additive ? addAll(current, ids) : replaceAll(ids);
       announceSelectionCount(next, current.ids.length);
@@ -2336,9 +2315,7 @@ export function TsldPanel({
       // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
       // screen-reader user hears as "selected", and pointing it at the active option
       // would report exactly one member of a selection of twelve.
-      aria-selected={
-        CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
-      }
+      aria-selected={isSelected(selection, a.id)}
     >
       {rowTextById.get(a.id)}
     </li>
@@ -2379,13 +2356,7 @@ export function TsldPanel({
      * on the toolbar did nothing for them. Gated on `mode === 'link'`, so Enter outside the tool
      * still opens the Logic tab exactly as it did — tested both ways.
      */
-    if (
-      CANVAS_AUTHORING_FLOW_ENABLED &&
-      editingEnabled &&
-      mode === 'link' &&
-      onLink &&
-      event.key === 'Enter'
-    ) {
+    if (editingEnabled && mode === 'link' && onLink && event.key === 'Enter') {
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       if (!current) return;
@@ -2462,26 +2433,20 @@ export function TsldPanel({
      */
     if (event.key === ' ') {
       event.preventDefault();
-      if (CANVAS_MULTI_SELECT_ENABLED) {
-        if (activeId) {
-          // Computed from the render's own `selection` and announced beside the write, rather than
-          // announcing inside the updater: a `setState` updater must be pure, and React may invoke
-          // it more than once. `select()` uses the updater form because the canvas can call it from
-          // a stale closure; a key handler is re-created every render and has no such problem.
-          const next = toggle(selection, activeId);
-          setSelection(next);
-          announceSelectionCount(next, selection.ids.length);
-        }
-        return;
+      if (activeId) {
+        // Computed from the render's own `selection` and announced beside the write, rather than
+        // announcing inside the updater: a `setState` updater must be pure, and React may invoke
+        // it more than once. `select()` uses the updater form because the canvas can call it from
+        // a stale closure; a key handler is re-created every render and has no such problem.
+        const next = toggle(selection, activeId);
+        setSelection(next);
+        announceSelectionCount(next, selection.ids.length);
       }
-      const current = activities.find((a) => a.id === activeId);
-      if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
       return;
     }
     // `i` — the logic summary Space used to give. Verified free against the current keymap before
     // it was taken (`Enter`, `?`, `[`, `]`, `Space`, `n`, `Alt+*`, `Shift+←/→`, arrows, Home/End).
-    // Flag-off this branch never runs, so `i` stays unbound and the keymap is byte-for-byte today's.
-    if (CANVAS_MULTI_SELECT_ENABLED && (event.key === 'i' || event.key === 'I')) {
+    if (event.key === 'i' || event.key === 'I') {
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
@@ -2496,7 +2461,7 @@ export function TsldPanel({
      * kept in step (the ADR-0079 Escape guard exists precisely because a `window` listener cannot
      * make that promise).
      */
-    if (CANVAS_MULTI_SELECT_ENABLED && (event.ctrlKey || event.metaKey) && event.key === 'a') {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
       event.preventDefault();
       const next = replaceAll(activities.map((a) => a.id));
       setSelection(next);
@@ -2513,7 +2478,6 @@ export function TsldPanel({
      * ADR-0064 defect class, arriving through a door that decision did not have.
      */
     if (
-      CANVAS_MULTI_SELECT_ENABLED &&
       event.key === 'Escape' &&
       mode === 'select' &&
       linkPickedId === null &&
@@ -2527,10 +2491,8 @@ export function TsldPanel({
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
     // equivalent of the finish-edge resize drag (WCAG 2.5.7), coalesced like the Alt+arrow moves.
     // Same eligibility as the pointer path: the flag, a wired handler, editing, and a bar whose
-    // duration is a real user input (milestones / LOE / WBS summaries no-op). Flag-off this branch
-    // is unreachable, so the listbox keymap is byte-for-byte today's.
+    // duration is a real user input (milestones / LOE / WBS summaries no-op).
     if (
-      CANVAS_DIRECT_MANIPULATION_ENABLED &&
       editingEnabled &&
       onResize &&
       event.shiftKey &&
@@ -2564,12 +2526,7 @@ export function TsldPanel({
       // The cursor decides, as the grab does for the drag: the whole selection moves only when it
       // holds more than one activity AND includes the cursor row. A cursor outside the set moves
       // that one bar, as it always has.
-      if (
-        CANVAS_MULTI_SELECT_ENABLED &&
-        bulk?.moveMany &&
-        selection.ids.length > 1 &&
-        selection.ids.includes(current.id)
-      ) {
+      if (bulk?.moveMany && selection.ids.length > 1 && selection.ids.includes(current.id)) {
         pluralNudge(selection.ids, current, axis, delta);
       } else {
         nudge(current, axis, delta);
@@ -2614,7 +2571,7 @@ export function TsldPanel({
      * is both taken and meaningless here. Taking it would have silently removed a shipped edit
      * accelerator to add a navigation one nobody asked for.
      */
-    if (CANVAS_MULTI_SELECT_ENABLED && event.shiftKey && !event.altKey) {
+    if (event.shiftKey && !event.altKey) {
       setActiveIdRaw(target.id);
       const grown = addAll(selection, [target.id]);
       setSelection(grown);
@@ -2825,10 +2782,9 @@ export function TsldPanel({
         return;
       }
       if (intent.sidewaysRefused) {
-        const selected =
-          CANVAS_MULTI_SELECT_ENABLED && selection.ids.includes(intent.activityId)
-            ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
-            : [];
+        const selected = selection.ids.includes(intent.activityId)
+          ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
+          : [];
         showConflict(
           selected.length > 1 ? startFrozenPluralReason(selected.length) : START_EDGE_FROZEN_REASON,
           false,
@@ -2844,8 +2800,7 @@ export function TsldPanel({
       //
       // Falls through to the single-bar path whenever the selection is one, does not contain the
       // dragged bar, or the host supplied no `moveMany` — so every existing caller is unchanged.
-      const pluralIds =
-        CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
+      const pluralIds = selection.ids.length > 1 ? selection.ids : [];
       if (moveMany && pluralIds.includes(intent.activityId)) {
         const rows = laneActivities.filter((a) => pluralIds.includes(a.id));
         // A WBS summary can be in the selection (Ctrl+A takes every row), and the server refuses a
@@ -3241,8 +3196,8 @@ export function TsldPanel({
 
   // Canvas-first authoring (ADR-0032) mounts a blank, draw-ready canvas on an empty plan (there's a
   // timeline anchor via `dataDate`), so skip the empty-state note in that case and fall through to
-  // the interactive canvas below. Flag-off — or with no anchor — keep today's empty-state note.
-  if (activities.length === 0 && !(CANVAS_AUTHORING_ENABLED && showDiagram)) {
+  // the interactive canvas below. With no anchor the empty-state note stays.
+  if (activities.length === 0 && !showDiagram) {
     return (
       // **Converged on the same file's own answer** (`docs/specs/empty-state-consolidation/` M6):
       // `:2700` below already renders its empty canvas through `NoticeStrip emphasis="dashed"`,
@@ -3425,7 +3380,7 @@ export function TsldPanel({
           and nothing at all when the host wired no operations, so a partially-wired host cannot ship
           a button that does nothing.
         */}
-        {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+        {bulk ? (
           <BulkSelectionBar
             count={selection.ids.length}
             primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
@@ -3673,9 +3628,7 @@ export function TsldPanel({
               onSelectRegion={selectRegion}
               // The plural set only when it IS plural: at one selected the canvas
               // receives `undefined` and builds the scene it always built.
-              selectedIds={
-                CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : undefined
-              }
+              selectedIds={selection.ids.length > 1 ? selection.ids : undefined}
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
@@ -3684,7 +3637,6 @@ export function TsldPanel({
               canReposition={onReposition !== undefined}
               canResize={onResize !== undefined}
               canLag={onLag !== undefined}
-              canLink={onLink !== undefined}
               onIntent={onIntent}
               onLoeSpanStep={handleLoeSpanStep}
               loePickStartId={loeStartId}
@@ -3809,14 +3761,12 @@ export function TsldPanel({
                 ))}
               </ul>
             ) : null}
-            {CANVAS_DATA_DATE_ENABLED ? (
-              <p id={`${listboxId}-data-date`} className="sr-only">
-                {`Data date ${formatCalendarDate(dataDate)}.`}
-                {todayIso && todayIso !== dataDate
-                  ? ` Today is ${formatCalendarDate(todayIso)}.`
-                  : ''}
-              </p>
-            ) : null}
+            <p id={`${listboxId}-data-date`} className="sr-only">
+              {`Data date ${formatCalendarDate(dataDate)}.`}
+              {todayIso && todayIso !== dataDate
+                ? ` Today is ${formatCalendarDate(todayIso)}.`
+                : ''}
+            </p>
             {levelledSummary !== null && levelledSummary.undrawnLabel !== '' ? (
               /*
                 **The lens is on and drew nothing, said visibly** (M-E-T6). Its neighbour below
@@ -3925,12 +3875,10 @@ export function TsldPanel({
               // absent while idle (the existing `[aria-busy="true"]` assertions).
               aria-busy={pendingReposition !== null || undefined}
               className="sr-only"
-              {...(CANVAS_DATA_DATE_ENABLED
-                ? { 'aria-describedby': `${listboxId}-data-date` }
-                : {})}
-              // Advertised only flag-on: an `aria-multiselectable` listbox whose Space does
-              // nothing plural is a promise the surface does not keep.
-              aria-multiselectable={CANVAS_MULTI_SELECT_ENABLED || undefined}
+              aria-describedby={`${listboxId}-data-date`}
+              // An `aria-multiselectable` listbox whose Space does nothing plural would be a
+              // promise the surface does not keep; here Space toggles the cursor row.
+              aria-multiselectable
               aria-activedescendant={activeId ? optionId(activeId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {

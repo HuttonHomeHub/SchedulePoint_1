@@ -20,10 +20,6 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
  * must surface on the context so the Clear-visual item can explain an overlay-disabled state (A1). Proven
  * against the REAL builder (mocking only the leaf query hooks), so a renamed seam would fail.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));

@@ -37,11 +37,6 @@ const h = vi.hoisted(() => ({
   onWriteRejected: vi.fn((): { kind: 'none' | 'lock' } => ({ kind: 'none' })),
 }));
 
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: true, NOTES_ENABLED: false };
-});
-
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanEditHistory: () => ({

@@ -5,13 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Canvas nav ON (isolate feeds the dim seam + announces) and insight lenses ON (so the union with the
 // filter dim is exercised); editing / authoring OFF to keep the read surface simple.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: false,
-  };
-});
 
 // Capture live-region announcements.
 const announceSpy = vi.fn();

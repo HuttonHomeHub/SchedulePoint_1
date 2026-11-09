@@ -38,12 +38,6 @@ const h = vi.hoisted(() => ({
   order: [] as string[],
 }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: false,
-  NOTES_ENABLED: false,
-}));
-
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanEditHistory: () => ({

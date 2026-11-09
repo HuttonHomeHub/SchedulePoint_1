@@ -15,11 +15,6 @@ import { ActivityCreateDialog } from './ActivityCreateDialog';
  * scope's optional fields (levelling priority, expenses, physical %) are actually registered.
  */
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-}));
-
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',

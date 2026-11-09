@@ -3,14 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Multi-select ON, because that is what separates the keyboard cursor from the selection: flag-off,
 // `aria-activedescendant` IS the selection and this defect cannot exist.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_MULTI_SELECT_ENABLED: true,
-    CANVAS_AUTHORING_ENABLED: false,
-  };
-});
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 
 import { useTsldCanvasUiState, type TsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';

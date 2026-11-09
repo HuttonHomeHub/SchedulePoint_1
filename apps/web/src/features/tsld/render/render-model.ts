@@ -35,7 +35,7 @@ export * from './link-routing';
 export * from './viewport';
 export * from './working-time';
 
-// ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ────────────
+// ── Bar visual refresh (ADR-0052 M4) ────────────
 
 /**
  * Corner radius (px) of a refreshed task bar — **subtle**, so the bar reads "softened", not

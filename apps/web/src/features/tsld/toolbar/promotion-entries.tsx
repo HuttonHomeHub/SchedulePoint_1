@@ -25,7 +25,6 @@ import { PROMOTION_LADDER, type LadderRank } from './promotion-ladder';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 import { isPromoted, type PromotableEntry } from '@/components/ui/toolbar/toolbar-promotion';
-import { CANVAS_AUTHORING_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 
 /**
@@ -217,7 +216,6 @@ export const EARNED_VALUE_ENTRY: PromotableEntry<TsldToolbarContext> = {
   from: 'analysis',
   rank: 7,
   at: at('P7'),
-  isVisible: () => EARNED_VALUE_ENABLED,
   onActivate: (ctx) => ctx.openEarnedValue(),
 };
 
@@ -277,7 +275,6 @@ export const ADD_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] = 
   from: 'add-activity',
   rank: place,
   at: at(rank),
-  isVisible: () => CANVAS_AUTHORING_ENABLED,
   penGated: true,
   activeKind: 'armed' as const,
   isActive: (ctx: TsldToolbarContext) => ctx.isAddingActivity && ctx.createType === type,
@@ -318,7 +315,6 @@ export const LINK_KIND_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] =
     // Joined and not raised (spec D-3): these arm the Link tool, so with none armed none is chosen and
     // there is nothing to raise. An armed kind keeps the armed picture (amber ink and underline).
     cluster: LINK_TYPE_CLUSTER,
-    isVisible: () => CANVAS_AUTHORING_ENABLED,
     penGated: true,
     activeKind: 'armed' as const,
     isActive: (ctx: TsldToolbarContext) => ctx.isLinking && ctx.linkType === type,

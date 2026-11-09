@@ -6,7 +6,6 @@ import { ZOOM_LEVELS } from '../render/time-scale';
 
 import { Button } from '@/components/ui/button';
 import { CheckboxField } from '@/components/ui/form';
-import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
 
 const ZOOM_LABELS: Record<ZoomLevel, string> = {
   day: 'Day',
@@ -21,10 +20,9 @@ const TOGGLES: ReadonlyArray<{ key: keyof TsldViewToggles; label: string }> = [
   { key: 'dayGrid', label: 'Day grid' },
   { key: 'monthGrid', label: 'Month grid' },
   { key: 'yearGrid', label: 'Year grid' },
-  // The data-date status line (canvas status & feedback M1) — offered here too so the legacy
-  // (toolbar-off) surface and `View▾` agree about which layers exist. Flag-off it is absent, so
-  // this list is byte-for-byte the pre-epic six (the parity claim in the spec's US-1).
-  ...(CANVAS_DATA_DATE_ENABLED ? [{ key: 'dataDate', label: 'Data date line' } as const] : []),
+  // The data-date status line (canvas status & feedback M1) — offered here too so this
+  // surface and `View▾` agree about which layers exist.
+  { key: 'dataDate', label: 'Data date line' },
   { key: 'today', label: 'Today' },
   { key: 'nonWorking', label: 'Non-working' },
   { key: 'labels', label: 'Labels' },

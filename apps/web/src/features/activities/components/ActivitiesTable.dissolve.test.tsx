@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
@@ -9,7 +9,7 @@ import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 import { ActivitiesTable } from './ActivitiesTable';
 
 /**
- * The table's **Dissolve** row action (WBS improvements M2) with `VITE_WBS_IMPROVEMENTS` forced on.
+ * The table's **Dissolve** row action (WBS improvements M2).
  * The copy itself is unit-tested in `lib/delete-activity-copy.test.ts`; what this pins is the
  * things a unit test of a pure function cannot see:
  *
@@ -20,10 +20,6 @@ import { ActivitiesTable } from './ActivitiesTable';
  *   work at the moment they are choosing the one that does not;
  * - the confirm is **not** dressed as destructive, since it destroys nothing but the grouping.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 const BASE: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
   id: 'a1',

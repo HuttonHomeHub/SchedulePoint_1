@@ -119,8 +119,7 @@ function PlanCurrencyField({
  *   figures with no currency symbol.
  *
  * Writers (`canEdit`) edit them; everyone else sees them read-only. Each change persists immediately as
- * a targeted PATCH; it changes no dates — the Earned-Value read applies them. Flagged behind
- * `VITE_EARNED_VALUE` (the API behind it is already live; only the controls are gated).
+ * a targeted PATCH; it changes no dates — the Earned-Value read applies them.
  */
 export function PlanEarnedValueSettings({
   orgSlug,

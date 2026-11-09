@@ -162,7 +162,7 @@ describe('today marker pill ink (todayInk)', () => {
   });
 });
 
-// ── Data-date marker pair (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
+// ── Data-date marker pair (canvas status & feedback M1) ─────────
 describe('data-date marker pair (dataDate / dataDateInk)', () => {
   it('resolveTsldPalette resolves the pair (documented jsdom fallbacks), distinct from today/bar/selection', () => {
     const palette = resolveTsldPalette(document.documentElement);

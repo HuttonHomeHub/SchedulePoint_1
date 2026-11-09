@@ -66,17 +66,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              VITE_CANVAS_AUTHORING: 'true',
-              // The Link tool — the Escape-precedence assertion is about an ARMED tool surviving a
-              // keystroke in the field, so it is required.
-              VITE_CANVAS_AUTHORING_FLOW: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

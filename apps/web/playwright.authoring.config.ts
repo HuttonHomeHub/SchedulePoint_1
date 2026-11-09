@@ -1,13 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **canvas-first plan authoring** (`VITE_CANVAS_AUTHORING`,
- * ADR-0032) — the layer above ADR-0031's toolbar workspace. Serves the web bundle with
- * `VITE_CANVAS_AUTHORING=true` (plus the toolbar + workspace + editing + pen flags it layers on) so a
+ * End-to-end configuration for **canvas-first plan authoring** (ADR-0032) — the layer above
+ * ADR-0031's toolbar workspace. A
  * Planner can build a plan directly on the canvas: draw the first activity on a blank canvas, set the
- * inline start date, auto-recalc, place milestones, and link with the two-click tool. Like the other
- * flag-on configs the flags bake at `webServer` start, so this is a separate config on the same ports;
- * it runs as its own CI step after the prior suites tear down. Chromium only (TECH_DEBT #25a).
+ * inline start date, auto-recalc, place milestones, and link with the two-click tool. It runs as its own CI step after the prior
+ * suites tear down. Chromium only (TECH_DEBT #25a).
  */
 export default defineConfig({
   testDir: './e2e-authoring',
@@ -57,9 +55,6 @@ export default defineConfig({
             // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
             // times, each citing its neighbours as precedent. The flag now takes its default, which is
             // what every shipped bundle carries (ADR-0088 D1).
-            env: {
-              VITE_CANVAS_AUTHORING: 'true',
-            },
           },
         ],
       }),

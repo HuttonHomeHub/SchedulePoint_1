@@ -11,7 +11,7 @@ import { apiFetch } from '@/lib/api/client';
 
 /**
  * The assignment cost & actuals surface (`budgetedCost` / `actualCost` / `actualUnits`, EV4b /
- * ADR-0042) with `VITE_EARNED_VALUE` forced ON — proves the inline row's grouped cost editor seeds
+ * ADR-0042) — proves the inline row's grouped cost editor seeds
  * (minor → major) and PATCHes all three (money ×100 → minor; a blank budgeted-cost clears the override
  * to null), and the assign form carries the cost inputs on POST. Flag-off behaviour is covered by
  * `ActivityResourcesDialog.test.tsx`.
@@ -19,10 +19,6 @@ import { apiFetch } from '@/lib/api/client';
 // `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
 // native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
 // has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

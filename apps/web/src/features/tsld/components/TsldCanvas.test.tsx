@@ -484,7 +484,6 @@ describe('TsldCanvas — dropping an open link pick on the shell signal (T7)', (
         onSelect={vi.fn()}
         fitSignal={0}
         mode="link"
-        canLink
         linkPickPredecessorId={ACTIVITIES[0]!.id}
         dropLinkPickSignal={signal}
         onLinkPickStep={onLinkPickStep}
@@ -505,7 +504,6 @@ describe('TsldCanvas — dropping an open link pick on the shell signal (T7)', (
         onSelect={vi.fn()}
         fitSignal={0}
         mode="link"
-        canLink
         linkPickPredecessorId={ACTIVITIES[0]!.id}
         dropLinkPickSignal={1}
         onLinkPickStep={onLinkPickStep}

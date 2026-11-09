@@ -8,7 +8,7 @@ import { expect, test } from '../e2e-support/test';
 import { addActivity, createAndOpenPlan, onboard, openProject } from './support';
 
 /**
- * Flag-ON **Notes** journey (`VITE_NOTES`, Notes M3, ADR-0046). Proves the surface runs end-to-end in
+ * **Notes** journey (Notes M3, ADR-0046). Proves the surface runs end-to-end in
  * a real browser against the real API:
  *
  * 1. A plan with one activity.

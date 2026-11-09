@@ -485,87 +485,90 @@
       "retiredOn": "2026-11-08",
       "batch": "batch-5",
       "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
-    }
-  ],
-  "flags": {
-    "VITE_CANVAS_AUTHORING": {
+    },
+    {
+      "flag": "VITE_CANVAS_AUTHORING",
       "constant": "CANVAS_AUTHORING_ENABLED",
       "enabled": "2026-08-03",
       "enabledSource": "floor",
+      "retiredOn": "2026-11-08",
       "batch": "batch-13",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4.",
-      "note": "Was derived from CANVAS_TOOLBAR_ENABLED as well until ADR-0088 D3 retired that flag. A retired parent drops its conjunct (ADR-0084 D4): nobody can turn off what no longer exists."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_CANVAS_AUTHORING_FLOW": {
+    {
+      "flag": "VITE_CANVAS_AUTHORING_FLOW",
       "constant": "CANVAS_AUTHORING_FLOW_ENABLED",
       "enabled": "2026-07-31",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-13",
-      "derivedFrom": "CANVAS_AUTHORING_ENABLED",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4.",
-      "note": "Moved batch-10 -> batch-13 on 2026-08-10, by the M0 derivation gate rather than by a re-plan. It is derived from CANVAS_AUTHORING_ENABLED (env.ts), whose own batch is 13 — so it was scheduled to retire three weeks BEFORE its parent, declaring the feature permanent while the parent could still switch it off. Assertion 5 existed to stop exactly this and could not see it, because `derivedFrom` was hand-maintained and this edge had never been recorded. Both flags are Class B `keep`, so nothing was actually scheduled and the fix costs nothing; the finding is that the gate was enforcing on 3 of 9 edges. Dropping the edge instead would have been forbidden — the edge is real (env.ts:1098-1099)."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_CANVAS_DATA_DATE": {
+    {
+      "flag": "VITE_CANVAS_DATA_DATE",
       "constant": "CANVAS_DATA_DATE_ENABLED",
       "enabled": "2026-08-07",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-17",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_CANVAS_DIRECT_MANIPULATION": {
+    {
+      "flag": "VITE_CANVAS_DIRECT_MANIPULATION",
       "constant": "CANVAS_DIRECT_MANIPULATION_ENABLED",
       "enabled": "2026-07-25",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-8",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_CANVAS_LINK_ROUTING": {
+    {
+      "flag": "VITE_CANVAS_LINK_ROUTING",
       "constant": "CANVAS_LINK_ROUTING_ENABLED",
       "enabled": "2026-07-31",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-10",
-      "derivedFrom": "CANVAS_DIRECT_MANIPULATION_ENABLED",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_CANVAS_MULTI_SELECT": {
+    {
+      "flag": "VITE_CANVAS_MULTI_SELECT",
       "constant": "CANVAS_MULTI_SELECT_ENABLED",
       "enabled": "2026-08-07",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-17",
-      "derivedFrom": "CANVAS_DIRECT_MANIPULATION_ENABLED",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_EARNED_VALUE": {
+    {
+      "flag": "VITE_EARNED_VALUE",
       "constant": "EARNED_VALUE_ENABLED",
       "enabled": "2026-07-18",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-5",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_NOTES": {
+    {
+      "flag": "VITE_NOTES",
       "constant": "NOTES_ENABLED",
       "enabled": "2026-08-03",
       "enabledSource": "floor",
+      "retiredOn": "2026-11-08",
       "batch": "batch-15",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_WBS_IMPROVEMENTS": {
+    {
+      "flag": "VITE_WBS_IMPROVEMENTS",
       "constant": "WBS_IMPROVEMENTS_ENABLED",
       "enabled": "2026-07-30",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-10",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T8 batch D). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     }
-  },
+  ],
+  "flags": {},
   "$schema-note": "enabledSource: \"docblock\" = the date the flag itself records; \"floor\" = the earliest date this repository can prove, used for the fourteen flags whose real flip is recorded NOWHERE (ADR-0084). A floor can only make a flag look YOUNGER than it is, so retiring on one is conservative — never premature. It is not corrected by guessing.",
   "sizing": "A batch is sized by BLAST RADIUS. The enablement cohort only sets the EARLIEST date a flag may fall on (enabled + horizonDays); it does not set the batch. Re-spaced 2026-08-09 after the original cohort-only split put 17 flags and ~75 production files into a batch due in nine days — the largest batch on the second-earliest date.\nMEASURED per flag: production files referencing the constant, and the number of playwright*.config.ts files that PIN it. The pin count is the one nobody had: VITE_CANVAS_AUTHORING is pinned in 14 configs and VITE_SCHEDULING_MODES in 13, and CI proved a single pinned config costs six specs to convert, not a line.\nESTIMATED, and labelled as such: weight = files + 3x pins and a cap of 45 per batch. The cadence was fortnightly and is WEEKLY from batch-2 (product owner, 2026-08-09), which finishes the queue 2026-12-01 rather than 2027-03-23. Note what that does to the estimate: the batch COMPOSITION was fitted against a fortnight and now has a week, so the cap is the part now under test — halving the cadence doubles the rate of work without re-sizing a single batch. The weighting, the cap and the cadence all come from ONE completed retirement, so they are a hypothesis rather than a plan. `check:flags` tests it for us — if batch 2 takes longer than its week, the next batch date fails and forces a re-fit against a second data point. Re-fit it then; do not defend it.",
   "classA": {},

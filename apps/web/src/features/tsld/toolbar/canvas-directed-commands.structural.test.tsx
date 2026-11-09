@@ -21,10 +21,6 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
  * (`COMMAND_CLASS`) before this suite — or the typecheck, which is a `Record` over the interface's
  * function keys — lets it through. Proven against the REAL builder, mocking only the leaf queries.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));

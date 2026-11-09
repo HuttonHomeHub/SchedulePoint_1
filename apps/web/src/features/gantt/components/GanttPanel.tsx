@@ -103,7 +103,6 @@ import {
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 import { joinConflictReasons, matchingConflictFlags } from '@/features/tsld/render/conflicts';
@@ -676,7 +675,7 @@ function GanttPanelBody({
     // invent a hierarchy it does not have.
     () =>
       buildRows(activities, sort, collapsed, {
-        unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+        unassignedBucket: true,
         // The bucket's span follows the drawn dates. `buildRows` had accepted this option since the
         // WBS band shipped and this caller never passed it, so the one row summarising the plan's
         // unfiled work was framed on the early dates in a VISUAL plan while its members' bars sat

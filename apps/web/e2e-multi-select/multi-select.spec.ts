@@ -20,8 +20,7 @@ import {
 } from './support';
 
 /**
- * The flag-ON journey for the **canvas plural selection** (`VITE_CANVAS_MULTI_SELECT`,
- * `docs/specs/canvas-multi-select/` M5-T2).
+ * The journey for the **canvas plural selection** (`docs/specs/canvas-multi-select/` M5-T2).
  *
  * Driven through the **parallel listbox**, not canvas pixels — the ADR-0064 harness technique. The
  * canvas is `aria-hidden`, so pixel-driving it would test the hit-test rather than the selection,

@@ -12,12 +12,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const h = vi.hoisted(() => ({ role: 'PLANNER' }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: false,
-  NOTES_ENABLED: true,
-}));
-
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme', planId: 'p1' }),
@@ -127,7 +121,6 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
-  DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
@@ -192,8 +185,8 @@ beforeEach(() => {
 });
 
 describe('ToolbarPlanWorkspace — docked plan-notes panel (entry-route win 1, flag on)', () => {
-  // The dock is a named landmark ("Plan notes panel"). It renders `PlanNotesSection chromeless`, so it
-  // does NOT carry the section's own "Notes" heading — the panel's single header is the SheetHeader.
+  // The dock is a named landmark ("Plan notes panel"). It renders `PlanNotesSection`, which carries no
+  // heading of its own — the panel's single header is the SheetHeader.
   const dock = () => screen.queryByRole('region', { name: 'Plan notes panel' });
 
   it('does not render the docked notes panel until Comments is clicked', () => {

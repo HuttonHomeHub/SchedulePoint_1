@@ -16,18 +16,6 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
  */
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_DIRECT_MANIPULATION_ENABLED: false,
-    CANVAS_MULTI_SELECT_ENABLED: true,
-  };
-});
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_MULTI_SELECT_ENABLED: true };
-});
 vi.mock(
   '../render/run-optimise-layout',
   () => import('../render/test-support/in-process-optimise'),

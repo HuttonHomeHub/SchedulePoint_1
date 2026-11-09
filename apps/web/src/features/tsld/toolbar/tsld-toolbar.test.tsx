@@ -8,13 +8,8 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// This suite covers the **flag-off** registry (plain Add toggle, no Link tool). Now that
-// `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
-// `tsld-toolbar-authoring.test.tsx`.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: false,
-}));
+// The authoring tools' own registry (the Add split-button's menu, the Link tool) is covered by
+// `tsld-toolbar-authoring.test.tsx`; this suite covers the rest of the bar.
 
 const spies = {
   setZoomPreset: vi.fn(),
@@ -282,7 +277,7 @@ describe('TSLD toolbar registry (two-row)', () => {
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
     const { rerender } = renderRows(ctx(), false);
-    const add = screen.getByRole('button', { name: 'Add activity' });
+    const add = screen.getByRole('button', { name: 'Add' });
     expect(add).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(add);
     expect(spies.toggleAddActivity).not.toHaveBeenCalled();
@@ -293,7 +288,7 @@ describe('TSLD toolbar registry (two-row)', () => {
         <Toolbar items={rows.strip} context={ctx()} label="Plan commands" authoringEnabled />
       </div>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(spies.toggleAddActivity).toHaveBeenCalledOnce();
   });
 
@@ -358,7 +353,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('button', { name: /View/ })).toBeInTheDocument();
     expect(screen.queryByText('Finish: 01 Aug 2026')).not.toBeInTheDocument();
     // Author + recalc remain reachable.
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
   it('keeps Auto-arrange on the bar and greys it without the pen (shade-don’t-hide)', () => {

@@ -18,10 +18,6 @@ import { canCalculateSchedule, canManageHierarchy, canReportProgress } from '@/l
  * once, so the test sets two at a time and asserts which sentence wins: a reason list whose order
  * nobody pinned is a list a later edit reorders without anybody noticing.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({

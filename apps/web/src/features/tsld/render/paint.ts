@@ -145,7 +145,7 @@ export interface TsldPalette {
   labelInsideCritical: string;
   labelInsideNearCritical: string;
   labelBeside: string;
-  // ── Bar visual refresh (ADR-0052 M4, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──────────
+  // ── Bar visual refresh (ADR-0052 M4) ──────────
   /** The calm hairline definition stroke around every refreshed non-critical bar (the border
    * token) — deliberately quieter than the foreground `outline`, so the emphasised critical /
    * near-critical outlines pop against it. Read only when `TsldScene.visualRefresh` is on. */
@@ -163,7 +163,7 @@ export interface TsldPalette {
   handleHalo: string;
   /** The alternating month band drawn under the diagram (ADR-0055 §4). Opaque. */
   monthBand: string;
-  // ── Data-date status marker (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
+  // ── Data-date status marker (canvas status & feedback M1) ─────────
   /** The **data-date** status vertical + its pill fill — the strongest neutral in the palette
    * (`--foreground`), NOT `--info`: in all three shipped themes info is a near
    * neighbour of `--primary`, the on-schedule bar fill, and a "distinct" line in the bar
@@ -286,7 +286,7 @@ export interface TsldScene {
   /**
    * Draw the **data-date line** — a solid 2px `palette.dataDate` vertical at day offset 0 (day 0
    * IS the data date: `screenXOfDay(0, view) === view.originX`, `render-model.ts`) with its own
-   * pill row, plus the coincidence rule against the Today line (`VITE_CANVAS_DATA_DATE`, canvas
+   * pill row, plus the coincidence rule against the Today line (canvas
    * status & feedback M1). Absent ⇒ the layer never runs ⇒ the frame is byte-for-byte today's
    * paint — the flag-off parity claim is structural, not a promise (the `monthBands` precedent;
    * pinned by `paint.data-date-parity.test.ts`).
@@ -346,14 +346,14 @@ export interface TsldScene {
    * shape cue, never colour-only (WCAG 1.4.1). A per-bar `Set.has` in the existing single pass, so it
    * adds no repaint. Absent ⇒ the highlight is off / nothing is over-allocated ⇒ byte-for-byte parity. */
   flaggedIds?: ReadonlySet<string> | undefined;
-  // ── Canvas direct manipulation M1 (ADR-0052, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──────
+  // ── Canvas direct manipulation M1 (ADR-0052) ──────
   /** Time-true link rendering: anchor each dependency at the point in time its lag actually
    * constrains — `lagDays` walked from the constrained edge on the relationship's lag calendar
    * (`isWorkingDay`; `TWENTY_FOUR_HOUR` elapsed) — and tip it with a directional arrowhead at the
    * successor end. Absent/false ⇒ the legacy extreme-end routing, no arrowheads ⇒ byte-for-byte
    * today's paint (the flag-off parity gate). */
   timeTrueLinks?: boolean | undefined;
-  // ── Canvas direct manipulation M4 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
+  // ── Canvas direct manipulation M4 (ADR-0052) ────
   /** The activity-bar visual refresh (ADR-0052 M4): rounded bar shape with a calm hairline
    * definition stroke, a heavier critical/near-critical emphasis outline (dash cue retained,
    * WCAG 1.4.1), the shape-bounded in-bar progress fill (`percentComplete`, LOD-culled), the
@@ -366,7 +366,7 @@ export interface TsldScene {
    * routing and the incident-link highlight for `selectedId`/`hoverId`. M5's fan-out and dashed
    * lag-run are retired (ADR-0151 D4; no link is dashed — `docs/DESIGN_SYSTEM.md`). */
   visualRefresh?: boolean | undefined;
-  // ── Canvas direct manipulation M5 (ADR-0052, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ────
+  // ── Canvas direct manipulation M5 (ADR-0052) ────
   /** The idle-hovered bar's activity id (published by the canvas from the SAME already-armed
    * hover classify the M4 hover ring reads — editing surfaces only): its incident links draw
    * transiently highlighted, mirroring the persistent `selectedId` highlight (the keyboard/AT
@@ -388,7 +388,7 @@ export interface TsldScene {
    * read when {@link TsldScene.lagHandles} is on; absent ⇒ every handle draws at rest.
    */
   activeLagId?: string | null | undefined;
-  // ── Canvas link routing (ADR-0064 M2, behind `VITE_CANVAS_LINK_ROUTING`) ──────────────────────
+  // ── Canvas link routing (ADR-0064 M2) ──────────────────────
   /**
    * Route a link's vertical corridor **around** the bars between its two lanes rather than through
    * them. Read only on the refreshed link path (`visualRefresh`), which is the one branch that
@@ -2218,7 +2218,7 @@ export function paintScene(
   // labels + selection ring, so label text stays legible over the lines, not under them.
   //
   // Two marks, two channels (the marker-channel vocabulary, `docs/DESIGN_SYSTEM.md`): the **data
-  // date** (`VITE_CANVAS_DATA_DATE`) is the schedule's own pivot — a fact of the programme — so it
+  // date** is the schedule's own pivot — a fact of the programme — so it
   // draws SOLID at 2px in the foreground hue; **Today** is wall-clock now, a moving cue, so it
   // stays dashed at 1.5px in the destructive hue. Shape and weight distinguish them without
   // relying on hue (WCAG 1.4.1). Day 0 IS the data date (`screenXOfDay(0, view) === view.originX`,
@@ -2697,7 +2697,7 @@ export interface InteractionOverlay {
   resize?: ResizeOverlay | null;
   /** A lag-anchor drag in flight (ADR-0052 M3): the tentative-lag readout chip. */
   lag?: LagOverlay | null;
-  // ── Bar visual refresh (ADR-0052 M4, the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ──────────
+  // ── Bar visual refresh (ADR-0052 M4) ──────────
   /** Restyle the live/resize ghosts (rounded, elevation-by-inner-inset-stroke — never
    * shadow/blur) and enable the hover ring. Absent/false ⇒ byte-for-byte the legacy overlay. */
   visualRefresh?: boolean;
@@ -2715,7 +2715,7 @@ export interface InteractionOverlay {
    * a chip stating its date. Computed by the pure `cursorReadout`, so the number shown is the one
    * the gesture will commit. Absent ⇒ nothing drawn. */
   cursor?: CursorChip | null;
-  // ── Multi-select (`docs/specs/canvas-multi-select/` M2-T5, `VITE_CANVAS_MULTI_SELECT`) ─────
+  // ── Multi-select (`docs/specs/canvas-multi-select/` M2-T5) ─────
   /**
    * The live marquee sweep rectangle, in screen space.
    *

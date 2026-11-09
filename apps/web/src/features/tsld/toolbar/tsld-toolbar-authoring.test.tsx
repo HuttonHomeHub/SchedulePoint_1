@@ -10,15 +10,9 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 
 /**
- * Canvas-first authoring toolbar items (ADR-0032) — the Row 2 · Do authoring cluster. Gated on
- * `VITE_CANVAS_AUTHORING`, so this file pins it on (the flag-off registry is covered by
- * `tsld-toolbar.test.tsx`). Scheduling-modes are pinned OFF here (the mode selector + Go-to-date are
- * covered by `tsld-toolbar-scheduling-modes.test.tsx`); the data-date control has left the toolbar.
+ * Canvas-first authoring toolbar items (ADR-0032) — the Row 2 · Do authoring cluster. The rest of the bar is
+ * covered by `tsld-toolbar.test.tsx`; the data-date control has left the toolbar.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({

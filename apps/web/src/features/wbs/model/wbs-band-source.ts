@@ -25,13 +25,11 @@ import {
  * feature (ADR-0026 §8), and the render tier is pure — it reads no feature flag. The direction that
  * IS allowed is this one, `wbs → tsld`, and only for the band's pure geometry.
  *
- * The flag is therefore a **parameter**, not an import: both callers are components that already
- * read `WBS_IMPROVEMENTS_ENABLED` and fuse it with the `View▾` toggle. `enabled: false`, or the
- * toggle off, returns `height: 0` (so a canvas reserves nothing and `measure()` subtracts nothing)
- * and `sceneActivities` **by identity** — the parity path, unchanged down to the reference.
+ * The `View▾` toggle is a **parameter**, not an import. With it off the band returns `height: 0`
+ * (so a canvas reserves nothing and `measure()` subtracts nothing) and `sceneActivities` **by identity** — the parity path, unchanged down to the reference.
  */
 export interface WbsBandSource {
-  /** The band is on: the caller's flag AND the `View▾ ▸ Structure` toggle. */
+  /** The band is on: the `View▾ ▸ Structure` toggle. */
   active: boolean;
   /**
    * The groups to place, or `null` when the band is off — never an empty array, because the two
@@ -51,15 +49,12 @@ export interface WbsBandSource {
 export function deriveWbsBandSource(
   activities: readonly ActivitySummary[],
   options: {
-    /** `VITE_WBS_IMPROVEMENTS`, read by the caller — this module reads no flag of its own. */
-    enabled: boolean;
     /** The `View▾ ▸ Structure ▸ WBS band` toggle. */
     toggleOn: boolean;
     source?: BarDateSource;
   },
 ): WbsBandSource {
-  const active = options.enabled && options.toggleOn;
-  if (!active) {
+  if (!options.toggleOn) {
     return { active: false, groups: null, height: 0, sceneActivities: activities };
   }
   const groups = wbsBandGroups(activities, { source: options.source ?? 'early' });

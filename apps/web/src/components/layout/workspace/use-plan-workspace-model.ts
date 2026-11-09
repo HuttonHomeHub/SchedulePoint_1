@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
@@ -96,7 +95,6 @@ import {
   applyLevellingLabel,
   levellingApplicationSnapshots,
   scheduleKeys,
-  useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
 import {
@@ -271,15 +269,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [editing, setEditing] = useState(false);
   // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049):
   // an ephemeral, session-local open flag toggled from the `resource-view` toolbar item, exactly like the
-  // other Look-row lenses. Inert when nothing reads it (flag off / the ADR-0030 fallback), so it is
-  // byte-for-byte today's behaviour by default.
+  // other Look-row lenses.
   const [resourceViewOpen, setResourceViewOpen] = useState(false);
   const toggleResourceView = useCallback(() => setResourceViewOpen((open) => !open), []);
   // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`):
   // an ephemeral, session-local flag toggled from the
   // `over-allocation` toolbar item that flags bars carrying the engine-owned levelling over-allocation
-  // flags (ADR-0041) — its own mode, independent of whether the demand strip is open. Inert when nothing
-  // reads it (flag off / the ADR-0030 fallback), so it is byte-for-byte today's behaviour by default.
+  // flags (ADR-0041) — its own mode, independent of whether the demand strip is open.
   const [overAllocationHighlight, setOverAllocationHighlight] = useState(false);
   const toggleOverAllocation = useCallback(() => setOverAllocationHighlight((on) => !on), []);
   const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
@@ -395,7 +391,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
   // selection-aware items (Update progress / Add note / Clear visual start) can read it — mirroring
   // the `editActivityId`/`deleteActivityId` precedent. Held as an id; the resolved row is derived below
-  // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
+  // from the live query so it clears when the row is deleted. Nothing else reads it until a row is selected.
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const onSelectionChange = useCallback((id: string | null) => setSelectedActivityId(id), []);
   // The canvas's PLURAL selection, lifted for `Ctrl+C` (`docs/specs/activity-copy-paste/` M3). Held
@@ -525,12 +521,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
-  // `varianceByActivityId` — ONE batch query for the whole table (never per-row). Gated on `VITE_NOTES`
-  // via `enabled`, so with the flag off the query never fires and the map stays undefined (the
-  // activities table then renders no badge column) — byte-identical to today.
-  const noteCounts = useActivityNoteCounts(orgSlug, planId, NOTES_ENABLED);
+  // `varianceByActivityId` — ONE batch query for the whole table (never per-row).
+  const noteCounts = useActivityNoteCounts(orgSlug, planId, true);
   const noteCountByActivityId = useMemo(() => {
-    if (!NOTES_ENABLED || !noteCounts.data) return undefined;
+    if (!noteCounts.data) return undefined;
     return new Map<string, number>(noteCounts.data.map((entry) => [entry.activityId, entry.count]));
   }, [noteCounts.data]);
 
@@ -562,11 +556,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The resolved Steps-dialog target (entry-route), derived from the live query like the resources/
   // progress targets — closes the dialog the moment its activity is deleted.
 
-  // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
+  // Unified auto-recalc (ADR-0032 M3): any structural edit — from
   // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
   // new/changed rows without a manual Recalculate. Enabled only when a recalc could succeed (role +
   // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
-  // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
+  // button becomes `flush()`.
   const announce = useAnnounce();
   // Undo/redo command stack (ADR-0048). Records the inverse of each structural edit. The store is
   // keyed on `planId` so switching plans resets history.
@@ -599,7 +593,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const [dropLinkPickSignal, setDropLinkPickSignal] = useState(0);
   const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
-    enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
+    enabled: canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
     onHoldExpired: () => {
       setDropLinkPickSignal((n) => n + 1);
@@ -663,7 +657,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * has not caught up yet would hand it the dates the recalculation replaced.
    */
   const autoResolve = useAutoResolveOverlaps({
-    enabled: CANVAS_AUTHORING_ENABLED && canEditSchedule,
+    enabled: canEditSchedule,
     settled: autoRecalc.settled,
     pendingEdits: autoRecalc.pendingEdits,
     readActivities: () =>
@@ -754,7 +748,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [activities.data, dependencies.data]);
   const structureSizeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!CANVAS_AUTHORING_ENABLED) return;
     if (activities.isPending || dependencies.isPending) return; // wait for a real loaded baseline
     if (structureSizeRef.current === null) {
       structureSizeRef.current = structureSignature;
@@ -790,7 +783,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const deleteAssignment = useDeleteAssignment(orgSlug, planId);
   const createCrossPlanLink = useCreateCrossPlanLink(orgSlug);
   const deleteCrossPlanLink = useDeleteCrossPlanLink(orgSlug);
-  const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
     // Post-M1 every saved plan has a mandatory start (ADR-0033 M1), so the ADR-0032 "first draw pins
     // the start to today" special-case is gone — a plan can't exist start-less. This guard is now
@@ -871,21 +863,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
     }
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
-    // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
-    // await + recalc-conflict semantics byte-for-byte.
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { recalcConflict: laneConflict };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { recalcConflict: laneConflict };
-    } catch {
-      return {
-        recalcConflict:
-          'Activity added, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    // bar plots a beat later (the optimistic pending bar covers the gap).
+    autoRecalc.notify();
+    return { recalcConflict: laneConflict };
   };
 
   // TSLD free-2D reposition (M4): a body drag moves a bar in time and/or lane at once, reported
@@ -1448,7 +1428,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, restoreBatch, deleteActivity.mutateAsync, beginLayoutEdit],
   );
-  // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
+  // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the Logic panel after
   // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
   // endpoints/type/lag; redo removes it again.
   const recordDependencyRemove = useCallback(
@@ -1916,26 +1896,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return landed !== undefined && landed !== laneIndex
-        ? { applied: true, conflict: null, laneIndex: landed }
-        : { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Moved, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return landed !== undefined && landed !== laneIndex
+      ? { applied: true, conflict: null, laneIndex: landed }
+      : { applied: true, conflict: null };
   };
 
-  // TSLD bar-end resize (ADR-0052 M2 finish edge, M3 start edge, behind
-  // `VITE_CANVAS_DIRECT_MANIPULATION`). **Finish edge** (`startDay` absent): the drag / `Shift+←/→`
+  // TSLD bar-end resize (ADR-0052 M2 finish edge, M3 start edge).
+  // **Finish edge** (`startDay` absent): the drag / `Shift+←/→`
   // nudge becomes a `PATCH durationDays` through the SAME single-activity update the reposition
   // path uses — carried as the FULL definition round-trip (`activityDefinitionInput`) so
   // durationType / EV / accrual / constraints are resent verbatim, never silently cleared; it does
@@ -2032,23 +2000,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The resize landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
-  // TSLD lag-anchor drag (ADR-0052 M3, behind `VITE_CANVAS_DIRECT_MANIPULATION`): the dragged (or
+  // TSLD lag-anchor drag (ADR-0052 M3): the dragged (or
   // Logic-panel-nudged) lag becomes a `PATCH /dependencies/:id` echoing the row's unchanged type +
   // lag calendar at the live version — exactly `useUpdateDependency`'s input, the same endpoint the
   // Edit-link dialog writes through. Optimistic-lock 409 and pen-loss 423 reuse the reposition
@@ -2123,26 +2079,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The change landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Lag changed, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
   // The keyboard lag nudge (ADR-0052 M3) composed once, here, rather than in whichever component
-  // happens to host the Logic panel: it is rendered by the Logic *dialog* flag-off and by the
-  // editor's Logic *tab* flag-on, and two call sites of the same hook is how the two surfaces
-  // would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
+  // happens to host the Logic panel: it is rendered by the editor's Logic tab, and a second
+  // call site of the same hook is how two surfaces would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
   const nudgeDependencyLag = useCoalescedLagNudge({
     onLag: onTsldLag,
     dependencies: dependencies.data ?? [],
@@ -2211,20 +2154,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Linked, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
   // TSLD auto-arrange (M4 4.3): persist the packed lane changes through the batch positions
@@ -2594,9 +2525,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     );
     // Fire the coalesced auto-recalc so the LOE redraws at its engine-derived span (ADR-0032). A recalc
     // failure is non-fatal — the span persisted; the dates land on the next recalc. This is unconditional
-    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button, hence
-    // CANVAS_AUTHORING_ENABLED); `autoRecalc.enabled` is likewise gated on it, so `notifyRecalc` is a
-    // no-op otherwise — do NOT "fix" it by flag-guarding here.
+    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button);
+    // `notifyRecalc` is itself a no-op when `autoRecalc` is not enabled (no role, pen or start date).
     notifyRecalc();
     return { applied: true, conflict: null };
   };
@@ -3028,7 +2958,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     todayIso,
     todayFraction,
     varianceByActivityId,
-    // Per-activity note counts for the row badge (ADR-0046) — undefined when `VITE_NOTES` is off.
+    // Per-activity note counts for the row badge (ADR-0046)
     noteCountByActivityId,
     // Gating / identity
     pen,
@@ -3058,7 +2988,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canShare: canSharePlan(role),
     canManageLogic,
     penReadOnly,
-    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.
+    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it.
     autoRecalc,
     // Local UI state
     editing,
@@ -3091,7 +3021,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onOpenActivityEditorAt,
     onDeleteActivity,
     // Dissolve target (WBS improvements M2) — set by the canvas selection bar, rendered by
-    // ActivityCrudDialogs. Inert when `VITE_WBS_IMPROVEMENTS` is off: nothing sets it.
+    // ActivityCrudDialogs.
     dissolveActivityId,
     setDissolveActivityId,
     onDissolveSummary,
@@ -3101,7 +3031,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setEditorIntent,
     activityEditorGating,
     // Canvas selection lifted to the workspace (toolbar quick-wins F0) + the toolbar's Update-progress
-    // target (F3). Inert when nothing reads them (flag off). `selectedActivity`/`progressActivity`
+    // target (F3). `selectedActivity`/`progressActivity`
     // resolve from the live query, so they clear when their row is deleted.
     selectedActivityId,
     onSelectionChange,
@@ -3118,10 +3048,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Resources tab.
     onResourcesActivity,
     // Report-progress opener from the canvas selection bar (entry-route) — reuses `progressActivityId`
-    // so it opens the ONE workspace-hosted `ActivityProgressDialog`. Inert flag-off.
+    // so it opens the ONE workspace-hosted `ActivityProgressDialog`.
     onProgressActivity,
     // Steps dialog target from the canvas selection bar (entry-route + earned-value/steps flags): the
-    // opener + resolved row + close setter, mirroring the resources trio. Inert flag-off.
+    // opener + resolved row + close setter, mirroring the resources trio.
     onStepsActivity,
     // Make milestone… (ADR-0162 decision 4): the opener every surface calls, the resolved target the
     // one workspace-mounted dialog reads, and its confirm/close.
@@ -3141,7 +3071,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
     // `recordActivityDelete` after a successful delete, with the batch it returned — an id-stable
     // restore, a WBS phase and its subtree included (`docs/TECH_DEBT.md` #230); the
-    // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal.
+    // Logic panel calls `recordDependencyRemove` after a successful link removal.
     recordActivityDelete,
     // A dissolve is one undo step (undo-redo M6) — see `recordActivityDissolve`.
     recordActivityDissolve,
@@ -3185,7 +3115,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,
-    // Bar-end resize (ADR-0052 M2 finish, M3 start — `VITE_CANVAS_DIRECT_MANIPULATION`): the
+    // Bar-end resize (ADR-0052 M2 finish, M3 start): the
     // full-definition durationDays PATCH (+ a hand-placed `visualStart` for a start drag) +
     // coalesced recalc + coalesced undo. The `mode-aware SNET` half of this sentence described
     // ADR-0052 §3's `EARLY` branch, which M-F deleted along with the mode.

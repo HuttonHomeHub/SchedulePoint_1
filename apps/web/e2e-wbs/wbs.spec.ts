@@ -18,7 +18,7 @@ import {
 } from './support';
 
 /**
- * The flag-ON **WBS improvements** journey (`VITE_WBS_IMPROVEMENTS`, ADR-0063).
+ * The **WBS improvements** journey (ADR-0063).
  *
  * One journey, because the epic's claims are sequential: you cannot check that dissolving a summary
  * keeps its work without first having filed work into one. Serial, on one plan, mirroring the other

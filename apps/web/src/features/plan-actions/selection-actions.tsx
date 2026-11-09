@@ -42,7 +42,6 @@ import {
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { useTooltip } from '@/components/ui/tooltip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
-import { NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
@@ -138,7 +137,7 @@ export interface SelectionActionContext {
   onNotes: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  /** Dissolve the selected summary — remove the grouping, keep the work (`VITE_WBS_IMPROVEMENTS`). */
+  /** Dissolve the selected summary — remove the grouping, keep the work. */
   onDissolve: () => void;
   /**
    * Duplicate the selected activity (`docs/specs/activity-copy-paste/` M1). Wired regardless of the
@@ -682,8 +681,7 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
  * on the canvas and in the table. The **Progress**, **Resources** and **Steps** items are entry-route
  * additions. Progress is role-gated (Contributor+, `canReportProgress`);
- * Resources is ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE`
- * and hides for a duration-derived selection — matching the table's Steps row
+ * Resources is ungated (view-ish; the dialog gates writes); Steps hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
  * Every item pins `labelVisibility: 'always'` — this is a compact floating bar of five actions where the
@@ -708,9 +706,6 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  *   themselves switches to the Gantt, which moves focus to the button they pressed — in a different
  *   container. Nothing else can remove them, so the handoff's premise never holds.
  * - `edit`. It has no `isVisible` at all since the ADR-0093 M5 pass; it is shaded, not omitted.
- * - Every flag-gated item in `tsld-toolbar-items.tsx` (`CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
- *   inlined at build time (ADR-0088 D1), so those predicates are constant for the life of a bundle
- *   and cannot flip under anybody.
  * - `next-conflict-status`, which is `presentational` — it never holds a roving stop, so it cannot
  *   be the thing focus was on.
  * - `pen`. It survives a peer TAKING the pen; what would remove it is the
@@ -794,24 +789,20 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
      * Sits next to `Logic` because that is where a planner last reached it — `Add note` opened the
      * Logic panel and scrolled to a Notes section until ADR-0062 gave notes a tab.
      */
-    ...(NOTES_ENABLED
-      ? [
-          {
-            id: 'notes',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 0.5,
-            label: 'Notes',
-            description: 'Add or read notes on this activity.',
-            srDescription: () => 'Add or read notes on this activity.',
-            icon: <StickyNote className="size-4" />,
-            isEnabled: (ctx: SelectionActionContext) => ctx.canWriteNotes,
-            disabledReason: (ctx: SelectionActionContext) =>
-              ctx.canWriteNotes ? undefined : NOTES_REASON,
-            onActivate: (ctx: SelectionActionContext) => ctx.onNotes(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    {
+      id: 'notes',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 0.5,
+      label: 'Notes',
+      description: 'Add or read notes on this activity.',
+      srDescription: () => 'Add or read notes on this activity.',
+      icon: <StickyNote className="size-4" />,
+      isEnabled: (ctx: SelectionActionContext) => ctx.canWriteNotes,
+      disabledReason: (ctx: SelectionActionContext) =>
+        ctx.canWriteNotes ? undefined : NOTES_REASON,
+      onActivate: (ctx: SelectionActionContext) => ctx.onNotes(),
+    } satisfies ToolbarItem<SelectionActionContext>,
     {
       id: 'progress',
       group: 'object',
@@ -968,29 +959,25 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       lostReason: 'This action applies only to a task with no duration.',
       onActivate: (ctx) => ctx.onMakeMilestone(),
     },
-    // Dissolve — only for a summary selection, and only behind `VITE_WBS_IMPROVEMENTS`. Registered
+    // Dissolve — only for a summary selection. Registered
     // BEFORE Delete for the same reason the table's row menu orders them that way: the two are
     // neighbours in intent ("get rid of this grouping") and opposites in effect, so the
     // non-destructive one must be visible at the moment the destructive one is being chosen.
-    ...(WBS_IMPROVEMENTS_ENABLED
-      ? [
-          {
-            id: 'dissolve',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 5,
-            label: 'Dissolve',
-            icon: <Ungroup className="size-4" />,
-            penGated: true,
-            disabledReason: (ctx) => penRefusal(ctx),
-            // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
-            // context fact, so a non-summary selection cannot reach an action that would 422.
-            isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
-            lostReason: 'This action applies only to a WBS summary.',
-            onActivate: (ctx: SelectionActionContext) => ctx.onDissolve(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    {
+      id: 'dissolve',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 5,
+      label: 'Dissolve',
+      icon: <Ungroup className="size-4" />,
+      penGated: true,
+      disabledReason: (ctx) => penRefusal(ctx),
+      // Registered for every selection but only VISIBLE on a summary: `isSummary` is a
+      // context fact, so a non-summary selection cannot reach an action that would 422.
+      isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+      lostReason: 'This action applies only to a WBS summary.',
+      onActivate: (ctx: SelectionActionContext) => ctx.onDissolve(),
+    } satisfies ToolbarItem<SelectionActionContext>,
     // ── Move to swimlane… (swimlanes M2-T10, ui-architecture C10) ───────────────────────────
     //
     // A popover with the `SelectField` and a Move button, not a submenu: `Menu` has none and no

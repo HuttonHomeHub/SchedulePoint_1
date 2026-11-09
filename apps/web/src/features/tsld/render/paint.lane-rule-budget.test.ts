@@ -47,7 +47,7 @@ const PALETTE: TsldPalette = {
   nonWorking: '#222',
   today: '#f00',
   todayInk: '#fff',
-  // The data-date pair (VITE_CANVAS_DATA_DATE) — distinct fixture values so assertions can pin them.
+  // The data-date pair — distinct fixture values so assertions can pin them.
   dataDate: '#dd1',
   dataDateInk: '#dd2',
   conflict: '#fa0',

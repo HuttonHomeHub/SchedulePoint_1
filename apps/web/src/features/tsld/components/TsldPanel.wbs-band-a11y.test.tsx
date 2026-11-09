@@ -3,8 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * **The WBS band's text equivalent** (`docs/TECH_DEBT.md` #232), with `VITE_WBS_IMPROVEMENTS`
- * forced on.
+ * **The WBS band's text equivalent** (`docs/TECH_DEBT.md` #232).
  *
  * The band canvas is `aria-hidden`, so a screen-reader user reaches it through this or not at all.
  * There was no text equivalent, and **two places in the repository said there was** — a comment in
@@ -18,10 +17,6 @@ import { describe, expect, it, vi } from 'vitest';
  * this change**: an invariant you have to touch to make room for your feature was never an
  * invariant. It still passes, which is the strongest thing this file can say about safety.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 

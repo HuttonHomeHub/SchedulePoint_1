@@ -1,12 +1,7 @@
-import {
-  CANVAS_DATA_DATE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_LINK_ROUTING_ENABLED,
-} from '@/config/env';
 import type { TsldViewToggles } from '@/features/tsld/render/paint';
 
 /**
- * **The flag-derived scene layers, derived once for both the screen and the deliverable.**
+ * **The scene layers, derived once for both the screen and the deliverable.**
  *
  * `docs/TECH_DEBT.md` #164. `TsldCanvas` and the export each hand-composed a scene object, and over
  * nine features the two drifted until the canvas built 25 keys and the export six — so the exported
@@ -15,10 +10,8 @@ import type { TsldViewToggles } from '@/features/tsld/render/paint';
  * relationship the picture appears to assert, and that was live in the artefact a planner sends to
  * someone who was not in the room.
  *
- * Two hand-written compositions is the cause, so one derivation is the fix. Every flag read here is
- * default-on and, per ADR-0088 D1, unreachable in any published image — which is exactly why the
- * divergence was invisible: nothing could switch a layer off to reveal that one surface had it and
- * the other did not.
+ * Two hand-written compositions is the cause, so one derivation is the fix. The divergence was invisible
+ * because nothing could switch a layer off to reveal that one surface had it and the other did not.
  *
  * **Returns a fresh object, so a React caller must memoise it.** `TsldCanvas` keys the scene effect
  * on these values (`:979-998`); an unmemoised object there is a new reference every render, which
@@ -38,9 +31,9 @@ export function sceneLayers(view: TsldViewToggles | undefined): SceneLayers {
   return {
     // The reader's `View ▾` preference decides. The painter stays flag-free, as every other layer does.
     monthBands: view?.monthBands ?? false,
-    timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
-    visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
-    linkRouting: CANVAS_LINK_ROUTING_ENABLED,
-    dataDateLine: CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true),
+    timeTrueLinks: true,
+    visualRefresh: true,
+    linkRouting: true,
+    dataDateLine: view?.dataDate ?? true,
   };
 }

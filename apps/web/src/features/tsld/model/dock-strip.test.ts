@@ -16,7 +16,6 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     showDiagram: true,
     activityCount: 3,
     mode: 'select',
-    authoringFlowEnabled: true,
     hasPlacementMigrationNotice: false,
     hasTouchGestureHint: false,
     hasArrangeOffer: false,
@@ -57,10 +56,10 @@ describe('resolveDockStrip', () => {
   });
 
   /**
-   * The empty notice's three remaining conditions, each withdrawn on its own. Without these the
+   * The empty notice's remaining conditions, each withdrawn on its own. Without these the
    * function could return `'empty'` unconditionally and every case above would still pass.
    */
-  it('withholds the empty notice unless the canvas is drawing, idle and authoring-enabled', () => {
+  it('withholds the empty notice unless the canvas is drawing and idle', () => {
     expect(
       resolveDockStrip(input({ activityCount: 0, showDiagram: false })),
       'no diagram',
@@ -68,10 +67,6 @@ describe('resolveDockStrip', () => {
     expect(
       resolveDockStrip(input({ activityCount: 0, mode: 'adding' })),
       'a tool armed',
-    ).toBeNull();
-    expect(
-      resolveDockStrip(input({ activityCount: 0, authoringFlowEnabled: false })),
-      'flag off',
     ).toBeNull();
   });
 

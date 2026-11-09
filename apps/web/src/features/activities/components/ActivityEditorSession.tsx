@@ -66,7 +66,6 @@ import { ContextStrip, FieldGridContainer, FormSection } from '@/components/ui/f
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import { EARNED_VALUE_ENABLED, NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel, ancestorIds, wouldCloseLoop } from '@/features/wbs';
@@ -229,12 +228,8 @@ export function ActivityEditorSession({
   // The steps list is fetched on the first visit to Progress in an opening, not at open (D-8) — the
   // query lives with the form it seeds, and a Contributor who never looks at Progress never pays for
   // it. Adjusted during render for the same reason as the intent above: it is derived from `active`.
-  //
-  // Only where the panel that renders them exists (the same flag as the panel below): a host with
-  // it off would otherwise fetch a list nobody is shown.
-  const stepsEnabled = EARNED_VALUE_ENABLED;
-  const [stepsRequested, setStepsRequested] = useState(stepsEnabled && active === 'progress');
-  if (stepsEnabled && active === 'progress' && !stepsRequested) setStepsRequested(true);
+  const [stepsRequested, setStepsRequested] = useState(active === 'progress');
+  if (active === 'progress' && !stepsRequested) setStepsRequested(true);
 
   // The General scope seeds its duration from the factor known at OPEN; `useDurationSeed` below
   // re-reads it once the calendar list lands, so a sub-day duration is never shown (or saved) as
@@ -661,12 +656,11 @@ export function ActivityEditorSession({
     // going (Progress) → what it costs (Cost) → what people said (Notes). Resources is a definition
     // scope on the same pen-gated rule as Logic, so it belongs on that side of the status divide.
     { id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) },
-    // Members — a WBS summary's contents (`VITE_WBS_IMPROVEMENTS`). Conditional on the SUBJECT, not
-    // just on a flag: every other tab here asks something of any activity, and "what is filed under
+    // Members — a WBS summary's contents. Conditional on the SUBJECT: every other tab here asks something of any activity, and "what is filed under
     // this?" is meaningless for one that cannot hold anything. It sits after Resources and before
     // Progress, on the definition side of the status divide, because membership is a pen-gated
     // structural fact and reuses the `definition` gate object verbatim (see `gating.members`).
-    ...(WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY'
+    ...(activity.type === 'WBS_SUMMARY'
       ? [{ id: 'members' as const, label: 'Members', ...collectionMarker(gating.members) }]
       : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
@@ -687,9 +681,9 @@ export function ActivityEditorSession({
         ]
       : []),
     // Notes, like Progress, are **never** marked read-only: the pen does not gate them (ADR-0046),
-    // so a padlock would be false for exactly the reader it is meant to inform. Needs `VITE_NOTES`
-    // and the composition root's slot to have anything to show.
-    ...(NOTES_ENABLED && notesSlot ? [{ id: 'notes' as const, label: 'Notes' }] : []),
+    // so a padlock would be false for exactly the reader it is meant to inform. Needs the composition
+    // root's slot to have anything to show.
+    ...(notesSlot ? [{ id: 'notes' as const, label: 'Notes' }] : []),
     // History is last (subject-first order, ADR-0062 §5) and, like Notes, never marked read-only: it
     // has no write scope at all, so a padlock would claim a gate that does not exist. Unflagged
     // (ADR-0088 D1) — present whenever the composition root supplies the panel.
@@ -1036,33 +1030,23 @@ export function ActivityEditorSession({
                     error={panelErrors.measure ?? null}
                     {...othersSaving('measure')}
                   />
-                  {/* The flag that decides whether weighted steps exist at all.
-                      **It used to be described as matching "the Steps entry points" in
-                      `ActivitiesTable` and `selection-actions`, and those are gone**
-                      (`docs/specs/object-bar-defects/` M1) — both opened this tab, so the panel is
-                      now reached only through `Progress`. The flag still belongs here for the
-                      reason the security review gave: without it the tab would show a checklist the
-                      product has no business offering. What changed is that this is now the ONLY
-                      place the flag is read for steps, so there is no parity left to keep. */}
-                  {EARNED_VALUE_ENABLED ? (
-                    <WeightedStepsPanel
-                      form={stepsForm}
-                      array={stepsArray}
-                      isDirty={stepsDirty}
-                      query={stepsQuery}
-                      activity={activity}
-                      gate={gating.steps}
-                      onSave={saveSteps}
-                      pending={saves.stepsPending}
-                      saved={savedSlots.steps === true}
-                      error={panelErrors.steps ?? null}
-                      announce={announce}
-                      // Only the **Steps** entry point asks for this. Landing at the top of a
-                      // three-panel tab would make that action feel like it opened the wrong thing.
-                      autoFocusHeading={stepsFocusDue}
-                      onHeadingFocused={() => setStepsFocusDue(false)}
-                    />
-                  ) : null}
+                  <WeightedStepsPanel
+                    form={stepsForm}
+                    array={stepsArray}
+                    isDirty={stepsDirty}
+                    query={stepsQuery}
+                    activity={activity}
+                    gate={gating.steps}
+                    onSave={saveSteps}
+                    pending={saves.stepsPending}
+                    saved={savedSlots.steps === true}
+                    error={panelErrors.steps ?? null}
+                    announce={announce}
+                    // Only the **Steps** entry point asks for this. Landing at the top of a
+                    // three-panel tab would make that action feel like it opened the wrong thing.
+                    autoFocusHeading={stepsFocusDue}
+                    onHeadingFocused={() => setStepsFocusDue(false)}
+                  />
                 </div>
               ) : null}
 
@@ -1083,7 +1067,7 @@ export function ActivityEditorSession({
                   {scopeError('cost')}
 
                   <FieldGateProvider gate={gating.cost}>
-                    {EARNED_VALUE_ENABLED ? <ActivityExpenseFields form={cost.form} /> : null}
+                    <ActivityExpenseFields form={cost.form} />
                     <ActivityAccrualField form={cost.form} />
                     <ScopeSaveBar
                       gate={gating.cost}

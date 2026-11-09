@@ -5,21 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * TsldPanel wiring for the finish-edge duration resize (ADR-0052 M2): the pointer intent →
  * `onResize` round-trip with its ghost + announcement, and the `Shift+←/→` keyboard nudge with its
- * flag / eligibility gating. The gesture machine, hit-zones, hook and route handler each have their
+ * eligibility gating. The gesture machine, hit-zones, hook and route handler each have their
  * own exhaustive suites; this covers only the panel seams between them.
  */
-
-const h = vi.hoisted(() => ({ directManipulation: true }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    get CANVAS_DIRECT_MANIPULATION_ENABLED() {
-      return h.directManipulation;
-    },
-  };
-});
 
 // Capture live-region announcements so we can assert the resize status messages.
 const announceSpy = vi.fn();
@@ -77,11 +65,10 @@ function renderPanel(rows: ActivitySummary[] = [activity()]) {
 beforeEach(() => {
   vi.useFakeTimers();
   announceSpy.mockClear();
-  h.directManipulation = true;
 });
 afterEach(() => vi.useRealTimers());
 
-describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
+describe('TsldPanel finish-edge resize (ADR-0052 M2)', () => {
   it('drag on the finish grab-zone → resize intent → onResize + announcement', async () => {
     const { canvas, onResize } = renderPanel();
     // DEFAULT_VIEWPORT (pxPerDay 14, origin 40/40): the day-0..2 bar spans x 40..82 at lane 0; the
@@ -183,28 +170,6 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2, flag on)', () => {
     fireEvent.keyDown(listbox, { key: 'ArrowRight', shiftKey: true });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS);
-    });
-    expect(onResize).not.toHaveBeenCalled();
-  });
-});
-
-describe('TsldPanel finish-edge resize (flag OFF parity)', () => {
-  it('Shift+ArrowRight does nothing and the bar-end press keeps its previous behaviour', async () => {
-    h.directManipulation = false;
-    const { canvas, onResize } = renderPanel();
-    // Keyboard: the branch is unreachable — no write.
-    const listbox = screen.getByRole('listbox');
-    fireEvent.focus(listbox);
-    fireEvent.keyDown(listbox, { key: 'ArrowRight', shiftKey: true });
-    await vi.advanceTimersByTimeAsync(NUDGE_DEBOUNCE_MS);
-    expect(onResize).not.toHaveBeenCalled();
-    // Pointer: with no link handler wired the end zone falls through to M1 select (today's
-    // behaviour) — a finish-zone drag never emits a resize intent.
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 118, clientY: LANE0_Y, pointerId: 1 });
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
     });
     expect(onResize).not.toHaveBeenCalled();
   });

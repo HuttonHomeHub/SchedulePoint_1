@@ -35,7 +35,6 @@ import type {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { usePromotionStage } from '@/components/ui/toolbar/use-promotion-stage';
-import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import { printGanttSchedule } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
@@ -50,7 +49,6 @@ import {
 } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
 import { CodeColumnsUnavailableError } from '@/lib/code-columns';
 import { downloadBlob } from '@/lib/download-blob';
@@ -215,7 +213,6 @@ export function useTsldToolbarContext({
   // NOTES `canWriteNotes` pattern); the menu-item render site (`tsld-toolbar-items.tsx`) reads it. UX only: the API
   // re-checks the permission + org-scopes the target plan (anti-IDOR).
   const canInterchangeExport = model.canExportSchedule;
-  const recalc = useRecalculateCommand(orgSlug, planId);
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
@@ -608,20 +605,13 @@ export function useTsldToolbarContext({
       redoTo: model.undoRedo.redoTo,
       historyBusy: model.undoRedo.busy,
 
-      // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
-      // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
-      // flag-off it's the standalone recalc command, byte-for-byte.
+      // Object / plan actions. The manual button flushes the shared auto-recalc coalescer
+      // (ADR-0032 M3) so it and the debounced auto-recalcs are one path.
       canRecalc,
-      recalcPending: CANVAS_AUTHORING_ENABLED ? model.autoRecalc.isPending : recalc.isPending,
-      recalculate: () =>
-        CANVAS_AUTHORING_ENABLED
-          ? // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
-            // (ux review); errors already surface via the coalescer's onMessage → announce.
-            model.autoRecalc.flush(() => announce('Schedule recalculated.'))
-          : recalc.run({
-              onSuccess: () => announce('Schedule recalculated.'),
-              onError: (message) => announce(message),
-            }),
+      recalcPending: model.autoRecalc.isPending,
+      // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
+      // (ux review); errors already surface via the coalescer's onMessage → announce.
+      recalculate: () => model.autoRecalc.flush(() => announce('Schedule recalculated.')),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
       openEarnedValue: () => openDialog('earned-value'),
@@ -1057,7 +1047,6 @@ export function useTsldToolbarContext({
     // External-Guest share links (ADR-0051 F-M4) — re-identify when the share permission flips.
     model.canShare,
     editPlan,
-    recalc,
     model.autoRecalc,
     announce,
     openDialog,

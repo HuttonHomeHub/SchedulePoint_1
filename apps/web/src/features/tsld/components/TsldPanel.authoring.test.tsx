@@ -1,20 +1,15 @@
 import type { DependencySummary } from '@repo/types';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
 /**
- * Canvas-first authoring (ADR-0032, M1): with `VITE_CANVAS_AUTHORING` on, the interactive canvas
+ * Canvas-first authoring (ADR-0032, M1): the interactive canvas
  * mounts on an **empty, uncalculated** plan as long as there's a timeline anchor (`plannedStart`, or
- * today when it's null) — so a planner can draw the first activity on a blank canvas. Flag-off keeps
- * today's empty-state note (covered in `TsldPanel.test.tsx`). Editing flag on too, so the surface is
- * the authoring one.
+ * today when it's null) — so a planner can draw the first activity on a blank canvas. With no anchor the empty-state
+ * note stays (covered in `TsldPanel.test.tsx`).
  */
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: true };
-});
 
 const NO_DEPS: DependencySummary[] = [];
 

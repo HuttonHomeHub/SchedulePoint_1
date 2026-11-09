@@ -10,7 +10,7 @@ import { anActivity } from '@/test/activity-fixture';
 
 /**
  * The activity Cost & Earned-Value inputs (`percentCompleteType` / `physicalPercentComplete` /
- * `budgetedExpense` / `actualExpense`, EV4b / ADR-0042) with `VITE_EARNED_VALUE` forced ON — the surface
+ * `budgetedExpense` / `actualExpense`, EV4b / ADR-0042) — the surface
  * ships dark by default, so this suite pins the flag to prove the fields render, convert MAJOR-unit money
  * entry to minor units (omitted when blank), reveal the physical %-field only for the PHYSICAL measure,
  * and hide for a type with no cost meaning (a milestone). Flag-off behaviour is covered by
@@ -27,10 +27,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts`
  * (`budgetedExpense` is in its `CLEARABLE_KEYS`).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

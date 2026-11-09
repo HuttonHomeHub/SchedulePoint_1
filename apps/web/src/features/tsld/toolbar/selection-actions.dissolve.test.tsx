@@ -2,9 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The canvas selection bar's **Dissolve** action (WBS improvements M2), with
- * `VITE_WBS_IMPROVEMENTS` forced on. `selectionActionItems` is built at module-eval from the flags,
- * so the hoisted env mock lands before the import; vitest isolates the module registry per file.
+ * The canvas selection bar's **Dissolve** action (WBS improvements M2).
  *
  * The two rules this pins are different in kind, and conflating them is the defect the plan warned
  * about (the ADR-0059 M6 lit-but-inert zoom control, inverted):
@@ -15,10 +13,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  *   perform it yet. Hiding it here would make the canvas and the row menu disagree about whether
  *   the action exists.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 
@@ -81,7 +75,7 @@ function bar(): HTMLElement {
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('SelectionActionsBar — Dissolve (VITE_WBS_IMPROVEMENTS on)', () => {
+describe('SelectionActionsBar — Dissolve', () => {
   it('offers Dissolve on a summary and calls back', () => {
     render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(within(bar()).getByRole('button', { name: 'Dissolve' }));

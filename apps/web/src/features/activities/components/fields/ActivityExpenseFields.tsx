@@ -4,10 +4,9 @@ import type { GroupProps } from './group-props';
 
 import { TextField } from '@/components/ui/form';
 import { FieldGrid, FormSection } from '@/components/ui/form-layout';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import type { ActivityCostValues } from '@/features/activities/schemas/activity-scope-schemas';
 
-/** Both members are behind `VITE_EARNED_VALUE`. */
+/** The two lump-sum expense fields this group owns. */
 export const EXPENSE_FIELDS = [
   'budgetedExpense',
   'actualExpense',
@@ -27,11 +26,7 @@ export const EXPENSE_FIELDS = [
  * silently rounded; `min={0}` because a negative expense is not a thing; `inputMode="decimal"`
  * because it is the difference between a phone offering a number pad and offering a keyboard.
  */
-export function ActivityExpenseFields({
-  form,
-}: GroupProps<ActivityCostValues>): JSX.Element | null {
-  if (!EARNED_VALUE_ENABLED) return null;
-
+export function ActivityExpenseFields({ form }: GroupProps<ActivityCostValues>): JSX.Element {
   const { errors } = form.formState;
 
   return (

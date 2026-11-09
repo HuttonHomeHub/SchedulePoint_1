@@ -43,15 +43,6 @@ const h = vi.hoisted(() => ({
   writeRejected: { kind: 'none' },
 }));
 
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: false,
-    NOTES_ENABLED: false,
-  };
-});
-
 // Keep the real command builders (they're pure); swap only the history store for record/clearRedo spies.
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

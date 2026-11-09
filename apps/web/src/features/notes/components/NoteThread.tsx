@@ -10,7 +10,6 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape } from '@/components/ui/page';
-import { cn } from '@/lib/utils';
 
 /**
  * The list half of a note surface (ADR-0046 Option B): a target's notes newest-first, each an item,
@@ -23,25 +22,18 @@ export function NoteThread({
   target,
   currentUserId,
   enabled = true,
-  bounded = false,
 }: {
   orgSlug: string;
   target: NoteTarget;
   currentUserId?: string | null | undefined;
   /** Keep the query idle while the host is hidden (a closed dialog); mirrors the dependency editor. */
   enabled?: boolean;
-  /**
-   * Cap the thread's height with an internal scroll when embedded in a fixed-height host (the canvas
-   * plan workspace header), so an accumulating thread can't grow the chrome and push the canvas below
-   * its `CANVAS_MIN_HEIGHT` floor (ADR-0030/0031). Off in long-scrolling routes (plan-detail).
-   */
-  bounded?: boolean;
 }): React.ReactElement {
   const thread = useNoteThread(orgSlug, target, enabled);
   const announce = useAnnounce();
   const notes = thread.data?.pages.flatMap((page) => page.notes) ?? [];
   // A focus sink for after a delete or a 403 authorship-loss: the affected control unmounts, so focus is
-  // moved here rather than falling to <body> (the ClientsTable/DependencyEditor precedent). Also the
+  // moved here rather than falling to <body> (the ClientsTable precedent). Also the
   // landing spot when "Load more" exhausts the thread and its button disappears (SC 2.4.3).
   const regionRef = useRef<HTMLDivElement>(null);
 
@@ -74,14 +66,7 @@ export function NoteThread({
    * `document.activeElement`, after two guesses had been wrong.
    */
   return (
-    <div
-      ref={regionRef}
-      tabIndex={-1}
-      className={cn(
-        'flex flex-col gap-2 outline-none',
-        bounded && notes.length > 0 && 'max-h-64 overflow-y-auto pr-1',
-      )}
-    >
+    <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-2 outline-none">
       {thread.isPending ? (
         // Inside the stable region and not in place of it: the region is the focus sink, and its
         // node identity must not depend on what the thread holds (see above). It is not marked

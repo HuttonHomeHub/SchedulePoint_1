@@ -15,8 +15,7 @@ import { resolveItems } from '@/components/ui/toolbar/toolbar-registry';
  * `ResolvedToolbarItem.active`, which is `item.isActive?.(ctx) ?? false`. Two of the three tools
  * that rule exists to protect are `render` items — `AddActivityControl` and `LinkControl` — and
  * each computed its own `pressed` from the context and set **no** registry `isActive`. `Add`'s
- * lived inside the `CANVAS_AUTHORING_ENABLED` ternary's flag-OFF arm, so in every shipped build it
- * was absent. The guard therefore fired for `marquee-select` alone: the one tool whose armed
+ * lived only in a flag-off arm that no shipped build selected, so it was absent. The guard therefore fired for `marquee-select` alone: the one tool whose armed
  * statement the same epic KEPT, and for neither of the two it withdrew. A planner could arm Add,
  * fold `Author`, and be left with a tool armed, no trigger, no statement and no exit but Escape —
  * the founding ADR-0064 defect, reintroduced by the fix for a different one.

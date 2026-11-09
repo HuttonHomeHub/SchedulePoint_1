@@ -9,8 +9,7 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activity **Cost accrual** select (M7 rung 5, ADR-0044 §32 / ADR-0035 §32) with `VITE_EARNED_VALUE`
- * pinned OFF, to prove the picker renders on its own. This suite proves: the select renders inside the
+ * The activity **Cost accrual** select (M7 rung 5, ADR-0044 §32 / ADR-0035 §32). This suite proves: the select renders inside the
  * "Cost & earned value" fieldset with Start / Uniform / End, always sends `accrualType`, and hides for
  * a type with no cost meaning (a milestone).
  *
@@ -19,10 +18,6 @@ import { anActivity } from '@/test/activity-fixture';
  * the row and round-trips it on save" ported to `ActivityEditorDialog.round-trips.test.tsx` — "seeds
  * accrualType from the row and round-trips it on a Cost save".
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: false,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

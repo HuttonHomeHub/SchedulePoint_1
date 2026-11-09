@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **canvas plural selection**
- * (`VITE_CANVAS_MULTI_SELECT`, `docs/specs/canvas-multi-select/` M5-T2) — Space/Shift+Arrow/Ctrl+A
+ * End-to-end configuration for the **canvas plural selection**
+ * (`docs/specs/canvas-multi-select/` M5-T2) — Space/Shift+Arrow/Ctrl+A
  * building a selection, the bulk bar's gates, the chain preview's direction, and a bulk delete
  * whose undo is one step.
  *
@@ -70,24 +70,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // The epic's surface under test.
-              // `VITE_CANVAS_MULTI_SELECT` is DERIVED from `VITE_CANVAS_DIRECT_MANIPULATION`, so
-              // both are set: a build with the plural selection on and direct manipulation off
-              // cannot exist, and setting only the derived flag would test a state the product
-              // never reaches.
-              VITE_CANVAS_MULTI_SELECT: 'true',
-              VITE_CANVAS_DIRECT_MANIPULATION: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              // The Link tool — the Escape-precedence assertion is about an ARMED tool surviving a
-              // keystroke in the field, so it is required.
-              VITE_CANVAS_AUTHORING_FLOW: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

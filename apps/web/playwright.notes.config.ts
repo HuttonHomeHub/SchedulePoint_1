@@ -1,10 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **Notes** web surface (`VITE_NOTES`, Notes M3,
- * ADR-0046).
+ * End-to-end configuration for the **Notes** web surface (Notes M3, ADR-0046).
  *
- * Serves the web bundle with `VITE_NOTES=true` so a member can add, edit and delete notes on an
+ * A member can add, edit and delete notes on an
  * activity end-to-end, and see the per-row count badge track. It runs on the **legacy stacked
  * plan-detail page** (canvas workspace + pen pinned OFF, matching the flags-off baseline suite) so the
  * journey stays simple: no pen dance, and notes are not pen-gated anyway (ADR-0046). Like the other
@@ -59,9 +58,6 @@ export default defineConfig({
             // Notes ON. The editing flags are not pinned: the pen layer runs as shipped, and the
             // journey takes the pen through the UI (`e2e-support/pen.ts`) before it edits a plan
             // (notes themselves are not pen-gated — ADR-0046).
-            env: {
-              VITE_NOTES: 'true',
-            },
           },
         ],
       }),

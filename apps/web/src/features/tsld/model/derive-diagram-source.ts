@@ -50,7 +50,7 @@ export interface DiagramSource {
 export function deriveDiagramSource(
   activities: readonly ActivitySummary[],
   options: {
-    wbsBand: { enabled: boolean; toggleOn: boolean };
+    wbsBand: { toggleOn: boolean };
     /** The host's neutral input, or `null`/absent to draw the swimlane-free diagram. */
     swimlanes?: SwimlaneInput | null | undefined;
     source: BarDateSource;
@@ -59,7 +59,6 @@ export function deriveDiagramSource(
   },
 ): DiagramSource {
   const band = deriveWbsBandSource(activities, {
-    enabled: options.wbsBand.enabled,
     toggleOn: options.wbsBand.toggleOn,
     source: options.source,
   });

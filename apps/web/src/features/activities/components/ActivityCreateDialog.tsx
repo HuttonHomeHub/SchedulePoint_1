@@ -57,7 +57,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FormProblemCount } from '@/components/ui/form';
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
@@ -710,17 +709,14 @@ function ActivityCreateForm({
               The three of them sit AFTER every scheduling section since M7, so this form reads
               General → Scheduling → Cost — the grouping the editor's tabs already had. They used to
               interrupt scheduling in the middle. */}
-            {EARNED_VALUE_ENABLED ? (
-              <FormSection title={MEASURE_SECTION_TITLE} description={MEASURE_SECTION_DESCRIPTION}>
-                <ActivityMeasureFields form={measure.form} />
-              </FormSection>
-            ) : null}
+            <FormSection title={MEASURE_SECTION_TITLE} description={MEASURE_SECTION_DESCRIPTION}>
+              <ActivityMeasureFields form={measure.form} />
+            </FormSection>
 
             <ActivityExpenseFields form={cost.form} />
 
             {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the
-              Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
-              value-measure picker. */}
+              Earned-Value Planned-Value curve, never a date. */}
             <ActivityAccrualField form={cost.form} />
           </div>
 

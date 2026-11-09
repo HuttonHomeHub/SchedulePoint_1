@@ -58,7 +58,7 @@ const PALETTE: TsldPalette = {
   nonWorking: '#222',
   today: '#f00',
   todayInk: '#fff',
-  // The data-date pair (VITE_CANVAS_DATA_DATE) — distinct fixture values so assertions can pin them.
+  // The data-date pair — distinct fixture values so assertions can pin them.
   dataDate: '#dd1',
   dataDateInk: '#dd2',
   conflict: '#fa0',
@@ -570,7 +570,7 @@ describe('paintScene', () => {
     expect(ctx.fillRect).not.toHaveBeenCalled();
   });
 
-  // ── The DATA-DATE line + the coincidence rule (`VITE_CANVAS_DATA_DATE`, status & feedback M1).
+  // ── The DATA-DATE line + the coincidence rule (status & feedback M1).
   // The rule table from the implementation plan: data date only · both lines · coincident (one
   // line, one merged pill) · toggle off · todayOffset null · off-screen (culled). The merge test
   // is `Math.round(x) === Math.round(x)` on the already-computed screen x values, asserted BOTH
@@ -1589,7 +1589,7 @@ describe('paintScene — over-allocation highlight', () => {
   });
 });
 
-// ── Time-true anchors + arrowheads (ADR-0052 M1, behind `VITE_CANVAS_DIRECT_MANIPULATION`) ──
+// ── Time-true anchors + arrowheads (ADR-0052 M1) ──
 describe('paintScene — time-true links', () => {
   // A synthetic week keyed by day offset (0–4 working, 5–6 not), matching the render-model tests.
   const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;
@@ -1768,7 +1768,7 @@ describe('paintScene — time-true links', () => {
   });
 });
 
-// ── Bar visual refresh (ADR-0052 M4, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ─────
+// ── Bar visual refresh (ADR-0052 M4) ─────
 describe('paintScene — bar visual refresh (ADR-0052 M4)', () => {
   /** All decorative layers off so the recorded calls are the bars alone. */
   const quiet = {
@@ -2762,7 +2762,7 @@ describe('paintInteractionLayer — visual refresh + hover (ADR-0052 M4)', () =>
   });
 });
 
-// ── Link visual refresh (ADR-0052 M5, behind the SAME `VITE_CANVAS_DIRECT_MANIPULATION`) ─────
+// ── Link visual refresh (ADR-0052 M5) ─────
 describe('paintScene — link visual refresh (ADR-0052 M5)', () => {
   // The synthetic week the time-true tests use: offsets 0–4 working, 5–6 not.
   const isWorkingDay = (d: number): boolean => ((d % 7) + 7) % 7 < 5;

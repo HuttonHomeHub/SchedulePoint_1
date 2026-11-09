@@ -42,7 +42,7 @@ const ALL: ActivitySummary[] = [SUMMARY, CHILD, LOOSE];
 
 describe('deriveWbsBandSource', () => {
   it('is inert with the toggle off, and returns the input array by identity', () => {
-    const source = deriveWbsBandSource(ALL, { enabled: true, toggleOn: false });
+    const source = deriveWbsBandSource(ALL, { toggleOn: false });
     expect(source).toEqual({ active: false, groups: null, height: 0, sceneActivities: ALL });
     // Identity, not just equality: the parity path must not even allocate a new array, because a
     // fresh reference every render is what turns a no-op into a repaint.
@@ -50,18 +50,18 @@ describe('deriveWbsBandSource', () => {
   });
 
   it('lifts summaries out of the scene when the band is on', () => {
-    const source = deriveWbsBandSource(ALL, { enabled: true, toggleOn: true });
+    const source = deriveWbsBandSource(ALL, { toggleOn: true });
     expect(source.active).toBe(true);
     expect(source.sceneActivities.map((a) => a.id)).toEqual(['c1', 'l1']);
   });
 
   it('reserves a height once there is something to show', () => {
-    const source = deriveWbsBandSource(ALL, { enabled: true, toggleOn: true });
+    const source = deriveWbsBandSource(ALL, { toggleOn: true });
     expect(source.height).toBeGreaterThanOrEqual(WBS_BAND_ROW_HEIGHT);
   });
 
   it('places the summary and the derived bucket on the band', () => {
-    const source = deriveWbsBandSource(ALL, { enabled: true, toggleOn: true });
+    const source = deriveWbsBandSource(ALL, { toggleOn: true });
     expect(source.groups?.map((g) => g.label)).toEqual(['Substructure', 'Unassigned']);
   });
 
@@ -85,7 +85,7 @@ describe('deriveWbsBandSource', () => {
         earlyFinish: '2026-03-31',
       }),
     );
-    const source = deriveWbsBandSource(nested, { enabled: true, toggleOn: true });
+    const source = deriveWbsBandSource(nested, { toggleOn: true });
     // The band takes the three it can stack…
     expect(source.groups?.filter((g) => g.depth <= 2).map((g) => g.id)).toEqual(['d0', 'd1', 'd2']);
     // …and the scene keeps exactly the one it cannot, so no summary is lost between them.
@@ -98,8 +98,8 @@ describe('deriveWbsBandSource', () => {
    * a band the user had switched on.
    */
   it('distinguishes off (null) from on-but-empty (an empty list)', () => {
-    expect(deriveWbsBandSource(ALL, { enabled: true, toggleOn: false }).groups).toBeNull();
-    expect(deriveWbsBandSource([], { enabled: true, toggleOn: true }).groups).toEqual([]);
-    expect(deriveWbsBandSource([], { enabled: true, toggleOn: true }).height).toBe(0);
+    expect(deriveWbsBandSource(ALL, { toggleOn: false }).groups).toBeNull();
+    expect(deriveWbsBandSource([], { toggleOn: true }).groups).toEqual([]);
+    expect(deriveWbsBandSource([], { toggleOn: true }).height).toBe(0);
   });
 });

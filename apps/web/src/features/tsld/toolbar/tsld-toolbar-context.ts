@@ -227,8 +227,7 @@ export interface TsldToolbarContext {
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;
-  /** Open the Earned-Value analysis dialog (EV4b, ADR-0042). Wired to the shared plan-chrome dialogs;
-   * the toolbar item that calls it is gated behind `VITE_EARNED_VALUE`. */
+  /** Open the Earned-Value analysis dialog (EV4b, ADR-0042). Wired to the shared plan-chrome dialogs; */
   openEarnedValue: () => void;
   /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
    * plan-chrome dialogs. */

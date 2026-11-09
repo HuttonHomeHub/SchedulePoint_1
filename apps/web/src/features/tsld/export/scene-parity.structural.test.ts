@@ -17,7 +17,7 @@ const SRC = join(__dirname, '..', '..', '..');
  * was nine features each adding correctly to the screen and nobody re-reading the export.
  *
  * **This gate is DERIVED, not a list, and that distinction is the whole point.** The plan specified
- * it as "fails on a literal `monthBands:` / `gridTiers:` / … outside the composer" — a hard-coded
+ * it as "fails on a literal `monthBands:` / … outside the composer" — a hard-coded
  * six-name roster beside a vocabulary that grows, which is the ADR-0073 C4 defect the same plan
  * cites approvingly elsewhere. A seventh key would have been in neither list and failed nothing;
  * `todayFraction` already was that seventh key, present on the screen since 2026-07-27 and absent
