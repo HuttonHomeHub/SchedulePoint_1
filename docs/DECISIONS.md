@@ -10,6 +10,27 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-09 — #576 is closed as not a race, and why a register row's trace was wrong
+
+**What was decided.** `docs/TECH_DEBT.md` #576 (a project delete soft-deleting a plan an import committed in
+between) is closed without a code change to the delete. The row, raised from the fresh-start M3-T0 trace, said the
+delete resolves its plan list and then soft-deletes plans by `projectId`, so an import committing between the two
+statements leaves a soft-deleted plan with live activities, unlocked.
+
+**What was read.** `lockProjectRowForDelete` takes the project row `FOR NO KEY UPDATE` before the plan list is read
+(`hierarchy-lifecycle.service.ts`, project branch). The two ways a plan is created, `PlansService.create` and
+`InterchangeService.commit` (`interchange.service.ts`, about line 320), each hold the project `FOR SHARE` for their
+whole transaction (#531), and the two lock modes conflict. Either the import commits first, and the delete then
+reads and cascades its plan and activities, or the delete commits first and the import's locking read finds the
+project deleted and refuses 404. `hierarchy-create-race.e2e-spec.ts` already drove this interleave (an import held
+at its plan insert, a project delete started against it); it now also asserts that no live activity is left under
+the swept project. The m3-inventory trace had not looked at the import's own lock.
+
+**What stays.** The project delete's `updateMany` by `projectId` is kept: were a plan ever outside the resolved
+list, stamping it is safer than leaving it active under a deleted project. The Baseline criticality columns stay
+nullable: a plan never recalculated has no mirror, and making them NOT NULL is a schema decision that remains the
+owner's. Three comments that cited the race as live were corrected.
+
 ## 2026-11-09 — The ten Dependabot bumps (#1282–#1291) are taken together
 
 **What was decided.** #1282–#1291 land as one change off `main`, as #1262 did on 2026-11-07, at the

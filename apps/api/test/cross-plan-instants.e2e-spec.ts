@@ -302,8 +302,8 @@ describe.skipIf(!hasDatabase)('cross-plan instants (e2e)', () => {
     // FC-5: an upstream whose instants are not stamped reads from its date. The stamp is one fact
     // (tidy T5, ck_plans_schedule_instants_match_cursor and ..._criticality_matches_cursor), so the
     // state is "never stamped": the cursor, the instants stamp and the criticality rule all NULL
-    // beside dates, which the project-delete race beside TECH_DEBT #492 can leave on a restored plan
-    // (fresh-start-1-1 m3-inventory.md §4).
+    // beside dates. The fixture sets it directly; no shipped path is known to produce it (the
+    // project-delete race once suspected of it does not exist, TECH_DEBT #576).
     await prisma.$executeRawUnsafe(
       `UPDATE "plans" SET "schedule_computed_at" = NULL, "schedule_instants_computed_at" = NULL,
          "schedule_critical_path_definition" = NULL, "schedule_critical_float_threshold_minutes" = NULL,

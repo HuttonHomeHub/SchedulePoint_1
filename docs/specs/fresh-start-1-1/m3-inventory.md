@@ -181,6 +181,14 @@ recalculation then dates the activities (`deleted_at IS NULL` on activities pass
 its first capture would then fail with 23502 under T8. (Client delete is safe for plans — `:501` uses
 `id: { in: planIds }` — but has the same shape one level up at `:504`, `project.updateMany({ clientId })`.)
 
+**Correction, 2026-11-09 (TECH_DEBT #576, closed).** The "neighbouring race" above does not exist, and this trace
+missed why: the import commit takes the project row `FOR SHARE` for its whole transaction
+(`interchange.service.ts`, `lockActiveProjectChainForShare`, #531), and a project delete takes it
+`FOR NO KEY UPDATE` _before_ it reads its plan list (`lockProjectRowForDelete`), so the two serialise: an
+import either commits first and is swept with its activities, or waits and is refused 404. The verdict below
+(keep the columns nullable) was reached on the strength of this paragraph; the other cause it names, a plan
+never recalculated, still holds, and NOT NULL remains an owner decision, not something this correction takes.
+
 **Verdict:** keep the four baseline criticality columns nullable (T8 not taken); reword the sentinel comment to
 name this cause. The race itself is a pre-existing integrity defect, not old data, and outside M3: **file it as a
 `docs/TECH_DEBT.md` row** beside #492 (fix: delete by the locked id list, and decide what happens to a plan or

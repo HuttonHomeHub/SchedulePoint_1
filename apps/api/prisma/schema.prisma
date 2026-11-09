@@ -2421,11 +2421,11 @@ model Baseline {
   ///
   /// KEPT NULLABLE AT 1.1 (tidy T8 NOT taken; ADR-0215, owner's Q3). With T5 a plan whose
   /// activities carry computed dates normally has a mirror, so a capture (which refuses a plan with
-  /// no computed finish) normally copies four values. ONE path is known to break that: a project
-  /// delete can soft-delete a plan an import committed in between, whose queued recalculation then
-  /// dates the activities while the stamp skips the deleted plan; restoring the batch brings the
-  /// plan back dated and unstamped (docs/TECH_DEBT.md #576). Its first capture stores this sentinel
-  /// rather than failing 23502. When #576 is fixed, NOT NULL can be reconsidered. Like every snapshot
+  /// no computed finish) normally copies four values. A plan that was never recalculated has no
+  /// mirror, so its first capture stores this sentinel rather than failing 23502. No shipped path
+  /// is known to date a plan's activities without stamping it: the project-delete/import race once
+  /// suspected of doing so does not exist (docs/TECH_DEBT.md #576, closed). Making these columns
+  /// NOT NULL is a separate schema decision for the owner and is NOT taken here. Like every snapshot
   /// column the value is PERMANENT — a capture cannot be re-run.
   ///
   /// ALL FOUR OR NONE. `ck_baselines_criticality_snapshot_all_or_none` (raw SQL in the migration —
