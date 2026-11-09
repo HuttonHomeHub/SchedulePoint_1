@@ -16,11 +16,7 @@
 import type { ColourLegend, ColourMode } from '../render/lenses';
 import { NEAR_CRITICAL_DOT_R, NODE_RIM_W } from '../render/render-model';
 
-import {
-  CANVAS_DATA_DATE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-} from '@/config/env';
+import { CANVAS_DATA_DATE_ENABLED, CANVAS_DIRECT_MANIPULATION_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 type LegendItem =
@@ -165,11 +161,8 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
     ? []
     : [{ label: 'Link slack (days)', slack: true } as const]),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
-  // mini-histogram, in the warning hue with a foreground outline (shape, not colour — WCAG 1.4.1). Only
-  // meaningful with the resource view, so listed only when the feature is on.
-  ...(CANVAS_RESOURCE_VIEW_ENABLED
-    ? [{ label: 'Over-allocated', overAllocation: true } as const]
-    : []),
+  // mini-histogram, in the warning hue with a foreground outline (shape, not colour — WCAG 1.4.1).
+  { label: 'Over-allocated', overAllocation: true } as const,
 ];
 
 /** Today's default key (criticality fills + shared cues) — the flag-off / no-lens legend, unchanged. */

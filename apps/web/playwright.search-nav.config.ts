@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * **Flag-ON** end-to-end configuration for **search that navigates**
- * (`VITE_CANVAS_SEARCH_NAV`, `docs/specs/canvas-search-navigation/` M5-T2) — Enter and Shift+Enter
+ * (`docs/specs/canvas-search-navigation/` M5-T2) — Enter and Shift+Enter
  * walking the match set, the n-of-m read-out, the announcement, Zoom to selection, and the Gantt's
  * half of the same match set.
  *
@@ -67,12 +67,6 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
-              // The epic's surface under test. `VITE_CANVAS_SEARCH_NAV` is DERIVED from
-              // `VITE_CANVAS_LENSES`, so both are set: a build with navigation on and lenses off
-              // cannot exist, and pinning only the derived flag would boot a state the product
-              // never reaches.
-              VITE_CANVAS_SEARCH_NAV: 'true',
-              VITE_CANVAS_LENSES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               // The Link tool — the Escape-precedence assertion is about an ARMED tool surviving a
               // keystroke in the field, so it is required.

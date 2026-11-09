@@ -377,25 +377,117 @@
       "retiredOn": "2026-11-08",
       "batch": "batch-16",
       "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T6 batch B). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
-    }
-  ],
-  "flags": {
-    "VITE_ACTIVITY_EDITOR_CONVERGENCE": {
+    },
+    {
+      "flag": "VITE_RESOURCE_CURVES",
+      "constant": "RESOURCE_CURVES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-6",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_CANVAS_RESOURCE_VIEW",
+      "constant": "CANVAS_RESOURCE_VIEW_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-7",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_CANVAS_LENSES",
+      "constant": "CANVAS_LENSES_ENABLED",
+      "enabled": "2026-07-19",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-7",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_CANVAS_SEARCH_NAV",
+      "constant": "CANVAS_SEARCH_NAV_ENABLED",
+      "enabled": "2026-08-07",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-17",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_CANVAS_NAV",
+      "constant": "CANVAS_NAV_ENABLED",
+      "enabled": "2026-07-20",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-7",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_CANVAS_TIME_AXIS",
+      "constant": "CANVAS_TIME_AXIS_ENABLED",
+      "enabled": "2026-07-27",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-9",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_INTER_PROJECT_DATES",
+      "constant": "INTER_PROJECT_DATES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-5",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_ACTIVITY_EDITOR_CONVERGENCE",
       "constant": "ACTIVITY_EDITOR_CONVERGENCE_ENABLED",
       "enabled": "2026-07-29",
       "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
       "batch": "batch-10",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
-    "VITE_ADVANCED_ACTIVITY_TYPES": {
+    {
+      "flag": "VITE_GUEST_SHARE_LINKS",
+      "constant": "GUEST_SHARE_LINKS_ENABLED",
+      "enabled": "2026-07-21",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-7",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_ADVANCED_ACTIVITY_TYPES",
       "constant": "ADVANCED_ACTIVITY_TYPES_ENABLED",
       "enabled": "2026-08-03",
       "enabledSource": "floor",
+      "retiredOn": "2026-11-08",
       "batch": "batch-15",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
     },
+    {
+      "flag": "VITE_RESOURCE_LEVELLING",
+      "constant": "RESOURCE_LEVELLING_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-6",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    },
+    {
+      "flag": "VITE_RESOURCES",
+      "constant": "RESOURCES_ENABLED",
+      "enabled": "2026-07-18",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-11-08",
+      "batch": "batch-5",
+      "note": "Retired 2026-11-08 in the 1.1.0 fresh-start plan (ADR-0215, `docs/specs/fresh-start-1-1/`, M1-T7 batch C). Class B guard: the enabled branch is kept and the disabled branch, its flag-off tests and every playwright pin deleted. No user-visible change — the flag was compiled on in every published image (ADR-0088 D1)."
+    }
+  ],
+  "flags": {
     "VITE_CANVAS_AUTHORING": {
       "constant": "CANVAS_AUTHORING_ENABLED",
       "enabled": "2026-08-03",
@@ -431,14 +523,6 @@
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
     },
-    "VITE_CANVAS_LENSES": {
-      "constant": "CANVAS_LENSES_ENABLED",
-      "enabled": "2026-07-19",
-      "enabledSource": "docblock",
-      "batch": "batch-7",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
     "VITE_CANVAS_LINK_ROUTING": {
       "constant": "CANVAS_LINK_ROUTING_ENABLED",
       "enabled": "2026-07-31",
@@ -457,58 +541,8 @@
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
     },
-    "VITE_CANVAS_NAV": {
-      "constant": "CANVAS_NAV_ENABLED",
-      "enabled": "2026-07-20",
-      "enabledSource": "docblock",
-      "batch": "batch-7",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_CANVAS_RESOURCE_VIEW": {
-      "constant": "CANVAS_RESOURCE_VIEW_ENABLED",
-      "enabled": "2026-07-20",
-      "enabledSource": "docblock",
-      "batch": "batch-7",
-      "derivedFrom": "RESOURCE_CURVES_ENABLED",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_CANVAS_SEARCH_NAV": {
-      "constant": "CANVAS_SEARCH_NAV_ENABLED",
-      "enabled": "2026-08-07",
-      "enabledSource": "docblock",
-      "batch": "batch-17",
-      "derivedFrom": "CANVAS_LENSES_ENABLED",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_CANVAS_TIME_AXIS": {
-      "constant": "CANVAS_TIME_AXIS_ENABLED",
-      "enabled": "2026-07-27",
-      "enabledSource": "docblock",
-      "batch": "batch-9",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
     "VITE_EARNED_VALUE": {
       "constant": "EARNED_VALUE_ENABLED",
-      "enabled": "2026-07-18",
-      "enabledSource": "docblock",
-      "batch": "batch-5",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_GUEST_SHARE_LINKS": {
-      "constant": "GUEST_SHARE_LINKS_ENABLED",
-      "enabled": "2026-07-21",
-      "enabledSource": "docblock",
-      "batch": "batch-7",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_INTER_PROJECT_DATES": {
-      "constant": "INTER_PROJECT_DATES_ENABLED",
       "enabled": "2026-07-18",
       "enabledSource": "docblock",
       "batch": "batch-5",
@@ -520,30 +554,6 @@
       "enabled": "2026-08-03",
       "enabledSource": "floor",
       "batch": "batch-15",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_RESOURCES": {
-      "constant": "RESOURCES_ENABLED",
-      "enabled": "2026-07-18",
-      "enabledSource": "docblock",
-      "batch": "batch-5",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_RESOURCE_CURVES": {
-      "constant": "RESOURCE_CURVES_ENABLED",
-      "enabled": "2026-07-18",
-      "enabledSource": "docblock",
-      "batch": "batch-6",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_RESOURCE_LEVELLING": {
-      "constant": "RESOURCE_LEVELLING_ENABLED",
-      "enabled": "2026-07-18",
-      "enabledSource": "docblock",
-      "batch": "batch-6",
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
     },

@@ -280,7 +280,8 @@ describe('paintScene', () => {
     const scene: TsldScene = { activities: [task()], edges: [], dataDate: DATA_DATE };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE);
     expect(ctx.strokeRect).not.toHaveBeenCalled();
-    expect(ctx.setLineDash).not.toHaveBeenCalled();
+    // The grid tiers set a dash and clear it; the bar must leave none in force.
+    expect(vi.mocked(ctx.setLineDash).mock.calls.at(-1)).toEqual([[]]);
   });
 
   it('draws a selection ring on the selected activity', () => {
@@ -584,12 +585,11 @@ describe('paintScene', () => {
       // No todayOffset ⇒ the Today branch (and therefore the coincidence test) never runs.
       paintScene(ctx, { ...base, dataDateLine: true }, VIEW, SIZE, PALETTE);
       expect(ctx.moveTo).toHaveBeenCalledWith(60.5, 0);
-      // Two strokes: the flag-off grid pass always strokes its (here empty) path once, plus the
-      // data-date rule — and no third.
-      // +1 since M4-T2: the lane hairlines stroke one batched pass of their own, and these
-      // counters are scene-wide rather than layer-scoped. Re-baselined explicitly rather than
-      // loosened to `toBeLessThanOrEqual`, so the gate still notices the NEXT layer to arrive.
-      expect(ctx.stroke).toHaveBeenCalledTimes(3);
+      // Two strokes: the lane hairlines' one batched pass (M4-T2) plus the data-date rule — and no
+      // third. These counters are scene-wide rather than layer-scoped; the figure is explicit
+      // rather than `toBeLessThanOrEqual`, so the gate still notices the NEXT layer to arrive.
+      // (The grid tiers stroke nothing here: `TODAY_ONLY` switches every grid toggle off.)
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]); // no dashed line anywhere
       expect(ctx.lineWidth).toBe(2);
       expect(ctx.strokeStyle).toBe(PALETTE.dataDate);
@@ -626,10 +626,10 @@ describe('paintScene', () => {
         SIZE,
         PALETTE,
       );
-      // One vertical: no dashed Today rule, and exactly ONE marker stroke on top of the grid
-      // pass's always-present empty-path stroke (two would be the un-merged case's three).
+      // One vertical: no dashed Today rule, and exactly ONE marker stroke on top of the lane
+      // hairlines' pass (two would be the un-merged case's three).
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
-      expect(ctx.stroke).toHaveBeenCalledTimes(3);
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
       // The merged LABEL is `axis-markers.test.ts`'s ('states both facts in one word').
     });
 
@@ -645,17 +645,17 @@ describe('paintScene', () => {
         PALETTE,
       );
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
-      // One stroke for the grid pass's always-empty path, one for the single merged rule.
-      expect(ctx.stroke).toHaveBeenCalledTimes(3);
+      // One stroke for the lane hairlines, one for the single merged rule.
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
     });
 
     it('draws nothing of its own when the scene field is absent or false (the toggle-off path)', () => {
       for (const scene of [base, { ...base, dataDateLine: false }]) {
         const ctx = mockCtx();
         paintScene(ctx, scene, VIEW, SIZE, PALETTE);
-        // No todayOffset either, so the whole status layer is silent: only the grid pass's
-        // always-present empty-path stroke remains.
-        expect(ctx.stroke).toHaveBeenCalledTimes(2);
+        // No todayOffset either, so the whole status layer is silent: only the lane hairlines'
+        // stroke remains.
+        expect(ctx.stroke).toHaveBeenCalledTimes(1);
       }
     });
 
@@ -669,10 +669,10 @@ describe('paintScene', () => {
         SIZE,
         PALETTE,
       );
-      // Exactly one marker rule strokes (plus the grid pass's empty path): the data-date rule is
+      // Exactly one marker rule strokes (plus the lane hairlines): the data-date rule is
       // culled and Today's is not. That the culled mark produces no LABEL either is
       // `axis-markers.test.ts`'s ('drops Today alone …', 'runs cull BEFORE clamp …').
-      expect(ctx.stroke).toHaveBeenCalledTimes(3);
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
       expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]); // the Today rule is unaffected
     });
 

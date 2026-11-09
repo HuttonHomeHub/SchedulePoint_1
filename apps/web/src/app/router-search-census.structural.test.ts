@@ -1,18 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { router } from './router';
 
 // The same pin `router-search.test.ts` carries, and for the same reason — see that file's comment.
 // The absolute count below is what makes it load-bearing here: a flag flipped off would shrink the
 // census rather than fail it.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCES_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
-}));
 
 /**
  * **Gate A — every route that declares `validateSearch` is exercised through the REAL parser**

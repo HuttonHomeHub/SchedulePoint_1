@@ -37,7 +37,7 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
-import { EARNED_VALUE_ENABLED, RESOURCE_CURVES_ENABLED } from '@/config/env';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ARCHIVED_BADGE, isArchivedRow } from '@/lib/library-filters';
 
@@ -153,7 +153,7 @@ export function ActivityResourcesPanel({
   const curveHelpId = useId();
   // The loading-curve picker distributes units across the activity's span, so it is meaningless for a
   // zero-span milestone — hidden there (TECH_DEBT #44b), in both the assigned rows and the assign form.
-  const showCurve = RESOURCE_CURVES_ENABLED && !isMilestone;
+  const showCurve = !isMilestone;
   // The join lag delays a resource *within* the activity's span, so a zero-span milestone has nothing
   // for it to sit inside — hidden there for the same reason the loading curve is (#44b)
   // (ADR-0071 M4).

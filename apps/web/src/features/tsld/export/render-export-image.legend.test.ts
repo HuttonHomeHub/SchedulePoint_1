@@ -5,14 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
  * its two both-ways rules: it names the over-allocation badge exactly when the picture draws one
  * (#524), and it counts what a narrow crop made it drop (#525, ADR-0127 D3).
  */
-const flags = vi.hoisted(() => ({ resourceView: true }));
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  get CANVAS_RESOURCE_VIEW_ENABLED() {
-    return flags.resourceView;
-  },
-}));
-
 import type { TsldScene } from '../render/paint';
 import { resolvePrintPalette } from '../render/palette';
 import type { Viewport } from '../render/render-model';
@@ -70,27 +62,19 @@ async function legendLabels(scene: Partial<TsldScene> = {}, width = 1200): Promi
 }
 
 describe('the export legend names the over-allocation badge exactly when it is drawn (#524)', () => {
-  it('ends with Over-allocated when the scene flags a bar and the resource view is on', async () => {
-    flags.resourceView = true;
+  it('ends with Over-allocated when the scene flags a bar', async () => {
     const labels = await legendLabels({ flaggedIds: new Set(['a1']) });
     expect(labels.at(-1)).toBe('Over-allocated');
   });
 
   it('omits it when nothing is flagged, so no key names an absent mark', async () => {
-    flags.resourceView = true;
     expect(await legendLabels({ flaggedIds: new Set() })).not.toContain('Over-allocated');
     expect(await legendLabels()).not.toContain('Over-allocated');
-  });
-
-  it('omits it when the resource view is off, as the screen key does', async () => {
-    flags.resourceView = false;
-    expect(await legendLabels({ flaggedIds: new Set(['a1']) })).not.toContain('Over-allocated');
   });
 });
 
 describe('a narrow crop counts the legend entries it cannot fit (#525)', () => {
   it('draws the entries that fit and states how many it dropped', async () => {
-    flags.resourceView = true;
     const scene = { flaggedIds: new Set(['a1']) };
     const whole = await legendLabels(scene);
     expect(whole.some((label) => /^\+\d+ more$/.test(label))).toBe(false);

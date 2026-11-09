@@ -10,10 +10,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 // The flag-ON resource-view registry (Stage E, ADR-0049): `resource-view` swaps its "Coming soon"
 // placeholder for a real pressed-state toggle. The flag-off stub is covered by `tsld-toolbar.test.tsx`
 // (which pins CANVAS_RESOURCE_VIEW_ENABLED off). Only this flag is forced on — the rest stay real.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
-}));
 
 const spies = { toggleResourceView: vi.fn(), toggleOverAllocation: vi.fn() };
 

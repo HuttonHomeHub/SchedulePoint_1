@@ -35,12 +35,7 @@ import type {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { usePromotionStage } from '@/components/ui/toolbar/use-promotion-stage';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  CANVAS_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-} from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED } from '@/config/env';
 import { printGanttSchedule } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
@@ -339,7 +334,7 @@ export function useTsldToolbarContext({
     requestSelectActivity,
   } = canvasUi;
 
-  // Canvas nav (VITE_CANVAS_NAV). Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
+  // Canvas nav. Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
   // it is one of the two `canvasControlRef` readers `docs/TECH_DEBT.md` #85 named, and lifting
   // them out of this memo is what let the two `react-hooks/refs` suppressions be deleted.
   const { orderedConflictHits, currentConflict, goToNextConflict } = useConflictNavigation({
@@ -352,7 +347,7 @@ export function useTsldToolbarContext({
     announce,
   });
 
-  // Search that navigates (VITE_CANVAS_SEARCH_NAV) — the same shape as the conflict cycle above,
+  // Search that navigates — the same shape as the conflict cycle above,
   // sharing its walk so the two can never order a plan differently.
   const { searchStatus, goToMatch, matchedIds, escapeSearchField } = useSearchNavigation({
     activities,
@@ -410,18 +405,14 @@ export function useTsldToolbarContext({
     plan.editedSinceCalculated,
   ]);
 
-  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
+  // Over-allocation highlight (Stage E M2): whether the plan has ≥ 1
   // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),
   // read straight off the already-loaded activities — no new fetch, no client re-derivation of
   // over-allocation. Gates the `over-allocation` toolbar item's disabled-with-reason (a plan that
   // never levelled, or a levelled plan with none, has zero — mirroring Next-conflict's empty state).
-  // Gated on the flag so flag-off ⇒ `.some(...)` never runs and it degrades to false (zero cost).
-  const hasOverAllocation = useMemo(
-    () => CANVAS_RESOURCE_VIEW_ENABLED && activities.some(isOverAllocated),
-    [activities],
-  );
+  const hasOverAllocation = useMemo(() => activities.some(isOverAllocated), [activities]);
 
-  // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
+  // Insight lenses: the Baseline-overlay gate reads the SAME variance query the
   // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
   // active baseline exists iff the summary carries a `baselineId`; loading/error feed the toolbar item's
   // disabled-with-reason (ADR-0031 shade-don't-hide), so the toggle never enables without ghosts to draw.
@@ -438,10 +429,9 @@ export function useTsldToolbarContext({
     matchingCount: number;
     isMatching: ((activity: ActivitySummary) => boolean) | undefined;
   }>(() => {
-    const filterOn =
-      CANVAS_LENSES_ENABLED && isFilterActive(lensState.filterQuery, lensState.filterAttrs);
+    const filterOn = isFilterActive(lensState.filterQuery, lensState.filterAttrs);
     const isolateChain =
-      CANVAS_NAV_ENABLED && navState.isolateActive && selectedActivityId !== null
+      navState.isolateActive && selectedActivityId !== null
         ? computeLogicPath(selectedActivityId, dependencies, {
             mode: navState.isolateMode,
           })
@@ -648,17 +638,16 @@ export function useTsldToolbarContext({
       // (spec §4.11). Stage 0 where there is no `matchMedia`, which is every unit test's.
       promotion,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
-      // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
-      // is off (the `share` id resolves to its placeholder, so neither is read).
+      // `openShare` opens the workspace-hosted `ShareLinksDialog`.
       canShare: model.canShare,
       openShare: () => openDialog('share'),
       editPlan,
 
-      // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) — the ephemeral open flag + toggle from
+      // Resource-view lens (ADR-0049) — the ephemeral open flag + toggle from
       // the model. Inert while the flag is off (the `resource-view` id resolves to its placeholder stub).
       resourceViewOpen: model.resourceViewOpen,
       toggleResourceView: model.toggleResourceView,
-      // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — the ephemeral mode flag +
+      // Over-allocation highlight (Stage E M2) — the ephemeral mode flag +
       // toggle from the model, plus the plan's over-allocation presence gate. Inert while the flag is
       // off (the `over-allocation` id resolves to its placeholder stub).
       overAllocationHighlight: model.overAllocationHighlight,
@@ -694,7 +683,7 @@ export function useTsldToolbarContext({
       ...(penLock ? { penLock } : {}),
       lateOverlayActive,
 
-      // Insight lenses (VITE_CANVAS_LENSES) — read the lens view state + wire its setters; the Baseline
+      // Insight lenses — read the lens view state + wire its setters; the Baseline
       // gate reads the shared variance query. Inert while the flag is off (the ids resolve to stubs).
       filterQuery: lensState.filterQuery,
       setFilterQuery,
@@ -739,7 +728,7 @@ export function useTsldToolbarContext({
       varianceLoading,
       varianceError,
 
-      // Canvas nav (VITE_CANVAS_NAV) — the isolate/next-conflict/snap view state + commands. Inert while
+      // Canvas nav — the isolate/next-conflict/snap view state + commands. Inert while
       // the flag is off (the three ids resolve to their placeholder stubs).
       isolateActive: navState.isolateActive,
       isolateMode: navState.isolateMode,
@@ -1077,11 +1066,11 @@ export function useTsldToolbarContext({
     minimapOpen,
     toggleMinimap,
     minimapRoom,
-    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
+    // Resource-view lens — re-identify only when the open flag flips (the
     // toggle is a stable model callback).
     model.resourceViewOpen,
     model.toggleResourceView,
-    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW) — re-identify when the mode flips or the
+    // Over-allocation highlight — re-identify when the mode flips or the
     // plan's over-allocation presence changes (the toggle is a stable model callback).
     model.overAllocationHighlight,
     model.toggleOverAllocation,

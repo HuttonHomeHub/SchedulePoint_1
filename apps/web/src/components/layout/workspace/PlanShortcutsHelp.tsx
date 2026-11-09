@@ -1,9 +1,5 @@
 import { Dialog } from '@/components/ui/dialog';
-import {
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-} from '@/config/env';
+import { CANVAS_DIRECT_MANIPULATION_ENABLED, CANVAS_MULTI_SELECT_ENABLED } from '@/config/env';
 import { isApplePlatform } from '@/features/undo-redo';
 import type { PlanViewMode } from '@/lib/plan-view-mode';
 
@@ -91,8 +87,7 @@ const DIRECT_MANIPULATION_SHORTCUTS: readonly Shortcut[] = [
 ];
 
 /**
- * Search-navigation accelerators (`docs/specs/canvas-search-navigation/` M2-T3) — appended only when
- * `VITE_CANVAS_SEARCH_NAV` is on, so the sheet stays byte-for-byte identical with the flag off.
+ * Search-navigation accelerators (`docs/specs/canvas-search-navigation/` M2-T3).
  * These are the only shortcuts in the sheet that act on a **focused field** rather than the canvas,
  * which is why they say so: a planner reading the list needs to know where to press them.
  */
@@ -334,7 +329,7 @@ export function PlanShortcutsHelp({
   const editShortcuts = [
     ...EDIT_SHORTCUTS,
     ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
-    ...(CANVAS_SEARCH_NAV_ENABLED ? SEARCH_NAV_SHORTCUTS : []),
+    ...SEARCH_NAV_SHORTCUTS,
     ...undoRedoShortcuts(isApplePlatform()),
   ];
   return (

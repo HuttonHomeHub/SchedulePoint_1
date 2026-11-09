@@ -247,7 +247,6 @@ const MAXIMAL: TsldScene = {
   todayFraction: 0.4,
   monthBands: true,
   dataDateLine: true,
-  gridTiers: true,
   dimmedIds: new Set(['overlapped']),
   gestureSourceId: 'plain',
   barFill: new Map([['near', '#0c8']]),

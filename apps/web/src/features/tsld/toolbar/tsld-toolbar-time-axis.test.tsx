@@ -8,16 +8,11 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
- * The `View▾` zoom menu's range-anchored copy (tsld-toolbar-canvas-refinements F3, M2), behind
- * `VITE_CANVAS_TIME_AXIS`. The width-derived scale itself (`pxPerDayForPreset`, `presetOf`,
+ * The `View▾` zoom menu's range-anchored copy (tsld-toolbar-canvas-refinements F3, M2). The width-derived scale itself (`pxPerDayForPreset`, `presetOf`,
  * `zoomToPreset`) is pure and covered in `render/time-scale.test.ts`; this suite proves the toolbar
  * wires the flag through to the one thing it owns — the menu row copy — without touching the
  * trigger's short name.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_TIME_AXIS_ENABLED: true,
-}));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext(over);

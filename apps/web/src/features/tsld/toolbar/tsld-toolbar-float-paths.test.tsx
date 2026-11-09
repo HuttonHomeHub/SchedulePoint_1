@@ -31,11 +31,6 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * counterpart either: the item reads no `hasDiagram`, and the context it is built from has none.
  */
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_NAV_ENABLED: true,
-}));
-
 const toggleFloatPaths = vi.fn();
 
 function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {

@@ -8,10 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * bar's DISPLAY lane, so a ghost sits in the same row as the bar it describes. The canvas is replaced
  * by a recorder, because the subject is what the panel hands it; the derivation under it is real.
  */
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_LENSES_ENABLED: true };
-});
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 
 const seen = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));

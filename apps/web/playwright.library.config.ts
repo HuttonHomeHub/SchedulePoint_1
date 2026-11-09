@@ -74,7 +74,6 @@ export default defineConfig({
             // times, each citing its neighbours as precedent. The flag now takes its default, which is
             // what every shipped bundle carries (ADR-0088 D1).
             env: {
-              VITE_RESOURCES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
             },
           },

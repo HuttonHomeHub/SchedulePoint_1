@@ -231,7 +231,7 @@ export interface TsldToolbarContext {
    * the toolbar item that calls it is gated behind `VITE_EARNED_VALUE`. */
   openEarnedValue: () => void;
   /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
-   * plan-chrome dialogs; the toolbar item that calls it is gated behind `VITE_RESOURCE_CURVES`. */
+   * plan-chrome dialogs. */
   openResourceHistogram: () => void;
   /** Toggle the docked Health check panel (health M2) — the DCMA 14-point report beside the plan.
    * Named for what it does: a second select while the panel is open CLOSES it (the menu item is a
@@ -258,12 +258,11 @@ export interface TsldToolbarContext {
    */
   promotion: PromotionState;
   /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
-   * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
-   * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on
-   * every build; nothing reads it while the flag is off (the `share` id resolves to its placeholder). */
+   * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item. NOT pen-gated — sharing grants read
+   * access, it doesn't edit the plan. */
   canShare: boolean;
   /** Open the External-Guest **Share links** dialog (ADR-0051 F-M4). Wired to the shared plan-chrome
-   * dialogs; the toolbar item that calls it is gated behind `VITE_GUEST_SHARE_LINKS` + {@link canShare}. */
+   * dialogs; the toolbar item that calls it is gated on {@link canShare}. */
   openShare: () => void;
   /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
    * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
@@ -272,7 +271,7 @@ export interface TsldToolbarContext {
 
   // --- Help (group 7) -----------------------------------------------------------------------
   openShortcuts: () => void;
-  // --- Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, group 2 · Row 1 · Look — ADR-0049) ----------
+  // --- Resource-view lens (group 2 · Row 1 · Look — ADR-0049) ----------
   /** Whether the canvas-axis-aligned resource strip is revealed (drives the `resource-view` item's
    * pressed state). Populated on every build; nothing reads it while the flag is off (the id resolves to
    * its `placeholderItem()` stub), so it is inert by default. */
@@ -373,7 +372,7 @@ export interface TsldToolbarContext {
    * and read by the workspace to build the selection bar's shared `clearVisualPlacementGate` input. */
   lateOverlayActive: boolean;
 
-  // --- Insight lenses (VITE_CANVAS_LENSES, group 2/3 · Row 1 · Look) -------------------------
+  // --- Insight lenses (group 2/3 · Row 1 · Look) -------------------------
   // Client view state over already-shipped reads (spec `docs/specs/canvas-lenses/`): the filter/search
   // dimming, the Colour-by picker, and the Baseline overlay. Populated on every build from
   // `canvasUi.lensState` + the variance query; nothing reads them while the flag is off (the ids then
@@ -456,7 +455,7 @@ export interface TsldToolbarContext {
   swimlanesLanesFailed?: boolean;
   swimlanesOverLimit?: { typeName: string; count: number };
 
-  // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
+  // --- Canvas navigation & authoring aids (spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and
   // Next conflict (cycle flagged activities). Populated on every build from `canvasUi.navState` + the
   // activities; nothing reads them while the flag is off (the ids then resolve to their
@@ -487,7 +486,7 @@ export interface TsldToolbarContext {
    * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
   goToNextConflict: () => void;
 
-  // --- Search that navigates (VITE_CANVAS_SEARCH_NAV, `docs/specs/canvas-search-navigation/`) ----
+  // --- Search that navigates (`docs/specs/canvas-search-navigation/`) ----
   /**
    * The find read-out: how many activities the live search matches, and which one the planner is
    * standing on (1-based; `null` before the first Enter). `null` for the whole object when the

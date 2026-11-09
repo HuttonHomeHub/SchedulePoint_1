@@ -3,15 +3,13 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import { useEffect, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The two default-on lenses this milestone gives spoken equivalents to (`VITE_CANVAS_LENSES`), plus
+// The two default-on lenses this milestone gives spoken equivalents to, plus
 // the over-allocation highlight — needed for the identity case, which has to carry EVERY mark at once.
 // Editing/authoring off keeps the read surface simple.
 vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    CANVAS_LENSES_ENABLED: true,
-    CANVAS_RESOURCE_VIEW_ENABLED: true,
     CANVAS_AUTHORING_ENABLED: false,
   };
 });

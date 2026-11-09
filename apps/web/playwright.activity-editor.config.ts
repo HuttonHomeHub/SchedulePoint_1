@@ -67,11 +67,9 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
-              // The convergence epic on top: Logic, Resources and Notes are tabs of this editor,
-              // and the permission claims they make (a link needs the pen; a note does not) can
-              // only be tested against a server that actually enforces the lock.
-              VITE_ACTIVITY_EDITOR_CONVERGENCE: 'true',
-              VITE_RESOURCES: 'true',
+              // Logic, Resources and Notes are tabs of this editor, and the permission claims they
+              // make (a link needs the pen; a note does not) can only be tested against a server
+              // that actually enforces the lock.
               VITE_NOTES: 'true',
               // Earned value ON: the Progress tab's third panel and the physical-% measure
               // it overrides are the co-location this epic exists for.

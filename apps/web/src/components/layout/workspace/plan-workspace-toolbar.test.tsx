@@ -91,7 +91,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // Stage E (ADR-0049): force the (dark-by-default) resource-view flag on so the `resource-view` toggle
   // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
   // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
 }));
 
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via

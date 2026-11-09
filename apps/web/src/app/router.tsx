@@ -14,7 +14,6 @@ import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
 import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Spinner } from '@/components/ui/spinner';
-import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -433,7 +432,7 @@ const calendarsRoute = createRoute({
   component: CalendarsScreen,
 });
 
-/** Resources library (behind `RESOURCES_ENABLED`; only added to the tree when on). */
+/** Resources library. */
 const resourcesRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/resources',
@@ -490,8 +489,6 @@ const recentlyDeletedRoute = createRoute({
  * PUBLIC External-Guest read-only plan view (ADR-0051 F-M4). A **sibling of `_authed`** — no session
  * guard, no `beforeLoad`, no app-shell chrome: an outsider with a share token reads exactly one plan.
  * The token rides in the URL fragment (`/share#sp_share_…`), read client-side (never a search param).
- * Registered ONLY behind `VITE_GUEST_SHARE_LINKS` (like the resources route), so with the flag off the
- * route tree is byte-identical — there is no `/share` route at all (the surface stays fully dark).
  */
 /**
  * Code-split the public guest screen: it pulls in the read-only TSLD canvas, which anonymous guests
@@ -651,9 +648,8 @@ const routeTree = rootRoute.addChildren([
   verifyEmailRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
-  // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
-  // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
-  ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
+  // The public guest `/share` route (ADR-0051 F-M4) — a sibling of the shell, never under it.
+  shareGuestRoute,
   // Unconditional and outside the shell — see the route's docblock for both reasons.
   staffConsoleRoute,
   authedRoute.addChildren([
@@ -669,9 +665,7 @@ const routeTree = rootRoute.addChildren([
     recentlyDeletedRoute,
     organizationExportRoute,
     orgNotFoundRoute,
-    // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
-    // app is byte-identical when off (no route, no nav link, no row action).
-    ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
+    resourcesRoute,
     auditLogRoute,
     myActivityRoute,
     accountRoute,

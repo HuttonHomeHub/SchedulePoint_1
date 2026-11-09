@@ -27,9 +27,6 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   EARNED_VALUE_ENABLED: true,
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-  INTER_PROJECT_DATES_ENABLED: true,
-  RESOURCE_LEVELLING_ENABLED: true,
 }));
 
 const GATING = deriveActivityEditorGating({

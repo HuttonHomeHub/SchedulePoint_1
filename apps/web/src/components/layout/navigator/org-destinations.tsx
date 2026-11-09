@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { RESOURCES_ENABLED } from '@/config/env';
 import {
   canExportOrganization,
   canManageHierarchy,
@@ -89,12 +88,7 @@ function useDestinations(orgSlug: string): Destination[] {
   const all: Destination[] = [
     { label: 'Clients', to: '/orgs/$orgSlug/clients', Icon: Building2, visible: true },
     { label: 'Calendars', to: '/orgs/$orgSlug/calendars', Icon: CalendarDays, visible: true },
-    {
-      label: 'Resources',
-      to: '/orgs/$orgSlug/resources',
-      Icon: Wrench,
-      visible: RESOURCES_ENABLED,
-    },
+    { label: 'Resources', to: '/orgs/$orgSlug/resources', Icon: Wrench, visible: true },
     { label: 'Members', to: '/orgs/$orgSlug/members', Icon: Users, visible: true },
     // Org Admin only (ADR-0072). Hiding it for other roles is a courtesy, not the control:
     // the API answers 403 whether or not this link is rendered.

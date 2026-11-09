@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 
 import type { TsldToolbarContext } from '../tsld-toolbar-context';
 
-import { CANVAS_NAV_ENABLED } from '@/config/env';
 import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import {
   joinConflictReasons,
@@ -11,7 +10,7 @@ import {
 } from '@/features/tsld/render/conflicts';
 
 /**
- * Next-conflict navigation (ADR-0078 S11, `VITE_CANVAS_NAV`).
+ * Next-conflict navigation.
  *
  * Extracted from `use-tsld-toolbar-context.tsx` verbatim. This is one of the **two** readers of
  * `canvasControlRef` that `docs/TECH_DEBT.md` #85 named — the other is the export commands' image
@@ -27,9 +26,6 @@ import {
  * render — which is what the rule was protecting all along. What changed is the compiler's ability
  * to see that, not the code's behaviour.
  */
-
-/** A stable empty list, so the flag-off path allocates nothing per render. */
-const EMPTY_CONFLICTS: ReturnType<typeof orderedConflicts> = [];
 
 export interface ConflictNavigation {
   /** The plan's flagged activities in stable order (CQ-2). */
@@ -61,17 +57,11 @@ export function useConflictNavigation(args: {
     announce,
   } = args;
 
-  // Memoised on the activities only so it never rebuilds per render. Gated on the flag (P-sug1):
-  // flag-off ⇒ the stable empty list, so `orderedConflicts` never runs and everything downstream
-  // degrades to zero/null — matching the flag's "flag-off ⇒ zero cost" contract.
-  const orderedConflictHits = useMemo(
-    () => (CANVAS_NAV_ENABLED ? orderedConflicts(activities) : EMPTY_CONFLICTS),
-    [activities],
-  );
+  // Memoised on the activities only so it never rebuilds per render.
+  const orderedConflictHits = useMemo(() => orderedConflicts(activities), [activities]);
 
   // Null (chip hidden) until the user starts cycling (no cursor), while isolating, when the
-  // cursor's activity is no longer flagged, when there are none, or flag-off (the ordered set is
-  // then empty). Kept in step with the polite announcement `goToNextConflict` speaks.
+  // cursor's activity is no longer flagged, when there are none. Kept in step with the polite announcement `goToNextConflict` speaks.
   const currentConflict = useMemo<TsldToolbarContext['currentConflict']>(() => {
     if (isolateActive || conflictCursorId === null) return null;
     const index = orderedConflictHits.findIndex((h) => h.id === conflictCursorId);

@@ -25,13 +25,7 @@ import { PROMOTION_LADDER, type LadderRank } from './promotion-ladder';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 
 import { isPromoted, type PromotableEntry } from '@/components/ui/toolbar/toolbar-promotion';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  EARNED_VALUE_ENABLED,
-  GUEST_SHARE_LINKS_ENABLED,
-  RESOURCE_CURVES_ENABLED,
-} from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 
 /**
@@ -106,7 +100,6 @@ export const FILTER_ATTR_ENTRIES: Partial<Record<FilterAttr, PromotableEntry<Tsl
       from: 'filter',
       rank: 1,
       at: at('L1'),
-      isVisible: () => CANVAS_LENSES_ENABLED,
       // Pressed from the same set the trigger reads (`filterAttrs.size > 0`), so the two agree.
       isActive: (ctx) => ctx.filterAttrs.has('critical'),
       isEnabled: (ctx) => ctx.hasDiagram,
@@ -122,7 +115,6 @@ export const FILTER_ATTR_ENTRIES: Partial<Record<FilterAttr, PromotableEntry<Tsl
       from: 'filter',
       rank: 6,
       at: at('L6'),
-      isVisible: () => CANVAS_LENSES_ENABLED,
       isActive: (ctx) => ctx.filterAttrs.has('conflict'),
       isEnabled: (ctx) => ctx.hasDiagram,
       disabledReason: noDiagram,
@@ -154,7 +146,6 @@ export const COLOUR_ENTRIES: readonly PromotableEntry<TsldToolbarContext>[] = CO
     // A choice of one: a recessed track with the chosen value raised (toolbar-grid M2). The names,
     // `aria-pressed` and the roving stops are untouched; the track is a plain wrapper.
     cluster: COLOUR_CLUSTER,
-    isVisible: () => CANVAS_LENSES_ENABLED,
     isActive: (ctx: TsldToolbarContext) => ctx.colourMode === mode,
     onActivate: (ctx: TsldToolbarContext) => ctx.setColourMode(mode),
   }),
@@ -239,7 +230,6 @@ export const RESOURCE_HISTOGRAM_ENTRY: PromotableEntry<TsldToolbarContext> = {
   from: 'analysis',
   rank: 8,
   at: at('P8'),
-  isVisible: () => RESOURCE_CURVES_ENABLED,
   onActivate: (ctx) => ctx.openResourceHistogram(),
 };
 
@@ -257,7 +247,6 @@ export const SHARE_ENTRY: PromotableEntry<TsldToolbarContext> = {
   // and is told the second. The hand-off message still says "Share & export" (`menuName`), because
   // that is the name the trigger has by the time focus lands on it.
   description: 'Moves into the Export menu in a narrower window, where it is named Share & export',
-  isVisible: () => GUEST_SHARE_LINKS_ENABLED,
   // A permission, not a state: shaded with the reason rather than hidden, so a Viewer learns that
   // sharing exists and why they cannot (ADR-0082) — the same gate the menu row carries.
   isEnabled: (ctx) => ctx.canShare,

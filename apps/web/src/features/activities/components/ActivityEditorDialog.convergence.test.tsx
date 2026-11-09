@@ -11,8 +11,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
 // state, which is the rollback contract — both are kept, per ADR-0053 M6.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
-  RESOURCES_ENABLED: true,
   NOTES_ENABLED: true,
 }));
 

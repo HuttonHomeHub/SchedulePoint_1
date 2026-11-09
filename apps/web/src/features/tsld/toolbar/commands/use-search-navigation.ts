@@ -2,7 +2,6 @@ import { useCallback, useMemo } from 'react';
 
 import type { TsldToolbarContext } from '../tsld-toolbar-context';
 
-import { CANVAS_SEARCH_NAV_ENABLED } from '@/config/env';
 import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import type { FilterAttr } from '@/features/tsld/render/lenses';
 import {
@@ -13,7 +12,7 @@ import {
 } from '@/features/tsld/render/search-matches';
 
 /**
- * Search that navigates (`docs/specs/canvas-search-navigation/` M1, `VITE_CANVAS_SEARCH_NAV`).
+ * Search that navigates (`docs/specs/canvas-search-navigation/` M1).
  *
  * Deliberately the same shape as `use-conflict-navigation.ts`, one module along: an ordered list, a
  * cursor, and a jump that centres, selects and announces. The two are the same interaction with
@@ -24,9 +23,6 @@ import {
  * the ADR-0078 §3b rule applied to new code rather than retrofitted: this hook exists as its own
  * module from the start, so no `react-hooks/refs` suppression is ever needed for it.
  */
-
-/** A stable empty list, so the flag-off and inactive-search paths allocate nothing per render. */
-const EMPTY_MATCHES: MatchHit[] = [];
 
 export interface SearchNavigation {
   /** The ordered match set, empty when the search is inactive or the flag is off. */
@@ -67,14 +63,8 @@ export function useSearchNavigation(args: {
     announce,
   } = args;
 
-  // Gated on the flag so flag-off `orderedMatches` never runs and everything downstream degrades to
-  // an empty list and a null read-out — the flag's "flag-off ⇒ zero cost" contract, and the same
-  // gate `useConflictNavigation` puts on `orderedConflicts`.
   const matchHits = useMemo(
-    () =>
-      CANVAS_SEARCH_NAV_ENABLED
-        ? orderedMatches(activities, filterQuery, filterAttrs)
-        : EMPTY_MATCHES,
+    () => orderedMatches(activities, filterQuery, filterAttrs),
     [activities, filterQuery, filterAttrs],
   );
 

@@ -13,7 +13,6 @@ import { splitByRow, type ToolbarItem } from '@/components/ui/toolbar/toolbar-re
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_LENSES_ENABLED: true,
 }));
 
 afterEach(cleanup);

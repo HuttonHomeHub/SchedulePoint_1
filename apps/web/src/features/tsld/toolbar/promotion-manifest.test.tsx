@@ -21,14 +21,8 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_NAV_ENABLED: true,
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
   CANVAS_MULTI_SELECT_ENABLED: true,
-  CANVAS_TIME_AXIS_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
   EARNED_VALUE_ENABLED: true,
-  RESOURCE_CURVES_ENABLED: true,
   NOTES_ENABLED: true,
 }));
 

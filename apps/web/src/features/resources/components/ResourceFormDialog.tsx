@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { EARNED_VALUE_ENABLED, RESOURCE_LEVELLING_ENABLED } from '@/config/env';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { minorToMajorInput } from '@/lib/format-money';
 import { ARCHIVED_BADGE, isArchivedRow, matchesLibraryQuery } from '@/lib/library-filters';
@@ -378,21 +378,19 @@ function ResourceForm({
                     </p>
                   ) : null}
                 </div>
-                {RESOURCE_LEVELLING_ENABLED ? (
-                  <TextField
-                    label="Max units/hour"
-                    type="number"
-                    min={0}
-                    step="any"
-                    inputMode="decimal"
-                    readOnly={readOnly}
-                    hint="The most this resource can supply at once. Resource levelling delays activities so demand never exceeds it. Leave blank for uncapped."
-                    error={errors.maxUnitsPerHour?.message}
-                    {...register('maxUnitsPerHour', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
-                  />
-                ) : null}
+                <TextField
+                  label="Max units/hour"
+                  type="number"
+                  min={0}
+                  step="any"
+                  inputMode="decimal"
+                  readOnly={readOnly}
+                  hint="The most this resource can supply at once. Resource levelling delays activities so demand never exceeds it. Leave blank for uncapped."
+                  error={errors.maxUnitsPerHour?.message}
+                  {...register('maxUnitsPerHour', {
+                    setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                  })}
+                />
                 {EARNED_VALUE_ENABLED ? (
                   <TextField
                     label="Cost per unit"

@@ -1,13 +1,7 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import {
-  EARNED_VALUE_ENABLED,
-  GUEST_SHARE_LINKS_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  RESOURCE_CURVES_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-} from '@/config/env';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
 import { EarnedValuePanel } from '@/features/earned-value';
 import {
@@ -154,20 +148,16 @@ export function PlanChromeDialogs({
               canEdit={model.canWrite}
             />
           </SettingsSection>
-          {RESOURCE_LEVELLING_ENABLED ? (
-            <SettingsSection title="Resource levelling">
-              <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
-            </SettingsSection>
-          ) : null}
-          {INTER_PROJECT_DATES_ENABLED ? (
-            <SettingsSection title="External relationships">
-              <PlanExternalRelationshipsSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
+          <SettingsSection title="Resource levelling">
+            <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
+          <SettingsSection title="External relationships">
+            <PlanExternalRelationshipsSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
           {EARNED_VALUE_ENABLED ? (
             <SettingsSection title="Earned value">
               <PlanEarnedValueSettings
@@ -196,29 +186,24 @@ export function PlanChromeDialogs({
         </Dialog>
       ) : null}
 
-      {RESOURCE_CURVES_ENABLED ? (
-        <Dialog
-          open={dialog === 'resource-histogram'}
-          onClose={onClose}
-          title="Resource histogram"
-          description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
-          size="lg"
-        >
-          <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
-        </Dialog>
-      ) : null}
+      <Dialog
+        open={dialog === 'resource-histogram'}
+        onClose={onClose}
+        title="Resource histogram"
+        description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
+        size="lg"
+      >
+        <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
+      </Dialog>
 
       {/* External-Guest share links (ADR-0051 F-M4). Unlike the panels above, `ShareLinksDialog` owns its
-          own `Dialog` chrome, so it is rendered directly (not wrapped). Gated behind the flag so it (and
-          the whole share feature) is never pulled into a flag-off build's behaviour. */}
-      {GUEST_SHARE_LINKS_ENABLED ? (
-        <ShareLinksDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={dialog === 'share'}
-          onClose={onClose}
-        />
-      ) : null}
+          own `Dialog` chrome, so it is rendered directly (not wrapped). */}
+      <ShareLinksDialog
+        orgSlug={model.orgSlug}
+        planId={model.planId}
+        open={dialog === 'share'}
+        onClose={onClose}
+      />
     </>
   );
 }

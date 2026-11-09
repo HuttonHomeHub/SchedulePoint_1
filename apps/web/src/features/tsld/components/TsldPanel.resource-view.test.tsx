@@ -8,7 +8,6 @@ vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    CANVAS_RESOURCE_VIEW_ENABLED: true,
     CANVAS_AUTHORING_ENABLED: false,
   };
 });

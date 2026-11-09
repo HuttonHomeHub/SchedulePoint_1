@@ -1,6 +1,6 @@
 /**
  * The pure **snap-to-working-day** rounding behind the TSLD *Snap to grid* authoring aid (spec
- * `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`). It rounds a dropped day offset to the nearest
+ * `docs/specs/canvas-nav/`). It rounds a dropped day offset to the nearest
  * **working** day using the plan's existing working-day predicate (`makeWorkingDayPredicate` /
  * `isWorkingDay` in `render/time-scale.ts`) — so a hand-placed Visual-mode bar lands on a clean
  * working-day boundary instead of a weekend/holiday. Pure and O(1)-amortised per drop (a bounded scan);

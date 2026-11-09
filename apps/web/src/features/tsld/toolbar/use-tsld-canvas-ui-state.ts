@@ -58,7 +58,7 @@ export interface TsldCanvasUiState {
   loeStartId: string | null;
   setLoeStartId: React.Dispatch<React.SetStateAction<string | null>>;
   /**
-   * The **insight-lens** view state (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) —
+   * The **insight-lens** view state (spec `docs/specs/canvas-lenses/`) —
    * the client filter query + attribute toggles, the Colour-by mode, and the Baseline-overlay switch.
    * Pure CLIENT VIEW STATE, exactly like {@link viewToggles}: never server state, never persisted; it
    * re-derives the scene's dimmed-id / colour / ghost maps whenever it or the queries change. Defaults
@@ -67,7 +67,7 @@ export interface TsldCanvasUiState {
   lensState: LensState;
   setFilterQuery: (query: string) => void;
   toggleFilterAttr: (attr: FilterAttr) => void;
-  /** Record the match the planner just jumped to (`VITE_CANVAS_SEARCH_NAV`). */
+  /** Record the match the planner just jumped to. */
   setSearchCursorId: (id: string) => void;
   setColourMode: (mode: ColourMode) => void;
   toggleBaselineOverlay: () => void;
@@ -81,8 +81,7 @@ export interface TsldCanvasUiState {
    */
   setSwimlanesOverride: (override: boolean | null) => void;
   /**
-   * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
-   * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
+   * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
    * and a one-shot **select signal** the toolbar uses to drive the canvas selection (for
    * Next-conflict). Pure CLIENT VIEW STATE, exactly like {@link lensState}: never server state, never
    * persisted. Defaults (isolate off, no cursor, no signal) produce no dim and no selection command ⇒
@@ -168,7 +167,7 @@ export interface LensState {
    */
   swimlanesOverride: boolean | null;
   /**
-   * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
+   * The last search match the planner jumped to, or null before the first
    * Enter. It lives here rather than beside `conflictCursorId` in `NavState` because it is **reset by
    * the two filter setters below** — a cursor into a match set the planner has just changed is not a
    * position, and keeping it would land the next Enter somewhere neither of them chose.

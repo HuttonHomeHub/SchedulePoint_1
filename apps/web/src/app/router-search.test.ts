@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { router } from './router';
 
@@ -9,11 +9,6 @@ import { router } from './router';
 // #96 M2 because the census below asserts an absolute route count, and a flag flipped off would
 // otherwise shrink the census silently instead of failing it — the `docs/TECH_DEBT.md`
 // #178/#181/#183 shape, a rule going quiet rather than wrong.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCES_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
-}));
 
 /**
  * The search params other systems put in our URLs, read through the **router's real parser**

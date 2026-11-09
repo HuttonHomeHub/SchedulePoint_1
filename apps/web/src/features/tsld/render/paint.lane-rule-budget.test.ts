@@ -157,13 +157,12 @@ function paint(activities: RenderActivity[], view: Viewport) {
 describe('lane hairlines — draw-budget gate (workspace redesign M4-T2)', () => {
   it('is one batched pass, whatever it draws', () => {
     const ctx = paint(plan(5), VIEW);
-    // **Asserted by stroke style, not by a total.** The flag-off grid layer strokes its own (here
-    // empty) path unconditionally, so a scene-wide `beginPath === 1` would be measuring that as
-    // well — and would go red for a change to a layer this gate is not about. What has to be true
-    // is that the hairlines are ONE batch: one style set, one path, one stroke.
+    // **Asserted by stroke style, as well as by a total**, so a change to a layer this gate is not
+    // about cannot hide a second hairline batch. What has to be true is that the hairlines are ONE
+    // batch: one style set, one path, one stroke.
     expect(ctx.styles.filter((style) => style === PALETTE.laneRule)).toHaveLength(1);
-    expect(ctx.calls.beginPath).toBe(2);
-    expect(ctx.calls.stroke).toBe(2);
+    expect(ctx.calls.beginPath).toBe(1);
+    expect(ctx.calls.stroke).toBe(1);
   });
 
   it('draws one rule per VISIBLE lane boundary — not one per lane in the plan', () => {

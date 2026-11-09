@@ -77,7 +77,6 @@ import {
   zoomAt,
   ELAPSED_DAY_WALK,
   LANE_HEIGHT,
-  LEGACY_MAX_PX_PER_DAY,
   MAX_PX_PER_DAY,
   type ClassifyHitOptions,
   type DayWalk,
@@ -134,8 +133,6 @@ import {
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
 } from '@/config/env';
 import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -266,15 +263,6 @@ function originStyle(wbsBandHeightPx: number, gutterWidthPx: number): React.CSSP
 }
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
-
-/**
- * The zoom-scale ceiling this build actually allows: the raised {@link MAX_PX_PER_DAY} once
- * `VITE_CANVAS_TIME_AXIS` is on, else the pre-epic {@link LEGACY_MAX_PX_PER_DAY} — resolved once
- * here (the flag is a build-time constant) rather than at each of the four call sites below, so a
- * flag-off build's wheel/pinch/button/preset zoom stays byte-for-byte within the old ceiling
- * (a component-review finding on an earlier draft that read `MAX_PX_PER_DAY` unconditionally).
- */
-const RESOLVED_MAX_PX_PER_DAY = CANVAS_TIME_AXIS_ENABLED ? MAX_PX_PER_DAY : LEGACY_MAX_PX_PER_DAY;
 
 /** The pending create ghost (day/lane geometry) held open under the name popover. */
 export interface PendingGhost {
@@ -416,10 +404,10 @@ export interface TsldCanvasProps {
   /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
   todayOffset?: number | null;
   /** The viewer-local time-of-day fraction (0…1) added to `todayOffset` for a fractional (not
-   * midnight-boundary) Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the
+   * midnight-boundary) Today line + pill. Absent/null ⇒ the
    * plain integer offset ⇒ byte-for-byte today's paint (the flag-off parity claim). */
   todayFraction?: number | null;
-  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────
   // All default-absent ⇒ byte-for-byte today's paint. `TsldPanel` derives these (memoised).
   /** Ids of activities the active filter dimmed (non-matches); they paint muted, keeping the outline. */
   dimmedIds?: ReadonlySet<string> | undefined;
@@ -450,7 +438,7 @@ export interface TsldCanvasProps {
    * from the same projection that swapped in the display lanes (memoised). Absent ⇒ no swimlanes ⇒
    * byte-for-byte today's paint (SC-3). */
   swimlaneMarks?: SwimlaneMarks | undefined;
-  // ── Resource strip (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`) ──────────────────
+  // ── Resource strip (Stage E, ADR-0049) ──────────────────
   // Both default-absent ⇒ byte-for-byte today's `measure()` + paint (the parity gate): no band is
   // reserved and the rAF loop does no strip work when the strip is inactive.
   /** When true, reserve the {@link RESOURCE_STRIP_HEIGHT} band at the container bottom and paint the
@@ -1187,7 +1175,7 @@ export function TsldCanvas({
   const interactionLayerMounted = editing || CANVAS_MULTI_SELECT_ENABLED;
   // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the scene
   // carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4). The user's own
-  // `view?.monthBands` preference (F7b, `VITE_CANVAS_TIME_AXIS`) only narrows the flag-on case — it
+  // `view?.monthBands` preference only narrows the flag-on case — it
   // never widens flag-off, which is what keeps the parity claim structural. Hoisted to one
   // expression (component-review finding) so the initial scene ref and the resync effect below
   // can't drift out of step.
@@ -1207,7 +1195,6 @@ export function TsldCanvas({
   const {
     monthBands: monthBandsEnabled,
     dataDateLine: dataDateLineEnabled,
-    gridTiers,
     timeTrueLinks,
     visualRefresh,
     linkRouting,
@@ -1225,9 +1212,6 @@ export function TsldCanvas({
     todayFraction,
     monthBands: monthBandsEnabled,
     dataDateLine: dataDateLineEnabled,
-    // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
-    // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-    gridTiers,
     dimmedIds,
     barFill,
     barInk,
@@ -1362,9 +1346,6 @@ export function TsldCanvas({
       todayFraction,
       monthBands: monthBandsEnabled,
       dataDateLine: dataDateLineEnabled,
-      // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
-      // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-      gridTiers,
       dimmedIds,
       barFill,
       barInk,
@@ -1395,11 +1376,10 @@ export function TsldCanvas({
     activities,
     edges,
     dataDate,
-    // The four flag-derived layers, now that they come from `sceneLayers` rather than being read
+    // The flag-derived layers, now that they come from `sceneLayers` rather than being read
     // inline as build-time constants. They are booleans off a `useMemo` keyed on `view`, so they
     // are referentially stable and adding them cannot make this effect run more often — which is
     // the whole reason `layers` is destructured rather than listed as an object.
-    gridTiers,
     timeTrueLinks,
     visualRefresh,
     linkRouting,
@@ -1427,11 +1407,7 @@ export function TsldCanvas({
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
   // sites only). Kept off the per-frame path since pan never changes pxPerDay.
   const reportZoomStop = (): void => {
-    const level = presetOf(
-      viewRef.current.pxPerDay,
-      sizeRef.current.width,
-      CANVAS_TIME_AXIS_ENABLED,
-    );
+    const level = presetOf(viewRef.current.pxPerDay, sizeRef.current.width);
     if (level !== lastStopRef.current) {
       lastStopRef.current = level;
       onZoomStopChangeRef.current?.(level);
@@ -1504,24 +1480,13 @@ export function TsldCanvas({
     controlRef,
     () => ({
       zoomToPreset: (level: ZoomLevel) => {
-        viewRef.current = zoomToPreset(
-          viewRef.current,
-          sizeRef.current,
-          level,
-          CANVAS_TIME_AXIS_ENABLED,
-          RESOLVED_MAX_PX_PER_DAY,
-        );
+        viewRef.current = zoomToPreset(viewRef.current, sizeRef.current, level, MAX_PX_PER_DAY);
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
       },
       stepZoom: (factor: number) => {
-        viewRef.current = stepZoom(
-          viewRef.current,
-          sizeRef.current,
-          factor,
-          RESOLVED_MAX_PX_PER_DAY,
-        );
+        viewRef.current = stepZoom(viewRef.current, sizeRef.current, factor, MAX_PX_PER_DAY);
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
@@ -1588,7 +1553,7 @@ export function TsldCanvas({
           framed,
           size,
           sceneRef.current.dataDate,
-          Math.min(RESOLVED_MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
+          Math.min(MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
         );
         // **The lane axis is repaired after the fit** (`docs/TECH_DEBT.md` #152). `fitToContent`
         // frames the TIME axis and pins `originY` to the padding — right for whole-plan Fit at
@@ -2273,7 +2238,7 @@ export function TsldCanvas({
               sceneRef.current.activities,
               size,
               sceneRef.current.dataDate,
-              RESOLVED_MAX_PX_PER_DAY,
+              MAX_PX_PER_DAY,
             )
           : DEFAULT_VIEWPORT;
         fittedRef.current = true;
@@ -2533,7 +2498,7 @@ export function TsldCanvas({
         viewRef.current,
         e.clientX - rect.left,
         e.deltaY < 0 ? 1.1 : 1 / 1.1,
-        RESOLVED_MAX_PX_PER_DAY,
+        MAX_PX_PER_DAY,
       );
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
@@ -2573,16 +2538,12 @@ export function TsldCanvas({
       // Deliberately about text ENTRY, not "anything that is not the canvas": Escape typed on a
       // toolbar button does not mean "undo my typing", so the tool contract still applies there.
       //
-      // Flag-gated, because flag-off must be byte-for-byte the prior behaviour — including this
-      // listener (spec §4.8, the rollback contract).
-      if (CANVAS_SEARCH_NAV_ENABLED) {
-        const target = e.target;
-        if (
-          target instanceof HTMLElement &&
-          target.closest('input, textarea, select, [contenteditable="true"]')
-        ) {
-          return;
-        }
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
       }
       if (gestureActiveRef.current) {
         gestureActiveRef.current = false;

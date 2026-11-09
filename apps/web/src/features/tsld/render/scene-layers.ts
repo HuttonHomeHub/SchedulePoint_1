@@ -2,7 +2,6 @@ import {
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
 } from '@/config/env';
 import type { TsldViewToggles } from '@/features/tsld/render/paint';
 
@@ -29,7 +28,6 @@ import type { TsldViewToggles } from '@/features/tsld/render/paint';
  */
 export interface SceneLayers {
   monthBands: boolean;
-  gridTiers: boolean;
   timeTrueLinks: boolean;
   visualRefresh: boolean;
   linkRouting: boolean;
@@ -40,7 +38,6 @@ export function sceneLayers(view: TsldViewToggles | undefined): SceneLayers {
   return {
     // The reader's `View ▾` preference decides. The painter stays flag-free, as every other layer does.
     monthBands: view?.monthBands ?? false,
-    gridTiers: CANVAS_TIME_AXIS_ENABLED,
     timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
     linkRouting: CANVAS_LINK_ROUTING_ENABLED,

@@ -78,7 +78,6 @@ export default defineConfig({
               // never reaches.
               VITE_CANVAS_MULTI_SELECT: 'true',
               VITE_CANVAS_DIRECT_MANIPULATION: 'true',
-              VITE_CANVAS_LENSES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               // The Link tool — the Escape-precedence assertion is about an ARMED tool surviving a
               // keystroke in the field, so it is required.

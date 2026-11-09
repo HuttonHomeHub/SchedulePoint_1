@@ -8,14 +8,13 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
- * The flag-on Share item (`VITE_GUEST_SHARE_LINKS=true`, ADR-0051 F-M4): the `share` id resolves to a
+ * The Share item (ADR-0051 F-M4): the `share` id resolves to a
  * real command that opens the member `ShareLinksDialog` (`openShare`), additionally gated on the caller
  * holding `plan:share` (`ctx.canShare`) — a non-holder sees it shaded with a reason (shade-don't-hide).
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
 }));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -42,7 +41,7 @@ function openDeliver(): void {
   if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
 }
 
-describe('TSLD toolbar Share (VITE_GUEST_SHARE_LINKS on)', () => {
+describe('TSLD toolbar Share', () => {
   it('opens the Share dialog for a caller who holds plan:share', () => {
     const openShare = vi.fn();
     renderRows(ctx({ openShare, canShare: true }));

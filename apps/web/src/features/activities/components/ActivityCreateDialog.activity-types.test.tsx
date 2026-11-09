@@ -9,12 +9,10 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The M5-epic advanced activity types (ADR-0035 §21/§24) with `VITE_ADVANCED_ACTIVITY_TYPES` forced ON —
- * the Type picker gains **Level of effort** and **WBS summary**. Proves the options render, that picking
+ * The M5-epic advanced activity types (ADR-0035 §21/§24) — the Type picker offers **Level of effort** and **WBS summary**. Proves the options render, that picking
  * one hides the Duration/Expected-finish inputs (their duration is derived) and shows the explanatory
  * hint, that the WBS parent picker offers the plan's summaries, and that a create submits the derived
- * type with a zeroed duration (and the chosen `parentId`). Flag-off behaviour (options absent, a seeded
- * value still shown) is covered in `ActivityCreateDialog.test.tsx`.
+ * type with a zeroed duration (and the chosen `parentId`).
  *
  * **The self-parenting case moved.** `ActivityCreateDialog` lost its edit path in the
  * activity-dialog-unification epic (create-only now, no `activity` prop), so "does not parent an
@@ -22,10 +20,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `ActivityEditorDialog.round-trips.test.tsx` — "does not offer the activity being edited as its own
  * WBS parent".
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

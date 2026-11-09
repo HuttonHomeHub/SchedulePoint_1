@@ -5,7 +5,7 @@ import { activityEditor } from '../e2e-support/activity-editor';
 
 /**
  * Journey helpers for the flag-ON **canvas-axis-aligned resource strip** suite
- * (`VITE_CANVAS_RESOURCE_VIEW`, Stage E, `docs/specs/canvas-resource-view/`). Mirrors the on-canvas
+ * (Stage E, `docs/specs/canvas-resource-view/`). Mirrors the on-canvas
  * advanced activity types helpers (`e2e-loe/support.ts`) verbatim for onboarding + drawing — this surface
  * layers directly on top of that one — and adds the resource-library + assignment helpers this suite
  * needs to seed real histogram data (created through the real UI flows, not an API short-cut).

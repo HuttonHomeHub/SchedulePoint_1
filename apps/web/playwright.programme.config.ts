@@ -4,8 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
  * End-to-end configuration for the **live cross-plan / programme scheduling** web surface
  * (inter-project M2, ADR-0045 F8).
  *
- * Serves the web bundle with `VITE_INTER_PROJECT_DATES=true`
- * (which it layers on — the "External" driven badge is the M1 surface's), so a planner can draw a live
+ * Serves the web bundle with its defaults, so a planner can draw a live
  * cross-plan link and run a programme recalculate end-to-end. It runs on the **legacy stacked
  * plan-detail page** (canvas workspace + pen pinned OFF, matching the flags-off baseline suite) so the
  * journey stays simple: no pen dance, and the API's edit-lock enforcement is off by default, so the
@@ -57,12 +56,8 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The M1 inter-project surface the programme layers on. The editing
-            // flags are not pinned: the journey runs the pen layer as shipped and takes the pen
+            // No flag is pinned: the journey runs the pen layer as shipped and takes the pen
             // through the UI (`e2e-support/pen.ts`) before it adds an activity or a link.
-            env: {
-              VITE_INTER_PROJECT_DATES: 'true',
-            },
           },
         ],
       }),

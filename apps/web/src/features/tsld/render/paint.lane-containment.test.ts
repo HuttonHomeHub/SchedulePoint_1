@@ -128,7 +128,6 @@ function sceneOf(activities: readonly RenderActivity[], extra: Partial<TsldScene
     todayFraction: 0.4,
     monthBands: true,
     dataDateLine: true,
-    gridTiers: true,
     timeTrueLinks: true,
     visualRefresh: true,
     lagHandles: true,

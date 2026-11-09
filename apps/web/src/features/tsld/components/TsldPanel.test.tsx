@@ -104,7 +104,7 @@ describe('TsldPanel', () => {
 
   it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
     // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset
-    // scales (VITE_CANVAS_TIME_AXIS, on by default — F3) are WIDTH-derived: at the container's
+    // scales (on by default — F3) are WIDTH-derived: at the container's
     // otherwise-clamped 1px floor every preset's target scale coincides at MIN_PX_PER_DAY, so the
     // canvas can no longer tell Week from Year apart. Give the container a realistic width so this
     // exercises the same math a real layout would.

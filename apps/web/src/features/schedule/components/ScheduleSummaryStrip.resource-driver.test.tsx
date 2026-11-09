@@ -8,18 +8,13 @@ import { ScheduleSummaryStrip } from './ScheduleSummaryStrip';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The missing-driver count chip (`resourceDriverMissingCount`, ADR-0035 §23) with
- * `VITE_ADVANCED_ACTIVITY_TYPES` forced ON — the plan-level companion to the row badge.
+ * The missing-driver count chip (`resourceDriverMissingCount`, ADR-0035 §23) — the plan-level companion to the row badge.
  *
  * The count has been in `PlanScheduleSummary` and returned by the API since M7.2 without a single
  * consumer, so a plan could carry resource-dependent activities scheduled on the wrong calendar and
  * report nothing anywhere. Zero stays hidden, matching every other engine-count chip: a permanent
  * "0" trains people to ignore the row.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

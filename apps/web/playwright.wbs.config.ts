@@ -65,9 +65,6 @@ export default defineConfig({
             timeout: 120_000,
             env: {
               VITE_WBS_IMPROVEMENTS: 'true',
-              // A WBS summary is an advanced activity type, so the type is only offered — and the
-              // table's WBS column only shown — with this on.
-              VITE_ADVANCED_ACTIVITY_TYPES: 'true',
               VITE_CANVAS_AUTHORING: 'true',
               // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
               // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —

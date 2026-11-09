@@ -7,15 +7,6 @@ import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import type { FilterAttr } from '@/features/tsld/render/lenses';
 import type { SearchableActivity } from '@/features/tsld/render/search-matches';
 
-/**
- * `VITE_CANVAS_SEARCH_NAV` is default-off, so these run under an explicit flag-on mock. The flag-off
- * behaviour is the epic's rollback contract and is asserted in its own parity suite, not here.
- */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_SEARCH_NAV_ENABLED: true,
-}));
-
 const NO_ATTRS: ReadonlySet<FilterAttr> = new Set();
 
 function activity(over: Partial<SearchableActivity> & { id: string }): SearchableActivity {

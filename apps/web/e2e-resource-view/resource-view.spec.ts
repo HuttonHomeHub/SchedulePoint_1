@@ -15,7 +15,7 @@ import {
 
 /**
  * Flag-ON **canvas-axis-aligned resource strip + on-bar over-allocation highlight** journey
- * (`VITE_CANVAS_RESOURCE_VIEW`, Stage E, `docs/specs/canvas-resource-view/`, ADR-0049). Proves the
+ * (Stage E, `docs/specs/canvas-resource-view/`, ADR-0049). Proves the
  * `resource-view` lens's whole M1 loop runs in a real browser, over the canvas-maximal toolbar
  * (ADR-0031) and canvas-first authoring (ADR-0032):
  *

@@ -22,7 +22,6 @@ import { apiFetch } from '@/lib/api/client';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   EARNED_VALUE_ENABLED: true,
-  RESOURCES_ENABLED: true,
 }));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));

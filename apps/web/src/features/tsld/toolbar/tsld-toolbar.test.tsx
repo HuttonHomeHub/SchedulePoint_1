@@ -14,24 +14,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
-  // Pin the canvas insight lenses OFF here too (this is the flag-off registry suite): the search field
-  // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
-  // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
-  CANVAS_LENSES_ENABLED: false,
-  // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
-  // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
-  CANVAS_NAV_ENABLED: false,
-  // Pin External-Guest share links OFF here too (now ON by default, ADR-0051 F-M4): `share` stays its
-  // "Coming soon" placeholder. The real flag-on Share… item is covered in tsld-toolbar-share.test.tsx.
-  GUEST_SHARE_LINKS_ENABLED: false,
-  // Pin the canvas resource-view lens (Stage E, ADR-0049) OFF here too: `resource-view` AND the M2
-  // `over-allocation` highlight stay their "Coming soon" placeholders (the flag-on toggles are covered
-  // in tsld-toolbar-resource-view.test.tsx).
-  CANVAS_RESOURCE_VIEW_ENABLED: false,
-  // Pin the time-axis legibility epic OFF here too (now ON by default, M7): the zoom-preset menu rows
-  // stay their plain "Month" labels, not the range-anchored "Month — 3 months" copy. The real flag-on
-  // labels are covered in tsld-toolbar-time-axis.test.tsx.
-  CANVAS_TIME_AXIS_ENABLED: false,
 }));
 
 const spies = {
@@ -396,51 +378,6 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(arrange).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(arrange);
     expect(requestAutoArrange).toHaveBeenCalledOnce();
-  });
-
-  it('renders the search field as a disabled stub', () => {
-    renderRows(ctx());
-    // Search leads the Find cluster as a disabled field (not a menu item).
-    expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
-  });
-
-  it('offers no resource-view lens at all inside View when VITE_CANVAS_RESOURCE_VIEW is off', () => {
-    // CANVAS_RESOURCE_VIEW_ENABLED is pinned off (top of file). Both lenses moved into `View ▾` in
-    // ADR-0090 M2-T2, and their Row-1 "Coming soon" placeholders went with them rather than staying
-    // behind — a placeholder occupying the width the live control just vacated defeats the move
-    // exactly. So flag-off the Insight section simply has no such row, which is what this now pins:
-    // absence, not a stub. The assertion opens the popover, because "not on Row 1" would pass even
-    // if the row were wrongly rendered inside it.
-    renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
-    for (const name of ['Resource view', 'Flag over-allocated']) {
-      expect(screen.queryByRole('checkbox', { name })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
-    }
-  });
-
-  it('shows the canvas-nav features as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
-    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the ids
-    // must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
-    //
-    // The subject has narrowed twice. `Isolate logic path` left in ADR-0090 M2-T1 (it moved to the
-    // selection bar, and its Row-1 placeholder went with it rather than being reproduced there — a
-    // placeholder earns its place on a persistent row a planner scans, not on a transient bar).
-    // `Snap to grid` left on 2026-08-13, deleted with the control: the engine rolls every
-    // `visualStart` forward to a working day unconditionally, so the toggle had nothing to toggle.
-    // `Next conflict` is what remains.
-    //
-    // **It moved back INLINE on 2026-08-13 (ADR-0094).** From ADR-0090 M2 until then it was a
-    // tier-3 item, so flag-off its placeholder lived in the `⋯` and this test opened the menu to
-    // find it. The epic promoted it to tier 1 — and because one `nextConflictShape` is spread into
-    // both the flag-on item and its `placeholderItem()` stub, the PLACEHOLDER moved with it. That is
-    // the shared-shape pattern working as intended: the two branches cannot drift, including in
-    // where they sit. The paragraph is updated with the assertion because a stale explanation is
-    // the half a reader would otherwise trust.
-    renderRows(ctx({ selectedActivity: undefined }));
-    const btn = screen.getByRole('button', { name: 'Next conflict' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription('Coming soon');
   });
 
   it('has no axe violations across both rows', async () => {

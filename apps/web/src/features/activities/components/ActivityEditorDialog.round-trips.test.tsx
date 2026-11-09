@@ -143,6 +143,38 @@ describe('ActivityEditorDialog — WBS loops (wbs-nest-from-members)', () => {
   });
 });
 
+describe('ActivityEditorDialog — WBS parent round-trip', () => {
+  it('seeds the parent from the row and round-trips it on a no-op General save', async () => {
+    const parent = row({
+      id: 'wbs-parent-1',
+      code: 'TT.4',
+      name: 'Superstructure',
+      type: 'WBS_SUMMARY',
+    });
+    mount({ activity: row({ parentId: 'wbs-parent-1', version: 4 }), planActivities: [parent] });
+    expect(screen.getByLabelText('Parent WBS summary')).toHaveValue('wbs-parent-1');
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab B' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.body).toMatchObject({ parentId: 'wbs-parent-1', version: 4 });
+  });
+
+  it('still sends a stored parent the picker cannot list (its summary is not in the plan list)', async () => {
+    // The case that makes this worth a test of its own: the field has no option for the stored
+    // parent, so a save that rebuilt `parentId` from what the picker shows would silently re-file
+    // the activity at the top level.
+    mount({ activity: row({ parentId: 'wbs-parent-1', version: 4 }), planActivities: [] });
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab B' } });
+    fireEvent.click(screen.getByRole('button', { name: /save general/i }));
+
+    await waitFor(() => expect(PATCHES).toHaveLength(1));
+    expect(PATCHES[0]!.body).toMatchObject({ parentId: 'wbs-parent-1', version: 4 });
+  });
+});
+
 describe('ActivityEditorDialog — Cost accrual round-trip (ported from ActivityCreateDialog.cost-accrual.test.tsx)', () => {
   it('seeds accrualType from the row and round-trips it on a Cost save', async () => {
     mount({ activity: row({ accrualType: 'START', version: 3 }) });

@@ -50,11 +50,6 @@ const ROW = {
   version: 1,
 } as ActivitySummary;
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
-
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',

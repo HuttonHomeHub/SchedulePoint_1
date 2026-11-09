@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
  * (CLAUDE.md §7 — no suite depends on the wall clock).
  *
  * Bounded to one repaint per interval per open, **visible** plan: at the default 60s step and the
- * `VITE_CANVAS_TIME_AXIS` `MAX_PX_PER_DAY = 200`, one minute is 0.14px, so the marker is never
+ * `MAX_PX_PER_DAY = 200`, one minute is 0.14px, so the marker is never
  * visibly stale, at a 0.007% duty cycle against a ≤4ms p95 frame (ADR-0026).
  *
  * This also repairs a pre-existing latent defect: the previous whole-day `todayOffset` was

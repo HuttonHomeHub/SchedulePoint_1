@@ -112,7 +112,6 @@ const CORPUS: ReadonlyArray<[string, TsldScene]> = [
       dataDate: DATA_DATE,
       todayOffset: 3,
       monthBands: true,
-      gridTiers: true,
     },
   ],
 ];

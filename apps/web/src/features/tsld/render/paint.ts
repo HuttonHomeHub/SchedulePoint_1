@@ -122,7 +122,7 @@ export interface TsldPalette {
   selection: string;
   /** Muted wash over non-working (weekend/holiday) day columns. */
   nonWorking: string;
-  /** Diagonal-stripe ink drawn over the non-working wash (F7a, `VITE_CANVAS_TIME_AXIS`) — a step
+  /** Diagonal-stripe ink drawn over the non-working wash — a step
    * stronger than `nonWorking`, so a weekend/holiday reads as a distinct KIND of surface, not just
    * a darker shade of the month band. Read only by the hatch-pattern builder; the flat `nonWorking`
    * fill remains the fallback when a pattern can't be built (jsdom, or a minimal test context). */
@@ -181,10 +181,8 @@ export interface TsldPalette {
   // guaranteed by the same 1:1 fill↔ink pairing labels rely on in both themes and under every
   // lens; the LOE bracket caps + WBS-summary tabs draw in the bar's own resolved fill, so the
   // Colour-by lenses recolour the whole glyph as one shape (the lens owns colour, M4 owns shape).
-  // ── Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5) ──
-  // `gridLine` above is kept and still resolves `--border` — it is the value the flag-off
-  // path strokes, which is what makes the parity claim structural. Read only when
-  // `TsldScene.gridTiers` is on.
+  // ── Time-axis gridline tiers (tsld-toolbar-canvas-refinements F5) ──
+  // `gridLine` above is kept and still resolves `--border`; the export strokes its axis with it.
   /** The finest tier (day boundaries) — a step lighter than `gridLine`. */
   gridLineDay: string;
   /** The mid tier (month boundaries) — approximately `gridLine`. */
@@ -268,7 +266,7 @@ export interface TsldScene {
   todayOffset?: number | null | undefined;
   /**
    * The viewer-local time-of-day fraction (0…1, `todayDayFraction`) added to `todayOffset` for a
-   * fractional Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the line draws
+   * fractional Today line + pill. Absent/null ⇒ the line draws
    * at the plain integer offset and no pill draws ⇒ byte-for-byte today's paint (the flag-off
    * parity claim is structural, not a promise).
    */
@@ -298,14 +296,7 @@ export interface TsldScene {
    * meaning is exactly the conflation ADR-0033 unpicked once already.
    */
   dataDateLine?: boolean | undefined;
-  /**
-   * Draw the time-axis grid as three tiers — day / month / year, each its own colour + weight
-   * (ADR-0055 token rule; day/month tier F5, `VITE_CANVAS_TIME_AXIS`) — instead of the single
-   * `gridLine` pass. Absent ⇒ the one flag-off pass, byte-for-byte today's paint (the flag-off
-   * parity claim structural, not a promise). The budget suite (`paint.grid-budget.test.ts`) flips it.
-   */
-  gridTiers?: boolean | undefined;
-  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────
   // ALL default-absent ⇒ byte-for-byte today's paint (the flag-off / no-active-lens parity gate).
   /** Ids of activities the active filter dimmed (non-matches). Members paint muted (reduced alpha)
    * while keeping the criticality outline, so the diagram geometry stays stable and the shape cue
@@ -1341,56 +1332,38 @@ export function paintScene(
   // Layer 1: time-axis gridlines — day / month / year variants, each gated by its toggle. Day
   // lines are culled below `DAY_GRID_MIN_PX` (else a solid block); month/year boundaries come
   // from the cheap integer-rollover `calendarBoundaries` (no per-day Date parsing).
-  if (scene.gridTiers) {
-    // Three tiers (F5, `VITE_CANVAS_TIME_AXIS`): each its own batched pass, drawn in order
-    // day → month → year so a heavier tier overwrites a coincident lighter one (a month start is
-    // also a day; a year start is also both). Every tier is 1 px on a HALF-pixel x, the crispness
-    // rule for an odd width.
-    //
-    // **The day and month tiers are dashed 3 on / 3 off; the year tier is solid** (NetPoint
-    // grammar G1, M1). Dash halves a rule's ink, which is what lets the grid read as the quietest
-    // mark while the logic reads first. The year stays solid so a coarser boundary still wins where
-    // it meets a month at the same x (ADR-0056 §2). This amends ADR-0056 §2's reservation of dash
-    // for the Today line and the cursor guideline: the Today line stays separable by its ink (≥ 4:1
-    // against a ≤ 1.80:1 rule), its weight and its pill. One `setLineDash` per tier, and the dash is
-    // cleared after the last tier, so nothing painted later inherits it.
-    const strokeTier = (days: Iterable<number>, colour: string, dash: readonly number[]): void => {
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = 1;
-      ctx.setLineDash(dash);
-      ctx.beginPath();
-      for (const d of days) {
-        const x = Math.round(screenXOfDay(d, view)) + 0.5;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, size.height);
-      }
-      ctx.stroke();
-    };
-    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
-      const days: number[] = [];
-      for (let d = firstDay; d <= lastDay; d += 1) days.push(d);
-      strokeTier(days, palette.gridLineDay, GRID_DASH);
-    }
-    if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, GRID_DASH);
-    if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, []);
-    ctx.setLineDash([]);
-  } else {
-    // Flag-off: the single `gridLine` pass, byte-for-byte today's paint. Batched into one stroke.
-    ctx.strokeStyle = palette.gridLine;
+  // Three tiers (F5): each its own batched pass, drawn in order
+  // day → month → year so a heavier tier overwrites a coincident lighter one (a month start is
+  // also a day; a year start is also both). Every tier is 1 px on a HALF-pixel x, the crispness
+  // rule for an odd width.
+  //
+  // **The day and month tiers are dashed 3 on / 3 off; the year tier is solid** (NetPoint
+  // grammar G1, M1). Dash halves a rule's ink, which is what lets the grid read as the quietest
+  // mark while the logic reads first. The year stays solid so a coarser boundary still wins where
+  // it meets a month at the same x (ADR-0056 §2). This amends ADR-0056 §2's reservation of dash
+  // for the Today line and the cursor guideline: the Today line stays separable by its ink (≥ 4:1
+  // against a ≤ 1.80:1 rule), its weight and its pill. One `setLineDash` per tier, and the dash is
+  // cleared after the last tier, so nothing painted later inherits it.
+  const strokeTier = (days: Iterable<number>, colour: string, dash: readonly number[]): void => {
+    ctx.strokeStyle = colour;
     ctx.lineWidth = 1;
+    ctx.setLineDash(dash);
     ctx.beginPath();
-    const gridLine = (d: number): void => {
+    for (const d of days) {
       const x = Math.round(screenXOfDay(d, view)) + 0.5;
       ctx.moveTo(x, 0);
       ctx.lineTo(x, size.height);
-    };
-    if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
-      for (let d = firstDay; d <= lastDay; d += 1) gridLine(d);
     }
-    if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
-    if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
     ctx.stroke();
+  };
+  if (toggles.dayGrid && view.pxPerDay >= DAY_GRID_MIN_PX) {
+    const days: number[] = [];
+    for (let d = firstDay; d <= lastDay; d += 1) days.push(d);
+    strokeTier(days, palette.gridLineDay, GRID_DASH);
   }
+  if (toggles.monthGrid) strokeTier(bounds.months, palette.gridLineMonth, GRID_DASH);
+  if (toggles.yearGrid) strokeTier(bounds.years, palette.gridLineYear, []);
+  ctx.setLineDash([]);
 
   // Layer 1.5: **lane hairlines** — one 1 px horizontal rule per lane boundary (workspace redesign
   // M4-T2). The time axis has had three tiers of vertical structure since ADR-0056 and the lane
@@ -2281,10 +2254,9 @@ export function paintScene(
     ctx.stroke();
   }
 
-  // The TODAY marker — a dashed vertical in the destructive hue. `todayFraction` (F6a,
-  // `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual time-of-day rather than the
-  // midnight boundary; absent/null keeps the plain integer offset, which is what makes the flag-off
-  // parity claim structural. Culling, the toggle and the coincidence rule are all decided in
+  // The TODAY marker — a dashed vertical in the destructive hue. `todayFraction` (F6a)
+  // interpolates the line to the actual time-of-day rather than the midnight boundary;
+  // absent/null keeps the plain integer offset. Culling, the toggle and the coincidence rule are all decided in
   // `axis-markers.ts`: a line is here iff the model returned one.
   //
   // **The LABELS are no longer drawn here** (#148 M2). They were pills at fixed screen y — chrome

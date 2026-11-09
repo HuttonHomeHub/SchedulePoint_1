@@ -1,30 +1,21 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * **Flag-ON** host wiring for the convergence epic: with `VITE_ACTIVITY_EDITOR_CONVERGENCE` on,
- * **Logic** is a tab of the one editor, so the Logic dialog must not also be mounted — and the
- * seams that used to be wired into it (undo recording for a removed link, the coalesced keyboard
- * lag nudge, the cross-plan section) must arrive at the editor instead.
+ * Host wiring for the convergence epic: **Logic** is a tab of the one editor, so the seams that
+ * used to be wired into a separate Logic dialog (undo recording for a removed link, the coalesced
+ * keyboard lag nudge, the cross-plan section) must arrive at the editor.
  *
  * Each of those three is named in the plan as a thing that dies silently when a surface moves: the
  * chord still fires, the undo stack just quietly stops recording. Hence one assertion each, at the
  * seam rather than through the panel.
- *
- * The flag-OFF counterpart is `activity-editor-convergence.flag-off.test.tsx`.
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-  RESOURCES_ENABLED: true,
 }));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
-
-vi.mock('@/features/dependencies', () => ({
-  DependencyEditor: () => <div data-testid="dependency-editor" />,
-}));
 
 vi.mock('@/features/cross-plan-dependencies', () => ({
   CrossPlanLinksSection: () => <div data-testid="cross-plan-section" />,
@@ -36,9 +27,7 @@ vi.mock('@/features/wbs', async (importOriginal) => ({
 }));
 vi.mock('@/features/notes', () => ({ ActivityNotesSection: () => null }));
 vi.mock('@/features/plans', () => ({ PlanFormDialog: () => null }));
-vi.mock('@/features/resources', () => ({
-  ActivityResourcesDialog: () => <div data-testid="resources-dialog" />,
-}));
+vi.mock('@/features/resources', () => ({ ActivityResourcesDialog: () => null }));
 
 /** Captures what the editor was handed, so the seams can be asserted without the real panel. */
 const editorProps = vi.fn();
@@ -66,9 +55,8 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   },
 }));
 
-const { PlanDialogs } = await import('./plan-dialogs');
 const { ActivityCrudDialogs } = await import('./activity-crud-dialogs');
-type Model = Parameters<typeof PlanDialogs>[0]['model'];
+type Model = Parameters<typeof ActivityCrudDialogs>[0]['model'];
 
 const ACTIVITY = { id: 'a1', name: 'Excavate', type: 'TASK', durationType: 'FIXED_DURATION' };
 
@@ -115,18 +103,8 @@ function makeModel(over: Record<string, unknown> = {}): Model {
   } as unknown as Model;
 }
 
-describe('the workspace hosts, with the convergence flag on', () => {
+describe('the workspace host of the activity editor', () => {
   beforeEach(() => vi.clearAllMocks());
-
-  it('does not mount the Logic dialog — Logic is a tab of the one editor', () => {
-    render(<PlanDialogs model={makeModel()} plan={{ projectId: 'proj-1' } as never} />);
-    expect(screen.queryByTestId('dependency-editor')).not.toBeInTheDocument();
-  });
-
-  it('does not mount the Resources dialog either — Resources is the other tab', () => {
-    render(<PlanDialogs model={makeModel()} plan={{ projectId: 'proj-1' } as never} />);
-    expect(screen.queryByTestId('resources-dialog')).not.toBeInTheDocument();
-  });
 
   it('hands the editor the undo seam for a removed link', () => {
     render(<ActivityCrudDialogs model={makeModel()} />);
@@ -137,10 +115,8 @@ describe('the workspace hosts, with the convergence flag on', () => {
   /**
    * `docs/TECH_DEBT.md` #65. Pinned by **identity** rather than by rendering the dialog and
    * saving: what can go wrong here is not the callback's behaviour — its own suite covers that —
-   * but a host that never passes it. `ActivityLogicPanel` has two hosts under two flags, and
-   * ADR-0080 records `bulk` being wired into one and not the layout its flag selects, unit tests
-   * green throughout. So both hosts are asserted, and they were wired in one commit for the same
-   * reason.
+   * but a host that never passes it (ADR-0080 records `bulk` being wired into one host and not
+   * the layout its flag selected, unit tests green throughout).
    */
   it('hands the editor the undo seam for an edited link', () => {
     render(<ActivityCrudDialogs model={makeModel()} />);

@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  CANVAS_LENSES_ENABLED,
-  CANVAS_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
-  flagDefaultOff,
-  flagDefaultOn,
-} from './env';
+import { flagDefaultOff, flagDefaultOn } from './env';
+
+describe('flagDefaultOn', () => {
+  it('is on unless the operator explicitly opts out with "false" or "0"', () => {
+    expect(flagDefaultOn(undefined)).toBe(true);
+    expect(flagDefaultOn('')).toBe(true);
+    expect(flagDefaultOn('true')).toBe(true);
+    expect(flagDefaultOn('false')).toBe(false);
+    expect(flagDefaultOn('0')).toBe(false);
+  });
+});
 
 describe('flagDefaultOff', () => {
   it('is on ONLY for an explicit opt-in ("true"/"1")', () => {
@@ -22,105 +25,6 @@ describe('flagDefaultOff', () => {
     expect(flagDefaultOff('0')).toBe(false);
     expect(flagDefaultOff('TRUE')).toBe(false); // case-sensitive: only the literal "true"
     expect(flagDefaultOff('yes')).toBe(false);
-  });
-});
-
-describe('CANVAS_LENSES_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-19; no VITE_CANVAS_LENSES set)', () => {
-    // The three canvas insight lenses are wired to shipped data and on by default now that their
-    // specialist reviews (perf / a11y / ux / component / security / test) are green (M4). Setting
-    // VITE_CANVAS_LENSES=false ships the four ids as their disabled/"Coming soon" stubs and the canvas
-    // paints byte-for-byte today's — the rollback path.
-    expect(CANVAS_LENSES_ENABLED).toBe(true);
-  });
-});
-
-describe('CANVAS_NAV_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-20; no VITE_CANVAS_NAV set)', () => {
-    // Canvas nav (isolate / next-conflict / snap) is on by default now that its specialist reviews
-    // (a11y / ux / component / perf / security / test) are green (M4). Setting VITE_CANVAS_NAV=false
-    // resolves the three ids to their "Coming soon" placeholders, adds no new dimmedIds, and leaves the
-    // Visual drag path byte-for-byte today's — the rollback path / parity gate.
-    expect(CANVAS_NAV_ENABLED).toBe(true);
-  });
-});
-
-describe('CANVAS_RESOURCE_VIEW_ENABLED', () => {
-  // The gate is `flagDefaultOn(VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED` (ADR-0049; on by
-  // default 2026-07-20 after the five reviews went green): the flag AND the resource-histogram data
-  // source. Exercise the composition's truth table (flag off/on × curves off/on) against the same
-  // `flagDefaultOn` reader the constant now uses.
-  const gate = (flag: string | undefined, curves: boolean): boolean =>
-    flagDefaultOn(flag) && curves;
-
-  it('is true when the flag is on/absent (default-on) AND the curves data source is on', () => {
-    expect(gate(undefined, true)).toBe(true);
-    expect(gate('true', true)).toBe(true);
-    expect(gate('1', true)).toBe(true);
-  });
-
-  it('is false ONLY when explicitly disabled — the rollback path — regardless of the data source', () => {
-    expect(gate('false', true)).toBe(false);
-    expect(gate('0', true)).toBe(false);
-  });
-
-  it('is false when the flag is on but the curves data source is off (nothing to strip)', () => {
-    expect(gate(undefined, false)).toBe(false);
-    expect(gate('true', false)).toBe(false);
-  });
-
-  it('is ON at the build default (delivered & enabled; no VITE_CANVAS_RESOURCE_VIEW set, curves on)', () => {
-    // On by default now that the resource strip + over-allocation highlight reviews are green (Stage E).
-    // Setting VITE_CANVAS_RESOURCE_VIEW=false ships the resource-view/over-allocation ids as their
-    // "Coming soon" placeholders and the canvas paints byte-for-byte today's — the rollback / parity path.
-    expect(CANVAS_RESOURCE_VIEW_ENABLED).toBe(true);
-  });
-});
-
-describe('CANVAS_TIME_AXIS_ENABLED', () => {
-  it('is on by default (delivered & enabled, 2026-07-27; no VITE_CANVAS_TIME_AXIS set)', () => {
-    // Range-anchored zoom presets, tiered gridlines, the interpolated Today marker/pill and
-    // ground-vs-non-working shading (M2-M5) are on by default now that the M7 enablement gate
-    // (ux/accessibility/component/performance reviews) is green. Setting
-    // VITE_CANVAS_TIME_AXIS=false keeps ZOOM_STOPS, the single grid pass, whole-day Today, and the
-    // flat non-working fill byte-for-byte — the rollback path / parity gate.
-    expect(CANVAS_TIME_AXIS_ENABLED).toBe(true);
-  });
-});
-
-describe('ACTIVITY_EDITOR_CONVERGENCE_ENABLED', () => {
-  /**
-   * **This case used to assert a derivation, and it is kept rather than deleted because what
-   * replaced the derivation is worth stating** (ADR-0084 D5: coverage moves with a named
-   * destination).
-   *
-   * The convergence flag was `AND`-ed with `VITE_ACTIVITY_EDITOR_TABS`. With tabs off and
-   * convergence on, the row menu's Logic and Resources items built an editor intent for a dialog
-   * that never rendered — both entry points stranded on a surface that opened nothing. The
-   * security review asked for the two to be coupled, and deriving the constant made that
-   * combination unrepresentable rather than merely untested.
-   *
-   * The tabbed editor is now unconditional (ADR-0089), so the stranding is unreachable by
-   * construction: there is no configuration in which an editor intent has no editor to open. The
-   * flag is a plain read again, and this asserts that it is — a stray `&&` reintroduced against a
-   * constant that no longer exists would not compile, but one against a *different* flag would.
-   */
-  it('is read on its own, with no surviving conjunct', async () => {
-    vi.resetModules();
-    vi.stubEnv('VITE_ACTIVITY_EDITOR_CONVERGENCE', 'true');
-    const env = await import('./env');
-    expect(env.ACTIVITY_EDITOR_CONVERGENCE_ENABLED).toBe(true);
-    vi.unstubAllEnvs();
-    vi.resetModules();
-  });
-
-  it('is off when it is set off', async () => {
-    vi.resetModules();
-    vi.stubEnv('VITE_ACTIVITY_EDITOR_CONVERGENCE', 'false');
-    const env = await import('./env');
-    expect(env.ACTIVITY_EDITOR_CONVERGENCE_ENABLED).toBe(false);
-    vi.unstubAllEnvs();
-    vi.resetModules();
   });
 });
 

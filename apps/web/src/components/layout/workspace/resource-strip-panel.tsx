@@ -50,8 +50,7 @@ const ALL_RESOURCES = '__all__';
 const STRIP_PANEL_BOTTOM_GAP = 8;
 
 /**
- * The DOM **chrome** host for the Stage-E canvas resource strip (ADR-0049 §4/§5, behind
- * `VITE_CANVAS_RESOURCE_VIEW`). The demand **bars** are painted on the canvas sibling layer inside
+ * The DOM **chrome** host for the Stage-E canvas resource strip (ADR-0049 §4/§5). The demand **bars** are painted on the canvas sibling layer inside
  * `TsldCanvas`; this component owns everything DOM: the `useResourceHistogram` / `useResources` queries,
  * a single-select **resource picker**, the reused **bucket-size `Select`**, the reused accessible
  * **`<table>`** (the WCAG 2.2 AA equivalent of the aria-hidden canvas bars), and the loading / empty /

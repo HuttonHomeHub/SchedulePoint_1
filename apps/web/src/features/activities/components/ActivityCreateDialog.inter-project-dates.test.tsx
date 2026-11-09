@@ -10,9 +10,8 @@ import { anActivity } from '@/test/activity-fixture';
 
 /**
  * The activity External dates section (`externalEarlyStart` / `externalLateFinish`, ADR-0043 / ADR-0035
- * §30) with `VITE_INTER_PROJECT_DATES` forced ON — the surface ships dark by default, so this suite pins
- * the flag to prove the two date inputs render + submit and the client-side N26 rule rejects an inverted
- * window. The flag-off (section hidden) behaviour is covered by `ActivityCreateDialog.test.tsx`.
+ * §30): proves the two date inputs render + submit and the client-side N26 rule rejects an inverted
+ * window.
  *
  * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
  * (activity-dialog-unification epic): "seeds both dates from the row and round-trips them on save"
@@ -22,10 +21,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts` (both
  * `externalEarlyStart`/`externalLateFinish` are in its `CLEARABLE_KEYS`).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  INTER_PROJECT_DATES_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

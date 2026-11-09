@@ -18,8 +18,6 @@ import {
  * Writers (`canEdit`) edit it; everyone else sees it read-only. The change persists immediately (a
  * targeted PATCH of just `ignoreExternalRelationships` + `version`, via the shared
  * {@link PlanScheduleOptionSelect}); it changes no dates itself — a later **Recalculate** applies it.
- * Flagged behind `VITE_INTER_PROJECT_DATES` (the API/engine behind it is already live; only the control
- * is gated).
  */
 export function PlanExternalRelationshipsSettings({
   orgSlug,

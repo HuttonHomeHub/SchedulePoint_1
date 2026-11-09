@@ -10,8 +10,6 @@ import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_SEARCH_NAV_ENABLED: true,
   CANVAS_AUTHORING_ENABLED: true,
   CANVAS_AUTHORING_FLOW_ENABLED: true,
 }));

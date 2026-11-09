@@ -42,13 +42,7 @@ import {
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { useTooltip } from '@/components/ui/tooltip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
-import {
-  CANVAS_NAV_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  NOTES_ENABLED,
-  RESOURCES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
-} from '@/config/env';
+import { NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
 import { MoveToSwimlaneControl } from '@/features/tsld/components/MoveToSwimlaneControl';
 import {
@@ -477,7 +471,7 @@ function IsolateControl({
 }
 
 /**
- * The **find read-out** (`VITE_CANVAS_SEARCH_NAV`) — how many activities the live search matches, and
+ * The **find read-out** — how many activities the live search matches, and
  * which one the planner is standing on.
  *
  * Modelled on {@link CurrentConflictStatus} down to the `aria-hidden`, and for the same reason: the
@@ -688,8 +682,7 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
  * on the canvas and in the table. The **Progress**, **Resources** and **Steps** items are entry-route
  * additions. Progress is role-gated (Contributor+, `canReportProgress`);
- * Resources additionally rides `VITE_RESOURCES` (matching the table's row action) and is otherwise
- * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE`
+ * Resources is ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE`
  * and hides for a duration-derived selection — matching the table's Steps row
  * action. None of the three is pen-gated (only Edit/Delete are).
  *
@@ -727,8 +720,8 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
   defineToolbar<SelectionBarContext>([
     // ── The conflict remedy (ADR-0094 M4) ───────────────────────────────────────────────────
     //
-    // **Deliberately NOT gated on `VITE_CANVAS_NAV`**, which gates the Next-conflict cycle and its
-    // count. The flag governs a way of FINDING a flagged activity; the flag on the activity is the
+    // **Deliberately NOT gated on the Next-conflict navigation**, which is a way of FINDING a flagged
+    // activity; the flag on the activity is the
     // engine's and is real whether or not that navigation exists. A planner who reaches a conflicted
     // bar by clicking it, or by the Has-conflict filter, should be offered the remedy — gating it
     // would make the fix reachable only through one route to the problem. Said here because the
@@ -861,21 +854,15 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
         ctx.canReportProgress ? undefined : PROGRESS_REASON,
       onActivate: (ctx: SelectionActionContext) => ctx.onProgress(),
     } satisfies ToolbarItem<SelectionActionContext>,
-    // Resources rides `VITE_RESOURCES` (the resource surface), matching the activities-table row
-    // action's gate.
-    ...(RESOURCES_ENABLED
-      ? [
-          {
-            id: 'resources',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 2,
-            label: 'Resources',
-            icon: <Users className="size-4" />,
-            onActivate: (ctx: SelectionActionContext) => ctx.onResources(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    {
+      id: 'resources',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 2,
+      label: 'Resources',
+      icon: <Users className="size-4" />,
+      onActivate: (ctx: SelectionActionContext) => ctx.onResources(),
+    } satisfies ToolbarItem<SelectionActionContext>,
     /*
      * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1).
      *
@@ -1215,53 +1202,44 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // text on WCAG 2.4.6 grounds. The accessible name is unchanged — `ToolbarButton` pins it to
     // `aria-label` exactly when the visible label is withheld. Only the painted text goes.
     //
-    // Both stay behind the flags their Row-1 originals carried, so flag-off is byte-for-byte the
-    // pre-M2 surface on BOTH surfaces. Their Row-1 "Coming soon" placeholders are deliberately NOT
+    // Their Row-1 "Coming soon" placeholders are deliberately NOT
     // reproduced: a placeholder earns its place on a persistent row a planner scans, and this is a
     // transient contextual bar of live actions where an inert row is noise.
-    ...(CANVAS_SEARCH_NAV_ENABLED
-      ? [
-          {
-            id: 'zoom-to-selection',
-            group: 'find',
-            labelVisibility: 'always',
-            order: 7,
-            // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
-            // named "Actions for <activity>", so in context the short form reads fine — but an
-            // accessible name has to stand on its own in a screen reader's control list, where
-            // "Zoom to" is a sentence with its object missing (WCAG 2.4.6). The e2e journey caught
-            // it, which no unit test could: the suite was rewritten alongside the rename.
-            label: 'Zoom to selection',
-            icon: <Crosshair className="size-4" />,
-            isVisible: (ctx: SelectionBarContext) => ctx.canvas !== null,
-            onActivate: (ctx: SelectionBarContext) => ctx.canvas?.zoomToSelection(),
-          } satisfies ToolbarItem<SelectionBarContext>,
-        ]
-      : []),
-    ...(CANVAS_NAV_ENABLED
-      ? [
-          {
-            id: 'isolate-logic',
-            // The fourth MODAL tool (console epic M3-T2): while it is on, the canvas shows a
-            // subset and the diagram a planner reads is governed by it. `IsolateControl` paints
-            // its own armed state, and this declaration is what makes the set readable.
-            activeKind: 'armed' as const,
-            group: 'find',
-            labelVisibility: 'always',
-            order: 8,
-            label: 'Isolate logic path',
-            icon: <Route className="size-4" />,
-            isVisible: (ctx: SelectionBarContext) => ctx.canvas !== null,
-            isActive: (ctx: SelectionBarContext) => ctx.canvas?.isolateActive ?? false,
-            // `isVisible` above is the narrowing: an item that is not visible is not rendered, so
-            // `canvas` cannot be null here. The fallback is unreachable rather than defensive, and
-            // it is an empty fragment rather than a non-null assertion so a future change to
-            // `isVisible` degrades to nothing instead of throwing on a live surface.
-            render: (ctx: SelectionBarContext, api: ToolbarItemRenderApi) =>
-              ctx.canvas ? <IsolateControl canvas={ctx.canvas} api={api} /> : <></>,
-          } satisfies ToolbarItem<SelectionBarContext>,
-        ]
-      : []),
+    {
+      id: 'zoom-to-selection',
+      group: 'find',
+      labelVisibility: 'always',
+      order: 7,
+      // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
+      // named "Actions for <activity>", so in context the short form reads fine — but an
+      // accessible name has to stand on its own in a screen reader's control list, where
+      // "Zoom to" is a sentence with its object missing (WCAG 2.4.6). The e2e journey caught
+      // it, which no unit test could: the suite was rewritten alongside the rename.
+      label: 'Zoom to selection',
+      icon: <Crosshair className="size-4" />,
+      isVisible: (ctx: SelectionBarContext) => ctx.canvas !== null,
+      onActivate: (ctx: SelectionBarContext) => ctx.canvas?.zoomToSelection(),
+    } satisfies ToolbarItem<SelectionBarContext>,
+    {
+      id: 'isolate-logic',
+      // The fourth MODAL tool (console epic M3-T2): while it is on, the canvas shows a
+      // subset and the diagram a planner reads is governed by it. `IsolateControl` paints
+      // its own armed state, and this declaration is what makes the set readable.
+      activeKind: 'armed' as const,
+      group: 'find',
+      labelVisibility: 'always',
+      order: 8,
+      label: 'Isolate logic path',
+      icon: <Route className="size-4" />,
+      isVisible: (ctx: SelectionBarContext) => ctx.canvas !== null,
+      isActive: (ctx: SelectionBarContext) => ctx.canvas?.isolateActive ?? false,
+      // `isVisible` above is the narrowing: an item that is not visible is not rendered, so
+      // `canvas` cannot be null here. The fallback is unreachable rather than defensive, and
+      // it is an empty fragment rather than a non-null assertion so a future change to
+      // `isVisible` degrades to nothing instead of throwing on a live surface.
+      render: (ctx: SelectionBarContext, api: ToolbarItemRenderApi) =>
+        ctx.canvas ? <IsolateControl canvas={ctx.canvas} api={api} /> : <></>,
+    } satisfies ToolbarItem<SelectionBarContext>,
     // **Float paths — moved here from the command deck** (toolbar-redesign M2-T4, D-c). The ranked
     // driving chains INTO the selected activity, in a docked right panel (audit F4). Its subject is the selected object, which is ADR-0093's discriminator, and
     // on the deck it spent most of its life shaded with "Select an activity first".

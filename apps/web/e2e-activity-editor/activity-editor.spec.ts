@@ -223,7 +223,7 @@ test('asks before discarding unsaved work on Escape', async ({ account, page }) 
 });
 
 /**
- * The convergence epic's own claims (`VITE_ACTIVITY_EDITOR_CONVERGENCE`), each of which needs a
+ * The convergence epic's own claims, each of which needs a
  * **real API with the lock enforced** to mean anything:
  *
  * - A link is a pen-gated write. The tab shades without the pen *and* the server refuses.

@@ -12,11 +12,7 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_LENSES_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_NAV_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
 } from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
@@ -507,9 +503,8 @@ export interface TsldPanelProps {
   /** Today as a calendar day (`YYYY-MM-DD`), for the TODAY marker. The route passes it (floored
    * to the local day) so the component does no wall-clock math. */
   todayIso?: string;
-  /** The viewer-local time-of-day fraction (0…1) for a fractional Today line + pill (F6a/F6b,
-   * `VITE_CANVAS_TIME_AXIS`) — undefined/null when the flag is off, keeping the plain integer
-   * marker byte-for-byte. The route derives it (`todayDayFraction` off its own `useNow` tick). */
+  /** The viewer-local time-of-day fraction (0…1) for a fractional Today line + pill (F6a/F6b) —
+   * undefined/null keeps the plain integer marker. The route derives it (`todayDayFraction` off its own `useNow` tick). */
   todayFraction?: number | null | undefined;
   /** Fill the available height instead of the default fixed 480px box. When set, the canvas
    * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
@@ -570,12 +565,11 @@ export interface TsldPanelProps {
   /** Open the Make milestone dialog for the activity (ADR-0162 decision 4). Absent ⇒ omitted. */
   onMakeMilestone?: ((activity: ActivitySummary) => void) | undefined;
   /** The plan's baseline-variance rows (`useBaselineVariance`), for the **Baseline overlay** lens
-   * (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`). The host passes the shipped
+   * (spec `docs/specs/canvas-lenses/`). The host passes the shipped
    * variance data (already route-composed for the activities table) so no new fetch is added; the
    * ghost geometry joins these captured dates to the live lanes. Absent/empty ⇒ no ghost layer. */
   varianceRows?: readonly BaselineVarianceRow[] | undefined;
-  /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049, behind
-   * `VITE_CANVAS_RESOURCE_VIEW`) — reserves the strip band at the canvas bottom and paints the demand
+  /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049) — reserves the strip band at the canvas bottom and paints the demand
    * bars. Absent/false ⇒ no band, byte-for-byte today's canvas. Forwarded straight to `TsldCanvas`.
    *
    * NB this lens intentionally takes a SEPARATE boolean + data prop ({@link resourceStrip}), unlike the
@@ -630,7 +624,7 @@ export interface TsldPanelProps {
    * the strip on a change. `null`/absent ⇒ the band (if {@link resourceStripActive}) draws just its
    * axis rule — the loading/empty state where the band is reserved but there's nothing to plot yet. */
   resourceStrip?: ResourceStripSnapshot | null;
-  /** Whether the **over-allocation highlight** mode is on (Stage E M2, behind `VITE_CANVAS_RESOURCE_VIEW`)
+  /** Whether the **over-allocation highlight** mode is on (Stage E M2)
    * — flags bars carrying the engine-owned levelling over-allocation flags (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041) with a non-colour-only badge + a parallel listbox mark + a count
    * announcement. Absent/false ⇒ no `flaggedIds` scene field ⇒ byte-for-byte today's canvas + a11y tree. */
@@ -1326,7 +1320,7 @@ export function TsldPanel({
       ]),
     );
   }, [activities, renderActivities, viewToggles.activityCodes, barDateSource, swimlaneScene]);
-  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
@@ -1343,7 +1337,7 @@ export function TsldPanel({
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
-  const filterActive = CANVAS_LENSES_ENABLED && isFilterActive(filterQuery, filterAttrs);
+  const filterActive = isFilterActive(filterQuery, filterAttrs);
   // The ids of the NON-matching activities (dimmed on the canvas + marked in the listbox). Absent when
   // no filter is active, so an empty/cleared filter dims nothing (parity).
   const filterDimmedIds = useMemo<Set<string> | undefined>(() => {
@@ -1354,12 +1348,12 @@ export function TsldPanel({
     }
     return set;
   }, [filterActive, activities, filterQuery, filterAttrs]);
-  // ── Isolate logic path (canvas nav, `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`) ──────
+  // ── Isolate logic path (canvas nav, `docs/specs/canvas-nav/`) ──────────────────
   // The selected activity's transitive logic chain (full or driving-only), memoised on the selection +
   // edges + mode only — never per frame (perf; O(V+E)). Absent unless isolate is active AND something
-  // is selected, so flag-off / no-selection contributes NO dim (byte-for-byte parity).
+  // is selected, so no-selection contributes NO dim.
   const isolateChain = useMemo<Set<string> | undefined>(() => {
-    if (!CANVAS_NAV_ENABLED || !navState.isolateActive || selectedId === null) return undefined;
+    if (!navState.isolateActive || selectedId === null) return undefined;
     return computeLogicPath(selectedId, dependencies, { mode: navState.isolateMode });
   }, [navState.isolateActive, navState.isolateMode, selectedId, dependencies]);
   // The complement of the chain within the plan — the ids isolate dims. Reuses the Stage A dim seam.
@@ -1410,22 +1404,22 @@ export function TsldPanel({
   // `barInk[id]` must be the ink chosen for `barFill[id]`, which is only guaranteed while both come
   // from the same resolve (`docs/TECH_DEBT.md` #160).
   const lensPalette = useMemo(
-    () => (CANVAS_LENSES_ENABLED ? resolveLensPalette(canvasSurface) : null),
+    () => resolveLensPalette(canvasSurface),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
     [themeVersion, canvasSurface],
   );
   const barFill = useMemo<Map<string, string> | undefined>(() => {
-    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    if (colourMode === 'criticality') return undefined;
     return buildColourMap(activities, colourMode, lensPalette);
   }, [colourMode, activities, lensPalette]);
   const barInk = useMemo<Map<string, string> | undefined>(() => {
-    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    if (colourMode === 'criticality') return undefined;
     return buildColourInkMap(activities, colourMode, lensPalette);
   }, [colourMode, activities, lensPalette]);
   // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
   // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
   const baselineGhosts = useMemo(() => {
-    if (!CANVAS_LENSES_ENABLED || !baselineOverlay || !varianceRows || varianceRows.length === 0) {
+    if (!baselineOverlay || !varianceRows || varianceRows.length === 0) {
       return undefined;
     }
     // The lane a ghost sits at is its bar's DISPLAY lane while swimlanes are shown, so the two share
@@ -1453,7 +1447,7 @@ export function TsldPanel({
    * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens keeps.
    */
   const levelledGhosts = useMemo(() => {
-    if (!CANVAS_LENSES_ENABLED || !levelledOverlay) return undefined;
+    if (!levelledOverlay) return undefined;
     const ghosts = buildLevelledGhosts(
       activities.flatMap((a) => {
         const laneIndex = ghostLaneOf(ghostLaneScene, a.id, a.laneIndex);
@@ -1483,7 +1477,7 @@ export function TsldPanel({
    */
   const levelledSummary = useMemo(
     () =>
-      CANVAS_LENSES_ENABLED && levelledOverlay && levelResources !== undefined
+      levelledOverlay && levelResources !== undefined
         ? levelledOverlaySummary(levelledGhosts?.length ?? 0, { levelResources })
         : null,
     [levelledOverlay, levelledGhosts, levelResources],
@@ -1595,7 +1589,7 @@ export function TsldPanel({
   // was carried by hue alone). Only while WBS is the ACTIVE colour mode: the clause describes what is
   // drawn, so on any other mode there is nothing to describe and the row text is byte-for-byte today's.
   const wbsGroupClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED || colourMode !== 'wbs') return undefined;
+    if (colourMode !== 'wbs') return undefined;
     const labelById = wbsGroupLabelById(activities);
     return new Map(activities.map((a) => [a.id, wbsGroupClause(a, labelById)]));
   }, [colourMode, activities]);
@@ -1603,10 +1597,10 @@ export function TsldPanel({
   // The ids of the engine-flagged over-allocated activities (`levelingWindowExceeded ||
   // selfOverAllocated`, ADR-0041) — marked on the canvas with a badge + in the parallel listbox, and
   // announced. Read ENGINE-OWNED flags only (never re-derive over-allocation client-side). Absent when
-  // the mode is off, the flag is off, or nothing is over-allocated (`overAllocatedIds` returns
+  // the mode is off or nothing is over-allocated (`overAllocatedIds` returns
   // undefined on an empty set) — so no `flaggedIds` scene field ⇒ byte-for-byte today's paint.
   const flaggedIds = useMemo<Set<string> | undefined>(() => {
-    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) return undefined;
+    if (!overAllocationHighlight) return undefined;
     return overAllocatedIds(activities);
   }, [overAllocationHighlight, activities]);
   // A **value-stable** signature of the flagged set (sorted ids), so the announce effect below fires only
@@ -1685,11 +1679,9 @@ export function TsldPanel({
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
-  // the stale "N of M activities match" text rather than leaving it to be re-read. Off when the flag is
-  // off (the effect early-returns, so it is inert then).
+  // the stale "N of M activities match" text rather than leaving it to be re-read.
   const filterWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_LENSES_ENABLED) return;
     // Once the planner has pressed Enter, the JUMP owns the live region
     // (`docs/specs/canvas-search-navigation/` M1-T2 step 3). Returning early here is the "cancel the
     // pending count timer" seam: the effect's own cleanup clears whatever was armed, and nothing new
@@ -1703,10 +1695,10 @@ export function TsldPanel({
     //
     // Typing again clears the cursor (`setFilterQuery`/`toggleFilterAttr` reset it), so the count
     // returns for the phase it is actually for: refining the query, before any jump.
-    if (CANVAS_SEARCH_NAV_ENABLED && searchCursorId !== null) return;
+    if (searchCursorId !== null) return;
     if (!filterActive) {
       // On the active → inactive transition, replace the stale "N of M activities match" rather than
-      // leaving it to be re-read. Flag-on it says **what happened** instead of saying nothing: the
+      // leaving it to be re-read. It says **what happened** instead of saying nothing: the
       // clear is otherwise silent to a screen-reader user on both routes that reach it (the Clear
       // button and the field's first Escape), and a blank live region is indistinguishable from one
       // that was never updated.
@@ -1715,7 +1707,7 @@ export function TsldPanel({
       // this effect runs after the commit, so it would have overwritten the handler's announcement
       // with the blank — one control, two announcements, and the useful one loses. The journey
       // caught exactly that. Owning it here also covers the Clear button for free.
-      if (filterWasActiveRef.current) announce(CANVAS_SEARCH_NAV_ENABLED ? 'Search cleared.' : '');
+      if (filterWasActiveRef.current) announce('Search cleared.');
       filterWasActiveRef.current = false;
       return;
     }
@@ -1731,10 +1723,9 @@ export function TsldPanel({
   }, [filterActive, activities.length, filterDimmedIds, searchCursorId, announce]);
   // Announce isolate for AT (WCAG 4.1.3 / 1.4.1) — the canvas dimming + listbox marking are otherwise
   // colour/emphasis-only. Fires on activate, selection change, or mode change; clears on exit. Isolate
-  // changes only on those (not per keystroke), so no debounce is needed. Inert when the flag is off.
+  // changes only on those (not per keystroke), so no debounce is needed.
   const isolateWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_NAV_ENABLED) return;
     if (!isolateChain || selectedId === null) {
       if (isolateWasActiveRef.current) announce('');
       isolateWasActiveRef.current = false;
@@ -1753,10 +1744,10 @@ export function TsldPanel({
   // Announce the over-allocation count for AT (WCAG 4.1.3 / 1.4.1) — the canvas badges + listbox marking
   // are otherwise shape/emphasis-only. Fires when the highlight turns on or the flagged set changes;
   // clears on exit. Changes only on those (not per keystroke), so no debounce is needed. Inert when the
-  // flag/mode is off (the effect early-returns), keeping the a11y tree byte-for-byte then.
+  // mode is off (the effect early-returns).
   const overAllocWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) {
+    if (!overAllocationHighlight) {
       if (overAllocWasActiveRef.current) announce('');
       overAllocWasActiveRef.current = false;
       return;
@@ -2958,10 +2949,7 @@ export function TsldPanel({
       // Preview only. `previewStartDay` is NOT what gets written — see `rollForwardToWorkingDay`
       // for why a client-computed day must not be persisted.
       const previewStartDay =
-        CANVAS_NAV_ENABLED &&
-        barDateSource === 'visual' &&
-        intent.startDay !== undefined &&
-        workingDayPredicate
+        barDateSource === 'visual' && intent.startDay !== undefined && workingDayPredicate
           ? rollForwardToWorkingDay(intent.startDay, workingDayPredicate)
           : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the

@@ -28,7 +28,7 @@ import {
   type ExportGutterFrame,
 } from './export-swimlane-gutter';
 
-import { CANVAS_DATA_DATE_ENABLED, CANVAS_RESOURCE_VIEW_ENABLED } from '@/config/env';
+import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
 
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
@@ -307,7 +307,7 @@ function cutNamesEntry(count: number): LegendEntry {
 
 /** The legend rows this picture's scene calls for. */
 function legendFor(scene: TsldScene, cutNames: number): readonly LegendEntry[] {
-  const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
+  const drawsBadge = (scene.flaggedIds?.size ?? 0) > 0;
   const drawsSwimlanes = scene.swimlaneMarks !== undefined;
   const rows = [
     ...EXPORT_LEGEND,

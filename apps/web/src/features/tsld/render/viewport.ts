@@ -56,9 +56,8 @@ export function laneRowAt(y: number, view: Viewport): number {
 
 /**
  * Clamp a px-per-day value to the allowed zoom range. `maxPxPerDay` is a **required** parameter
- * (not read off the `MAX_PX_PER_DAY` module constant directly) so a flag-off caller can pass
- * {@link LEGACY_MAX_PX_PER_DAY} instead — the compiler, not a reviewer, catches a call site that
- * forgets to resolve the flag-aware ceiling.
+ * (not read off the `MAX_PX_PER_DAY` module constant directly) — the compiler, not a reviewer,
+ * catches a call site that forgets to state the ceiling.
  */
 export function clampPxPerDay(pxPerDay: number, maxPxPerDay: number): number {
   return Math.max(MIN_PX_PER_DAY, Math.min(maxPxPerDay, pxPerDay));
@@ -129,7 +128,7 @@ export const DEFAULT_VIEWPORT: Viewport = { pxPerDay: ZOOM_STOPS.week, originX: 
  * `pxPerDay` so the full day span fits horizontally (clamped to `[MIN_PX_PER_DAY, maxPxPerDay]`)
  * and pans so the earliest day / topmost lane sit just inside the top-left padding. Falls back to
  * {@link DEFAULT_VIEWPORT} when nothing is computed yet. `maxPxPerDay` is required, not defaulted,
- * so the caller must resolve the flag-aware ceiling (`MAX_PX_PER_DAY` vs {@link LEGACY_MAX_PX_PER_DAY}).
+ * so the caller must state the ceiling.
  */
 /**
  * The minimum span {@link withMinimumSpan} frames, in days.

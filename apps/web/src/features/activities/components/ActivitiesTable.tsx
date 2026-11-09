@@ -30,14 +30,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
-import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  NOTES_ENABLED,
-  RESOURCES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
-} from '@/config/env';
+import { NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
 import {
   MAKE_MILESTONE_LABEL,
@@ -456,8 +449,7 @@ export function ActivitiesTable({
     () => new Map(calendars.map((c) => [c.id, c.name])),
     [calendars],
   );
-  // Parent WBS-summary lookup for the read-only WBS column (entry-route gap #7, only when
-  // `ADVANCED_ACTIVITY_TYPES_ENABLED`): resolve each activity's `parentId` to the summary's display
+  // Parent WBS-summary lookup for the read-only WBS column (entry-route gap #7): resolve each activity's `parentId` to the summary's display
   // string (its code, else its name) from the already-loaded activities — no extra fetch, mirroring the
   // Calendar column's name resolution.
   const wbsParentLabelById = useMemo(() => {
@@ -516,11 +508,11 @@ export function ActivitiesTable({
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
   /**
-   * Whether **Resources** belongs to the host (the convergence epic) rather than to this table's
-   * own dialog. Narrowed as a const so the row action can call `onOpenResources` without a second
-   * existence check that TypeScript could not connect to this one.
+   * Whether **Resources** belongs to the host (the editor's Resources tab) rather than to this
+   * table's own dialog. Narrowed as a const so the row action can call `onOpenResources` without a
+   * second existence check that TypeScript could not connect to this one.
    */
-  const hostOwnsResources = ACTIVITY_EDITOR_CONVERGENCE_ENABLED && onOpenResources !== undefined;
+  const hostOwnsResources = onOpenResources !== undefined;
 
   /*
    * ---- Bulk assign (M4b) ------------------------------------------------------------------
@@ -637,16 +629,14 @@ export function ActivitiesTable({
           onSelect: () => openFor(activity, 'members'),
         });
       }
-      // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
-      // writes inside are gated on `canEditSchedule`).
-      if (RESOURCES_ENABLED) {
-        actions.push({
-          key: 'resources',
-          label: 'Resources',
-          onSelect: () =>
-            hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
-        });
-      }
+      // Any member may open the assignments editor (reads are member-level; writes inside are gated
+      // on `canEditSchedule`).
+      actions.push({
+        key: 'resources',
+        label: 'Resources',
+        onSelect: () =>
+          hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
+      });
       {
         // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
         // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
@@ -819,15 +809,15 @@ export function ActivitiesTable({
           // the per-activity companion to the summary strip's "Externally driven" count, so a planner
           // can see WHICH activities an external commitment gated. Informational (soft bound), so a
           // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
-          // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
-          const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
+          // (never colour alone, WCAG 1.4.1).
+          const externalDriven = activity.externalDriven;
           // A resource-dependent activity with no driving assignment (engine-owned, ADR-0035 §23):
           // the engine produces-and-flags rather than refusing, scheduling it on the ordinary calendar
           // and setting this. Until now the flag was computed, persisted and rendered NOWHERE, so the
           // failure was silent — the activity simply scheduled on the wrong working time and looked
           // fine. Critical tone because it means the dates on screen are not the ones the planner
-          // asked for. Gated on the same flag as the type that produces it.
-          const driverMissing = ADVANCED_ACTIVITY_TYPES_ENABLED && activity.resourceDriverMissing;
+          // asked for.
+          const driverMissing = activity.resourceDriverMissing;
           // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
           // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
           const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
@@ -976,30 +966,25 @@ export function ActivitiesTable({
             } satisfies Column<ActivitySummary>,
           ]
         : []),
-      // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
-      // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
+      // The activity's parent WBS summary (ADR-0038), read-only. An em dash means "no parent" (a top-level activity). The
       // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
       // fetch, mirroring the Calendar column. Conditional spread (not a splice) so its position is stable;
       // hidden below `lg` like the other definition-detail columns.
-      ...(ADVANCED_ACTIVITY_TYPES_ENABLED
-        ? [
-            {
-              header: 'WBS',
-              headClassName: 'hidden lg:table-cell',
-              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
-              cell: (activity: ActivitySummary) => {
-                const parentLabel = wbsParentLabelById.get(activity.id);
-                return parentLabel ? (
-                  <span className="text-muted-foreground" title={parentLabel}>
-                    {parentLabel}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                );
-              },
-            } satisfies Column<ActivitySummary>,
-          ]
-        : []),
+      {
+        header: 'WBS',
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+        cell: (activity: ActivitySummary) => {
+          const parentLabel = wbsParentLabelById.get(activity.id);
+          return parentLabel ? (
+            <span className="text-muted-foreground" title={parentLabel}>
+              {parentLabel}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
+      } satisfies Column<ActivitySummary>,
       // Code columns (P6 activity codes, M3-T2): one per shown type, after the WBS column, read-only here
       // (the table's Set <type> and the editor are the writes). Hidden below `lg` like the other
       // definition-detail columns. A column still loading reads "Loading…" in the Calendar column's
@@ -1106,39 +1091,35 @@ export function ActivitiesTable({
         varianceColumn('Total float variance', 'float', 'lg'),
       );
     }
-    if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
-      cols.push({
-        header: 'Actions',
-        srHeader: true,
-        headClassName: 'pr-0',
-        cellClassName: 'pr-0 text-right whitespace-nowrap',
-        cell: (activity) => {
-          const actions = actionsFor(activity);
-          // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
-          // the second clause a Viewer would open a menu of nothing but refusals — and it is what
-          // keeps the all-disabled focus trap out of reach rather than merely fixed.
-          // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
-          // this component** — established by trying to test it rather than by assuming either way, after
-          // the consolidation pass blocked on it being untested. The column above renders only when
-          // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
-          // four contributes an action that is never shaded (Logic, Resources and Report progress are
-          // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
-          // predicate — `canWrite && holdsPen` — so they cannot disagree).
-          //
-          // A unit test can only reach it by turning all four off, at which point the column is absent and
-          // the test passes for the wrong reason. The first version of that test did exactly that and still
-          // passed with this clause deleted. Kept as a guard against a future action set where it IS
-          // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
-          // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
-          if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
-            return null;
-          }
-          return (
-            <RowActionsButton store={store} activity={activity} menuTriggerRef={menuTriggerRef} />
-          );
-        },
-      });
-    }
+    cols.push({
+      header: 'Actions',
+      srHeader: true,
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
+      cell: (activity) => {
+        const actions = actionsFor(activity);
+        // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
+        // the second clause a Viewer would open a menu of nothing but refusals — and it is what
+        // keeps the all-disabled focus trap out of reach rather than merely fixed.
+        // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
+        // this component** — established by trying to test it rather than by assuming either way, after
+        // the consolidation pass blocked on it being untested. The Resources action is never shaded
+        // (a read, so member-level), and the others contribute one that is not either (Logic and
+        // Report progress are reads or non-pen-gated; `canEditSchedule` and
+        // `editorGating.general.writable` are the same predicate — `canWrite && holdsPen` — so they
+        // cannot disagree).
+        //
+        // A unit test has nothing to switch off to reach it, so it is not tested directly. Kept as a
+        // guard against a future action set where it IS reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
+        // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
+        if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
+          return null;
+        }
+        return (
+          <RowActionsButton store={store} activity={activity} menuTriggerRef={menuTriggerRef} />
+        );
+      },
+    });
     return cols;
   }, [
     bulkAssignActive,
@@ -1154,9 +1135,6 @@ export function ActivitiesTable({
     noteCountByActivityId,
     varianceByActivityId,
     floatNotComparableCount,
-    canEditSchedule,
-    canReportProgress,
-    onOpenLogic,
     actionsFor,
   ]);
 
@@ -1327,7 +1305,7 @@ export function ActivitiesTable({
         windowed
       />
 
-      {RESOURCES_ENABLED && !hostOwnsResources ? (
+      {!hostOwnsResources ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
           planId={planId}

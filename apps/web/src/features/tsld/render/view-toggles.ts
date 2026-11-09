@@ -72,7 +72,7 @@ export interface TsldViewToggles {
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Ungated since the mode collapsed (one-planning-surface M-F-T5). */
   lateOverlay: boolean;
-  /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS`) — a
+  /** User preference for the alternating month-band ground — a
    * plain boolean here so the pure painter module never imports a flag; `sceneLayers` composes the
    * actual gate (`view?.monthBands ?? false`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
    * every existing caller/fixture stays valid; the default below is a plain literal, not a flag

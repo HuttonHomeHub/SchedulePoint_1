@@ -5,7 +5,6 @@ import type { GroupProps } from './group-props';
 
 import { TextField } from '@/components/ui/form';
 import { FieldGrid, FormSection } from '@/components/ui/form-layout';
-import { RESOURCE_LEVELLING_ENABLED } from '@/config/env';
 import { isDurationDerivedType } from '@/features/activities/schemas/activity-schemas';
 import type { ActivitySchedulingValues } from '@/features/activities/schemas/activity-scope-schemas';
 
@@ -30,11 +29,7 @@ export function ActivityLevellingField({
   /** The live type from the GENERAL scope (ADR-0089 D2b). */
   activityType: ActivityType | undefined;
 }): JSX.Element | null {
-  if (
-    !RESOURCE_LEVELLING_ENABLED ||
-    (activityType !== undefined && isDurationDerivedType(activityType))
-  )
-    return null;
+  if (activityType !== undefined && isDurationDerivedType(activityType)) return null;
 
   return (
     <FormSection title="Levelling" description="Used only when the plan is levelled.">

@@ -9,10 +9,8 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activity levelling-priority field (`levelingPriority`, ADR-0041) with `VITE_RESOURCE_LEVELLING`
- * forced ON — the surface ships dark by default, so this suite pins the flag to prove the field renders,
- * persists (omitted when blank), and is hidden for a type levelling never moves (a milestone). The
- * flag-off behaviour is covered by `ActivityCreateDialog.test.tsx`.
+ * The activity levelling-priority field (`levelingPriority`, ADR-0041): proves the field renders,
+ * persists (omitted when blank), and is hidden for a type levelling never moves (a milestone).
  *
  * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
  * (activity-dialog-unification epic): "seeds the priority from the row and round-trips it on save"
@@ -22,10 +20,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `apps/web/src/features/activities/api/activity-body-builders.structural.test.ts`
  * (`levelingPriority` is in its `CLEARABLE_KEYS`).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

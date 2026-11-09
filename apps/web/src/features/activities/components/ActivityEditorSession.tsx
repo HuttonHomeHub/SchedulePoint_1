@@ -66,16 +66,7 @@ import { ContextStrip, FieldGridContainer, FormSection } from '@/components/ui/f
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
-import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  EARNED_VALUE_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  NOTES_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-  RESOURCES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
-} from '@/config/env';
+import { EARNED_VALUE_ENABLED, NOTES_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel, ancestorIds, wouldCloseLoop } from '@/features/wbs';
@@ -664,21 +655,12 @@ export function ActivityEditorSession({
     },
     // Logic is a **collection**, not a form: it has no draft state to be dirty and no field to be
     // invalid, so it can only ever carry the read-only marker (spec §2 "Save model").
-    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-      ? [{ id: 'logic' as const, label: 'Logic', ...collectionMarker(gating.logic) }]
-      : []),
-    // Resources needs BOTH flags: the convergence one to be a tab at all, and `VITE_RESOURCES`
-    // because there is no resources surface without it. A tab whose entry point is hidden — or an
-    // entry point with no tab — is the exact flag-parity gap the ADR-0060 security review caught on
-    // the steps panel, so the four combinations have their own matrix test.
-    //
-    // It sits **before** Progress, following the spec's order (§4.11): what the activity IS
+    { id: 'logic' as const, label: 'Logic', ...collectionMarker(gating.logic) },
+    // Resources sits **before** Progress, following the spec's order (§4.11): what the activity IS
     // (General/Scheduling) → what it depends on (Logic) → what does the work (Resources) → how it is
     // going (Progress) → what it costs (Cost) → what people said (Notes). Resources is a definition
     // scope on the same pen-gated rule as Logic, so it belongs on that side of the status divide.
-    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && RESOURCES_ENABLED
-      ? [{ id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) }]
-      : []),
+    { id: 'resources' as const, label: 'Resources', ...collectionMarker(gating.resources) },
     // Members — a WBS summary's contents (`VITE_WBS_IMPROVEMENTS`). Conditional on the SUBJECT, not
     // just on a flag: every other tab here asks something of any activity, and "what is filed under
     // this?" is meaningless for one that cannot hold anything. It sits after Resources and before
@@ -706,10 +688,8 @@ export function ActivityEditorSession({
       : []),
     // Notes, like Progress, are **never** marked read-only: the pen does not gate them (ADR-0046),
     // so a padlock would be false for exactly the reader it is meant to inform. Needs `VITE_NOTES`
-    // as well as the convergence flag, and the composition root's slot to have anything to show.
-    ...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED && NOTES_ENABLED && notesSlot
-      ? [{ id: 'notes' as const, label: 'Notes' }]
-      : []),
+    // and the composition root's slot to have anything to show.
+    ...(NOTES_ENABLED && notesSlot ? [{ id: 'notes' as const, label: 'Notes' }] : []),
     // History is last (subject-first order, ADR-0062 §5) and, like Notes, never marked read-only: it
     // has no write scope at all, so a padlock would claim a gate that does not exist. Unflagged
     // (ADR-0088 D1) — present whenever the composition root supplies the panel.
@@ -827,15 +807,13 @@ export function ActivityEditorSession({
                       plan" whenever the offerable list was empty, which is exactly when a stored
                       but unresolvable parent is most likely — so the one activity that disproves
                       the sentence was the one it was shown to. */}
-                      {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-                        <ActivityBreakdownField
-                          form={general.form}
-                          parentOptions={parentOptions}
-                          parentContentsHidden={parentContentsHidden}
-                          loading={planActivitiesLoading}
-                          errored={planActivitiesError}
-                        />
-                      ) : null}
+                      <ActivityBreakdownField
+                        form={general.form}
+                        parentOptions={parentOptions}
+                        parentContentsHidden={parentContentsHidden}
+                        loading={planActivitiesLoading}
+                        errored={planActivitiesError}
+                      />
                       <ScopeSaveBar
                         gate={gating.general}
                         dirty={general.isDirty}
@@ -926,16 +904,12 @@ export function ActivityEditorSession({
 
                     <ActivityPlacementFields form={scheduling.form} activityType={type} />
 
-                    {INTER_PROJECT_DATES_ENABLED ? (
-                      <ActivityExternalDatesFields
-                        form={scheduling.form}
-                        externalDriven={activity.externalDriven === true}
-                      />
-                    ) : null}
+                    <ActivityExternalDatesFields
+                      form={scheduling.form}
+                      externalDriven={activity.externalDriven === true}
+                    />
 
-                    {RESOURCE_LEVELLING_ENABLED ? (
-                      <ActivityLevellingField form={scheduling.form} activityType={type} />
-                    ) : null}
+                    <ActivityLevellingField form={scheduling.form} activityType={type} />
                     <ScopeSaveBar
                       gate={gating.scheduling}
                       dirty={scheduling.isDirty}

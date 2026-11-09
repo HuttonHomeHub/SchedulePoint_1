@@ -96,9 +96,8 @@ export function useDiagramImage(args: {
    * The model derives it from the SAME `new Date()` as `todayIso` (`use-plan-workspace-model.ts`),
    * so the integer offset and the fraction cannot disagree; deriving it from a fresh `Date.now()`
    * against a `useNow`-ticked `todayIso` puts the line a full day out across local midnight. And
-   * the model gates it on `CANVAS_TIME_AXIS_ENABLED`, so a hand-rolled call draws a fractional
-   * line and a Today pill in the deliverable while the screen draws a plain integer marker —
-   * which is this milestone's own defect, inverted.
+   * a hand-rolled call could draw a Today line at a different time of day in the deliverable than
+   * the screen does — which is this milestone's own defect, inverted.
    */
   todayFraction: number | undefined;
   lateOverlayActive: boolean;
@@ -232,7 +231,6 @@ export function useDiagramImage(args: {
         // gate would go quietly blind on exactly the composition it exists to watch. It refuses on
         // an unresolvable spread for that reason, and this shape keeps it honest.
         monthBands: layers.monthBands,
-        gridTiers: layers.gridTiers,
         timeTrueLinks: layers.timeTrueLinks,
         visualRefresh: layers.visualRefresh,
         linkRouting: layers.linkRouting,

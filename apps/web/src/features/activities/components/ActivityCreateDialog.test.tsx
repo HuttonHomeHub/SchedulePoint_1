@@ -10,13 +10,6 @@ import { anActivity } from '@/test/activity-fixture';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
-// This is the BASE form suite — advanced activity types is still a flag, pinned off here; its
-// behaviour lives in the dedicated `.activity-types.test.tsx` suite.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_ACTIVITY_TYPES_ENABLED: false,
-}));
-
 const ACTIVITY: ActivitySummary = anActivity({
   planId: 'pl1',
   constraintType: 'SNET',
@@ -106,27 +99,6 @@ describe('ActivityCreateDialog', () => {
     const body = JSON.parse(vi.mocked(apiFetch).mock.calls[0]![1]?.body as string);
     expect(body).toMatchObject({ type: 'START_MILESTONE', durationDays: 0 });
   });
-
-  it('does not offer advanced activity types (Level of effort) while the flag is off', () => {
-    // This suite pins VITE_ADVANCED_ACTIVITY_TYPES off (it defaults on), so the picker shows only the
-    // three fully-supported types — no Level of effort (or Hammock).
-    renderDialog();
-    expect(screen.queryByRole('option', { name: 'Level of effort' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Hammock' })).not.toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Task' })).toBeInTheDocument();
-  });
-
-  // "still shows a seeded Level-of-effort value when editing with the flag off (honest selector)"
-  // moved: `ActivityCreateDialog` lost its edit path in the activity-dialog-unification epic
-  // (create-only now, no `activity` prop). The mechanism it pinned — `selectableActivityTypes`
-  // always adds the CURRENT value even when the advanced-types flag would not otherwise offer it —
-  // is proven generically, flag-independently, by
-  // `fields/ActivityWorkFields.test.tsx`'s "the type option list" describe block (using `HAMMOCK`,
-  // a type never offered even with the flag ON, which is the stronger case).
-
-  // "round-trips a seeded WBS parentId on a no-op save with the flag off" moved to
-  // `ActivityEditorDialog.flag-off-round-trips.test.tsx` — "round-trips a seeded parentId on a
-  // no-op General save with the flag off".
 
   it('reveals the date once a constraint is chosen and sends the pair', async () => {
     renderDialog();

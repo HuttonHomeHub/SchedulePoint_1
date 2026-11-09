@@ -56,13 +56,7 @@ import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-  NOTES_ENABLED,
-} from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED } from '@/config/env';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useSession } from '@/features/auth/api/use-session';
@@ -416,18 +410,16 @@ export function ToolbarPlanWorkspace({
   // would not re-render the portal or the toggle's reason when they arrive.
   const [viewportSlot, setViewportSlot] = useState<HTMLDivElement | null>(null);
   const [minimapRoom, setMinimapRoom] = useState(true);
-  // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
+  // Resource-view lens (Stage E, ADR-0049): the DOM `ResourceStripPanel`
   // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
   // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
-  // mounts the panel — only when the lens is open, the flag is on, and the plan is diagrammable (has a
-  // data date). Flag-off ⇒ always inactive ⇒ byte-for-byte today's canvas + no panel.
+  // mounts the panel — only when the lens is open and the plan is diagrammable (has a data date).
   const [stripSnapshot, setStripSnapshot] = useState<ResourceStripSnapshot | null>(null);
   const onStripSnapshot = useCallback(
     (snapshot: ResourceStripSnapshot | null) => setStripSnapshot(snapshot),
     [],
   );
-  const resourceViewActive =
-    CANVAS_RESOURCE_VIEW_ENABLED && model.resourceViewOpen && plan.plannedStart !== null;
+  const resourceViewActive = model.resourceViewOpen && plan.plannedStart !== null;
   const setNotesOpen = model.setNotesOpen;
   // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
   // right docks. No VITE_ flag (ADR-0088 D1): the rollback is a commit boundary.
@@ -1685,9 +1677,9 @@ export function ToolbarPlanWorkspace({
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
       todayFraction={model.todayFraction}
-      // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
-      // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
-      {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}
+      // Baseline overlay lens: reuse the shipped variance rows (route-composed for the activities
+      // table) — no new fetch.
+      varianceRows={model.variance.data?.rows}
       // Resource-view strip (Stage E, ADR-0049): reserve the band + paint the demand bars from the
       // snapshot the ResourceStripPanel below publishes. Inactive ⇒ no band, byte-for-byte today's.
       resourceStripActive={resourceViewActive}
@@ -1697,8 +1689,8 @@ export function ToolbarPlanWorkspace({
       onViewportSlot={setViewportSlot}
       onMinimapRoomChange={setMinimapRoom}
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
-      // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
-      overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
+      // mode, independent of the demand strip being open.
+      overAllocationHighlight={model.overAllocationHighlight}
       // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
@@ -1736,7 +1728,7 @@ export function ToolbarPlanWorkspace({
   // The ONE emphasis set the Gantt receives (M4). The canvas gets the matches through its own dim
   // seam; both read `ctx.matchedIds`, which `useSearchNavigation` derives once — so the two views
   // cannot disagree about what the search matched, which is the whole point of lifting it.
-  const searchNavActive = CANVAS_SEARCH_NAV_ENABLED && ctx.matchedIds.size > 0;
+  const searchNavActive = ctx.matchedIds.size > 0;
   // The undo reveal holds only while its activity is still the selection: choosing anything else hands
   // the scroll back, and the Gantt withdraws it itself once it has scrolled.
   const undoRevealId =
@@ -2090,13 +2082,12 @@ export function ToolbarPlanWorkspace({
 
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
   // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
-  // VITE_CANVAS_LENSES it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry. The band
+  // the canvas lenses it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry. The band
   // colours come from the **var()** legend palette (`lensLegendVarPalette`), so the swatches are raw
   // `var(--color-*)` inline styles — inherently theme-reactive with zero JS, so the legend never goes
   // theme-stale on a light/dark switch (C1/U3; the canvas fills, which can't use `var()`, re-resolve via
-  // `themeVersion` instead). Flag-off it renders today's default key, byte-for-byte.
-  const lensLegend = useMemo<LensLegendInfo | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED) return undefined;
+  // `themeVersion` instead).
+  const lensLegend = useMemo<LensLegendInfo>(() => {
     const { colourMode, baselineOverlay } = canvasUi.lensState;
     return {
       colourMode,
@@ -2113,7 +2104,7 @@ export function ToolbarPlanWorkspace({
       onPositionChange={legend.setPosition}
       leftInsetPx={swimlaneManagement.gutterWidthPx}
       swimlaneBoundary={swimlaneScene.input !== null}
-      {...(lensLegend ? { lens: lensLegend } : {})}
+      lens={lensLegend}
     />
   );
 

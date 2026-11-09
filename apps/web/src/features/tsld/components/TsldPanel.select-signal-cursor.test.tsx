@@ -7,7 +7,6 @@ vi.mock('../../../config/env', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    CANVAS_NAV_ENABLED: true,
     CANVAS_MULTI_SELECT_ENABLED: true,
     CANVAS_AUTHORING_ENABLED: false,
   };

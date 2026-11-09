@@ -8,15 +8,9 @@ import { ScheduleSummaryStrip } from './ScheduleSummaryStrip';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 /**
- * The levelled-overlay figures (ADR-0041) with `VITE_RESOURCE_LEVELLING` forced ON — the surface ships
- * dark by default, so this suite pins the flag to prove the levelled finish + counts show once the plan
- * has levelled, and stay hidden when it hasn't. The flag-off / never-levelled behaviour is covered by
- * `ScheduleSummaryStrip.test.tsx`.
+ * The levelled-overlay figures (ADR-0041): proves the levelled finish + counts show once the plan
+ * has levelled, and stay hidden when it hasn't.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 

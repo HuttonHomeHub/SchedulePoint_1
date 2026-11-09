@@ -13,12 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 
 import { useAnnounce } from '@/components/ui/announcer';
-import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
-  NOTES_ENABLED,
-} from '@/config/env';
+import { CANVAS_AUTHORING_ENABLED, NOTES_ENABLED } from '@/config/env';
 import {
   useActivities,
   useCreatePlacedActivity,
@@ -274,29 +269,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [canEditSchedule, penReadOnly, penHolder],
   );
   const [editing, setEditing] = useState(false);
-  // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`):
+  // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049):
   // an ephemeral, session-local open flag toggled from the `resource-view` toolbar item, exactly like the
   // other Look-row lenses. Inert when nothing reads it (flag off / the ADR-0030 fallback), so it is
   // byte-for-byte today's behaviour by default.
   const [resourceViewOpen, setResourceViewOpen] = useState(false);
   const toggleResourceView = useCallback(() => setResourceViewOpen((open) => !open), []);
-  // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`,
-  // behind `VITE_CANVAS_RESOURCE_VIEW`): an ephemeral, session-local flag toggled from the
+  // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`):
+  // an ephemeral, session-local flag toggled from the
   // `over-allocation` toolbar item that flags bars carrying the engine-owned levelling over-allocation
   // flags (ADR-0041) — its own mode, independent of whether the demand strip is open. Inert when nothing
   // reads it (flag off / the ADR-0030 fallback), so it is byte-for-byte today's behaviour by default.
   const [overAllocationHighlight, setOverAllocationHighlight] = useState(false);
   const toggleOverAllocation = useCallback(() => setOverAllocationHighlight((on) => !on), []);
-  const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
-  // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
-  // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
-  // Predecessors as before. `setLogicActivity` clears it on any plain open/close; `revealActivityNotes`
-  // sets it. Inert (never read) when `VITE_NOTES`/quick-wins are off.
-  const [logicRevealNotes, setLogicRevealNotes] = useState(false);
-  const setLogicActivity = useCallback((activity: ActivitySummary | undefined) => {
-    setLogicRevealNotes(false);
-    setLogicActivityState(activity);
-  }, []);
+  const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -370,80 +356,32 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [setEditorIntent],
   );
   // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
-  // focused bar), the row menu and the bottom panel. Flag-on it opens the editor's Logic tab
-  // instead of a dialog of its own (the convergence epic); flag-off it is `setLogicActivity`, which
-  // is what every host called directly before — the same conditional shape `onEditActivity` uses.
+  // focused bar), the row menu and the bottom panel. It opens the editor's Logic tab.
   const onOpenLogic = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'logic'))
-        : setLogicActivity(a),
-    [setLogicActivity, setEditorIntent],
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'logic')),
+    [setEditorIntent],
   );
-  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
-  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
-  // Flag-on there is nothing to reveal: **Add note** opens the editor's Notes tab, which IS the
-  // notes surface. Flag-off it keeps the scroll-and-focus plumbing, which is still the only way to
-  // reach a section buried three panels down the Logic dialog.
+  // Toolbar **Add note** (quick-wins F4/U4): opens the editor's Notes tab, which IS the notes surface.
   const revealActivityNotes = useCallback(
-    (activity: ActivitySummary) => {
-      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
-        setEditorIntent(openActivityEditor(activity, 'notes'));
-        return;
-      }
-      setLogicRevealNotes(true);
-      setLogicActivityState(activity);
-    },
+    (activity: ActivitySummary) => setEditorIntent(openActivityEditor(activity, 'notes')),
     [setEditorIntent],
   );
   // Plan notes right-side drawer (entry-route win 1): the open flag the toolbar **Comments** button
   // toggles (`revealComments`) and the drawer's Close button clears.
   const [notesOpen, setNotesOpen] = useState(false);
-  // The activity targeted by the canvas selection bar's **Resources** action (entry-route win 2) —
-  // held as an id (mirroring `editActivityId`) so a refetch re-derives the current row and the
-  // dialog closes the moment its target vanishes. Drives the workspace-hosted
-  // `ActivityResourcesDialog` (beside the crud dialogs).
-  const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
-  // Flag-on, **Resources** is a tab of the one editor rather than a dialog of its own — the same
-  // shape as `onEditActivity` / `onOpenLogic`. Flag-off it still drives the workspace-hosted
-  // `ActivityResourcesDialog` below.
+  // **Resources** is a tab of the one editor rather than a dialog of its own.
   const onResourcesActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'resources'))
-        : setResourcesActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'resources')),
     [setEditorIntent],
   );
   /**
    * Open the editor **where a conflict actually lives** (ADR-0094 M4) — the route behind the
-   * selection bar's conflict remedy.
-   *
-   * Composed from the two openers above rather than setting `editorIntent` directly, because those
-   * openers already carry the flag-off fallback each surface needs: with the convergence flag off
-   * there are no tabs to land on, so `resources` must still reach the standalone dialog. A third
-   * copy of that branch is exactly the drift this epic exists to remove.
-   *
-   * `constraint` has no flag-off dialog of its own — a constraint has only ever been editable in the
-   * activity form — so it degrades to the ordinary Edit opener. That is a worse landing, not a dead
-   * end: the field is on the form either way.
+   * selection bar's conflict remedy: the tab that holds the offending field.
    */
   const onOpenActivityEditorAt = useCallback(
-    (a: ActivitySummary, at: 'constraint' | 'resources') => {
-      if (at === 'resources') {
-        onResourcesActivity(a);
-        return;
-      }
-      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
-        setEditorIntent(openActivityEditor(a, 'constraint'));
-        return;
-      }
-      onEditActivity(a);
-    },
-    [onResourcesActivity, onEditActivity, setEditorIntent],
-  );
-  const setResourcesActivity = useCallback(
-    (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
-    [],
+    (a: ActivitySummary, at: 'constraint' | 'resources') =>
+      setEditorIntent(openActivityEditor(a, at)),
+    [setEditorIntent],
   );
   // **Steps** is not a dialog of its own: it opens the editor's Progress tab with focus on the
   // Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7). It held its own id and
@@ -538,18 +476,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { workingWeekdays: mask, exceptions };
   }, [calendars.data, calendarDetail.data, planCalendarId]);
   // Today as a local calendar day (`YYYY-MM-DD`), for the TSLD's "today" marker — resolved here so
-  // the diagram does no wall-clock math. `useNow` (F6c, `VITE_CANVAS_TIME_AXIS`) bumps a counter
+  // the diagram does no wall-clock math. `useNow` bumps a counter
   // every 60s (paused while the tab is hidden) so this — and `todayFraction` below — re-derive
   // instead of freezing at whatever instant the plan happened to mount, which is what made the
   // pre-existing integer marker go stale across a session left open past midnight.
   useNow(60_000);
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  // The viewer-local time-of-day fraction (F6a) — undefined when the flag is off, which is what
-  // keeps the Today marker at its plain integer offset (byte-for-byte parity) downstream.
-  const todayFraction = CANVAS_TIME_AXIS_ENABLED
-    ? todayDayFraction(now.getTime(), now.getTimezoneOffset())
-    : undefined;
+  // The viewer-local time-of-day fraction (F6a), so the Today marker sits at its time of day.
+  const todayFraction = todayDayFraction(now.getTime(), now.getTimezoneOffset());
   // Variance vs the plan's active baseline (M7). The route composes it and passes a
   // per-activity map into the activities table, so that feature imports no baseline code.
   const variance = useBaselineVariance(orgSlug, planId);
@@ -624,16 +559,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     selectedActivityId,
   });
 
-  // The resolved Resources-dialog target (entry-route win 2), derived from the live query like the
-  // progress/edit targets above — so it carries the current row and becomes undefined the moment its
-  // activity is deleted, closing the dialog with no extra effect.
-  const resourcesActivity = useMemo(
-    () =>
-      resourcesActivityId
-        ? (activities.data ?? []).find((a) => a.id === resourcesActivityId)
-        : undefined,
-    [resourcesActivityId, activities.data],
-  );
   // The resolved Steps-dialog target (entry-route), derived from the live query like the resources/
   // progress targets — closes the dialog the moment its activity is deleted.
 
@@ -3129,8 +3054,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     canExportSchedule: canExportSchedule(role),
     // External-Guest share links (ADR-0051 F-M4): who may create/list/revoke a plan's share links —
     // Planner + Org Admin (`plan:share`, a governance act that mints a bearer credential), NOT pen-gated
-    // (it grants read access, it doesn't edit the plan). Gates the toolbar Share affordance alongside
-    // `VITE_GUEST_SHARE_LINKS`. Named to match the `canSharePlan` rbac fn; false for a signed-out role.
+    // (it grants read access, it doesn't edit the plan). Gates the toolbar Share affordance. Named to match the `canSharePlan` rbac fn; false for a signed-out role.
     canShare: canSharePlan(role),
     canManageLogic,
     penReadOnly,
@@ -3140,26 +3064,21 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     editing,
     setEditing,
     // Resource-view lens (Stage E, ADR-0049): the ephemeral open flag + toggle the `resource-view`
-    // toolbar item drives; the workspace mounts the `ResourceStripPanel` + strip band when open. Inert
-    // unless `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    // toolbar item drives; the workspace mounts the `ResourceStripPanel` + strip band when open.
     resourceViewOpen,
     toggleResourceView,
     // Over-allocation highlight (Stage E M2): the ephemeral mode flag + toggle the `over-allocation`
-    // toolbar item drives; TsldPanel flags the over-allocated bars when on. Inert unless
-    // `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    // toolbar item drives; TsldPanel flags the over-allocated bars when on.
     overAllocationHighlight,
     toggleOverAllocation,
     logicActivity,
     setLogicActivity,
-    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter). Flag-on it
-    // builds the editor intent; flag-off it opens the dialog, exactly as before.
+    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter): it builds the
+    // editor intent for the Logic tab.
     onOpenLogic,
-    // The coalesced keyboard lag nudge, composed once here so the Logic dialog and the Logic tab
-    // cannot end up with two different implementations of the same chord.
+    // The coalesced keyboard lag nudge, composed once here.
     nudgeDependencyLag,
-    // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
-    // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
-    logicRevealNotes,
+    // The toolbar **Add note** opener (toolbar quick-wins U4/A4): opens the editor's Notes tab.
     revealActivityNotes,
     // Activity edit/delete targeted from the floating selection bar (rendered by ActivityCrudDialogs).
     editActivityId,
@@ -3195,12 +3114,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // than eight loose fields — `PlanWorkspaceModel` is consumed by ~30 files and widening it a
     // field at a time is how it got to this length.
     floatPaths,
-    // Resources dialog target from the canvas selection bar (entry-route win 2):
-    // the opener + the resolved row + the close setter. `resourcesActivity` re-derives from the live
-    // query, so it closes the dialog when the row is deleted.
+    // Resources opener from the canvas selection bar (entry-route win 2): opens the editor's
+    // Resources tab.
     onResourcesActivity,
-    resourcesActivity,
-    setResourcesActivity,
     // Report-progress opener from the canvas selection bar (entry-route) — reuses `progressActivityId`
     // so it opens the ONE workspace-hosted `ActivityProgressDialog`. Inert flag-off.
     onProgressActivity,
