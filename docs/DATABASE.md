@@ -64,11 +64,8 @@
   measurement in the migration comment" is met by reference for everything before 1.1. Every later
   migration must sort after the baseline. It was proven equal to the 84-migration chain by a catalogue
   comparison (`docs/specs/fresh-start-1-1/schema-design.md`, "M2-T1 equivalence proof").
-- **A re-derivation marker may be a migration with no statement.** When a release changes
-  what the engine writes into engine-owned columns without changing any stored input, a boot
-  service recalculates the affected plans once, keyed on a migration's
-  `_prisma_migrations.finished_at`. If the release has no data migration to key on, the key
-  is a comment-only file of its own. See "Re-derivation markers" below.
+- **Re-derivation markers are history.** Before 1.1 a marker migration keyed a one-shot boot
+  recalculation; the baseline removed them all. See "Re-derivation markers (history)" below.
 
 ## Indexes
 
@@ -2155,114 +2152,15 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
   second run refused at the lock.
 - **Non-scheduling.** Nothing in the application reads it.
 
-### Re-derivation markers: a migration whose only product is its `_prisma_migrations` row (#421)
+### Re-derivation markers (history)
 
-Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
-When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
-it as stale (ADR-0155 D9). Five boot services now recalculate such plans once, and each is
-keyed on a migration's `finished_at`.
-
-**Since the 1.1 baseline (ADR-0215) none of the marker rows below exists**, so each service's scalar
-subquery is NULL, no plan qualifies, and the services are dormant until they are removed (fresh-start
-M3). The technique stays valid for a release after 1.1; a squash ends every marker.
-
-| Service                           | Marker migration                                        | Has DDL/data |
-| --------------------------------- | ------------------------------------------------------- | ------------ |
-| `FinishMilestoneRederiveService`  | `20260923120000_finish_milestone_end_of_day_placements` | yes          |
-| `CrossPlanRederiveService`        | `20260926120000_cross_plan_lag_working_minutes`         | yes          |
-| `ProgressedVisualRederiveService` | `20260930120000_progressed_predecessor_visual_marker`   | **no**       |
-| `MilestoneRederiveService`        | `20261026120000_milestone_cross_calendar_marker`        | **no**       |
-| `CrossPlanInstantRederiveService` | `20261107120100_cross_plan_instants_marker`             | **no**       |
-
-- **Why `finished_at` is the right key.** `docker-entrypoint.sh` runs `prisma migrate deploy`
-  before `node dist/main.js`, in the image that carries the engine change (ADR-0018). So the row
-  appears at the moment the new engine takes over on that host. Any plan with
-  `schedule_computed_at` earlier than it was written by the old engine. Recalculating stamps
-  `schedule_computed_at`, so each plan leaves the set once it is done. A `NULL`
-  `schedule_computed_at` has no old dates and is never in the set.
-- **Fail-closed.** The services compare against a scalar subquery. With no row, or with a rolled-back
-  row, that subquery is `NULL`, and `x < NULL` admits no plan.
-- **Why a file of its own for #421.** The release changes Pass 2 of the engine and no stored
-  input, so there is no data migration to key on. Every alternative was checked, and the reasons
-  they fail are in the migration's header: an earlier migration's row misses plans recalculated
-  between releases, a constant in code differs per host, and a column on `plans` is DDL on the
-  hottest table to store what one `_prisma_migrations` row already records. The file has no
-  statement. `prisma migrate deploy` applies it and records it (measured on PostgreSQL 16.13).
-- **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
-  `finished_at`, and every matching plan computed before then would be recalculated again. That is
-  harmless but unrequested.
-- **The cross-plan instants marker (ADR-0212 D5, `CrossPlanInstantRederiveService`).** Same shape, no
-  statement. A plan is pending when it is live, has a data date, was computed before the marker and is an
-  endpoint of a live cross-plan link in either direction, so the upstream writes its instants before the
-  downstream reads them. It is keyed on `20261107120100_cross_plan_instants_marker`, which lands in the
-  same release as the cross-plan read. It is a file of comments, so its row is its only product, and it
-  cannot be keyed on the earlier `schedule_instants` migration: between that release and this one the
-  image wrote instants while still reading dates, so a downstream recalculated in that window has current
-  instants and old-read dates that only this row can find. A rollback of the image must delete the row
-  (`docs/DEPLOYMENT.md`).
-- **The #421 pending read, measured** (PostgreSQL 16.13, all `72 migrations` applied, 10
-  organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
-  plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
-  the fixture's arithmetic). The query is the one the M2 builder brief specifies: the marker as a
-  scalar subquery (the precedents' shape), and an `EXISTS` over `activities` keyed on `plan_id`
-  only. Five `EXPLAIN (ANALYZE, BUFFERS)` runs per state:
-  - **First boot:** 39–61 ms. The plan is a hash semi-join: one sequential scan of `activities`
-    hashed against the pending `plans`.
-  - **Steady state** (nothing pending): 0.51–0.91 ms. The `activities` scan is never executed,
-    because the `plans` scan returns nothing first.
-  - **A few plans left pending** (10, for example plans whose recalculation fails and is retried at
-    each boot): 38–45 ms. The planner cannot see the subquery's value at plan time, so it estimates
-    a third of `plans` and still scans `activities`. With the marker passed in as a parameter it
-    took 7 ms: a nested loop probing `idx_activities_plan_updated_at`, which is partial on
-    `deleted_at IS NULL` and leads with `plan_id`. That saving is not worth a second read and a second shape, because it
-    only arises while a plan keeps failing.
-  - **`a.organization_id = p.organization_id` is left out of the `EXISTS` on purpose.** With it,
-    the parameterised form made a `BitmapAnd` with `activities_organization_id_idx`, which read
-    20,200 index entries per plan and took 13.8 ms rather than 7.1 ms. It protects nothing here.
-    The output's organisation comes from the `plans` row, and `recalculateAsSystem` re-reads the
-    plan scoped to that organisation.
-  - **No index is added.** The read is bounded by one scan of `activities` once per host, and
-    under 1 ms after that. An index on `actual_start`/`actual_finish`/`expected_finish` would serve
-    only this once-per-release read, and every progress write would pay for it for ever.
-- **The #539 marker, and what its pending set adds** (`MilestoneRederiveService`, ADR-0207; designed
-  by the database-architect). Same shape, no statement. A plan is pending when it is live, has a data
-  date, was computed before the marker, and either holds a live zero-span activity or is an endpoint of
-  a live cross-plan link whose other end is one. The activity predicate mirrors the engine's
-  `isZeroSpan` (zero duration, not a level-of-effort or WBS summary) **widened to both milestone
-  types**, because nothing forces a milestone's stored duration to 0 (the column defaults to 480; only
-  the service enforces it). A zero-duration LOE or summary is excluded: those types always store 0, and
-  counting them would make every plan with a summary pending.
-- **The cross-plan arms are not optional.** The derivation stopped back-rolling a zero-duration
-  REMOTE's late date. The remote is a successor in another plan, read through the upstream plan's
-  OUTGOING edge, so a plan with no zero-span activity of its own whose outgoing link reaches a
-  milestone reads a different late bound now. It is upstream of the plan the downstream extension
-  starts from, and ADR-0045 staleness reads upstream `schedule_computed_at` only, so nothing else
-  would flag it. The incoming arm is already covered by the downstream extension when the upstream
-  plan recalculates in the same run; it is included for a run in which that plan failed.
-- **The #539 pending read, measured** by the database-architect on a local scratch database (PostgreSQL 16.15; production runs PostgreSQL 17, so the figures are indicative of shape, not absolute) (`77 migrations` plus a hand-inserted marker, 10
-  organisations, 2,000 plans, 200,000 activities, 100 live cross-plan links from plans with no
-  zero-span activity to start milestones; 5% soft-deleted, 2% never calculated, one plan in seven
-  holding only a zero-duration LOE and summary; 1,710 pending, checked by hand with an independent
-  `count(*)`). `EXPLAIN ANALYZE`, last five of six runs:
-  - **First boot:** 31–46 ms: one parallel scan of `activities` into the `zero_span` CTE, hashed, with
-    the edges hash-joined. No JIT.
-  - **Steady state:** 0.47–0.83 ms. `stale` returns nothing, so `zero_span` never runs.
-  - **A few left pending** (10 failing): 23–31 ms.
-  - **Two shapes were measured and rejected; do not "simplify" into either.** Three `OR EXISTS` arms
-    correlated on `plans` returned the right rows, but the plan cost (225,184) exceeded
-    `jit_above_cost` (100,000), so JIT compiled on every boot: 51 ms of JIT for a steady state that
-    finds nothing. One `EXISTS` with `a.plan_id = p.id OR a.id IN (…edges…)` took 28–31 **seconds** on
-    the first boot, because the correlated OR blocks every index and hash. The CTE form materialises
-    the stale plans first.
-  - **No `organization_id` predicate in the subqueries, and no new index**, for the #421 reasons above.
-- **Restoring a copy.** A copy taken before this release has no marker row; `migrate deploy` applies it
-  with `finished_at` = now and every affected plan in the copy is re-derived. A copy taken after it
-  carries the marker, and plans already done are stamped after it. A plan restored from the recycle bin
-  keeps its old `schedule_computed_at`, so it is pending at the next boot (as with the three above).
-- **Rolling the image back must delete the marker row** (`docs/DEPLOYMENT.md` "Rolling back past the
-  milestone cross-calendar release"; "Rolling back past the progressed-predecessor release" for the #421
-  marker). The previous image ignores an extra applied row, stamps the plans it recalculates after
-  `finished_at`, and a later roll-forward would never re-derive them.
+Until 1.0, a release that changed what the engine writes into engine-owned columns (ADR-0022)
+shipped a migration whose `_prisma_migrations.finished_at` keyed a one-shot boot service that
+recalculated the plans computed before it (ADR-0155 D9). Five such services existed. The 1.1
+baseline (ADR-0215) removed every marker row and the services with them; a fresh database has no
+plan computed by an older engine. The design, the measured pending reads, the restore behaviour and
+the rollback rule are at git tag `api-v1.0.0` (this file and `docs/DEPLOYMENT.md`). A release after
+1.1 that needs the technique again defines it afresh.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

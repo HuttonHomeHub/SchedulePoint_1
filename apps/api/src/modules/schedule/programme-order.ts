@@ -88,8 +88,7 @@ export function resolveProgrammeOrder(
  * **The Kahn step, over an explicit node set** (#385 M3-T0, backend-performance-reviewer P1): order
  * `nodes` **upstream-first**, so every plan precedes the plans that derive from it, breaking every tie
  * by plan id over an id-sorted frontier. It is the one topological sort of the plan graph here —
- * {@link resolveProgrammeOrder} calls it with a target's upstream closure, and the boot re-derivation
- * (`cross-plan-rederive.service.ts`) with every plan in an organisation's adjacency.
+ * {@link resolveProgrammeOrder} calls it with a target's upstream closure.
  *
  * Only edges with **both** ends in `nodes` count: an edge from or to a plan outside the set neither
  * raises an in-degree nor releases one. That is why a caller that wants a chain `A → B → C` ordered

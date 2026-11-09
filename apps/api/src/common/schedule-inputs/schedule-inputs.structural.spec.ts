@@ -161,13 +161,7 @@ describe('the write paths that stamp', () => {
         'markScheduleInputsChanged',
       );
     }
-    for (const file of [
-      'schedule/schedule.service.ts',
-      'schedule/cross-plan-rederive.service.ts',
-      'schedule/finish-milestone-rederive.service.ts',
-      'schedule/progressed-visual-rederive.service.ts',
-      'interchange/interchange.service.ts',
-    ]) {
+    for (const file of ['schedule/schedule.service.ts', 'interchange/interchange.service.ts']) {
       expect(readFileSync(join(MODULES, file), 'utf8'), file).not.toContain(
         'markScheduleInputsChanged',
       );

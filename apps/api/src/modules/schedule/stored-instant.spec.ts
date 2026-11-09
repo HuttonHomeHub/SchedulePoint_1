@@ -26,36 +26,20 @@ describe('trustedInstantMinutes (ADR-0212 D4)', () => {
     expect(trustedInstantMinutes(null, current, onCorrupt)).toBeNull();
   });
 
-  it('is null unless both stamps are set and EQUAL to the millisecond', () => {
+  it('is null for a plan never calculated, which has neither stamp', () => {
     const instant = new Date('2026-01-10T06:00:00.000Z');
+    expect(
+      trustedInstantMinutes(
+        instant,
+        { ...current, planScheduleComputedAt: null, planInstantsComputedAt: null },
+        onCorrupt,
+      ),
+    ).toBeNull();
     expect(
       trustedInstantMinutes(instant, { ...current, planInstantsComputedAt: null }, onCorrupt),
     ).toBeNull();
     expect(
       trustedInstantMinutes(instant, { ...current, planScheduleComputedAt: null }, onCorrupt),
-    ).toBeNull();
-    expect(
-      trustedInstantMinutes(
-        instant,
-        {
-          ...current,
-          planScheduleComputedAt: new Date(AT.getTime() + 1),
-          planInstantsComputedAt: AT,
-        },
-        onCorrupt,
-      ),
-    ).toBeNull();
-    // Newer instants than the cursor are not current either: equality, not ordering (design B3).
-    expect(
-      trustedInstantMinutes(
-        instant,
-        {
-          ...current,
-          planScheduleComputedAt: AT,
-          planInstantsComputedAt: new Date(AT.getTime() + 1),
-        },
-        onCorrupt,
-      ),
     ).toBeNull();
   });
 
@@ -71,7 +55,7 @@ describe('trustedInstantMinutes (ADR-0212 D4)', () => {
     });
   });
 
-  it('does not report a whole-minute value, a stale stamp or a null instant', () => {
+  it('does not report a whole-minute value, an unstamped plan or a null instant', () => {
     const onNotWholeMinute = vi.fn();
     trustedInstantMinutes(new Date('2026-01-10T06:00:00.000Z'), current, onNotWholeMinute);
     trustedInstantMinutes(null, current, onNotWholeMinute);

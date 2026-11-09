@@ -1091,9 +1091,8 @@ export class ScheduleRepository {
    * loaded before this transaction opens.
    *
    * **`schedule_instants_computed_at` is written in THIS statement, never a second one** (ADR-0212 D4;
-   * m2-schema-design.md B1): `now()` is one value per statement, so a current recalculation always
-   * leaves it EQUAL to `schedule_computed_at`, and an older image's stamp (which names its columns)
-   * moves the cursor alone — the inequality is what tells the derivation the instants are not current.
+   * m2-schema-design.md B1): `now()` is one value per statement, so a recalculation always leaves
+   * it EQUAL to `schedule_computed_at`; the derivation trusts a stored instant on that basis.
    *
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.

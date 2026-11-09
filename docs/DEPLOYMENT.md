@@ -777,110 +777,15 @@ The migration test (`apps/api/test/cross-plan-lag-migration.e2e-spec.ts`) runs b
 **as written in this file**, asserts that each carries the migration's `resolved` CTE verbatim, and
 proves each check can fail.
 
-### Rolling back past the milestone cross-calendar release
+### Re-derivation markers (history)
 
-That release (`docs/specs/milestone-cross-calendar/`, `docs/TECH_DEBT.md` #539, ADR-0207) changes what
-the engine writes for a milestone or zero-duration task that sits between calendars. Its migration
-`20261026120000_milestone_cross_calendar_marker` has **no statement and changes no stored input**: its
-only product is its `_prisma_migrations` row, and at the first boot a service recalculates every
-affected plan once. There is nothing to reverse in the schema. **Redeploying the previous images alone
-is still wrong**, and the reason is the row:
-
-- the previous image does not remove it, and its pre-migrate check ignores it (whether `prisma migrate
-deploy` tolerates an applied migration with no local directory has not been verified, which is why this
-  procedure deletes the row first and does not depend on it);
-- every plan the previous image then recalculates is stamped **after** the row's `finished_at`, with
-  old-rule dates;
-- when the release is rolled forward again the row already exists and is not re-applied, so those plans
-  are **never re-derived** and nothing flags them.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row, as the finish-milestone reverse does at its step 3:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261026120000_milestone_cross_calendar_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
-   stay that way until each plan's next recalculation; the previous image has no boot service to revert
-   them.
-
-A later roll-forward then re-applies the file with a fresh `finished_at` and every affected plan is
-re-derived again, which is correct. **What the first boot after the release costs:** it recalculates nearly
-every plan that holds a milestone or zero-duration task (or is linked across plans to one), one plan at a
-time, in the background and never awaited. A planner who opens such a plan before its turn waits at most
-one recalculation. Each API replica runs the same pass, so a plan can be recalculated once per replica; that
-is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
-deploy would repeat the whole re-derivation unasked.
-
-### Rolling back past the cross-plan instants release
-
-That release (`docs/specs/cross-plan-instants/`, `docs/TECH_DEBT.md` #565, ADR-0212) stores four exact
-working instants per activity and a freshness stamp per plan, and makes a cross-plan link read them
-instead of the remote date. The columns arrive in `20261107120000_schedule_instants`; the read arrives
-with `20261107120100_cross_plan_instants_marker`, which has **no statement**: its only product is its
-`_prisma_migrations` row, and at the first boot `CrossPlanInstantRederiveService` recalculates once every
-live linked plan whose `schedule_computed_at` is earlier than that row's `finished_at`, upstream first.
-Both migrations are forward-only; there is nothing to reverse in the schema.
-
-**Stale instants need no step.** A previous image's recalculation moves `schedule_computed_at` and leaves
-the instants and `schedule_instants_computed_at` behind, so the pair stops matching and the instant-reading
-image falls back to the date for that plan (`trustedInstantMinutes`, ADR-0212 D4). **The marker row does
-need one**, for the reason every marker in this file does: the previous image does not remove it, every
-plan it recalculates is stamped after `finished_at` with old-read dates, and a roll-forward finds the row
-applied and skips them. If the step is forgotten the plans keep today's behaviour, the date read, until their
-next recalculation. They never get a wrong instant.
-
-**The marker row is never deleted outside a rollback.** It is the boot service's only record of when the
-instant-reading image took over, and deleting it as a "reset" lets the next start re-apply the migration with a new
-`finished_at`, which makes every linked plan pending again. Skipping step 2 of the procedure below is safe, at the cost stated above: linked plans keep the
-date read until each is recalculated.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261107120100_cross_plan_instants_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the linked plans people are working in: their stored dates were computed under the new read
-   and stay so until each plan's next recalculation.
-
-**What the first boot after the release costs and does.** It recalculates every live plan that is an
-endpoint of a cross-plan link, one plan at a time, upstream first within each organisation, in the
-background and never awaited. Some linked dates move **earlier** and some upstream work **regains float**:
-the dates now equal what the same logic gives in one plan. The log line `schedule.xplan_instants_rederived`
-carries `pending` and `recalculated`, which is the first measurement of how many linked plans a host has.
-Each API replica runs the same pass; that is harmless (idempotent, serialised by the plan lock) and the
-second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset".
-
-### Rolling back past the progressed-predecessor release
-
-That release (`docs/specs/progressed-predecessor-visual/`, `docs/TECH_DEBT.md` #421) changes how the
-engine propagates a progressed predecessor's planned duration into the engine-owned `visual_effective_*`
-columns. Its migration `20260930120000_progressed_predecessor_visual_marker` is a file of comments with
-**no statement and no change to any stored input**: its only product is its `_prisma_migrations` row, and
-at the first boot `ProgressedVisualRederiveService` recalculates once every plan with progress (or an
-applied Expected Finish) whose `schedule_computed_at` is earlier than that row's `finished_at`. There is
-nothing to reverse in the schema, and the reason redeploying the previous images alone is still wrong is
-the same as for the milestone release above: the row stays, every plan the previous image recalculates is
-stamped after its `finished_at` with the old Pass 2's dates, and a roll-forward finds the row applied and
-never re-derives them.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260930120000_progressed_predecessor_visual_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
-   stay that way until each plan's next recalculation; the previous image has no boot service to revert
-   them.
-
-Run the delete after the images are rolled back past that release and before the roll-forward; the
-sequence above does it first so the previous image never boots beside a row it ignores. A later
-roll-forward re-applies the file with a fresh `finished_at` and every affected progressed plan is
-re-derived again, which is correct. Outside a rollback, do **not** delete the row as a "reset": the next
-deploy would recalculate every progressed plan computed before that moment, a full re-derivation nobody
-asked for. The cost of that first boot is read in `docs/DATABASE.md` "Re-derivation markers".
+Until 1.0 a release that changed what the engine writes into engine-owned columns shipped a marker
+migration, and a boot service recalculated the affected plans once, keyed on that row's `finished_at`.
+Rolling an image back past such a release meant deleting the marker row first. The 1.1 baseline
+(ADR-0215) removed every marker row, and the five boot services with them: a fresh database has
+nothing to re-derive and no row to delete. The procedures, and the measured cost of each first boot,
+are at git tag `api-v1.0.0` (this file and `docs/DATABASE.md`). A future release that needs the
+technique again defines it afresh, with its own rollback step.
 
 ### Rolling back past the P6 activity codes release
 

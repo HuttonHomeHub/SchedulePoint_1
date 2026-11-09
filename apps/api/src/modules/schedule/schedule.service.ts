@@ -537,17 +537,13 @@ export class ScheduleService {
   /**
    * The ADR-0022 single-plan recalculation transaction, without the caller's identity: the plan
    * advisory lock, the engine, the engine-owned write and the freshness stamp. {@link recalculatePlan}
-   * reaches it with a principal already authorised and passes the pen assertion; the one-shot
-   * finish-milestone re-derivation at boot (#381, ADR-0155, `finish-milestone-rederive.service.ts`)
-   * passes `null`, because no user is acting and the write is engine-owned — the same columns the
-   * migration beside it cannot compute in SQL. Never exposed on a route: a caller holding no
-   * principal reaches this only from inside the API process.
+   * reaches it with a principal already authorised and passes the pen assertion.
    */
   private async recalculateInLock(
     organizationId: string,
     plan: NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdInOrg']>>>,
     dataDate: string,
-    assertPen: ((tx: Prisma.TransactionClient) => Promise<unknown>) | null,
+    assertPen: (tx: Prisma.TransactionClient) => Promise<unknown>,
   ): Promise<{
     summary: EngineSummary;
     startedAt: number;
@@ -571,7 +567,7 @@ export class ScheduleService {
         // Serialise with dependency creates and other recalcs on this plan, then
         // read a consistent snapshot of the graph (ADR-0021/0022).
         await this.schedule.lockPlanForWrite(planId, tx);
-        if (assertPen) await assertPen(tx);
+        await assertPen(tx);
         const graph = await this.buildEngineGraph(organizationId, plan, dataDate, tx);
         lagCalendarOverrideCount = graph.meta.lagCalendarOverrideCount;
         activityCalendarCount = graph.meta.activityCalendarCount;
@@ -658,23 +654,6 @@ export class ScheduleService {
       progressedActivityCount,
       crossPlanUpstreamMissingCount,
     };
-  }
-
-  /**
-   * Recalculate one plan as the system rather than as a member (#381, ADR-0155). Used only by the
-   * five one-shot re-derivations at boot, `FinishMilestoneRederiveService` (#381),
-   * `CrossPlanRederiveService` (#385 M3, which calls it upstream-first),
-   * `ProgressedVisualRederiveService` (#421, likewise), `MilestoneRederiveService` (#539,
-   * likewise) and `CrossPlanInstantRederiveService` (#565, likewise), before or while the API
-   * serves; no pen is asserted because nobody is editing, and the advisory lock still serialises it
-   * with any user recalculation of the same plan (and with the other boot services). Returns false (and writes nothing) for a plan that has since
-   * been deleted or lost its data date.
-   */
-  async recalculateAsSystem(organizationId: string, planId: string): Promise<boolean> {
-    const plan = await this.plans.findActiveByIdInOrg(planId, organizationId);
-    if (!plan?.plannedStart) return false;
-    await this.recalculateInLock(organizationId, plan, formatCalendarDate(plan.plannedStart), null);
-    return true;
   }
 
   /**

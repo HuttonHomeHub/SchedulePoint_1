@@ -13,7 +13,7 @@ import { clearDomainData } from './audit-reset';
 
 /**
  * **Cross-plan instants M4 — two real plans, joined through the public REST API, give the dates one
- * plan gives** (ADR-0212, spec FC-6, FC-8, FC-5, FC-10). The engine specs prove the rule; only this
+ * plan gives** (ADR-0212, spec FC-6, FC-5, FC-10). The engine specs prove the rule; only this
  * proves the product's own read path: the repository selects, the freshness check, the service mapping
  * and the stored columns the previous recalculation wrote.
  *
@@ -283,11 +283,11 @@ describe.skipIf(!hasDatabase)('cross-plan instants (e2e)', () => {
       expect(pick(downRows.get(name)!), name).toEqual(pick(single.get(name)!));
   });
 
-  it('FC-5 and FC-8: a remote plan without current instants is read from its date, and is read again once recalculated', async () => {
+  it('FC-5: a remote plan without instants is read from its date, and is read again once recalculated', async () => {
     const agent = await admin();
     const cal = await calendars(agent);
     const middle = { type: 'START_MILESTONE', calendarId: cal.weekend };
-    const { up, down, downIds } = await twoPlans(agent, cal, middle, 'M->K', false);
+    const { up, down } = await twoPlans(agent, cal, middle, 'M->K', false);
     const k = async () => (await rows(agent, down)).get('K')!.earlyStart;
     expect(await k()).toBe('2027-06-28');
 
@@ -299,30 +299,19 @@ describe.skipIf(!hasDatabase)('cross-plan instants (e2e)', () => {
       )[0]!.equal;
     expect(await stamps(), 'the recalculation stamped both in one statement').toBe(true);
 
-    // FC-8: an older image recalculated the upstream: its cursor moved, its instants did not.
-    await prisma.$executeRawUnsafe(
-      `UPDATE "plans" SET "schedule_computed_at" = "schedule_computed_at" + interval '1 second' WHERE "id" = $1::uuid`,
-      up,
-    );
-    expect(await stamps()).toBe(false);
-    await recalc(agent, down);
-    expect(await k(), 'the stale instant is not read; the date is').toBe('2027-07-05');
-    expect(downIds.has('K')).toBe(true);
-
-    // The current image recalculating the upstream makes its instants current again.
-    await recalc(agent, up);
-    expect(await stamps()).toBe(true);
-    await recalc(agent, down);
-    expect(await k()).toBe('2027-06-28');
-
-    // FC-5: an upstream whose instants were never written (a plan not recalculated since the columns
-    // landed) reads exactly as before.
+    // FC-5: an upstream whose instants are not stamped (a plan never calculated) reads from its date.
     await prisma.$executeRawUnsafe(
       `UPDATE "plans" SET "schedule_instants_computed_at" = NULL WHERE "id" = $1::uuid`,
       up,
     );
     await recalc(agent, down);
     expect(await k()).toBe('2027-07-05');
+
+    // Recalculating the upstream stamps its instants again, and the downstream reads them.
+    await recalc(agent, up);
+    expect(await stamps()).toBe(true);
+    await recalc(agent, down);
+    expect(await k()).toBe('2027-06-28');
   });
 
   it('FC-10: the cross-plan loads issue the same statements at 10 and 100 links each way', async () => {
