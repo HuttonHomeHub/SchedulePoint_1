@@ -31,11 +31,8 @@ import { DataTable, type Column } from '@/components/ui/data-table';
 import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
 import {
-  ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
-  ADVANCED_CONSTRAINTS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
@@ -427,7 +424,7 @@ export function ActivitiesTable({
   noteCountByActivityId?: ReadonlyMap<string, number>;
   /**
    * The org's calendars (ADR-0037), route-composed like `varianceByActivityId` — used to name an
-   * activity's own calendar in the "Calendar" column (shown only when `ACTIVITY_CALENDAR_ENABLED`)
+   * activity's own calendar in the "Calendar" column
    * and threaded into the edit dialog's picker. A shared `@repo/types` shape, so activities stays
    * dependency-free of the calendars feature.
    */
@@ -697,7 +694,7 @@ export function ActivitiesTable({
         // duplicating one leaf of a band would produce an empty grouping, and copying the band with
         // its subtree is M2. The check is `type`, the same fact `dissolve` gates on, so the action
         // cannot reach a state the product would render as breakage.
-        if (ACTIVITY_COPY_PASTE_ENABLED && onDuplicate && activity.type !== 'WBS_SUMMARY') {
+        if (onDuplicate && activity.type !== 'WBS_SUMMARY') {
           actions.push({
             key: 'duplicate',
             label: 'Duplicate',
@@ -816,8 +813,8 @@ export function ActivitiesTable({
           // pill beside the name — always visible (the Constraint column hides below `lg`), so a
           // produced-and-flagged violation can't slip off narrow screens. Text carries the meaning
           // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
-          // users, matching the summary strip's wording. Only shown when the M4 surface is on.
-          const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
+          // users, matching the summary strip's wording.
+          const violated = activity.constraintViolated;
           // An imported external bound drove this activity's schedule (engine-owned, ADR-0043 M1):
           // the per-activity companion to the summary strip's "Externally driven" count, so a planner
           // can see WHICH activities an external commitment gated. Informational (soft bound), so a
@@ -932,31 +929,27 @@ export function ActivitiesTable({
           );
         },
       },
-      // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
+      // An activity's own working-time calendar (ADR-0037), An em
       // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
       // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
       // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
       // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
       // drift. Hidden below `lg` like the other definition detail columns.
-      ...(ACTIVITY_CALENDAR_ENABLED
-        ? [
-            {
-              header: 'Calendar',
-              headClassName: 'hidden lg:table-cell',
-              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
-              cell: (activity: ActivitySummary) => {
-                if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
-                const name = calendarNameById.get(activity.calendarId);
-                if (name) return <span className="text-muted-foreground">{name}</span>;
-                return (
-                  <span className="text-muted-foreground italic" title={activity.calendarId}>
-                    {calendarsLoading ? 'Loading…' : 'Unnamed'}
-                  </span>
-                );
-              },
-            } satisfies Column<ActivitySummary>,
-          ]
-        : []),
+      {
+        header: 'Calendar',
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+        cell: (activity: ActivitySummary) => {
+          if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
+          const name = calendarNameById.get(activity.calendarId);
+          if (name) return <span className="text-muted-foreground">{name}</span>;
+          return (
+            <span className="text-muted-foreground italic" title={activity.calendarId}>
+              {calendarsLoading ? 'Loading…' : 'Unnamed'}
+            </span>
+          );
+        },
+      } satisfies Column<ActivitySummary>,
       // The activity's swimlane (swimlanes M4-T1), only when the host says the plan has some to show.
       // Display only: assigning is the bulk bar's job, as the other definition columns are the editor's.
       // Under the WBS source it says so rather than naming a swimlane the table does not derive — the

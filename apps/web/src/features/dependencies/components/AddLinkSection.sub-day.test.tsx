@@ -4,17 +4,9 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The lag field with `VITE_SUB_DAY_DURATIONS` **on** (ADR-0070 §5).
- *
- * Its own file because the flag is a build-time constant: the panel's existing suite runs flag-off
- * and is the rollback contract, so it must keep asserting the whole-days number box. This one
- * asserts the other half — that the same form reads `4h` and sends exact minutes.
+ * The lag field when the calendar's day factor is known (ADR-0070 §5): the same form reads `4h`
+ * and sends exact minutes.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-}));
-
 const created = vi.fn();
 vi.mock('../api/use-dependencies', () => ({
   useCreateDependency: () => ({

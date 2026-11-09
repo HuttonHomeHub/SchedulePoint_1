@@ -41,7 +41,7 @@ import { FieldGateLock, resolveFieldGate, useFieldGate } from '@/components/ui/f
 import { CheckboxField, SelectField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DURATION_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
+import { EARNED_VALUE_ENABLED } from '@/config/env';
 import { minorToMajorInput } from '@/lib/format-money';
 
 /** A MATERIAL resource may never drive an activity's dates (ADR-0039). */
@@ -316,9 +316,8 @@ function AssignmentCostFields({
 }
 
 /**
- * One assignment row: a budgeted-units edit, a units/time (rate) edit for the driving assignment
- * (behind `VITE_DURATION_TYPES`), a driving toggle (disabled for MATERIAL), and unassign. When the
- * duration-types surface is on, a units/rate edit on the driving assignment carries its `editedField`
+ * One assignment row: a budgeted-units edit, a units/time (rate) edit for the driving assignment,
+ * a driving toggle (disabled for MATERIAL), and unassign. A units/rate edit on the driving assignment carries its `editedField`
  * so the server recomputes the triad (ADR-0040), and — for a units-driven `durationType` — a live note
  * previews the duration the edit will derive.
  */
@@ -416,10 +415,9 @@ export function AssignmentRow({
   const unitsValidation = validateBudgetedUnits(units);
   const unitsError = 'error' in unitsValidation ? unitsValidation.error : undefined;
 
-  // The units/rate triad (ADR-0040) is meaningful only on the DRIVING assignment, and only behind the
-  // flag. A units edit recomputes the dependent (per the activity's durationType) only when a rate is
+  // The units/rate triad (ADR-0040) is meaningful only on the DRIVING assignment, A units edit recomputes the dependent (per the activity's durationType) only when a rate is
   // already set — otherwise it is a plain store, the pre-ADR-0040 behaviour.
-  const triadOn = DURATION_TYPES_ENABLED && assignment.isDriving;
+  const triadOn = assignment.isDriving;
   const hasRate = assignment.unitsPerHour !== null;
   const rateSeeded = assignment.unitsPerHour === null ? '' : String(assignment.unitsPerHour);
   const rateChanged = rate !== rateSeeded;
@@ -872,9 +870,7 @@ export function AssignmentRow({
       ) : (
         <p className="text-muted-foreground text-sm">
           {assignment.budgetedUnits} units
-          {DURATION_TYPES_ENABLED && assignment.unitsPerHour !== null
-            ? ` · ${assignment.unitsPerHour} units/time`
-            : ''}
+          {assignment.unitsPerHour !== null ? ` · ${assignment.unitsPerHour} units/time` : ''}
           {assignment.isDriving ? ' · driving' : ''}
           {showCurve && assignment.curveType !== 'UNIFORM'
             ? ` · ${RESOURCE_CURVE_LABELS[assignment.curveType]} curve`

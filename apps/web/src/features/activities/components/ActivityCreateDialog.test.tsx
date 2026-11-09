@@ -10,13 +10,10 @@ import { anActivity } from '@/test/activity-fixture';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
-// This is the BASE form suite — the M4/M5 flag surfaces (advanced constraints, per-activity calendar,
-// advanced activity types) are on by default, so pin them off here; their flag-on behaviour lives in the
-// dedicated `.advanced-constraints.test.tsx` / `.calendar.test.tsx` / `.activity-types.test.tsx` suites.
+// This is the BASE form suite — advanced activity types is still a flag, pinned off here; its
+// behaviour lives in the dedicated `.activity-types.test.tsx` suite.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_CONSTRAINTS_ENABLED: false,
-  ACTIVITY_CALENDAR_ENABLED: false,
   ADVANCED_ACTIVITY_TYPES_ENABLED: false,
 }));
 
@@ -48,7 +45,7 @@ describe('ActivityCreateDialog', () => {
   it('creates a task with name, type and duration', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Pour slab' } });
-    // "Duration type" (VITE_DURATION_TYPES defaults on) is a separate field/label — target the
+    // "Duration type" is a separate field/label — target the
     // working-days field by its exact label so the two don't collide.
     fireEvent.change(screen.getByLabelText('Duration (working days)'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));

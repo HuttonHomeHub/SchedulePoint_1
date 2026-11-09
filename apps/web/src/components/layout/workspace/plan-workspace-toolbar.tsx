@@ -58,14 +58,10 @@ import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import {
   CANVAS_AUTHORING_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_LENSES_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
-  ENTRY_ROUTES_ENABLED,
-  FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
@@ -432,10 +428,6 @@ export function ToolbarPlanWorkspace({
   );
   const resourceViewActive =
     CANVAS_RESOURCE_VIEW_ENABLED && model.resourceViewOpen && plan.plannedStart !== null;
-  // The **Comments** button's reveal target (toolbar quick-wins F2): a ref on the plan-notes heading +
-  // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
-  // section isn't mounted (`VITE_NOTES` off), so it never throws.
-  const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   const setNotesOpen = model.setNotesOpen;
   // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
   // right docks. No VITE_ flag (ADR-0088 D1): the rollback is a commit boundary.
@@ -565,22 +557,12 @@ export function ToolbarPlanWorkspace({
     [closeDockOf],
   );
   const revealComments = useCallback(() => {
-    // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button is a genuine TOGGLE for the docked
-    // notes panel (open when closed, close when open) — the panel docks in the layout below and pushes
-    // the canvas, never overlays. Flag-off keeps the original behaviour — scroll the inline notes
-    // heading into view + focus it.
-    if (ENTRY_ROUTES_ENABLED) {
-      // One-dock-at-a-time, derived from the SET (right-docks.ts) — never a hand-written pair.
-      closeOtherDocks('notes');
-      setNotesOpen((open) => !open);
-      return;
-    }
-    const el = notesHeadingRef.current;
-    // No explicit `behavior` — let the app's global `prefers-reduced-motion` CSS `scroll-behavior`
-    // opt-out govern it (A3); an explicit `behavior: 'smooth'` would bypass that (mirrors
-    // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
-    el?.scrollIntoView({ block: 'start' });
-    el?.focus();
+    // Entry-route win 1: the Comments button is a genuine TOGGLE for the docked notes panel (open
+    // when closed, close when open) — the panel docks in the layout below and pushes the canvas,
+    // never overlays.
+    // One-dock-at-a-time, derived from the SET (right-docks.ts) — never a hand-written pair.
+    closeOtherDocks('notes');
+    setNotesOpen((open) => !open);
   }, [setNotesOpen, closeOtherDocks]);
 
   /**
@@ -911,7 +893,7 @@ export function ToolbarPlanWorkspace({
   // whole row and the diagram column is `inert`. A render clamp only: the stored width is never
   // rewritten, so a width dragged at 1440 is back at 1440 after a visit at 640.
   const notesPanel = useNotesPanelPrefs();
-  const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
+  const notesDockActive = NOTES_ENABLED && model.notesOpen;
   const { bounds: notesBounds, onResize: onNotesResize } = useRightDockSize(
     notesPanel,
     NOTES_PANEL_MIN_WIDTH,
@@ -928,7 +910,7 @@ export function ToolbarPlanWorkspace({
   // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
   // `toggleFloatPathsInto` above for why.
   const floatPathsPrefs = useFloatPathsPanelPrefs();
-  const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
+  const floatPathsDockActive = floatPaths.open;
   const { bounds: floatPathsBounds, onResize: onFloatPathsResize } = useRightDockSize(
     floatPathsPrefs,
     FLOAT_PATHS_PANEL_MIN_WIDTH,
@@ -1466,7 +1448,7 @@ export function ToolbarPlanWorkspace({
     // Copy/paste ride the SAME gate as undo/redo — flag on, and the planner can actually author.
     // A copy alone is a read, but the paste it exists to feed is not, and a `Ctrl+C` that works
     // followed by a `Ctrl+V` that refuses is a worse dead end than a shortcut that is simply off.
-    clipboardEnabled: ACTIVITY_COPY_PASTE_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    clipboardEnabled: model.canEditSchedule && !lateOverlayActive,
     onCopy: model.copySelection,
     onPaste: () => void model.pasteClipboard(),
   });
@@ -2742,32 +2724,15 @@ export function ToolbarPlanWorkspace({
             view={ctx.planView}
           />
 
-          {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
-          has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
-          {PROGRAMME_SCHEDULING_ENABLED ? (
-            <div className="px-4 pt-2">
-              <ProgrammeScheduleSection
-                orgSlug={model.orgSlug}
-                planId={model.planId}
-                canRecalc={model.canRecalc}
-              />
-            </div>
-          ) : null}
-
-          {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
-          in a docked, resizable RIGHT panel inside the body below (toggled by Comments), so the always-
-          inline block renders ONLY flag-off — byte-for-byte the prior behaviour. */}
-          {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
-            <div className="px-4 pt-2">
-              <PlanNotesSection
-                orgSlug={model.orgSlug}
-                planId={model.planId}
-                canWrite={model.canWriteNotes}
-                bounded
-                headingRef={notesHeadingRef}
-              />
-            </div>
-          ) : null}
+          {/* Programme scheduling (ADR-0045) — renders nothing unless the plan has live cross-plan
+          links, so the slim toolbar layout is unchanged for an ordinary plan. */}
+          <div className="px-4 pt-2">
+            <ProgrammeScheduleSection
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              canRecalc={model.canRecalc}
+            />
+          </div>
 
           {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
           {lateOverlayActive && model.canEditSchedule ? (

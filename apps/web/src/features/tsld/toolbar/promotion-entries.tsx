@@ -28,7 +28,6 @@ import { isPromoted, type PromotableEntry } from '@/components/ui/toolbar/toolba
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_LENSES_ENABLED,
-  CANVAS_LIVE_FEEDBACK_ENABLED,
   EARNED_VALUE_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   RESOURCE_CURVES_ENABLED,
@@ -186,7 +185,6 @@ export const VIEW_TOGGLE_ENTRIES: Partial<
     from: 'view',
     rank: 4,
     at: at('L4'),
-    isVisible: () => CANVAS_LIVE_FEEDBACK_ENABLED,
     isActive: (ctx) => ctx.viewToggles.floatTails === true,
     onActivate: (ctx) => ctx.toggleView('floatTails'),
   },

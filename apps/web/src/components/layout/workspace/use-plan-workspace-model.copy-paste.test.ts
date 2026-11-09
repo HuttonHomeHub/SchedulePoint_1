@@ -49,7 +49,6 @@ vi.mock('@/config/env', async (importOriginal) => {
     ...actual,
     CANVAS_AUTHORING_ENABLED: false,
     NOTES_ENABLED: false,
-    ACTIVITY_COPY_PASTE_ENABLED: true,
   };
 });
 

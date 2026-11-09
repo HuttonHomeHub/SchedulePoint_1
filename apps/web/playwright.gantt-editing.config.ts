@@ -98,7 +98,6 @@ export default defineConfig({
             // That decision is this milestone's whole argument, reached here first and left
             // contradicted by a copied line.
             env: {
-              VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
             },
           },

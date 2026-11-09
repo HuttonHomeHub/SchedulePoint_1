@@ -81,8 +81,7 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
      * `hoursPerDay` is the activity's own calendar factor (ADR-0068), resolved by the HOST and
      * passed down, never looked up here: a pure column module has no business fetching calendars,
      * and ADR-0089 D2b makes host-resolution the rule for a cross-scope fact. Absent, the read-out
-     * degrades to whole working days — the same code path as `VITE_SUB_DAY_DURATIONS` off, so the
-     * rollback contract and the not-yet-loaded state cannot rot separately (ADR-0070).
+     * degrades to whole working days, which is also the not-yet-loaded state (ADR-0070).
      *
      * A milestone reads an em dash, not `0 d`. It genuinely has no duration, and ADR-0070 M4
      * records `0 d` being printed for real sub-day work — so the two states looked identical on the

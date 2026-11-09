@@ -3,7 +3,6 @@ import { ChevronDown, Keyboard, ScrollText, UserCog, Wrench } from 'lucide-react
 
 import { useShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import { AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
 import { cn } from '@/lib/utils';
@@ -118,16 +117,14 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             screen existed with no route to it but a typed URL, while the audit log's own refusal
             told the reader their activity was "on My activity" — a sentence naming a place the
             product did not take them. ADR-0072. */}
-        {AUDIT_LOG_ENABLED ? (
-          <MenuItem
-            onSelect={() => {
-              void navigate({ to: '/me/activity' });
-            }}
-          >
-            <ScrollText aria-hidden="true" className="size-4" />
-            My activity
-          </MenuItem>
-        ) : null}
+        <MenuItem
+          onSelect={() => {
+            void navigate({ to: '/me/activity' });
+          }}
+        >
+          <ScrollText aria-hidden="true" className="size-4" />
+          My activity
+        </MenuItem>
         {/* **The staff console, for the one person in the installation who has one.**
             Shown from RUNTIME EVIDENCE — a `GET /staff/me` that answered 200 — and never from a
             `VITE_` constant, which is ADR-0074's rule applied to its natural case: staff-ness is a

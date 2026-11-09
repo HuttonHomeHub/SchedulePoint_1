@@ -41,7 +41,7 @@ export function flagDefaultOn(value: string | undefined): boolean {
  *
  * **It has no consumer right now**, and that is the normal resting state of this helper rather than
  * a sign it is dead: every flag passes through it for the length of one epic and then leaves.
- * {@link AUDIT_LOG_ENABLED} moved to {@link flagDefaultOn} on 2026-08-03, and the next flag will
+ * The last flag to leave it moved to {@link flagDefaultOn}, and the next flag will
  * need it on day one. Covered by `env.test.ts` regardless of consumers, including the case-sensitivity
  * that makes `"TRUE"` read as off — so it cannot rot unnoticed between epics.
  *
@@ -85,40 +85,6 @@ export function flagDefaultOff(value: string | undefined): boolean {
 export const CANVAS_AUTHORING_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_AUTHORING);
 
 /**
- * Per-activity working-time calendars (ADR-0037, M5 — engine conformance framework). **ON by default**.
- * The picker is a thin "Plan default (inherit)" ↔ specific-calendar `Select` (writing
- * `activities.calendar_id`) that reuses the same primitive and states as the already-reviewed
- * plan-calendar picker (M5-D2), and the activities table shows an activity's own calendar when it isn't
- * inheriting. Everything behind it — the settable API field, the absolute-instant engine, and the
- * conformance proof — is already live; only the picker is gated. Set `VITE_ACTIVITY_CALENDAR=false` to
- * hide it. The engine schedules each activity on its resolved calendar
- * (`activity.calendarId → plan.calendarId → 24/7`) regardless of this flag; the flag only governs
- * whether a planner can *pick* it in the web UI.
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const ACTIVITY_CALENDAR_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_CALENDAR);
-
-/**
- * Advanced schedule constraints (ADR-0035 §7–§11, M4). **ON by default** now that its quality gates are
- * cleared — the accessibility (pass), component (pass), and UX (blockers folded in: shared
- * `CheckboxField`, plain section chrome, expected-finish copy/guard) reviews are green. When on, the
- * activity form gains a **secondary constraint** (a second type + date driving the backward pass,
- * ADR-0035 §10), an **As-late-as-possible** toggle (ADR-0035 §11) and an **expected-finish** date
- * (ADR-0035 §9); the plan settings gain an **Expected-finish scheduling** toggle
- * (`useExpectedFinishDates`); and a **Conflict** badge surfaces an engine-flagged `constraintViolated`
- * activity (a mandatory pin that broke logic, produced-and-flagged, ADR-0035 §7). Everything behind it —
- * the settable API fields, the engine's constraint passes, and the conformance proof (S12/N10) — is
- * already live; the flag only governs whether a planner can *edit and see* the new fields in the web UI.
- * Set `VITE_ADVANCED_CONSTRAINTS=false` to roll back to the moderate-constraint editor.
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const ADVANCED_CONSTRAINTS_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_ADVANCED_CONSTRAINTS,
-);
-
-/**
  * Advanced activity types (ADR-0035 §21/§24, M5-epic). **ON by default** now that its quality gates have
  * cleared — the LOE (F4) and WBS (F8) web surfaces went through the component/ux/a11y reviews (F8's
  * blocking copy/state findings folded in). Gates whether the activity form's Type picker offers
@@ -149,23 +115,6 @@ export const ADVANCED_ACTIVITY_TYPES_ENABLED = flagDefaultOn(
  * @enabled 2026-07-18
  */
 export const RESOURCES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOURCES);
-
-/**
- * Duration types & the resource-units triad (M7 rung 4, ADR-0040). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a new dark
- * surface whose quality gates (a11y, ux, component reviews, e2e) were the pre-flip quality gate (a11y / ux / component / e2e) — now green with the documented blockers (TECH_DEBT #38/#39/#40/#41/#44) cleared. When on, the activity form gains a **duration type**
- * picker (Fixed Duration & Units/Time (default) / Fixed Duration & Units / Fixed Units / Fixed
- * Units/Time) and — inside the per-activity resource assignment editor (itself behind
- * {@link RESOURCES_ENABLED}) — a **units/time (rate)** field on the driving assignment, with a live
- * preview of the duration the server will derive for a units-driven type. Everything behind it — the
- * settable `durationType` / `unitsPerHour` fields, the write-boundary `resolveTriad` recompute, and the
- * conformance proof — is already live; the flag only governs whether the web UI exposes it. The rate
- * field is meaningful only alongside the resource surface, so it appears only when BOTH this flag and
- * {@link RESOURCES_ENABLED} are on; the duration-type picker (a plain activity attribute) needs only
- * this flag. Set `VITE_DURATION_TYPES=false` to disable it (rollback / opt-out).
- *
- * @enabled 2026-07-18
- */
-export const DURATION_TYPES_ENABLED = flagDefaultOn(import.meta.env.VITE_DURATION_TYPES);
 
 /**
  * Resource levelling (ADR-0041, the M7 levelling rung). **ON by default** (flipped 2026-07-18; pre-flip blockers cleared) — a new dark surface whose
@@ -259,38 +208,6 @@ export const RESOURCE_CURVES_ENABLED = flagDefaultOn(import.meta.env.VITE_RESOUR
  * @enabled 2026-07-18
  */
 export const INTER_PROJECT_DATES_ENABLED = flagDefaultOn(import.meta.env.VITE_INTER_PROJECT_DATES);
-
-/**
- * Live cross-plan / programme scheduling web surface (inter-project **Milestone 2**, F8; ADR-0045 /
- * ADR-0035 §30.5–§30.8). **ON by default** (now its component/ux/a11y/e2e gates are green) — the
- * first user-visible slice of the live cross-plan solve. When on, the web UI exposes the programme
- * surface, layered on the static M1 inter-project surface ({@link INTER_PROJECT_DATES_ENABLED}):
- *
- * - **Cross-plan links** — a section in the activity panel (the SUCCESSOR activity's home, ADR-0045
- *   CQ-2) to draw a **live** inter-project link from an upstream activity in ANOTHER plan of the org:
- *   an org-scoped endpoint picker (client → project → plan → activity), the FS/SS/FF/SF type + signed
- *   lag + lag-calendar inputs (mirroring the intra-plan dependency editor), and a link list with
- *   delete. Same-plan (N31) is caught client-side; cycle (N30) / duplicate (N33) surface the shared
- *   `CROSS_PLAN_DEPENDENCY_CONFLICT_MESSAGES` copy from the server.
- * - **Recalculate programme** — an action beside the existing Recalculate that runs the synchronous
- *   `…/schedule/recalculate-programme` solve (the plan's upstream cross-plan closure, upstream-first),
- *   with a result panel (per-plan summaries + the summed missing-upstream N32 warning), the **423
- *   `PROGRAMME_PLANS_LOCKED`** blocked-plans path (with the pen request/override hint), and the **422
- *   `PROGRAMME_TOO_LARGE`** too-large path.
- * - **Stale banner** — shown (`role="status"`) when the plan summary carries `scheduleStale` (an
- *   upstream plan was recalculated more recently), prompting a programme recalculate.
- *
- * The whole surface is unobtrusive: it appears only for a plan that actually has cross-plan edges (the
- * summary's `scheduleStale` field is present only then). Everything behind it — the cross-plan link
- * CRUD, the derivation seam, the programme-recalc orchestration and the staleness read — is already
- * live on the API (F2–F7); the flag only governs whether the web UI exposes it. Set
- * `VITE_PROGRAMME_SCHEDULING=false` for a byte-for-byte rollback.
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const PROGRAMME_SCHEDULING_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_PROGRAMME_SCHEDULING,
-);
 
 /**
  * Notes web surface (Notes M3, ADR-0046). **ON by default** — the quality gates (component / ux / a11y
@@ -408,32 +325,6 @@ export const CANVAS_RESOURCE_VIEW_ENABLED =
   flagDefaultOn(import.meta.env.VITE_CANVAS_RESOURCE_VIEW) && RESOURCE_CURVES_ENABLED;
 
 /**
- * Schedule interchange — the web review UI for importing a foreign schedule file (Stage C2, M1;
- * ADR-0050, spec `docs/specs/schedule-interchange/`). **ON by default** (2026-07-20, product sign-off)
- * now that the five specialist reviews (security / backend-performance / a11y / api / devops) are green
- * and every blocking finding is folded (the graph-size DoS ceiling, the batched-commit timeout, the
- * Dockerfile image break, the a11y error/announce gaps, the 413 code), and the flag-on Playwright
- * journey — which caught and fixed the pen-enforcement recalc 423 — passes in CI. When on, the project
- * plan-create surface gains an **Import from file…** entry (gated additionally on the caller holding
- * `interchange:import` — Planner + Org Admin) that opens a dry-run **review dialog**: pick a `.xer`, the
- * app POSTs it to the dry-run endpoint and renders the returned `InterchangeReport` (mapped
- * activity/relationship/calendar counts + the approximation / repair / drop findings as accessible
- * lists, downloadable), then **Confirm import** commits it — creating the plan server-side (calendars +
- * activities + dependencies, recalculated) and opening the new plan on the TSLD canvas.
- *
- * Everything behind it — the pure `@repo/interchange` parse/map/validate pipeline and the thin
- * `interchange` API module's dry-run + commit endpoints — is always live (RBAC-gated, Tasks 1.2–1.5);
- * this flag only governs whether the web UI exposes the entry + dialog. `VITE_SCHEDULE_INTERCHANGE=false`
- * (or the caller lacking `interchange:import`) ⇒ the plan-create surface is byte-for-byte today's — no
- * entry point, no dialog, and the review code is never reached (emergency rollback / opt-out).
- *
- * @enabled 2026-07-20
- */
-export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_SCHEDULE_INTERCHANGE,
-);
-
-/**
  * External-Guest per-plan share links — the flagged web surface (Stage F / F-M4; ADR-0051, spec
  * `docs/specs/external-guest-share-link/`). **OFF by default during build** — an in-progress dark
  * surface that flips on only after its specialist reviews (component / ux / a11y / performance /
@@ -467,30 +358,6 @@ export const SCHEDULE_INTERCHANGE_ENABLED = flagDefaultOn(
 export const GUEST_SHARE_LINKS_ENABLED = flagDefaultOn(import.meta.env.VITE_GUEST_SHARE_LINKS);
 
 /**
- * Entry-route UX improvements (spec — "entry-route" quick wins). **ON by default** now that its
- * accessibility / component / UX reviews are green and folded in (set `VITE_ENTRY_ROUTES=false` to roll
- * back). Frontend-only, over already-shipped features
- * (notes + progress + resource assignments + weighted steps) — no new API/schema/`@repo/types`/CPM-engine
- * change (the recalc parity gate is untouched). When on, it changes where shipped affordances are reached:
- *
- * - **Plan notes as a right-side drawer** — the plan Notes thread (`VITE_NOTES`) moves out of the
- *   always-inline block above the canvas into a right-anchored **non-modal** `Sheet` the toolbar
- *   **Comments** button opens (the canvas behind stays live), reclaiming the wasted vertical space.
- * - **Canvas selection-bar actions** — the floating selection bar gains **Report progress** (role-gated,
- *   Contributor+), **Resources** (additionally gated on `VITE_RESOURCES`, the per-activity assignment
- *   editor) and **Steps** (additionally gated on `VITE_EARNED_VALUE` + `VITE_ACTIVITY_STEPS`, hidden for a
- *   duration-derived selection) — each until now reachable only from the activities-table row menu.
- *
- * Every half rides existing endpoints/dialogs; the flag only governs where they are surfaced. Set
- * `VITE_ENTRY_ROUTES=true` to enable it in an environment. Flag-off ⇒ the plan notes stay inline, the
- * selection bar carries only its base three actions, and none of the new code is reached — byte-for-byte
- * the prior behaviour (emergency rollback / opt-out).
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const ENTRY_ROUTES_ENABLED = flagDefaultOn(import.meta.env.VITE_ENTRY_ROUTES);
-
-/**
  * TSLD canvas direct manipulation + visual refresh (ADR-0052, spec
  * `docs/specs/canvas-direct-manipulation/`). **ON by default** (2026-07-25) now that all five
  * milestones (M1–M5) have landed with their specialist reviews (a11y / ux / component / perf) and
@@ -511,74 +378,6 @@ export const CANVAS_DIRECT_MANIPULATION_ENABLED = flagDefaultOn(
 );
 
 /**
- * Canvas **live feedback & GPM float/drift visualisation** (ADR-0054, spec
- * `docs/specs/canvas-live-feedback/`). Default **off** until its M6 enablement gate — the
- * specialist reviews and, critically, the ADR-0026 draw-budget measurement at 2,000 activities
- * with every new layer enabled. When on, the TSLD canvas answers the two questions a
- * time-scaled logic diagram exists to answer — *when*, and *how much room*:
- *
- * - an in-flight gesture reads as **the bar itself moving**: the source bar dims and the ghost
- *   carries the real bar treatment (label, progress, milestone diamond) rather than a bare
- *   rectangle (amends ADR-0052 §4's deliberately-minimal ghost, which was right only while the
- *   source stayed fully painted beside it);
- * - a **date chip tracks the cursor** through every gesture and on idle hover in an edit mode,
- *   with a vertical guideline to the ruler and the hovered day's tick emphasised — and it states
- *   the datum actually being chosen (the tentative *finish* on a finish-edge resize, the *start*
- *   on a reposition), read through the same `dayColumnAt` mapping the gesture commits with, so
- *   the number shown can never disagree with the edit performed;
- * - each bar's **start and finish dates draw flanking it** behind a `Dates` view toggle,
- *   level-of-detail culled by zoom and collision (flanking, not inside: an inside date competes
- *   with the name label and vanishes on any bar narrower than its text);
- * - **total float draws as a hollow tail right** of the bar and **drift as a hollow tail left**,
- *   behind a lens toggle — the Graphical Path Method idiom, comparable across the whole diagram
- *   at a glance in a way a per-link number is not. Drift is engine-owned (`visualDriftDays`,
- *   ADR-0033) and is **absent in Early mode by construction**: an early-start schedule already
- *   places everything as early as logic allows, so drift is non-zero only under Visual mode or a
- *   constraint. That absence is correct, not a defect;
- * - **relationship slack** annotates the **selected** activity's links only — a number on every
- *   edge of a real network obscures the structure the diagram exists to show.
- *
- * Frontend-only: every datum (dates, `totalFloat`, `visualDriftDays`) is already on the wire, so
- * there is no API, DTO, schema or engine change and no code path from any of this back into
- * `computeSchedule` — the ADR-0034 recalc parity gate is structurally untouched. Set
- * `VITE_CANVAS_LIVE_FEEDBACK=false` for a byte-for-byte rollback to the ADR-0052 surface (the
- * flag-off parity suites).
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_CANVAS_LIVE_FEEDBACK,
-);
-
-/**
- * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **ON**
- * since 2026-07-26 (S5-T4), once the browser draw measurement was made and recorded: at 2,000
- * activities the band pass sits **inside the baseline's own run-to-run spread** — several runs
- * land below it — so its cost is smaller than the noise floor rather than merely small. Method,
- * hardware and the caveat that this was NOT the ADR-0026 §9 device envelope are written down in
- * `docs/specs/designed-ui/implementation-plan.md` (S5-T2).
- *
- * When on, the diagram sits on a ground of its own with **alternating month bands**: a planner can
- * count months without reading a single label, which is the one thing a time-scaled diagram should
- * make free. Banding is *ground*, not a gridline, so it deliberately does not follow the `Month
- * grid` toggle, and its parity comes from the absolute month ordinal — calendar-derived, so the
- * stripes cannot invert when the viewport pans.
- *
- * The cost is one `fillStyle` and at most `visibleMonths + 1` `fillRect` per frame, with zero text
- * — pinned by `render/paint.band-budget.test.ts` in the counting-stub style, which asserts the
- * *shape* of the cost rather than milliseconds (a CI runner's absolute timings are noise).
- *
- * Frontend-only, and the painter is the only thing that changes: no API, DTO, schema or engine
- * change. Set `VITE_CANVAS_VISUAL_LANGUAGE=false` for a byte-for-byte paint — the
- * scene simply carries no `monthBands`, so the band layer is skipped entirely.
- *
- * @enabled 2026-07-26
- */
-export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
-  import.meta.env.VITE_CANVAS_VISUAL_LANGUAGE,
-);
-
-/**
  * TSLD time-axis legibility (ADR-0056, spec `docs/specs/tsld-toolbar-canvas-refinements/`, M2–M5).
  * **ON by default** since 2026-07-27 (M7) — gates range-anchored zoom presets (M2), tiered
  * gridlines (M3), the interpolated Today marker + pill (M4) and ground-vs-non-working shading
@@ -596,28 +395,6 @@ export const CANVAS_VISUAL_LANGUAGE_ENABLED = flagDefaultOn(
  * @enabled 2026-07-27
  */
 export const CANVAS_TIME_AXIS_ENABLED = flagDefaultOn(import.meta.env.VITE_CANVAS_TIME_AXIS);
-
-/**
- * Gantt view (ADR-0059, spec `docs/specs/gantt-view/`). **ON by default since 2026-07-28** (M6),
- * after the epic shipped in slices (M0 seam → M1 grid + bars → M2 WBS → M3 baseline variance →
- * M4 printed programme) and the deferred review pass over the combined diff was folded — which
- * caught a lit-but-inert zoom control in the Gantt (the preset delegated only to the canvas handle,
- * null with no canvas mounted) and the canvas-only viewport commands that now shade with a reason.
- * M5 (editing) stays deferred by design: the brief says read-primary.
- *
- * Gates the `view-mode` toolbar switch (TSLD | Gantt — the slot ADR-0031 §296 reserved and
- * ADR-0055 §8.4 declined to ship while only one view existed) and the Gantt surface itself.
- * Flag-off, no switch renders and no `?view=` value is honoured: the workspace is byte-for-byte
- * today's TSLD, which is the rollback contract the parity suites pin.
- *
- * Frontend-only. The view reads persisted computed columns (`earlyStart`…`totalFloat`,
- * `isCritical`, `parentId`, `percentComplete`) that are already on the wire — no API, DTO, schema
- * or permission change, and **no path back into `computeSchedule`**, so the ADR-0034 recalc
- * parity gate is untouched by construction.
- *
- * @enabled 2026-07-28
- */
-export const GANTT_VIEW_ENABLED = flagDefaultOn(import.meta.env.VITE_GANTT_VIEW);
 
 /**
  * Activity-editor convergence (ADR-0062; spec
@@ -765,135 +542,6 @@ export const CANVAS_LINK_ROUTING_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_LINK_ROUTING);
 
 /**
- * **Sub-day durations and lags** (`VITE_SUB_DAY_DURATIONS`, default **OFF**) — ADR-0070, the
- * authoring half of ADR-0036's minutes.
- *
- * ADR-0036 moved storage and the CPM engine to working minutes; ADR-0068 made a *day* a
- * per-calendar quantity; `api-v0.34.0` put `durationMinutes` and `lagMinutes` on the public DTOs so
- * a sub-day value could be authored and read back exactly. **Nothing in the product could type
- * one** — the activity editor offered a whole-number *days* box and the dependency editor a
- * whole-number *days* lag, so a four-hour lift or a 30-minute cure lag could be imported,
- * scheduled, levelled and exported, and never entered.
- *
- * Flag ON reads both fields as text with a `d`/`h`/`m` grammar (`2d 4h`, `90m`, `1.5d`) and sends
- * the minute-denominated field; a **bare number still means days**, so every value a planner has
- * already learnt to type keeps its meaning.
- *
- * Rollback: set `VITE_SUB_DAY_DURATIONS=false` and rebuild the web image. Nothing persisted depends
- * on it — the API has accepted both `durationDays` and `durationMinutes` since `api-v0.34.0`, and a
- * sub-day duration authored with the flag on keeps scheduling identically with it off; it simply
- * reads back rounded to whole days again, which the field's label says out loud. The flag-off parity
- * suite is kept, not weakened: it is the rollback contract.
- *
- * The flag exists at all — unlike ADR-0061's deliberately unflagged layout work — because this
- * changes **which field of the write DTO carries the value**. A wrong day↔minute factor is a wrong
- * date, silently, so the rollback has to be a switch rather than a revert.
- *
- * @enabled 2026-08-03 (a FLOOR — the earliest date the repository can prove; the real flip was earlier and is recorded nowhere, ADR-0084)
- */
-export const SUB_DAY_DURATIONS_ENABLED = flagDefaultOn(import.meta.env.VITE_SUB_DAY_DURATIONS);
-
-/**
- * **The Float paths panel** (`VITE_FLOAT_PATHS`, default **ON** since 2026-08-02) — the
- * engine↔planner surface audit's F4, and its last open finding.
- *
- * The engine has computed the ranked contiguous driving chains into an activity since M6-F6
- * (ADR-0035 §19, conformance scenario S11), and `GET …/schedule/float-paths` has exposed them
- * since the reconciliation pass that followed. **Nothing in the product ever called it.** So the
- * question a planner actually asks — _if I compress the critical path, what binds next and by how
- * much?_ — could be answered by SchedulePoint's engine and only read in the tool SchedulePoint
- * exists to replace.
- *
- * Flag ON adds a **Float paths** item to the toolbar's `find` group and a non-modal panel that
- * ranks the chains, plus path emphasis in **both** the Diagram and the Gantt view — it is an
- * analysis, not a canvas viewport command, so it is live in both (the ADR-0059 M6 lesson inverted).
- * The relative float is rendered from `relativeFloatMinutes`, never the deprecated day field: that
- * field divides by a flat 1440 and total float is measured on the activity's own calendar
- * (ADR-0037 §4, ADR-0068), so on an eight-hour calendar one working day of float rounded to `0`.
- * Fixing that at the API was M0 of this epic and shipped first, unflagged and alone.
- *
- * The panel fetches on open with `staleTime: 0`. That is a measured decision, not a guess: unlike
- * its sibling read-models the endpoint runs a full `computeSchedule` per request, and the harness
- * `apps/api/scripts/measure-float-paths.mjs` put it at **100.4 ms p95 — 0.61× a recalculate** on a
- * 540-activity plan. Cheaper than the write a planner already presses a button for; and because the
- * analysis is derived from the live schedule, a stale float path is a *wrong* float path.
- *
- * **Flipped default-ON by M4**, once the five specialist gates ran over the whole M0–M3 diff and
- * every blocking finding was folded. That milestone earned its place again — twelve blocking
- * defects in code that had already passed a human read, and most of them the house's own recurring
- * shape, a correct pattern applied to one control and not its neighbour:
- *
- * - The **Gantt never fed the workspace selection**, so the toolbar's selection-aware items
- *   answered with a stale *canvas* selection while the Gantt showed something else — and were
- *   shaded forever in a session that started there. Found by the design review, before a line of
- *   the panel existed.
- * - **Isolate logic path** was lit and inert in the Gantt, driving canvas state nothing there reads.
- * - The **bucket row** faded with the rest and carried no text marker, while the activity rows it
- *   sits among all did (WCAG 1.4.1).
- * - Closing the panel by its own **X or Escape** stranded focus on `<body>`; only re-pressing the
- *   toolbar item restored it (WCAG 2.4.3).
- * - Every **non-success state was silent** — busy, never-calculated, target-gone, failed — while
- *   the success path announced carefully (WCAG 4.1.3). The two announcement effects could also
- *   clobber each other in one commit, on a live region that holds one message and has no queue.
- * - A **negative** relative float rendered bare, and announced as "−1d above the driving path".
- * - The **never-calculated** state invented a second sentence for a 422 that already had shared
- *   copy, and offered no way to act on it.
- * - The Gantt's **bring-into-view re-centred the grid on every unrelated recalculation**, yanking
- *   the planner's scroll back after they had deliberately moved away.
- *
- * The flag-on journey (`apps/web/e2e-float-paths/`, its own CI step) proves the unit against a real
- * API on a real eight-hour calendar: a branch carrying one working day of float reads `+1d`, which
- * is the defect the whole epic descends from.
- *
- * Rollback: set `VITE_FLOAT_PATHS=false` and rebuild. There is no schema, no write path, no
- * permission and no pen here — flag-off is byte-for-byte the prior product: no toolbar item, no
- * panel, no query, no scene contribution. The flag-off parity suite is the rollback contract and is
- * kept rather than weakened (the ADR-0053 M6 rule).
- *
- * @enabled 2026-08-02
- */
-export const FLOAT_PATHS_ENABLED = flagDefaultOn(import.meta.env.VITE_FLOAT_PATHS);
-
-/**
- * **The audit log** (`VITE_AUDIT_LOG`) — the web surface for ADR-0072, and the closing half of
- * `docs/TECH_DEBT.md` #14. **ON by default** (2026-08-03).
- *
- * The API records eighteen events across membership, invitations, the organisation, authentication
- * and hierarchy deletes/restores, into an append-only table, and exposes two reads. Until this flag
- * flipped, **nothing in the product could see any of it** — the shape this repository keeps finding
- * (ADR-0067's shift patterns, ADR-0070's sub-day durations): a capability that is stored, enforced
- * and exported, and that no screen can reach.
- *
- * Flag ON adds two screens, one nav entry and one account-menu item:
- *
- * - **Audit log** (`/orgs/$orgSlug/audit-log`), Org Admin only. The nav entry is hidden for every
- *   other role, and that is a courtesy rather than the control — the API answers 403 regardless,
- *   and a non-member gets 404 before it (anti-enumeration).
- * - **My activity** (`/me/activity`), for anyone, from the account menu. It takes NO user id: the
- *   actor comes from the session, so there is no parameter to tamper with and no permission to
- *   hold. That is why an ordinary member can read their own sign-in history without an Org Admin
- *   handing it over — and why it sits in the account menu rather than the organisation nav, since
- *   it spans every organisation the reader belongs to and carries the org-less auth rows too.
- *
- * Both render the same `AuditEventList`, differing only in scope and in whether the actor column is
- * shown (on `/me` every row is the same person). Two tables would drift about how a role change
- * reads, and only a reader who opened both would ever see it.
- *
- * `ipAddress` and `userAgent` are recorded and deliberately **not** rendered: the ordinary reader
- * here is an Org Admin looking at a membership history, and a colleague's home IP on that screen is
- * a privacy cost with no matching benefit. Showing them is a decision with its own scope.
- *
- * Rollback: set `VITE_AUDIT_LOG=false` and rebuild the web image. There is no write path, no
- * mutation and no pen here — flag-off is byte-for-byte the prior product: no routes registered, no
- * nav entry, no queries. The API keeps recording either way, which is the point of shipping the
- * producers first: the log is being written long before anyone can read it, so the first screen
- * shows real history rather than an empty table.
- *
- * @enabled 2026-08-03
- */
-export const AUDIT_LOG_ENABLED = flagDefaultOn(import.meta.env.VITE_AUDIT_LOG);
-
-/**
  * The TSLD **data-date line** (`VITE_CANVAS_DATA_DATE`, default **OFF** during build) — canvas
  * status & feedback M1 (spec `docs/specs/canvas-status-and-feedback/`, proposing ADR-0078). It
  * flips on at that epic's M6 gate once the specialist reviews and the flag-on journey are green.
@@ -981,43 +629,3 @@ export const CANVAS_SEARCH_NAV_ENABLED =
  */
 export const CANVAS_MULTI_SELECT_ENABLED =
   CANVAS_DIRECT_MANIPULATION_ENABLED && flagDefaultOn(import.meta.env.VITE_CANVAS_MULTI_SELECT);
-
-/**
- * **Activity copy, paste and duplicate** (spec + plan in `docs/specs/activity-copy-paste/`). When
- * on, a Planner holding the pen can duplicate one activity, duplicate a whole WBS band with the
- * logic inside it, and copy/paste an arbitrary selected set — each as one action and one undoable
- * step, composed entirely from write paths that already ship.
- *
- * **Not derived.** Unlike {@link CANVAS_MULTI_SELECT_ENABLED} there is no chord collision to make
- * unrepresentable: the two accelerators this epic takes (`Ctrl/Cmd+C` / `Ctrl/Cmd+V`) are unbound
- * in the plan workspace today, and the first two milestones — duplicate one activity, duplicate a
- * band — need no selection beyond the single one the canvas and the table have always had. Only
- * the arbitrary-set slice reads a plural selection, and it reads it through the shipped model
- * rather than through this flag.
- *
- * **Default-ON since 2026-08-08**, once the M5 gate pass cleared: six specialist reviews over the
- * combined diff, every blocking finding folded with a regression test verified to fail first, and
- * the flag-on journey `apps/web/e2e-copy-paste/` driving a real API with the pen enforced.
- *
- * The gate earned its place for the fifth epic running. Security passed; the other five blocked, on
- * defects that had all passed a human read — a **band duplicate that was unreachable** (its model,
- * tests and measurement had shipped while both entry points excluded a summary, so its unit tests
- * were validating dead code); a completed copy that was **invisible**, landing below the plan's
- * lowest lane with `createdIds` produced and read by nothing but a count; **caps sized on a request
- * shape that no longer existed**, leaving M4's assignment creates unbounded against a per-handler
- * rate limit; a **byte-for-byte duplicated date shift** one file apart, inside the epic whose own
- * docblocks cite that failure; a disabled-reason carried as a **`title` only** under a docblock
- * claiming it was reachable; and the composites' rollback, hold-release and failure-class branches
- * with **no hook-level coverage at all**.
- *
- * Flag-off there is no Duplicate item in the row menu or on the canvas selection bar, no keyboard
- * handler is installed, and no clone code is reachable — the surfaces are byte-for-byte today's,
- * pinned by parity suites that are **kept** rather than deleted at the flip: they are the rollback
- * contract (the ADR-0053 M6 rule), not scaffolding.
- *
- * Frontend-only throughout: no API, DTO, schema or migration, and the CPM engine is not imported,
- * so the ADR-0034 recalculation parity gate is untouched by construction.
- *
- * @enabled 2026-08-08
- */
-export const ACTIVITY_COPY_PASTE_ENABLED = flagDefaultOn(import.meta.env.VITE_ACTIVITY_COPY_PASTE);

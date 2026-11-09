@@ -3,8 +3,6 @@ import type * as ReactRouter from '@tanstack/react-router';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as Env from '@/config/env';
-
 /**
  * **The coverage rule is relocated, not cut** — M3 of the page-consistency epic.
  *
@@ -24,11 +22,6 @@ import type * as Env from '@/config/env';
  * and does not prove" behind a press was named as the riskiest single change in the epic and was
  * declined; without an assertion, a later tidy-up would make it silently.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof Env>()),
-  AUDIT_LOG_ENABLED: true,
-}));
-
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme' }),

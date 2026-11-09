@@ -15,7 +15,6 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_NAV_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
 } from '../../../config/env';
@@ -471,12 +470,12 @@ export interface TsldPanelProps {
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
-   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 §8). Optional:
+   * action (entry-route win 2). The host owns the dialog (ADR-0026 §8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
-   * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
+   * that surfaces it is gated in {@link selectionActionItems}. */
   onResources?: (activity: ActivitySummary) => void;
-  /** Open the progress editor — the selection bar's **Report progress** action (entry-route,
-   * `VITE_ENTRY_ROUTES`). Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
+  /** Open the progress editor — the selection bar's **Report progress** action (entry-route).
+   * Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
   onProgress?: (activity: ActivitySummary) => void;
   /** Whether the viewer may report progress (Contributor upward) — gates the selection bar's Progress
    * action (role only, not pen-gated), mirroring the toolbar's Update-progress command. Default false. */
@@ -637,7 +636,7 @@ export interface TsldPanelProps {
    * announcement. Absent/false ⇒ no `flaggedIds` scene field ⇒ byte-for-byte today's canvas + a11y tree. */
   overAllocationHighlight?: boolean;
   /**
-   * The activities on the **selected float path** (audit F4, behind `VITE_FLOAT_PATHS`) — everything
+   * The activities on the **selected float path** (audit F4) — everything
    * else recedes, through the same `dimmedIds` seam the filter and isolate lenses use.
    *
    * The set is derived ONCE by the plan workspace and handed to both this view and the Gantt, so
@@ -1787,17 +1786,9 @@ export function TsldPanel({
   // effect below), so the direct setState is intentional.
   const selectSignalSeenRef = useRef<number | null>(navState.selectSignal?.nonce ?? null);
   useEffect(() => {
-    // Widened from `CANVAS_NAV_ENABLED` for the search cycle (`docs/specs/canvas-search-navigation/`
-    // M1-T2): Enter-to-jump lifts a selection through this same one-shot signal, so gating it on the
-    // nav flag alone would leave the search's jump silently selecting nothing in a build with lenses
-    // on and nav off. Either flag arms the subscription; neither leaves it exactly as it was.
-    // Widened again for copy/paste (`docs/specs/activity-copy-paste/` M1 risk (c)): a completed
-    // duplicate or paste reveals its clone through this same one-shot signal, and without this
-    // clause the reveal is silently inert in any build with both nav flags off — the clone lands
-    // below the plan's lowest lane and nothing moves. Found by the flag-on journey, whose config
-    // deliberately does not set the nav flags: a seam that is itself flag-gated is a dependency, and
-    // this one was invisible until a build existed that did not have it.
-    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED && !ACTIVITY_COPY_PASTE_ENABLED) return;
+    // Always subscribed: Enter-to-jump from the search and the reveal of a completed duplicate or
+    // paste both lift a selection through this one-shot signal, so it cannot sit behind the nav
+    // flag alone.
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;

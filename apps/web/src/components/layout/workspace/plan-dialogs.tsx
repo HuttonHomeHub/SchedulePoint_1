@@ -5,9 +5,7 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
-  ENTRY_ROUTES_ENABLED,
   NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
   RESOURCES_ENABLED,
 } from '@/config/env';
 import { isMilestoneType } from '@/features/activities';
@@ -72,7 +70,7 @@ export function PlanDialogs({
           notesHeadingRef={notesHeadingRef}
           revealNotes={model.logicRevealNotes}
           {...(model.logicActivity ? { activity: model.logicActivity } : {})}
-          {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
+          {...(model.logicActivity
             ? {
                 crossPlanSlot: (
                   <CrossPlanLinksSection
@@ -115,11 +113,11 @@ export function PlanDialogs({
       ) : null}
 
       {/* The per-activity resource-assignment editor the canvas selection bar's **Resources** action
-          opens (entry-route win 2, `VITE_ENTRY_ROUTES`), driven off `model.resourcesActivity`. Mounted
+          opens (entry-route win 2), driven off `model.resourcesActivity`. Mounted
           and toggled like the crud dialogs; its target re-derives from the live query, so it closes when
           the row is deleted. Reuses the same dialog + prop shape as the activities-table row action; the
-          dialog enforces its own write gating via `canWrite`. Flag-off ⇒ not rendered (byte-for-byte). */}
-      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED && !ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? (
+          dialog enforces its own write gating via `canWrite`. Not rendered while the convergence editor hosts it. */}
+      {RESOURCES_ENABLED && !ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? (
         <ActivityResourcesDialog
           orgSlug={model.orgSlug}
           planId={model.planId}

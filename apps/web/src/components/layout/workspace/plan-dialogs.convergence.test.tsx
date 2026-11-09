@@ -17,9 +17,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: true,
   RESOURCES_ENABLED: true,
-  PROGRAMME_SCHEDULING_ENABLED: true,
 }));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));

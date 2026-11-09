@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **sub-day durations and lags**
- * (`VITE_SUB_DAY_DURATIONS`, ADR-0070) — the `d`/`h`/`m` grammar in the activity duration field and
+ * End-to-end configuration for **sub-day durations and lags**
+ * (ADR-0070) — the `d`/`h`/`m` grammar in the activity duration field and
  * the signed lag field, and the table read-outs that show them back.
  *
  * Everything this suite proves needs a **real API and a real database**: that a four-hour duration
@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test';
  * full-definition PATCH, and that a lag switched to the 24-hour calendar is re-measured as elapsed
  * time. A mocked fetch can tell you none of that — it echoes whatever it was handed.
  *
- * Like the sibling flag-on configs the flags bake at `webServer` start, so this is its own config on
+ * Like the sibling configs the flags bake at `webServer` start, so this is its own config on
  * the same ports, run as its own CI step. Chromium only (TECH_DEBT #25a), serial (one org's plan is
  * mutated throughout).
  */
@@ -57,20 +57,10 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The sub-day fields ON, and nothing else: the activities table and the Logic dialog
-            // are reachable without any canvas layer, and the fewer flags a journey needs the fewer
-            // reasons it has to fail for something it is not about.
-            env: {
-              VITE_SUB_DAY_DURATIONS: 'true',
-              // The legacy stacked plan page, not the canvas workspace: this suite is about two
-              // FIELDS and two table columns, and driving them through a canvas would add a dozen
-              // reasons to fail for something the epic is not about.
-              // The tabbed editor, which is what every shipped bundle contains. This suite pinned
-              // it OFF until the dialog-unification epic, so it proved the duration field on a
-              // surface no operator can produce (ADR-0088 D1: a `VITE_` flag is inlined at build
-              // time and none is passed to the image build). Converted rather than deleted
-              // (ADR-0084 D5) — the coverage moved to the surface that ships.
-            },
+            // No flags pinned: the activities table and the Logic dialog are reachable without any
+            // canvas layer, and the fewer flags a journey needs the fewer reasons it has to fail
+            // for something it is not about. The tabbed editor is what every shipped bundle
+            // contains, so that is the surface the duration field is proved on.
           },
         ],
       }),

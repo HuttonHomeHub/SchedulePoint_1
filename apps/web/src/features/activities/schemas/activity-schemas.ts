@@ -195,8 +195,8 @@ export const activityFormSchema = z
     type: z.enum(ACTIVITY_TYPES),
     // The P6 duration type (ADR-0040): how a future edit to one of {duration, units, units/time}
     // recomputes the others so `Units = Duration × Units/Time` stays true. A `<select>` over the four
-    // values; only editable behind `VITE_DURATION_TYPES`, but always seeded from the row so a stored
-    // value round-trips even with the picker hidden. Defaults to the API default.
+    // values; always seeded from the row so a stored
+    // value round-trips even while the picker is hidden (a duration-derived type). Defaults to the API default.
     durationType: z.enum(DURATION_TYPES),
     // Raw text (ADR-0070). `duration`, not `durationDays`, because what it holds depends on the
     // calendar: `2d 4h` when the factor is known, a whole number of days when it is not. The
@@ -205,9 +205,7 @@ export const activityFormSchema = z
     constraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     constraintDate: z.string().optional(),
     // Optional SECONDARY constraint (ADR-0035 §10, M4): the primary drives the forward pass, this the
-    // backward pass. Same shape and paired rule as the primary; only editable behind the
-    // `VITE_ADVANCED_CONSTRAINTS` flag, but always seeded from the row so a stored value round-trips
-    // even with the fields hidden.
+    // backward pass. Same shape and paired rule as the primary.
     secondaryConstraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     secondaryConstraintDate: z.string().optional(),
     // As-late-as-possible (ADR-0035 §11): a display-only placement preference; never changes dates/float.

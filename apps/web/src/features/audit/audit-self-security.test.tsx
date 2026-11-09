@@ -3,18 +3,11 @@ import type * as ReactRouter from '@tanstack/react-router';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as Env from '@/config/env';
-
 /**
  * ADR-0073 C2.4 — an actor-less row rendering beside the reader's own: an attempt row reaches the
  * reader with the column and the sentence that make it legible — which is the entire feature, on the
  * one screen whose copy tells somebody they may be under attack.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof Env>()),
-  AUDIT_LOG_ENABLED: true,
-}));
-
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({ orgSlug: 'acme' }),

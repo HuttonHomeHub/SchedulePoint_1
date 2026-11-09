@@ -22,13 +22,10 @@ import {
  * a WBS summary. Both were create's rules and neither was the editor's.
  */
 
-const flags = vi.hoisted(() => ({ advancedConstraints: true, levelling: true }));
+const flags = vi.hoisted(() => ({ levelling: true }));
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  get ADVANCED_CONSTRAINTS_ENABLED() {
-    return flags.advancedConstraints;
-  },
   get RESOURCE_LEVELLING_ENABLED() {
     return flags.levelling;
   },
@@ -75,13 +72,11 @@ const LABELS: Record<(typeof PLACEMENT_FIELDS)[number], string> = {
 describe('ActivityPlacementFields', () => {
   it('files itself under a heading that is not “Constraints”', () => {
     // Neither control pins a date, and the previous heading invited exactly that reading.
-    flags.advancedConstraints = true;
     render(<Placement activityType="TASK" />);
     expect(screen.getByRole('heading', { name: 'Placement & targets' })).toBeVisible();
   });
 
   it.each(PLACEMENT_FIELDS)('renders a control registered as %s', (field) => {
-    flags.advancedConstraints = true;
     render(<Placement activityType="TASK" />);
     expect(screen.getByLabelText(LABELS[field])).toHaveAttribute('name', field);
   });
@@ -97,19 +92,9 @@ describe('ActivityPlacementFields', () => {
     expect(rendered).toEqual([...PLACEMENT_FIELDS]);
   });
 
-  it('renders nothing at all with the advanced-constraints flag off', () => {
-    // Both members are behind it, so the section itself goes rather than leaving a heading over an
-    // empty grid.
-    flags.advancedConstraints = false;
-    render(<Placement activityType="TASK" />);
-    expect(screen.queryByRole('heading', { name: 'Placement & targets' })).toBeNull();
-    flags.advancedConstraints = true;
-  });
-
   it.each(['FINISH_MILESTONE', 'LEVEL_OF_EFFORT', 'WBS_SUMMARY'] as const)(
     'hides expected finish for a %s, whose duration is not entered',
     (activityType) => {
-      flags.advancedConstraints = true;
       render(<Placement activityType={activityType} />);
       expect(screen.queryByLabelText('Expected finish')).toBeNull();
       // The checkbox stays: where a milestone is drawn is still a question.
@@ -120,7 +105,6 @@ describe('ActivityPlacementFields', () => {
   it('shows expected finish while the type is not yet known', () => {
     // `undefined` is "the host has not resolved a type", not "a derived type" — withholding the
     // field would be asserting something the form has not been told.
-    flags.advancedConstraints = true;
     render(<Placement />);
     expect(screen.getByLabelText('Expected finish')).toBeVisible();
   });

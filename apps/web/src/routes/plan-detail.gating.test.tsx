@@ -55,12 +55,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // These seams assert the flag-off reposition→inline-recalc path; authoring (now default-on) routes
   // recalc through the coalescer instead, so pin it off here (the coalescer has its own unit tests).
   CANVAS_AUTHORING_ENABLED: false,
-  // The programme section (now default-on) mounts its own summary/recalc queries; pin it off here —
-  // it has its own suite (ProgrammeScheduleSection).
-  PROGRAMME_SCHEDULING_ENABLED: false,
-  // Entry-route (now default-on) makes PlanDialogs mount the resources/steps dialogs; pin it off here
-  // so these pen-gating / reposition seams are the subject (entry-route has its own suites).
-  ENTRY_ROUTES_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -211,6 +205,8 @@ vi.mock('@/features/schedule', () => ({
   }),
   // Mounted by `PlanChromeDialogs`; its own suite covers it, and this one never opens it.
   ApplyLevellingDialog: () => null,
+  // Mounts its own summary/recalc queries; it has its own suite (ProgrammeScheduleSection.test.tsx).
+  ProgrammeScheduleSection: () => null,
   RecalculateButton: ({ canCalculate }: { canCalculate: boolean }) => (
     <div data-testid="recalculate" data-can-calc={String(canCalculate)} />
   ),

@@ -217,8 +217,7 @@ export function useTsldToolbarContext({
   // Schedule interchange export (ADR-0050 M4d): the caller's `interchange:export` PERMISSION — every
   // member holds it (Viewer upward), so most users see it. Derived in the model (`canExportSchedule`,
   // role-only) like the other capabilities. This context field is the permission ONLY (mirroring the
-  // NOTES `canWriteNotes` pattern); the `VITE_SCHEDULE_INTERCHANGE` flag gates visibility ONCE at the
-  // menu-item render site (`tsld-toolbar-items.tsx`), so the two gates stay orthogonal. UX only: the API
+  // NOTES `canWriteNotes` pattern); the menu-item render site (`tsld-toolbar-items.tsx`) reads it. UX only: the API
   // re-checks the permission + org-scopes the target plan (anti-IDOR).
   const canInterchangeExport = model.canExportSchedule;
   const recalc = useRecalculateCommand(orgSlug, planId);
@@ -559,7 +558,7 @@ export function useTsldToolbarContext({
       toggleView,
       // Which projection the workspace shows (ADR-0059). Sourced from the URL, so a switch is
       // deep-linkable and Back returns to the diagram. Offered to every role — reading the schedule
-      // as bars is not an edit — and hard-wired to `'tsld'` when `VITE_GANTT_VIEW` is off.
+      // as bars is not an edit.
       planView,
       ganttColumns,
       setPlanView,
@@ -865,8 +864,7 @@ export function useTsldToolbarContext({
         if (printing) return;
 
         // The Gantt is DOM, so it prints as a document — no rasterisation (ADR-0059 M4). Branching on
-        // `planView` is enough to keep the flag-off path byte-identical: with `VITE_GANTT_VIEW` off it
-        // is hard-wired to `tsld`.
+        // `planView` picks between the two.
         //
         // **Async only for the code columns' names** (P6 activity codes, M3-T2): the host resolves each
         // shown type's values before anything mounts, so paper never carries "Loading…", "Unavailable"
@@ -970,10 +968,10 @@ export function useTsldToolbarContext({
       exportError,
       dismissExportError: () => setExportError(null),
 
-      // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) — a
+      // Schedule interchange export (interchange:export, ADR-0050 M4d) — a
       // GET that streams the plan as a foreign schedule file (P6 .xer / MS Project .xml) and rides the
       // fidelity report on the `X-Interchange-Report` header. Gated by `canInterchangeExport`; inert when
-      // the flag/permission is off (the menu group doesn't render, so this is never called).
+      // the permission is off (the menu group doesn't render, so this is never called).
       canInterchangeExport,
       interchangeExporting,
       exportNotice,
@@ -1172,7 +1170,7 @@ export function useTsldToolbarContext({
     pdfExporting,
     printing,
     exportError,
-    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE) — re-identify when the permission flips,
+    // Schedule interchange export — re-identify when the permission flips,
     // the plan/org key changes (the fetch closes over `orgSlug`/`planId`/`plan.name`), the in-flight
     // flag toggles (drives the items' spinner), or the lossy-export notice appears/clears.
     canInterchangeExport,

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
 import {
   DURATION_PARSE_MESSAGE,
   checkDurationText,
@@ -14,10 +13,9 @@ import { statedDuration, type DurationSource } from '@/lib/stated-duration';
  *
  * There is **one** field. Whether it reads the `d`/`h`/`m` grammar or plain whole working days is
  * decided by one question — *do we know how many hours this activity's day is worth?* — and that
- * question has three ways of answering "no": the flag is off, the calendar list has not resolved,
- * or the bound calendar is not in it. All three land on the same degraded control, deliberately:
- * the rollback contract and the not-yet-loaded state are then the same code, so neither can rot
- * while the other is exercised.
+ * question has two ways of answering "no": the calendar list has not resolved, or the bound
+ * calendar is not in it. Both land on the same degraded control, deliberately, so the two states
+ * are one piece of code.
  *
  * Days is the fallback because it is the one unit that needs no factor. It is also what the field
  * has always been, so degrading costs a planner nothing they had before.
@@ -28,7 +26,7 @@ const MAX_WHOLE_DAYS = 100_000;
 
 /** Can this field read hours and minutes right now? Narrows `hoursPerDay` for the caller. */
 export function canAuthorSubDay(hoursPerDay: number | undefined): hoursPerDay is number {
-  return SUB_DAY_DURATIONS_ENABLED && hoursPerDay !== undefined;
+  return hoursPerDay !== undefined;
 }
 
 /** The visible label. It states the unit when the unit is fixed, and doesn't when it isn't. */
@@ -52,12 +50,12 @@ export function durationHelp(hoursPerDay: number | undefined): string | undefine
  * The input's own props, as one object rather than three parallel ternaries at each call site.
  *
  * Text — not `type="number"` — once the factor is known: `2d 4h` is not a number, and a number input
- * refuses those characters before the parser ever sees them. Degraded (or flag-off) it goes back to
+ * refuses those characters before the parser ever sees them. Degraded it goes back to
  * the bounded number spinner it has always been.
  *
  * Bundled because it was not: the two dialogs each branched on `hoursPerDay === undefined` while
- * their label and help branched on {@link canAuthorSubDay}, which also reads the flag — so flag-off
- * the field rendered as free text under a label promising whole days. One predicate, one shape.
+ * their label and help branched on {@link canAuthorSubDay}, which once also read a flag — so the degraded
+ * field rendered as free text under a label promising whole days. One predicate, one shape.
  */
 export function durationInputProps(
   hoursPerDay: number | undefined,
@@ -89,7 +87,7 @@ export function seedDurationText(
  * finer — which is the point: a four-hour lift typed into the field M1 built read back as `0 d`,
  * indistinguishable from a milestone.
  *
- * Degraded (or flag-off, or a calendar we cannot resolve) it is the day count, exactly as before.
+ * Degraded (a calendar we cannot resolve) it is the day count, exactly as before.
  * There is no way to render `4h` without knowing what a day is worth, so this reports what it knows
  * rather than inventing a factor — the same rule the field itself follows.
  */

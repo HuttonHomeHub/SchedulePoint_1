@@ -77,9 +77,6 @@ export default defineConfig({
               // The Link tool — the Escape-precedence assertion is about an ARMED tool surviving a
               // keystroke in the field, so it is required.
               VITE_CANVAS_AUTHORING_FLOW: 'true',
-              // The Gantt, for M4's half of the match set. Default-on since ADR-0059 M6; pinned
-              // here so this suite does not silently lose an assertion to a future flag change.
-              VITE_GANTT_VIEW: 'true',
               // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
               // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
               // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve

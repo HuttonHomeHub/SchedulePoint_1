@@ -15,8 +15,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   EARNED_VALUE_ENABLED: false,
   RESOURCE_CURVES_ENABLED: false,
   GUEST_SHARE_LINKS_ENABLED: false,
-  SCHEDULE_INTERCHANGE_ENABLED: false,
-  CANVAS_LIVE_FEEDBACK_ENABLED: false,
 }));
 
 afterEach(cleanup);

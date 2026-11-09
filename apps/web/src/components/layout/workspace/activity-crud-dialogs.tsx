@@ -10,7 +10,6 @@ import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
 } from '@/config/env';
 import {
   ActivityCreateDialog,
@@ -308,7 +307,7 @@ export function ActivityCrudDialogs({
                 ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
                   ? { onNudgeLag: model.nudgeDependencyLag }
                   : {}),
-                ...(PROGRAMME_SCHEDULING_ENABLED && intended
+                ...(intended
                   ? {
                       crossPlanSlot: (
                         <CrossPlanLinksSection
@@ -319,7 +318,7 @@ export function ActivityCrudDialogs({
                           onRemoved={model.recordCrossPlanLinkRemove}
                           canManageLogic={model.canManageLogic}
                           // `intended` is already narrowed truthy by this branch's own
-                          // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
+                          // condition (`intended`), so this
                           // section is always showing its subject when it renders at all.
                           enabled
                         />

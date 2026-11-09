@@ -1,12 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **Gantt view** (`VITE_GANTT_VIEW`, ADR-0059,
+ * End-to-end configuration for the **Gantt view** (ADR-0059,
  * `docs/specs/gantt-view/`) — the view switch, the grid-and-bars projection, URL-backed view state
- * and the grid's keyboard/a11y contract. Serves the web bundle with `VITE_GANTT_VIEW=true` plus the
+ * and the grid's keyboard/a11y contract. Serves the web bundle with the
  * canvas-first plan-workspace layers this journey's authoring steps build on (canvas authoring →
  * toolbar → workspace → editing surface + pen; mirrors the library/interchange/share suites'
- * layering). Like the other flag-on configs the flags bake at `webServer` start, so this is a
+ * layering). Like the other configs the flags bake at `webServer` start, so this is a
  * separate config on the same ports; it runs as its own CI step after the prior suites tear down.
  * Chromium only (TECH_DEBT #25a), serial (one org's plan is mutated throughout).
  */
@@ -74,7 +74,6 @@ export default defineConfig({
             // times, each citing its neighbours as precedent. The flag now takes its default, which is
             // what every shipped bundle carries (ADR-0088 D1).
             env: {
-              VITE_GANTT_VIEW: 'true',
               VITE_CANVAS_AUTHORING: 'true',
             },
           },

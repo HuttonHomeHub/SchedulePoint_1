@@ -59,12 +59,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // Float paths ON: claim 5 proves the one-dock-at-a-time pair against the REAL
-              // sibling, not a stub. The pen layer is not pinned: the report is a read and is not
-              // pen-gated, so the journey takes the pen only where it has to edit to reach a state.
-              VITE_FLOAT_PATHS: 'true',
-            },
           },
         ],
       }),

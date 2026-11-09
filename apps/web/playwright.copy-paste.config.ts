@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **activity copy / paste / duplicate**
- * (`VITE_ACTIVITY_COPY_PASTE`, `docs/specs/activity-copy-paste/` M5-T2).
+ * End-to-end configuration for **activity copy / paste / duplicate**
+ * (`docs/specs/activity-copy-paste/` M5-T2).
  *
  * What a unit suite structurally cannot prove, and this exists for:
  *
@@ -81,8 +81,6 @@ export default defineConfig({
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
             env: {
-              // The epic's surface under test.
-              VITE_ACTIVITY_COPY_PASTE: 'true',
               // `Ctrl+C` sources the canvas's PLURAL selection, which is itself derived from
               // direct manipulation — so both are set. A build with the plural selection on and
               // direct manipulation off cannot exist (ADR-0080), and setting only the derived flag

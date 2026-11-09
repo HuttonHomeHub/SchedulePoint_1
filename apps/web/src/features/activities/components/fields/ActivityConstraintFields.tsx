@@ -6,14 +6,13 @@ import type { GroupProps } from './group-props';
 
 import { SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FormSection } from '@/components/ui/form-layout';
-import { ADVANCED_CONSTRAINTS_ENABLED } from '@/config/env';
 import { CONSTRAINT_TYPE_LABELS } from '@/features/activities/schemas/activity-schemas';
 import type { ActivitySchedulingValues } from '@/features/activities/schemas/activity-scope-schemas';
 import { PARKED_CONSTRAINT_LABELS } from '@/lib/constraint-format';
 
 /**
  * The two constraint pairs, in the order the reader meets them. Each date is conditional on its
- * type being set, and the secondary pair is behind `VITE_ADVANCED_CONSTRAINTS`.
+ * type being set.
  */
 export const CONSTRAINT_FIELDS = [
   'constraintType',
@@ -93,39 +92,35 @@ export function ActivityConstraintFields({
           />
         ) : null}
 
-        {ADVANCED_CONSTRAINTS_ENABLED ? (
-          <>
-            <SelectField
-              label="Secondary constraint"
-              error={errors.secondaryConstraintType?.message}
-              hint={
-                'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
-                '“start no earlier than” with a secondary “finish no later than”. The primary ' +
-                'constraint drives its early dates.'
-              }
-              {...form.register('secondaryConstraintType')}
-            >
-              <option value="">None</option>
-              {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {CONSTRAINT_TYPE_LABELS[value]}
-                </option>
-              ))}
-              {secondaryParkedValue ? (
-                <option value={secondaryParkedValue}>
-                  {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
-                </option>
-              ) : null}
-            </SelectField>
-            {secondaryConstraintType ? (
-              <TextField
-                label="Secondary constraint date"
-                type="date"
-                error={errors.secondaryConstraintDate?.message}
-                {...form.register('secondaryConstraintDate')}
-              />
-            ) : null}
-          </>
+        <SelectField
+          label="Secondary constraint"
+          error={errors.secondaryConstraintType?.message}
+          hint={
+            'A second date constraint that drives the activity’s late dates — e.g. a primary ' +
+            '“start no earlier than” with a secondary “finish no later than”. The primary ' +
+            'constraint drives its early dates.'
+          }
+          {...form.register('secondaryConstraintType')}
+        >
+          <option value="">None</option>
+          {SELECTABLE_CONSTRAINT_TYPES.map((value) => (
+            <option key={value} value={value}>
+              {CONSTRAINT_TYPE_LABELS[value]}
+            </option>
+          ))}
+          {secondaryParkedValue ? (
+            <option value={secondaryParkedValue}>
+              {PARKED_CONSTRAINT_LABELS[secondaryParkedValue]}
+            </option>
+          ) : null}
+        </SelectField>
+        {secondaryConstraintType ? (
+          <TextField
+            label="Secondary constraint date"
+            type="date"
+            error={errors.secondaryConstraintDate?.message}
+            {...form.register('secondaryConstraintDate')}
+          />
         ) : null}
       </FieldGrid>
     </FormSection>

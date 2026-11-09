@@ -274,9 +274,8 @@ export interface TsldScene {
    */
   todayFraction?: number | null | undefined;
   /**
-   * Paint the alternating month bands (ADR-0055 §4, `VITE_CANVAS_VISUAL_LANGUAGE`). Absent ⇒ the
-   * band layer is skipped entirely ⇒ the frame is byte-for-byte today's paint, which is what makes
-   * the flag-off parity claim structural rather than a promise. The budget suite flips it.
+   * Paint the alternating month bands (ADR-0055 §4). Absent ⇒ the
+   * band layer is skipped entirely. The budget suite flips it.
    */
   monthBands?: boolean | undefined;
   /**
@@ -312,7 +311,7 @@ export interface TsldScene {
    * while keeping the criticality outline, so the diagram geometry stays stable and the shape cue
    * survives the dim. Absent ⇒ no filter active ⇒ every bar at full emphasis. */
   dimmedIds?: ReadonlySet<string> | undefined;
-  /** The activity whose ghost is in flight right now (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) —
+  /** The activity whose ghost is in flight right now (ADR-0054 §1) —
    * its source bar recedes to {@link GESTURE_SOURCE_ALPHA} so a drag or resize reads as one shape
    * moving rather than a bar plus a floating rectangle. Absent (the flag-off path never sets it)
    * ⇒ no-op ⇒ byte-for-byte parity. */
@@ -2692,7 +2691,7 @@ export interface LagOverlay {
 }
 
 /**
- * Full-fidelity detail for the in-flight ghost (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`). The
+ * Full-fidelity detail for the in-flight ghost (ADR-0054 §1). The
  * ADR-0052 ghost was a deliberately bare fill+outline, which was right while it sat beside a
  * fully-painted source bar; now the source recedes, the ghost IS the bar and must look like it.
  * Absent ⇒ the ADR-0052 ghost, byte-for-byte.
@@ -2736,7 +2735,7 @@ export interface InteractionOverlay {
    * change (never the sole carrier of state — selection remains the keyboard/AT state), drawn
    * OUTSIDE the bar so it obscures no label or badge. Only read under `visualRefresh`. */
   hover?: Rect | null;
-  // ── Live feedback (ADR-0054 §1–§2, `VITE_CANVAS_LIVE_FEEDBACK`) ──────────────────────────
+  // ── Live feedback (ADR-0054 §1–§2) ──────────────────────────
   /** Full-fidelity detail for the in-flight `live`/`resize` ghost, so a drag reads as the bar
    * itself moving. Absent ⇒ the ADR-0052 ghost, byte-for-byte. */
   ghost?: GhostDetail | null;

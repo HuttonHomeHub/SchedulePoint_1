@@ -7,21 +7,17 @@ import { OrgDestinations } from '@/components/layout/navigator/org-destinations'
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
- * The rollback contract for `VITE_AUDIT_LOG` (ADR-0072), and the role gate on the nav entry.
- *
- * Kept rather than weakened once the flag flips (the ADR-0053 M6 rule): flag-off must stay
- * byte-for-byte the prior product, and the day someone needs the rollback is the day this suite
- * has to still mean something.
+ * The role gate on the audit log's nav entry, and the account menu's My activity item (ADR-0072).
  *
  * The nav entry is a courtesy, never the control — the API answers 403 whether or not it renders,
  * which is why this file pins visibility and the API e2e pins authorisation.
  *
  * **The nav entry moved, and this suite followed it rather than being relaxed** (ADR-0097 Landing
  * D1a, 2026-08-19): the six organisation destinations left the app header for the Project
- * Explorer's bottom zone, so the three cases about the link now render `OrgDestinations` and the
- * two about the account menu still render the header row. Widening `getByRole` to search a whole
- * shell, or dropping the `Members` control assertion, would have been the cheaper edit and would
- * have left a parity suite that passes whether or not the entry exists at all.
+ * Explorer's bottom zone, so the cases about the link render `OrgDestinations` and the one about
+ * the account menu still renders the header row. Widening `getByRole` to search a whole shell, or
+ * dropping the `Members` control assertion, would have left a suite that passes whether or not the
+ * entry exists at all.
  */
 // The account chip now asks whether the reader is staff (ADR-0086). Stubbed to "no" — the answer
 // for almost everybody — so these tests stay about what they are about, and so no real fetch
@@ -54,23 +50,6 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 }));
 
 const role = vi.hoisted(() => ({ current: 'ORG_ADMIN' }));
-const flag = vi.hoisted(() => ({ enabled: false }));
-
-/**
- * A GETTER, not a value, and no `vi.resetModules()`.
- *
- * Re-importing the header under a fresh module graph was tried first and produces a second
- * `ThemeContext` — the provider rendered from this file's graph is invisible to the component from
- * the new one, and every case fails inside `useTheme` for a reason that has nothing to do with the
- * flag. The getter lets one graph answer differently per test.
- */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  get AUDIT_LOG_ENABLED() {
-    return flag.enabled;
-  },
-}));
-
 vi.mock('@/features/organizations/api/use-organizations', () => ({
   useOrganizations: () => ({
     data: [{ id: 'org-1', slug: 'acme', name: 'Acme Co', role: role.current }],
@@ -108,32 +87,7 @@ function renderDestinations(): void {
   render(<OrgDestinations orgSlug="acme" />);
 }
 
-describe('flag OFF — the prior product, byte for byte', () => {
-  beforeEach(() => {
-    flag.enabled = false;
-  });
-
-  it('renders no Audit log entry, even for an Org Admin', () => {
-    renderDestinations();
-    expect(screen.queryByRole('link', { name: 'Audit log' })).toBeNull();
-    // Flag-off is not "audit hidden", it is the prior nav: the rest of it is untouched. Asserting
-    // a sibling is what stops this passing against a component that renders nothing.
-    expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
-  });
-
-  it('renders no My activity item in the account menu', () => {
-    renderHeader();
-    fireEvent.click(screen.getByRole('button', { name: /Account:/ }));
-    expect(screen.queryByRole('menuitem', { name: 'My activity' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
-  });
-});
-
-describe('flag ON — the entry appears for the role that can use it', () => {
-  beforeEach(() => {
-    flag.enabled = true;
-  });
-
+describe('the entry appears for the role that can use it', () => {
   it('shows Audit log to an Org Admin', () => {
     renderDestinations();
     expect(screen.getByRole('link', { name: 'Audit log' })).toHaveAttribute(

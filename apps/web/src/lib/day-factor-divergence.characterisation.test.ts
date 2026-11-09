@@ -41,14 +41,12 @@ import { durationWriteFields } from '@/features/activities/model/duration-field'
  * on it — neither of which this tier can reach. Establishing it by reading is what the register did
  * for a year, and reading is what got the severity wrong.
  *
- * ## The flag is deliberately NOT pinned, and that is the opposite of its sibling's choice
+ * ## `durationWriteFields` runs on the factor-aware branch
  *
- * `effective-hours-per-day.test.ts` mocks `SUB_DAY_DURATIONS_ENABLED` to `false`, because it is
- * asserting a rollback contract and a contract has to name the state it contracts for. This file
- * wants the reverse: the ambient value, which has been **on** since 2026-08-02 and is therefore what
- * every shipped bundle does. Pinning it off here would take `durationWriteFields` down its degraded
- * whole-days branch — where the factor is provably unused — and the file would then characterise a
- * path on which the defect cannot occur, while looking like it had proved something.
+ * The sub-day grammar is no longer switchable, so
+ * this file always characterises the path every shipped bundle takes. Its degraded whole-days
+ * branch — where the factor is provably unused — is the path on which the defect cannot occur, and
+ * is reached only when the calendar factor is unknown.
  *
  * ## The fixture is the spec's §0.2 shape
  *

@@ -78,7 +78,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Excavate');
   await dialog.getByLabel('Code').fill('A100');
-  // Just `Duration` since ADR-0070 turned `VITE_SUB_DAY_DURATIONS` on by default: once the field
+  // Just `Duration` since ADR-0070: once the field
   // can resolve how many hours this activity's day is worth it reads `d`/`h`/`m` text and stops
   // promising whole days in its label. `10` still means ten days — a bare number always does, which
   // is the property that made the grammar safe to ship into a field planners already used. The

@@ -2,7 +2,6 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 
 import { Dialog } from '@/components/ui/dialog';
 import {
-  ADVANCED_CONSTRAINTS_ENABLED,
   EARNED_VALUE_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
@@ -148,15 +147,13 @@ export function PlanChromeDialogs({
           <SettingsSection title="Progress & recalculation">
             <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
           </SettingsSection>
-          {ADVANCED_CONSTRAINTS_ENABLED ? (
-            <SettingsSection title="Expected finish">
-              <PlanExpectedFinishToggle
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
+          <SettingsSection title="Expected finish">
+            <PlanExpectedFinishToggle
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
           {RESOURCE_LEVELLING_ENABLED ? (
             <SettingsSection title="Resource levelling">
               <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />

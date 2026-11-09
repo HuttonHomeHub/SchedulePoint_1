@@ -23,7 +23,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **schedule interchange (XER import)** journey (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1,
+ * **Schedule interchange (XER import)** journey (Stage C2 M1,
  * ADR-0050, `docs/specs/schedule-interchange/`). Proves the whole M1 import loop runs in a real browser:
  *
  * 1. A Planner/Org Admin creates a client + project, then opens the project's plan-create surface, where

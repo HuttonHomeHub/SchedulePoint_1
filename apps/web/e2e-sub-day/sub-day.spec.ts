@@ -17,7 +17,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **sub-day durations and lags** journey (`VITE_SUB_DAY_DURATIONS`, ADR-0070).
+ * **Sub-day durations and lags** journey (ADR-0070).
  *
  * It proves the claims that only a real API and a real database can settle — a mocked fetch accepts
  * any body, echoes back whatever it was handed, and honours any optimistic `version`:

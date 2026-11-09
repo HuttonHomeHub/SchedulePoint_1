@@ -14,7 +14,7 @@ import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
 import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Spinner } from '@/components/ui/spinner';
-import { AUDIT_LOG_ENABLED, GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import { GUEST_SHARE_LINKS_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -353,7 +353,7 @@ const membersRoute = createRoute({
 });
 
 /**
- * The organisation's audit log (behind `AUDIT_LOG_ENABLED`; only added to the tree when on).
+ * The organisation's audit log.
  *
  * Membership is checked in `beforeLoad` like every `:orgSlug` route; the `audit:read` permission is
  * NOT — the screen says why a non-admin cannot read it, which is more use than a redirect that
@@ -379,7 +379,7 @@ const organizationExportRoute = createRoute({
 });
 
 /**
- * The caller's own audit events (behind `AUDIT_LOG_ENABLED`).
+ * The caller's own audit events.
  *
  * Deliberately NOT org-scoped: the events span every organisation the reader belongs to, and the
  * five authentication ones belong to no organisation at all. Nesting it under `/orgs/$orgSlug`
@@ -459,7 +459,7 @@ const projectDetailRoute = createRoute({
 });
 
 /**
- * A single plan — the TSLD canvas, and (behind `VITE_GANTT_VIEW`) the Gantt projection of the
+ * A single plan — the TSLD canvas, and the Gantt projection of the
  * same model. Which view is showing lives in `?view=` so it is deep-linkable and survives a
  * reload (ADR-0059 §3). Validation keeps the raw string and lets `parsePlanViewMode` degrade an
  * unrecognised value to the TSLD — a hand-edited URL must never crash a screen.
@@ -672,9 +672,8 @@ const routeTree = rootRoute.addChildren([
     // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
     // app is byte-identical when off (no route, no nav link, no row action).
     ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
-    // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
-    // app is byte-identical when off — no route, no nav entry, no query.
-    ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
+    auditLogRoute,
+    myActivityRoute,
     accountRoute,
   ]),
 ]);

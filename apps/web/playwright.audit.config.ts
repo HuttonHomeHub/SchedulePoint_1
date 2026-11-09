@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **audit log** (`VITE_AUDIT_LOG`, ADR-0072).
+ * End-to-end configuration for the **audit log** (ADR-0072).
  *
  * Everything this suite proves needs a **real API and a real database**, because the audit log is a
  * claim about writes that happened somewhere else: that a producer actually fired inside the
@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
  * `/me` feed is scoped by **actor** rather than by subject. A mocked fetch answers all four with
  * whatever it was handed — it cannot be wrong about a row it invented.
  *
- * Like the sibling flag-on configs the flags bake at `webServer` start, so this is its own config on
+ * Like the sibling configs the flags bake at `webServer` start, so this is its own config on
  * the same ports, run as its own CI step. Chromium only (TECH_DEBT #25a), serial (two accounts and
  * one organisation are mutated throughout).
  */
@@ -61,14 +61,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // The audit surface ON, and nothing else. Every action this journey audits — sign-up,
-            // organisation create, invite, accept, role change, client delete — lives on the
-            // ordinary hierarchy and members screens, so no canvas layer is involved and the
-            // fewer flags a journey needs the fewer reasons it has to fail for something it is
-            // not about.
-            env: {
-              VITE_AUDIT_LOG: 'true',
-            },
           },
         ],
       }),

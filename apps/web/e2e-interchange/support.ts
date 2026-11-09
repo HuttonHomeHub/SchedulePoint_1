@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **schedule interchange (XER import)** suite
- * (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1, ADR-0050, `docs/specs/schedule-interchange/`). Mirrors the
+ * Journey helpers for the **schedule interchange (XER import)** suite
+ * (Stage C2 M1, ADR-0050, `docs/specs/schedule-interchange/`). Mirrors the
  * onboarding + client/project helpers used across the other flag-on suites (`e2e-resource-view/support.ts`,
  * `e2e-loe/support.ts`) verbatim — the onboarding actor becomes the org's Org Admin, which already
  * satisfies `interchange:import` (Planner + Org Admin), so no extra role setup is needed — and adds a

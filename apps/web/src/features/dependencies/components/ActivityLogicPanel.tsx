@@ -119,8 +119,8 @@ export function ActivityLogicPanel({
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   /**
    * An optional extra panel rendered below Successors — the composition root passes the
-   * `VITE_PROGRAMME_SCHEDULING` cross-plan links section here (ADR-0045), keeping this feature free
-   * of a sideways feature → feature import. Absent (the default) leaves the panel byte-identical.
+   * cross-plan links section here (ADR-0045), keeping this feature free of a sideways
+   * feature → feature import. Absent leaves the panel without that section.
    */
   crossPlanSlot?: React.ReactNode;
   /**
@@ -326,8 +326,7 @@ export function ActivityLogicPanel({
               {...(onAdded ? { onAdded } : {})}
             />
           ) : null}
-          {/* Cross-plan links (ADR-0045) — passed by the composition root only when
-              VITE_PROGRAMME_SCHEDULING is on; absent (byte-identical) otherwise. */}
+          {/* Cross-plan links (ADR-0045) — passed by the composition root. */}
           {crossPlanSlot}
           {/* Notes (ADR-0046) — passed by the composition root only when VITE_NOTES is on; absent
               (byte-identical) otherwise. */}

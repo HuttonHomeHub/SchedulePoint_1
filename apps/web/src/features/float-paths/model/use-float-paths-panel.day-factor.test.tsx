@@ -29,11 +29,6 @@ import { useFloatPathsPanel } from './use-float-paths-panel';
  * `float-paths-flag-off.parity.test.tsx` owns.
  */
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  FLOAT_PATHS_ENABLED: true,
-}));
-
 const CREW_8H = 'cal-crew-8h';
 const CRANE_24H = 'cal-crane-24h';
 

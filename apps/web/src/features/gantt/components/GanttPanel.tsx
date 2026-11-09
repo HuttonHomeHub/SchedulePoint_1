@@ -257,8 +257,7 @@ export interface GanttPanelProps {
    * `host-parity.structural.test.ts` is what stops one host supplying it and the other not — which
    * is how the Gantt came to read `earlyStart` unconditionally in the first place.
    *
-   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days, which is the
-   * same path as `VITE_SUB_DAY_DURATIONS` off (ADR-0070).
+   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days (ADR-0070).
    */
   hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
   /**

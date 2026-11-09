@@ -61,12 +61,11 @@ export interface TsldToolbarContext {
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
   /** Which projection the workspace is showing — `'tsld'` or `'gantt'` (ADR-0059). Drives the
-   * view-mode segment's pressed state. Always `'tsld'` when `VITE_GANTT_VIEW` is off, because the
-   * hook that supplies it is hard-wired to the diagram in that build. */
+   * view-mode segment's pressed state. */
   planView: PlanViewMode;
   /** Switch the workspace's projection. View-only and offered to **every** role — reading the
    * schedule as bars is not an edit, so unlike the scheduling-mode selector this is never shaded
-   * for a viewer. Registered but not surfaced when `VITE_GANTT_VIEW` is off. */
+   * for a viewer. */
   setPlanView: (view: PlanViewMode) => void;
   /**
    * The Gantt grid's hidden columns and how to change them (ADR-0095 M5-T1).
@@ -568,11 +567,10 @@ export interface TsldToolbarContext {
   /** Dismiss the {@link exportError} banner (clears it back to `null`). */
   dismissExportError: () => void;
 
-  // --- Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) ----
+  // --- Schedule interchange export (interchange:export, ADR-0050 M4d) ----
   /** Whether the current member holds `interchange:export` (every member does — Viewer upward). Gates
-   * the Export menu's "Interchange" group ALONGSIDE the `VITE_SCHEDULE_INTERCHANGE` flag: both must be
-   * true for the P6/MS Project items to render. False (group hidden) when the flag is off — the
-   * `exportInterchange` command is then never called. */
+   * the Export menu's "Interchange" group; the P6/MS Project items render only when it is true.
+   * False (group hidden) ⇒ the `exportInterchange` command is never called. */
   canInterchangeExport: boolean;
   /** Download the plan serialised to a foreign schedule file (P6 `xer` / MS Project `mspdi`), reading the
    * fidelity report off the `X-Interchange-Report` header and surfacing it unobtrusively (a polite

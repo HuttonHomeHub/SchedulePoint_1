@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { AUDIT_LOG_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import { RESOURCES_ENABLED } from '@/config/env';
 import {
   canExportOrganization,
   canManageHierarchy,
@@ -102,7 +102,7 @@ function useDestinations(orgSlug: string): Destination[] {
       label: 'Audit log',
       to: '/orgs/$orgSlug/audit-log',
       Icon: ScrollText,
-      visible: AUDIT_LOG_ENABLED && canReadAuditLog(role),
+      visible: canReadAuditLog(role),
     },
     {
       label: 'Recently deleted',

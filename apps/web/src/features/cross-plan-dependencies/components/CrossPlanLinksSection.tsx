@@ -22,8 +22,8 @@ import { DataTable, type Column } from '@/components/ui/data-table';
  * gate it (it is the successor — the edge's home, CQ-2) and the downstream activities it gates (it
  * is the predecessor). Read for any member; Planners/Org Admins (`canManageLogic`) also get add /
  * remove. Same-plan / cycle / duplicate rejections come back from the API (the server owns the
- * plan-level DAG guarantee) and surface inline. Rendered only behind `VITE_PROGRAMME_SCHEDULING` by
- * its host, so nothing here changes an existing surface with the flag off.
+ * plan-level DAG guarantee) and surface inline. Rendered by the hosts that compose it (the
+ * activity Logic panel's slot).
  */
 export function CrossPlanLinksSection({
   orgSlug,

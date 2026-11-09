@@ -2,21 +2,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Entry-route (`VITE_ENTRY_ROUTES`): the canvas floating selection bar gains **Report progress**,
- * **Resources** and **Steps** actions. `selectionActionItems` is built at module-eval time from the
- * flags, so the env mock (hoisted) must be in place before the module is imported — vitest isolates the
- * module registry per test file, so this flag-on view doesn't leak into the sibling default-off suite.
- * `EARNED_VALUE`/`ACTIVITY_STEPS` (which additionally gate Steps) default on, so they come through the
- * spread real env.
+ * Entry-route: the canvas floating selection bar carries **Progress** and **Resources** actions
+ * beside the base Logic / Edit / Delete.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ENTRY_ROUTES_ENABLED: true,
-}));
-
-import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
-
-const { SelectionActionsBar } = await import('@/features/plan-actions/selection-actions');
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 const spies = {
   onOpenLogic: vi.fn(),
@@ -96,8 +88,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
       // `Progress` two buttons back.
       'Edit',
       // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
-      // planner reaches for when the row is nearly right. Present since VITE_ACTIVITY_COPY_PASTE
-      // flipped default-on (W5 M5).
+      // planner reaches for when the row is nearly right.
       'Duplicate',
       'Delete',
       // Last, because it is the rarest action on the bar and the only one inert outside Visual mode

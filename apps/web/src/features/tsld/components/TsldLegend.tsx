@@ -19,7 +19,6 @@ import { NEAR_CRITICAL_DOT_R, NODE_RIM_W } from '../render/render-model';
 import {
   CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
 } from '@/config/env';
 import { cn } from '@/lib/utils';
@@ -150,7 +149,7 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // paint this mark — which is precisely why withdrawing the key with the flag would have left the
   // commonest cue in the diagram unexplained.
   { label: 'Visual conflict', conflict: true } as const,
-  // The ADR-0054 §4/§5 insight marks (behind `VITE_CANVAS_LIVE_FEEDBACK`). Listed like every other
+  // The ADR-0054 §4/§5 insight marks. Listed like every other
   // toggleable cue here (Non-working and Today are keyed whether or not their toggle is on), so a
   // planner who turns `Feasible window` on has somewhere to learn what the hatched bracket means.
   //
@@ -159,16 +158,12 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // no longer paints. The previous pair also had to explain why the left-hand tail was *usually
   // absent* — drift is zero everywhere in Early mode by construction — and that whole apology
   // disappears with the shape: a bracket with no drift simply starts at the bar.
-  ...(CANVAS_LIVE_FEEDBACK_ENABLED
-    ? [
-        { label: 'Feasible window — earliest to latest', window: true } as const,
-        // The selection-scoped slack chip is the legacy link path's (NetPoint grammar M3-T3): the
-        // refreshed path labels every waiting link instead, keyed above as a gap.
-        ...(CANVAS_DIRECT_MANIPULATION_ENABLED
-          ? []
-          : [{ label: 'Link slack (days)', slack: true } as const]),
-      ]
-    : []),
+  { label: 'Feasible window — earliest to latest', window: true } as const,
+  // The selection-scoped slack chip is the legacy link path's (NetPoint grammar M3-T3): the
+  // refreshed path labels every waiting link instead, keyed above as a gap.
+  ...(CANVAS_DIRECT_MANIPULATION_ENABLED
+    ? []
+    : [{ label: 'Link slack (days)', slack: true } as const]),
   // Over-allocation cue (Stage E M2, ADR-0049) — a small rising-bars badge matching the canvas
   // mini-histogram, in the warning hue with a foreground outline (shape, not colour — WCAG 1.4.1). Only
   // meaningful with the resource view, so listed only when the feature is on.

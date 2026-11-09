@@ -11,9 +11,8 @@ import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
 /**
- * The per-activity calendar picker with BOTH `VITE_ACTIVITY_CALENDAR` and `VITE_LIBRARY_SCOPING` on
- * (ADR-0053 §1): the plan's project supplies its own calendars alongside the organisation's, so the
- * options group by tier. The flag-off flat list is covered by `ActivityCreateDialog.calendar.test.tsx`.
+ * The per-activity calendar picker (ADR-0053 §1): the plan's project supplies its own calendars alongside the organisation's, so the
+ * options group by tier.
  *
  * **The archived-seeded-calendar case moved.** `ActivityCreateDialog` lost its edit path in the
  * activity-dialog-unification epic (create-only now, no `activity` prop), so "keeps an archived
@@ -25,7 +24,6 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
  */
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_CALENDAR_ENABLED: true,
   LIBRARY_SCOPING_ENABLED: true,
 }));
 

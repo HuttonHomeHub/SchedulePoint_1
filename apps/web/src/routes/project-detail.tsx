@@ -10,7 +10,6 @@ import {
   SectionCard,
   Skeleton,
 } from '@/components/ui/page';
-import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 import { ProjectCalendarsSection } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import { ImportScheduleButton } from '@/features/interchange';
@@ -67,8 +66,7 @@ export function ProjectDetailScreen(): React.ReactElement {
 
   // How many action blocks the settled header will draw: the same gates it applies, all known
   // from the role, so the skeleton's trailing edge is where the buttons will be.
-  const importing = SCHEDULE_INTERCHANGE_ENABLED && canImport;
-  const actionBlocks = importing && canWrite ? 2 : importing || canWrite ? 1 : 0;
+  const actionBlocks = canImport && canWrite ? 2 : canImport || canWrite ? 1 : 0;
 
   return (
     <PageContainer>
@@ -91,27 +89,23 @@ export function ProjectDetailScreen(): React.ReactElement {
               { label: project.data.name },
             ]}
           />
-          {/* Flag OFF ⇒ render exactly the prior surface. Flag ON ⇒ the "Import from file…" entry sits
-          beside "New plan" (the entry self-gates on interchange:import). */}
+          {/* The "Import from file…" entry sits beside "New plan" (the entry self-gates on
+          interchange:import). */}
           <PageHeader
             className="mt-2"
             title={project.data.name}
             description={project.data.description ?? undefined}
             actions={
-              SCHEDULE_INTERCHANGE_ENABLED ? (
-                <>
-                  <ImportScheduleButton
-                    orgSlug={orgSlug}
-                    projectId={projectId}
-                    projectName={project.data.name}
-                    canImport={canImport}
-                    canManageOrgCalendars={canManageOrgCals}
-                  />
-                  {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
-                </>
-              ) : canWrite ? (
-                <CreatePlanButton orgSlug={orgSlug} projectId={projectId} />
-              ) : null
+              <>
+                <ImportScheduleButton
+                  orgSlug={orgSlug}
+                  projectId={projectId}
+                  projectName={project.data.name}
+                  canImport={canImport}
+                  canManageOrgCalendars={canManageOrgCals}
+                />
+                {canWrite ? <CreatePlanButton orgSlug={orgSlug} projectId={projectId} /> : null}
+              </>
             }
             /* **"activities across its plans", and "activities" means EVERY row.** A project owns no
            activities directly — an activity hangs off a plan — and the figure includes WBS

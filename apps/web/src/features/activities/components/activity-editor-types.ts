@@ -74,7 +74,7 @@ export interface ActivityEditorDialogProps {
    * plain panel, which is what a host without those flags wants.
    */
   logic?: {
-    /** `VITE_PROGRAMME_SCHEDULING`'s cross-plan links section (ADR-0045). */
+    /** The cross-plan links section (ADR-0045). */
     crossPlanSlot?: React.ReactNode;
     /** Undo recording for an added link (ADR-0048 M2). */
     onAdded?: (dependency: DependencySummary) => void;

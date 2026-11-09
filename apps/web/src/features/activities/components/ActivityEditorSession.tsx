@@ -67,7 +67,6 @@ import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
-  ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   EARNED_VALUE_ENABLED,
@@ -904,26 +903,24 @@ export function ActivityEditorSession({
                   {scopeError('scheduling')}
 
                   <FieldGateProvider gate={gating.scheduling}>
-                    {ACTIVITY_CALENDAR_ENABLED ? (
-                      <FormSection
-                        title="Working time"
-                        description="Which calendar's working days this activity's duration is measured in."
-                      >
-                        <ActivityCalendarField
-                          value={scopeCalendarId ?? ''}
-                          onChange={(calendarId) =>
-                            scheduling.form.setValue('calendarId', calendarId, {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            })
-                          }
-                          calendars={calendars}
-                          loading={calendarsLoading}
-                          errored={calendarsError}
-                          activityType={type}
-                        />
-                      </FormSection>
-                    ) : null}
+                    <FormSection
+                      title="Working time"
+                      description="Which calendar's working days this activity's duration is measured in."
+                    >
+                      <ActivityCalendarField
+                        value={scopeCalendarId ?? ''}
+                        onChange={(calendarId) =>
+                          scheduling.form.setValue('calendarId', calendarId, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                        calendars={calendars}
+                        loading={calendarsLoading}
+                        errored={calendarsError}
+                        activityType={type}
+                      />
+                    </FormSection>
 
                     <ActivityConstraintFields form={scheduling.form} />
 

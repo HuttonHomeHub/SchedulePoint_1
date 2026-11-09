@@ -43,11 +43,8 @@ import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { useTooltip } from '@/components/ui/tooltip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 import {
-  ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
-  ENTRY_ROUTES_ENABLED,
-  FLOAT_PATHS_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
@@ -182,11 +179,11 @@ export interface SelectionActionContext {
    * the control inside can shade itself the way the item does.
    */
   setCode?: { panel: SetCodePanel } | null;
-  /** Open the per-activity resource-assignment editor (entry-route win 2, `VITE_ENTRY_ROUTES`). Wired
-   * regardless of the flag; the `resources` item that calls it is only registered when the flag is on. */
+  /** Open the per-activity resource-assignment editor (entry-route win 2). Called by the
+   * `resources` item, which is registered when the resource surface is on. */
   onResources: () => void;
-  /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Wired regardless of
-   * the flag; the `progress` item that calls it is only registered when `VITE_ENTRY_ROUTES` is on. */
+  /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Called by the
+   * `progress` item. */
   onProgress: () => void;
   /**
    * The workspace's `activityEditorGating.general`, carried through unchanged so an identity test
@@ -690,8 +687,7 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  * Logic → (Progress) → (Resources) → (Steps) → Edit → Delete. Labels use the activities-table's
  * vocabulary — **Logic / Edit / Delete** (wording convergence) — so the same operation reads the same
  * on the canvas and in the table. The **Progress**, **Resources** and **Steps** items are entry-route
- * additions (`VITE_ENTRY_ROUTES`): each is spread into the array conditionally so flag-off is
- * byte-for-byte the prior three-item bar. Progress is role-gated (Contributor+, `canReportProgress`);
+ * additions. Progress is role-gated (Contributor+, `canReportProgress`);
  * Resources additionally rides `VITE_RESOURCES` (matching the table's row action) and is otherwise
  * ungated (view-ish; the dialog gates writes); Steps additionally rides `VITE_EARNED_VALUE`
  * and hides for a duration-derived selection — matching the table's Steps row
@@ -719,7 +715,7 @@ export const SELECTION_BAR_GROUP_ORDER: readonly ToolbarGroupId[] = ['object', '
  *   themselves switches to the Gantt, which moves focus to the button they pressed — in a different
  *   container. Nothing else can remove them, so the handoff's premise never holds.
  * - `edit`. It has no `isVisible` at all since the ADR-0093 M5 pass; it is shaded, not omitted.
- * - Every flag-gated item in `tsld-toolbar-items.tsx` (`GANTT_VIEW_ENABLED`, `CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
+ * - Every flag-gated item in `tsld-toolbar-items.tsx` (`CANVAS_AUTHORING_ENABLED`, `NOTES_ENABLED`). A `VITE_` constant is
  *   inlined at build time (ADR-0088 D1), so those predicates are constant for the life of a bundle
  *   and cannot flip under anybody.
  * - `next-conflict-status`, which is `presentational` — it never holds a roving stop, so it cannot
@@ -823,55 +819,51 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
-    ...(ENTRY_ROUTES_ENABLED
-      ? [
-          {
-            id: 'progress',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 1,
-            /**
-             * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
-             *
-             * The UX review declined this shortening on a specific ground rather than a stylistic
-             * one: `:423-425` requires this bar's labels to match the activities table's, "so the
-             * same operation reads the same on the canvas and in the table", and renaming here
-             * alone would have split that vocabulary across three surfaces and left the fourth.
-             * `ActivitiesTable.tsx` moved with it, which answers the objection instead of
-             * overriding it.
-             *
-             * It is here because it is worth a LINE: measured, the row was 32 px from fitting on
-             * one line at 1920 and this is 46 (`docs/specs/foot-row/m0-measurement.md`). A bare
-             * noun beside `Logic` / `Resources` / `Steps` also reads consistently — those are the
-             * same editor's tabs — and the verb survives below for anyone whose only channel is the
-             * accessible name.
-             *
-             * **It survives on `srDescription`, and `description` alone would NOT have carried it.**
-             * This first shipped with `description` only, whose docblock says in as many words that
-             * it is "appended to the native hover `title`" (`toolbar-registry.ts:298-303`) — so the
-             * verb reached a sighted mouse user hovering, and nobody else: not a screen-reader user,
-             * not a sighted keyboard user, which is precisely the audience the sentence above
-             * claimed to be covering. `srDescription` is the `aria-describedby` channel
-             * (`toolbar-registry.ts:342-362`). Both are set, because the two audiences are
-             * different and neither is served by the other's mechanism. The gate this fell through
-             * is the one `ToolbarSplitButton.tsx:47-52` records having caught four times.
-             */
-            label: 'Progress',
-            description: 'Report progress on this activity.',
-            srDescription: () => 'Report progress on this activity.',
-            icon: <ClipboardCheck className="size-4" />,
-            // Role-gated, NOT pen-gated — progress is a Contributor action (the notes/progress
-            // precedent), mirroring the toolbar's Update-progress command's `canProgress` gate.
-            isEnabled: (ctx: SelectionActionContext) => ctx.canReportProgress,
-            disabledReason: (ctx: SelectionActionContext) =>
-              ctx.canReportProgress ? undefined : PROGRESS_REASON,
-            onActivate: (ctx: SelectionActionContext) => ctx.onProgress(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
-    // Resources rides BOTH the entry-route flag AND `VITE_RESOURCES` (the resource surface), matching the
-    // activities-table row action's gate + the Steps item's multi-flag precedent.
-    ...(ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED
+    {
+      id: 'progress',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 1,
+      /**
+       * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
+       *
+       * The UX review declined this shortening on a specific ground rather than a stylistic
+       * one: `:423-425` requires this bar's labels to match the activities table's, "so the
+       * same operation reads the same on the canvas and in the table", and renaming here
+       * alone would have split that vocabulary across three surfaces and left the fourth.
+       * `ActivitiesTable.tsx` moved with it, which answers the objection instead of
+       * overriding it.
+       *
+       * It is here because it is worth a LINE: measured, the row was 32 px from fitting on
+       * one line at 1920 and this is 46 (`docs/specs/foot-row/m0-measurement.md`). A bare
+       * noun beside `Logic` / `Resources` / `Steps` also reads consistently — those are the
+       * same editor's tabs — and the verb survives below for anyone whose only channel is the
+       * accessible name.
+       *
+       * **It survives on `srDescription`, and `description` alone would NOT have carried it.**
+       * This first shipped with `description` only, whose docblock says in as many words that
+       * it is "appended to the native hover `title`" (`toolbar-registry.ts:298-303`) — so the
+       * verb reached a sighted mouse user hovering, and nobody else: not a screen-reader user,
+       * not a sighted keyboard user, which is precisely the audience the sentence above
+       * claimed to be covering. `srDescription` is the `aria-describedby` channel
+       * (`toolbar-registry.ts:342-362`). Both are set, because the two audiences are
+       * different and neither is served by the other's mechanism. The gate this fell through
+       * is the one `ToolbarSplitButton.tsx:47-52` records having caught four times.
+       */
+      label: 'Progress',
+      description: 'Report progress on this activity.',
+      srDescription: () => 'Report progress on this activity.',
+      icon: <ClipboardCheck className="size-4" />,
+      // Role-gated, NOT pen-gated — progress is a Contributor action (the notes/progress
+      // precedent), mirroring the toolbar's Update-progress command's `canProgress` gate.
+      isEnabled: (ctx: SelectionActionContext) => ctx.canReportProgress,
+      disabledReason: (ctx: SelectionActionContext) =>
+        ctx.canReportProgress ? undefined : PROGRESS_REASON,
+      onActivate: (ctx: SelectionActionContext) => ctx.onProgress(),
+    } satisfies ToolbarItem<SelectionActionContext>,
+    // Resources rides `VITE_RESOURCES` (the resource surface), matching the activities-table row
+    // action's gate.
+    ...(RESOURCES_ENABLED
       ? [
           {
             id: 'resources',
@@ -924,41 +916,37 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // and Delete already do exactly that) rather than one item that branches. `ToolbarItem.label` is
     // a plain string — only `icon` takes a context function, and deliberately so — so a single item
     // could not rename itself without widening a shared primitive for one caller.
-    ...(ACTIVITY_COPY_PASTE_ENABLED
-      ? [
-          {
-            id: 'duplicate',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 4.5,
-            label: 'Duplicate',
-            icon: <Copy className="size-4" />,
-            penGated: true,
-            disabledReason: (ctx) => penRefusal(ctx),
-            isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
-            lostReason: 'This action does not apply to a WBS summary.',
-            onActivate: (ctx: SelectionActionContext) => {
-              ctx.onDuplicate();
-            },
-          } satisfies ToolbarItem<SelectionActionContext>,
-          {
-            id: 'duplicate-band',
-            group: 'object',
-            labelVisibility: 'always',
-            order: 4.5,
-            label: 'Duplicate band',
-            description: 'Copies the summary and every activity in it',
-            icon: <Copy className="size-4" />,
-            penGated: true,
-            disabledReason: (ctx) => penRefusal(ctx),
-            isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
-            lostReason: 'This action applies only to a WBS summary.',
-            onActivate: (ctx: SelectionActionContext) => {
-              ctx.onDuplicateBand();
-            },
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    {
+      id: 'duplicate',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 4.5,
+      label: 'Duplicate',
+      icon: <Copy className="size-4" />,
+      penGated: true,
+      disabledReason: (ctx) => penRefusal(ctx),
+      isVisible: (ctx: SelectionActionContext) => !ctx.isSummary,
+      lostReason: 'This action does not apply to a WBS summary.',
+      onActivate: (ctx: SelectionActionContext) => {
+        ctx.onDuplicate();
+      },
+    } satisfies ToolbarItem<SelectionActionContext>,
+    {
+      id: 'duplicate-band',
+      group: 'object',
+      labelVisibility: 'always',
+      order: 4.5,
+      label: 'Duplicate band',
+      description: 'Copies the summary and every activity in it',
+      icon: <Copy className="size-4" />,
+      penGated: true,
+      disabledReason: (ctx) => penRefusal(ctx),
+      isVisible: (ctx: SelectionActionContext) => ctx.isSummary,
+      lostReason: 'This action applies only to a WBS summary.',
+      onActivate: (ctx: SelectionActionContext) => {
+        ctx.onDuplicateBand();
+      },
+    } satisfies ToolbarItem<SelectionActionContext>,
     /**
      * **Make milestone… — icon-only, and only for a zero-duration task** (ADR-0162 decision 4).
      *
@@ -1275,8 +1263,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
         ]
       : []),
     // **Float paths — moved here from the command deck** (toolbar-redesign M2-T4, D-c). The ranked
-    // driving chains INTO the selected activity, in a docked right panel (audit F4,
-    // `VITE_FLOAT_PATHS`). Its subject is the selected object, which is ADR-0093's discriminator, and
+    // driving chains INTO the selected activity, in a docked right panel (audit F4). Its subject is the selected object, which is ADR-0093's discriminator, and
     // on the deck it spent most of its life shaded with "Select an activity first".
     //
     // **View-agnostic, so it is NOT gated on `canvas`**: the analysis runs in the Gantt as well as
@@ -1284,27 +1271,23 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // both can). The gates the deck item carried carry over by construction rather than by copy: the
     // deck required `activityCount > 0` and a selected activity, and this bar renders only for a
     // selection, so both hold whenever the item exists. It is never pen-gated — looking is not
-    // editing. Flag-off the item is absent, as it was on the deck.
-    ...(FLOAT_PATHS_ENABLED
-      ? [
-          {
-            id: 'float-paths',
-            group: 'find',
-            // **Icon-only, on a measurement** (`dock.spec.ts`, ADR-0115): with its label this bar
-            // wraps to a second line in the foot row and a selection then costs the diagram 36 px,
-            // which is the guarantee that spec asserts as an equality. The name and the tooltip
-            // carry the words, as they do for Make milestone… above.
-            labelVisibility: 'never',
-            order: 9,
-            label: 'Float paths',
-            description: 'Trace the chains of activities that drive this one',
-            icon: <Split className="size-4" />,
-            isVisible: (ctx: SelectionActionContext) => ctx.toggleFloatPaths !== null,
-            isActive: (ctx: SelectionActionContext) => ctx.floatPathsOpen,
-            onActivate: (ctx: SelectionActionContext) => ctx.toggleFloatPaths?.(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    // editing.
+    {
+      id: 'float-paths',
+      group: 'find',
+      // **Icon-only, on a measurement** (`dock.spec.ts`, ADR-0115): with its label this bar
+      // wraps to a second line in the foot row and a selection then costs the diagram 36 px,
+      // which is the guarantee that spec asserts as an equality. The name and the tooltip
+      // carry the words, as they do for Make milestone… above.
+      labelVisibility: 'never',
+      order: 9,
+      label: 'Float paths',
+      description: 'Trace the chains of activities that drive this one',
+      icon: <Split className="size-4" />,
+      isVisible: (ctx: SelectionActionContext) => ctx.toggleFloatPaths !== null,
+      isActive: (ctx: SelectionActionContext) => ctx.floatPathsOpen,
+      onActivate: (ctx: SelectionActionContext) => ctx.toggleFloatPaths?.(),
+    } satisfies ToolbarItem<SelectionActionContext>,
   ]);
 
 /**

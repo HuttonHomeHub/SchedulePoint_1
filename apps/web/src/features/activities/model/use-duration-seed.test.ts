@@ -5,11 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
  * The flag on, because the whole point of the re-seed is the sub-day path: flag-off
  * `seedDurationText` returns the rounded day and there is nothing here to protect.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-}));
-
 const { useDurationSeed, useLateSeed } = await import('./use-duration-seed');
 const { seedRemainingText } = await import('./remaining-field');
 

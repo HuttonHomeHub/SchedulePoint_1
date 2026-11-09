@@ -23,9 +23,7 @@ vi.mock('@/config/env', async () => ({
   // Flag OFF: this host only mounts when Logic is a dialog rather than a tab.
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED: false,
   CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: false,
   NOTES_ENABLED: false,
-  PROGRAMME_SCHEDULING_ENABLED: false,
   RESOURCES_ENABLED: false,
 }));
 

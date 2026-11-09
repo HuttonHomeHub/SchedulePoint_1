@@ -124,18 +124,13 @@ import {
   CANVAS_LENSES_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_RESOURCE_VIEW_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
-  CANVAS_VISUAL_LANGUAGE_ENABLED,
   EARNED_VALUE_ENABLED,
-  ENTRY_ROUTES_ENABLED,
-  GANTT_VIEW_ENABLED,
   GUEST_SHARE_LINKS_ENABLED,
   NOTES_ENABLED,
   RESOURCE_CURVES_ENABLED,
-  SCHEDULE_INTERCHANGE_ENABLED,
   WBS_IMPROVEMENTS_ENABLED,
 } from '@/config/env';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
@@ -736,11 +731,7 @@ const VIEW_TOGGLE_META: Record<
   dayGrid: { group: 'structure', label: 'Day grid' },
   monthGrid: { group: 'structure', label: 'Month grid' },
   yearGrid: { group: 'structure', label: 'Year grid' },
-  monthBands: {
-    group: 'structure',
-    label: 'Month bands',
-    enabled: CANVAS_VISUAL_LANGUAGE_ENABLED,
-  },
+  monthBands: { group: 'structure', label: 'Month bands' },
   wbsBand: { group: 'structure', label: 'WBS band', enabled: WBS_IMPROVEMENTS_ENABLED },
   // The Gantt's dependency arrows (M4). Listed under `structure` because that is what it is —
   // the shape of the programme rather than a marker on it — and it lives in `View ▾` rather than
@@ -763,7 +754,7 @@ const VIEW_TOGGLE_META: Record<
   // NetPoint grammar M4-T1 (spec §4.13 C1): beside `labels`, both default off.
   activityCodes: { group: 'markers', label: 'Activity codes' },
   centreItem: { group: 'markers', label: 'Duration & float' },
-  dates: { group: 'insight', label: 'Dates', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  dates: { group: 'insight', label: 'Dates' },
   // **Renamed, not replaced** (one-planning-surface M-E): the float and drift tails were one fact
   // drawn twice and became one bracket, so the control describes the same overlay under a name
   // that matches the picture. The KEY stays `floatTails` because renaming it would touch three
@@ -774,15 +765,11 @@ const VIEW_TOGGLE_META: Record<
   // `useState(DEFAULT_VIEW_TOGGLES)` and calls them "never persisted" in its own docblock, so the
   // toggle already resets on every mount under either name. The first version of this comment
   // repeated the plan's sentence; it is corrected here rather than left to be cited later.
-  floatTails: {
-    group: 'insight',
-    label: 'Feasible window',
-    enabled: CANVAS_LIVE_FEEDBACK_ENABLED,
-  },
+  floatTails: { group: 'insight', label: 'Feasible window' },
   // Renamed from `Link slack` (NetPoint grammar M3-T3): it now labels every waiting link's gap in
   // working days rather than the selection's slack. The key keeps its name for the reason given
   // for `floatTails` above.
-  linkSlack: { group: 'insight', label: 'Link gaps', enabled: CANVAS_LIVE_FEEDBACK_ENABLED },
+  linkSlack: { group: 'insight', label: 'Link gaps' },
   // **The overlay survives the mode** (one-planning-surface M-F-T5). It was gated on
   // `VITE_SCHEDULING_MODES` because ADR-0033 shipped it beside the Early/Visual selector, but it
   // reads the LATE dates and has never consulted `schedulingMode` — so deleting the mode leaves it
@@ -2041,12 +2028,12 @@ function ExportMenuControl({
           Diagram — current view (PDF)
         </MenuItem>
         {/* Interchange export (ADR-0050 M4d) — send the plan to another scheduling tool as a foreign file.
-            The whole group renders only when the `VITE_SCHEDULE_INTERCHANGE` flag AND the caller's
-            `interchange:export` permission (`ctx.canInterchangeExport`, every member) are BOTH true; else
-            the menu is byte-for-byte the Stage-C1 CSV/PNG/PDF set. These are server round-trips (a GET that
+            The whole group renders only when the caller holds the `interchange:export`
+            permission (`ctx.canInterchangeExport`, every member); else the menu is the Stage-C1
+            CSV/PNG/PDF set. These are server round-trips (a GET that
             streams the file), not the client-side off-screen renders above, so they sit in their own
             section after the Diagram group. */}
-        {SCHEDULE_INTERCHANGE_ENABLED && ctx.canInterchangeExport ? (
+        {ctx.canInterchangeExport ? (
           <>
             <MenuSection divider label="Interchange" />
             {/* Both items show a loading spinner and are disabled while an export is in flight
@@ -3149,7 +3136,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       segment: 'view-mode',
       label: 'Diagram',
       icon: <Waypoints className="size-4" aria-hidden="true" />,
-      isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'tsld',
       onActivate: (ctx) => ctx.setPlanView('tsld'),
     },
@@ -3162,7 +3148,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       segment: 'view-mode',
       label: 'Gantt',
       icon: <ChartGantt className="size-4" aria-hidden="true" />,
-      isVisible: () => GANTT_VIEW_ENABLED,
       isActive: (ctx) => ctx.planView === 'gantt',
       onActivate: (ctx) => ctx.setPlanView('gantt'),
     },
@@ -3743,10 +3728,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       labelVisibility: 'never' as const,
       description: "Show the plan's comments beside the diagram",
       isVisible: () => NOTES_ENABLED,
-      // With `VITE_ENTRY_ROUTES` on, Comments is a genuine TOGGLE for the docked notes panel, so it
-      // carries pressed state (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
-      // Without it it is a one-shot scroll action (not a toggle), so no pressed state.
-      ...(ENTRY_ROUTES_ENABLED ? { isActive: (ctx) => ctx.notesOpen } : {}),
+      // Comments is a genuine TOGGLE for the docked notes panel, so it carries pressed state
+      // (`aria-pressed`) reflecting `notesOpen` — like the View/Legend toggles.
+      isActive: (ctx) => ctx.notesOpen,
       onActivate: (ctx) => ctx.revealComments(),
     },
 

@@ -5,8 +5,7 @@ import type { ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Entry-route win 1 (`VITE_ENTRY_ROUTES`): with the flag on, the plan Notes thread moves out of the
- * always-inline block and into a right-side drawer the toolbar **Comments** button opens
+ * Entry-route win 1: the plan Notes thread lives in a right-side drawer the toolbar **Comments** button opens
  * (`revealComments` → `model.setNotesOpen(true)`). Exercised through the REAL production path
  * (`PlanDetailScreen` → `ToolbarPlanWorkspace` → `useTsldToolbarContext` → the Comments registry item)
  * with the canvas/heavy children stubbed, so a broken ref/prop anywhere along the chain fails here.
@@ -17,8 +16,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: false,
   NOTES_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: true,
-  PROGRAMME_SCHEDULING_ENABLED: false,
 }));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
@@ -149,6 +146,8 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // Mounted by `PlanChromeDialogs`; its own suite covers it, and these suites never open it.
   ApplyLevellingDialog: () => null,
+  // Mounts its own summary/recalc queries; it has its own suite (ProgrammeScheduleSection.test.tsx).
+  ProgrammeScheduleSection: () => null,
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({
     notify: vi.fn(),

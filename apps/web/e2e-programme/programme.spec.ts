@@ -15,8 +15,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **live cross-plan / programme scheduling** journey (`VITE_PROGRAMME_SCHEDULING`,
- * inter-project M2, ADR-0045 F8). Proves the surface runs end-to-end in a real browser against the
+ * **Live cross-plan / programme scheduling** journey (inter-project M2, ADR-0045 F8). Proves the surface runs end-to-end in a real browser against the
  * real API:
  *
  * 1. Two interdependent plans in one project — an upstream **Procurement** (a long "Deliver steel")

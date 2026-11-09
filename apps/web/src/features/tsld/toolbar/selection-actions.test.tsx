@@ -2,14 +2,6 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
-// This is the BASE / flag-OFF suite for the selection bar: pin `VITE_ENTRY_ROUTES` off (it now defaults
-// ON) so `selectionActionItems` is built with only the three base actions — the entry-route additions
-// (Progress/Resources/Steps) have their own flag-on suites (selection-actions.entry-routes / .resources-off).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ENTRY_ROUTES_ENABLED: false,
-}));
-
 import {
   SelectionActionsBar,
   type SelectionBarContext,
@@ -87,37 +79,6 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     expect(within(bar).queryByRole('button', { name: 'Open logic' })).not.toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: 'Edit activity' })).not.toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: 'Delete activity' })).not.toBeInTheDocument();
-  });
-
-  it('registers only the base actions when VITE_ENTRY_ROUTES is off', () => {
-    // This suite pins ENTRY_ROUTES off, so the Progress/Resources/Steps items are absent. Duplicate
-    // is NOT one of those — it rides `VITE_ACTIVITY_COPY_PASTE`, default-on since W5 M5 — and
-    // Clear visual start is not either: ADR-0094 M4-T1 moved it here from the command surface,
-    // where its `isEnabled` had always consulted the selection (ADR-0093's discriminator). So the
-    // base set is Logic → Edit → Duplicate → Delete → Clear visual start. Asserting a bare count
-    // here would have gone red on each flip and said nothing about why; naming the members says
-    // which item arrived.
-    render(<SelectionActionsBar context={ctx()} />);
-    const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
-    // `'Steps'` was in this list and is not any more: it is absent unconditionally now
-    // (`docs/specs/object-bar-defects/` M1), so asserting it here would read as a flag gate on an
-    // item that no longer has one — true, and about the wrong thing.
-    for (const name of ['Progress', 'Resources']) {
-      expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
-    }
-    expect(
-      within(bar)
-        .getAllByRole('button')
-        // Accessible name first, `textContent` as the fallback: `Notes` carries an `srDescription`
-        // (as `Progress` does), which renders an `sr-only` span INSIDE the button, so raw text
-        // reads "NotesAdd or read notes…". The entry-routes suite next door reads it the same way.
-        .map((b) => b.getAttribute('aria-label') ?? b.textContent),
-      // `Notes` is here in the base set on purpose: it rides `VITE_NOTES` alone, not
-      // `VITE_ENTRY_ROUTES`. It came from the command surface, where it was gated on the
-      // quick-wins BATCH flag as well — a gate that meant "was this command added in that batch"
-      // and says nothing about an object action. `VITE_NOTES` is the one that means what it needs:
-      // is there a notes surface to open at all.
-    ).toEqual(['Logic', 'Notes', 'Edit', 'Duplicate', 'Delete', 'Clear visual start']);
   });
 
   it('runs the read action (logic) even in read-only', () => {

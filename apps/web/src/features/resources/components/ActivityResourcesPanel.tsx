@@ -37,11 +37,7 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
-import {
-  DURATION_TYPES_ENABLED,
-  EARNED_VALUE_ENABLED,
-  RESOURCE_CURVES_ENABLED,
-} from '@/config/env';
+import { EARNED_VALUE_ENABLED, RESOURCE_CURVES_ENABLED } from '@/config/env';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ARCHIVED_BADGE, isArchivedRow } from '@/lib/library-filters';
 
@@ -52,7 +48,7 @@ import { ARCHIVED_BADGE, isArchivedRow } from '@/lib/library-filters';
  * the chosen/assigned resource is MATERIAL; the API's 422 `MATERIAL_CANNOT_DRIVE` is a server-side
  * backstop. Every query renders its loading / empty / error state.
  *
- * With `VITE_DURATION_TYPES` on, the driving assignment also carries a units/time (rate) — the
+ * The driving assignment also carries a units/time (rate) — the
  * `Units/Time` term of the ADR-0040 triad — settable here and (with the activity's duration type) able
  * to derive the activity's duration; the assign form takes an optional initial rate.
  *
@@ -509,9 +505,9 @@ export function ActivityResourcesPanel({
                     />
                   ) : null}
                   {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
-                    driving box is ticked, and only behind the flag. An initial rate is stored inert; the
+                    driving box is ticked. An initial rate is stored inert; the
                     duration derivation happens on a later units/rate edit in the row above. */}
-                  {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
+                  {wantsDriving && !selectedIsMaterial ? (
                     <TextField
                       label="Units / time (rate)"
                       type="number"

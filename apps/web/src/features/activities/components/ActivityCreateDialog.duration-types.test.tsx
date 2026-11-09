@@ -9,10 +9,8 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The duration-type picker (ADR-0040, M7 rung 4) with `VITE_DURATION_TYPES` forced ON — the surface
- * ships dark by default, so this suite pins the flag to prove the picker renders, persists, and is
- * hidden for a type with no entered duration (a milestone). (The flag-off behaviour — picker hidden,
- * seeded value still round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ * The duration-type picker (ADR-0040, M7 rung 4) — this suite proves the picker renders,
+ * persists, and is hidden for a type with no entered duration (a milestone).
  *
  * **The seed+round-trip case moved.** `ActivityCreateDialog` lost its edit path in the
  * activity-dialog-unification epic (create-only now, no `activity` prop), so "seeds the duration
@@ -20,11 +18,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `ActivityEditorDialog.round-trips.test.tsx` — "seeds the duration type from the row and
  * round-trips it on a General save".
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  DURATION_TYPES_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = anActivity({

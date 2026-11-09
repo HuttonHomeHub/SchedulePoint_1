@@ -92,14 +92,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
   // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
   CANVAS_RESOURCE_VIEW_ENABLED: true,
-  // This suite asserts the ADR-0031 toolbar *layout*. The programme section (now default-on) mounts
-  // its own summary/recalc queries into the same region; pin it off here so the layout is the subject
-  // — it has its own suite (ProgrammeScheduleSection).
-  PROGRAMME_SCHEDULING_ENABLED: false,
-  // Entry-route (now default-on) turns the inline notes into a drawer and mounts the resources/steps
-  // dialogs in PlanDialogs; pin it off here so the toolbar layout is the subject — the drawer + new
-  // selection-bar items have their own suites (plan-workspace-entry-routes / selection-actions.*).
-  ENTRY_ROUTES_ENABLED: false,
 }));
 
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via
@@ -281,6 +273,8 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // Mounted by `PlanChromeDialogs`; its own suite covers it, and these suites never open it.
   ApplyLevellingDialog: () => null,
+  // Mounts its own summary/recalc queries; it has its own suite (ProgrammeScheduleSection.test.tsx).
+  ProgrammeScheduleSection: () => null,
   // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({

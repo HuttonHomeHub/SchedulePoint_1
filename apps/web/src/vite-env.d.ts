@@ -12,16 +12,10 @@ interface ImportMetaEnv {
   /** Canvas-first plan authoring (ADR-0032). "true"/"1" enables it; off by default. */
   readonly VITE_CANVAS_AUTHORING?: string;
   /** Scheduling modes & de-overloaded plan start (ADR-0033). On by default; "false"/"0" disables it. */
-  /** Per-activity working-time calendar picker (ADR-0037). On by default; "false"/"0" disables it. */
-  readonly VITE_ACTIVITY_CALENDAR?: string;
-  /** Advanced schedule constraints — secondary/ALAP/expected-finish + violation badge (ADR-0035, M4). On by default; "false"/"0" disables it. */
-  readonly VITE_ADVANCED_CONSTRAINTS?: string;
   /** Advanced activity types — the Level-of-Effort (later WBS-summary) option in the Type picker (ADR-0035 §21/§24, M5-epic). "true"/"1" enables it; off by default. */
   readonly VITE_ADVANCED_ACTIVITY_TYPES?: string;
   /** Web resource surface — library screen + per-activity assignments (M7.1, ADR-0039). "true"/"1" enables it; off by default. */
   readonly VITE_RESOURCES?: string;
-  /** Duration types & the resource-units triad — the activity duration-type picker + the driving assignment's units/time rate (M7 rung 4, ADR-0040). "true"/"1" enables it; off by default. */
-  readonly VITE_DURATION_TYPES?: string;
   /** Resource levelling — plan level-resources/within-float toggles, resource max units/hour, activity levelling priority, levelled summary overlay (ADR-0041). "true"/"1" enables it; off by default. */
   readonly VITE_RESOURCE_LEVELLING?: string;
   /** Earned-Value web surface — plan EAC/currency settings, resource cost rate, activity cost & %-complete, assignment cost, and the EV analysis panel (EV4b, ADR-0042). "true"/"1" enables it; off by default. */
@@ -30,8 +24,6 @@ interface ImportMetaEnv {
   readonly VITE_RESOURCE_CURVES?: string;
   /** Inter-project / external dates web surface — activity external early-start/late-finish, plan ignore-external toggle, externally-driven summary count (F5, ADR-0043). "true"/"1" enables it; off by default. */
   readonly VITE_INTER_PROJECT_DATES?: string;
-  /** Live cross-plan / programme scheduling web surface — the activity-panel cross-plan links section, the programme recalc control + result/423/422 handling, and the staleness banner (inter-project M2, F8, ADR-0045). "true"/"1" enables it; off by default. */
-  readonly VITE_PROGRAMME_SCHEDULING?: string;
   /** Notes web surface — attributed note threads + composer on plans (plan-detail/workspace) and activities (Logic panel), plus the per-row count badge (Notes M3, ADR-0046). "true"/"1" enables it; off by default. */
   readonly VITE_NOTES?: string;
   /** TSLD canvas insight lenses — filter/search dimming, Colour-by (Criticality/Total-float/WBS), and the baseline ghost overlay, turning three Look-row toolbar placeholders into real client-side read lenses (docs/specs/canvas-lenses/). "true"/"1" enables it; off by default during build (flips on at M4). */
@@ -40,23 +32,13 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_NAV?: string;
   /** TSLD canvas-axis-aligned resource strip — turns the `resource-view` toolbar placeholder into a demand strip pinned to the TSLD time axis (a Canvas 2D sibling layer painted by the `TsldCanvas` loop from the shared viewport), over the already-shipped resource-histogram read-model (Stage E, ADR-0049, docs/specs/canvas-resource-view/). Gated on VITE_RESOURCE_CURVES. "true"/"1" enables it; off by default during build (flips on after reviews, Task 6). */
   readonly VITE_CANVAS_RESOURCE_VIEW?: string;
-  /** Schedule interchange web review UI — the project plan-create "Import from file…" entry + the dry-run review dialog (report table + approximation/repair/drop lists + download) + commit → open-plan, over the already-shipped `@repo/interchange` pipeline + the `interchange` dry-run/commit endpoints (Stage C2 M1, ADR-0050, docs/specs/schedule-interchange/). Additionally gated on the caller holding `interchange:import`. "true"/"1" enables it; off by default during build (flips on after the M1 specialist reviews). */
-  readonly VITE_SCHEDULE_INTERCHANGE?: string;
   /** External-Guest per-plan share links web surface — the member Share dialog (toolbar `share` item: list/create/revoke a plan's guest links + one-time URL, gated on `plan:share`) + the public read-only `/share` guest view (session-less, token in the URL fragment), over the already-shipped F-M2 management + F-M3 guest-read endpoints (Stage F M4, ADR-0051, docs/specs/external-guest-share-link/). "true"/"1" enables it; off by default during build (flips on after the specialist reviews + Playwright journey). */
   readonly VITE_GUEST_SHARE_LINKS?: string;
-  /** Entry-route UX improvements — plan notes as a right-side drawer (opened from the Comments toolbar button) + a Resources action on the canvas selection bar, over the already-shipped notes + resource-assignment features (docs spec — entry-route quick wins). "true"/"1" enables it; off by default during build (flips on after the specialist reviews). */
-  readonly VITE_ENTRY_ROUTES?: string;
   /** TSLD canvas direct manipulation + visual refresh — time-true link anchoring (lag walked on the relationship's lag calendar from the constrained edge; lead = left) + directional arrowheads, duration resize on both bar edges, a draggable lag anchor, and the token-resolved bar/link visual refresh (ADR-0052, docs/specs/canvas-direct-manipulation/). On by default (2026-07-25, M1–M5 landed); "false"/"0" rolls back to the legacy edge-drag zones and canvas paint, byte-for-byte. */
   readonly VITE_CANVAS_DIRECT_MANIPULATION?: string;
-  /** TSLD canvas live feedback + GPM float/drift visualisation — the in-flight ghost carrying the dragged bar's own label/progress/glyph while its source recedes, a cursor date chip + ruler guideline, start/finish dates flanking each bar behind a Dates toggle, hollow float/drift tails, and relationship slack on the selected activity's links (ADR-0054, docs/specs/canvas-live-feedback/). "true"/"1" enables it; off by default until the M6 draw-budget measurement + specialist reviews. */
-  readonly VITE_CANVAS_LIVE_FEEDBACK?: string;
   /** Designed chrome band — the header row and (on a plan) the two toolbar rows rendered as ONE full-bleed band across the top, with the Project Explorer and the workspace below it; the toolbar reaches the band through a portal, so no plan state moves into the shell (ADR-0055, docs/specs/designed-ui/). Also stamps `data-designed-chrome` on <html>, activating the flagged token values. "true"/"1" enables it; off by default until the S5 enablement gate. */
-  /** Canvas visual language — the diagram on a ground of its own with alternating month bands, so months are countable without labels (ADR-0055 §4, docs/specs/designed-ui/). "true"/"1" enables it; off by default until the S5 draw-budget gate. */
-  readonly VITE_CANVAS_VISUAL_LANGUAGE?: string;
   /** TSLD time-axis legibility — range-anchored zoom presets, tiered gridlines, an interpolated Today marker + pill, and ground-vs-non-working shading (docs/specs/tsld-toolbar-canvas-refinements/). "true"/"1" enables it; off by default until the M7 enablement gate. */
   readonly VITE_CANVAS_TIME_AXIS?: string;
-  /** Gantt view — a grid-and-bar projection of the same model, reached through the TSLD | Gantt view switch, for the audience that does not read logic diagrams (ADR-0059, docs/specs/gantt-view/). Read-only in the first slices. "true"/"1" enables it; off by default until the M6 enablement gate. */
-  readonly VITE_GANTT_VIEW?: string;
   /** Tabbed activity editor — the 22-field single-submit dialog split into four tabs that save per write scope, with the progress model co-located (ADR-0060, docs/specs/activity-editor-restructure/). "true"/"1" enables it; off by default until the M6 enablement gate. */
   /** Activity-editor convergence — the per-activity Logic and Resources pop-outs folded into tabs of the editor above, rendering the same panels the dialogs render (docs/specs/activity-editor-logic-resources-convergence/). No permission change: the new scopes reuse the existing definition gate. "true"/"1" enables it; off by default until the M6 enablement gate. */
   readonly VITE_ACTIVITY_EDITOR_CONVERGENCE?: string;
@@ -65,12 +47,6 @@ interface ImportMetaEnv {
   /** ADR-0064 M1 — the additive canvas authoring-flow surface (band, confirmation, quiescence). */
   readonly VITE_CANVAS_AUTHORING_FLOW?: string;
   readonly VITE_CANVAS_LINK_ROUTING?: string;
-  /** ADR-0070 — type a duration or lag in days, hours and minutes. Default off. */
-  readonly VITE_SUB_DAY_DURATIONS?: string;
-  /** Audit F4 — the Float paths panel: what binds after the critical path, and by how much. Default ON. */
-  readonly VITE_FLOAT_PATHS?: string;
-  /** ADR-0072 — the audit log screens: an organisation's history, and your own. Default ON. */
-  readonly VITE_AUDIT_LOG?: string;
   /** Canvas status & feedback M1 — the TSLD data-date line, pill, legend + text equivalents. Default off. */
   readonly VITE_CANVAS_DATA_DATE?: string;
   /** Search that navigates — Enter cycles the matches, centring, selecting and announcing each.
@@ -81,5 +57,4 @@ interface ImportMetaEnv {
   readonly VITE_CANVAS_MULTI_SELECT?: string;
   /** Activity copy, paste & duplicate (docs/specs/activity-copy-paste/) — Duplicate on the row menu
    *  and the canvas selection bar, band duplication, and Ctrl+C/Ctrl+V over a set. Default off. */
-  readonly VITE_ACTIVITY_COPY_PASTE?: string;
 }

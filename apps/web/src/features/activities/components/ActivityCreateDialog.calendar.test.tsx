@@ -10,12 +10,10 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The per-activity calendar picker (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR` forced ON — the
- * feature ships dark by default, so this suite pins the flag to prove the Select renders, defaults to
+ * The per-activity calendar picker (ADR-0037, M5) — this suite proves the Select renders, defaults to
  * inherit, persists a chosen calendar, and surfaces a load error without masking a seeded calendar as
  * "inherit". The org calendars are route-composed (passed as a prop), so no calendars fetch is
- * mocked here — only the create/update mutation hits `apiFetch`. (The flag-off behaviour — no
- * picker, value still round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ * mocked here — only the create/update mutation hits `apiFetch`.
  *
  * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
  * (activity-dialog-unification epic): "seeds the activity's calendar and clears it to inherit (null)
@@ -25,16 +23,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `fields/ActivityCalendarField.test.tsx` ("says the list failed rather than offering a short one" +
  * "still shows a bound calendar the list does not contain").
  */
-// `LIBRARY_SCOPING_ENABLED` is pinned OFF so this suite keeps documenting the BASE per-activity
-// calendar picker — a flat, ungrouped native `<select>` over the org library (ADR-0037). The
-// tier-grouped `Combobox` the flag turns it into has its own suite,
-// `ActivityCreateDialog.scope.test.tsx` (ADR-0053 §1/§4). Pinning both directions means neither
-// behaviour can regress unnoticed when the flag default moves.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_CALENDAR_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const CALENDARS: CalendarSummary[] = [

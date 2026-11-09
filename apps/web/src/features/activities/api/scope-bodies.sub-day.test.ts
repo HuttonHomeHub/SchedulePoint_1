@@ -1,18 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
- * `generalBody` with `VITE_SUB_DAY_DURATIONS` **on** (ADR-0070).
- *
- * Its own file because the flag is a build-time constant: `scope-bodies.test.ts` runs flag-off and
- * is the rollback contract — it must keep asserting that the body sends `durationDays`. This suite
- * asserts the other half, that a resolved working-hours factor makes the same builder send exact
+ * `generalBody` when a working-hours factor is known (ADR-0070). `scope-bodies.test.ts` asserts
+ * the degraded half (the body sends `durationDays`); this suite asserts that a resolved working-hours factor makes the same builder send exact
  * minutes instead, and **never both** (the API rejects that pairing by design).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-}));
-
 const { generalBody } = await import('./scope-bodies');
 
 const general = {

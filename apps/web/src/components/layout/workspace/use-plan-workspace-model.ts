@@ -396,14 +396,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [setEditorIntent],
   );
-  // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
-  // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
-  // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
+  // Plan notes right-side drawer (entry-route win 1): the open flag the toolbar **Comments** button
+  // toggles (`revealComments`) and the drawer's Close button clears.
   const [notesOpen, setNotesOpen] = useState(false);
-  // The activity targeted by the canvas selection bar's **Resources** action (entry-route win 2,
-  // `VITE_ENTRY_ROUTES`) — held as an id (mirroring `editActivityId`) so a refetch re-derives the
-  // current row and the dialog closes the moment its target vanishes. Drives the workspace-hosted
-  // `ActivityResourcesDialog` (beside the crud dialogs). Inert when nothing reads it (flag off).
+  // The activity targeted by the canvas selection bar's **Resources** action (entry-route win 2) —
+  // held as an id (mirroring `editActivityId`) so a refetch re-derives the current row and the
+  // dialog closes the moment its target vanishes. Drives the workspace-hosted
+  // `ActivityResourcesDialog` (beside the crud dialogs).
   const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
   // Flag-on, **Resources** is a tab of the one editor rather than a dialog of its own — the same
   // shape as `onEditActivity` / `onOpenLogic`. Flag-off it still drives the workspace-hosted
@@ -610,7 +609,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : undefined,
     [selectedActivityId, activities.data],
   );
-  // **Float paths** (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into one activity.
+  // **Float paths** (audit F4) — the ranked driving chains into one activity.
   // Hosted here rather than in either view because the emphasis id-set it derives is handed to BOTH
   // the canvas and the Gantt: two derivations of "which activities are on the path" would differ
   // eventually, and only in a screenshot or a printed programme (the ADR-0063 `wbs-band-source`
@@ -2678,8 +2677,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   };
 
   /**
-   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2, behind
-   * `VITE_ACTIVITY_COPY_PASTE`).
+   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2).
    *
    * Pre-checks come from `planClone`'s refusal union rather than from ad-hoc tests here, so a case
    * cannot be handled in one call site and forgotten in the next. Everything else follows
@@ -3126,7 +3124,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     scheduleRefusal: refuseSchedule,
     // Schedule interchange export (ADR-0050 M4d) — every member may export (Viewer upward, a read-egress
     // of on-screen schedule data), so this is role-only (NOT pen-gated). Gates the Export menu's
-    // "Interchange" group alongside `VITE_SCHEDULE_INTERCHANGE`. Named to match the `canExportSchedule`
+    // "Interchange" group. Named to match the `canExportSchedule`
     // rbac fn end-to-end. False for a signed-out / unknown role.
     canExportSchedule: canExportSchedule(role),
     // External-Guest share links (ADR-0051 F-M4): who may create/list/revoke a plan's share links —
@@ -3189,18 +3187,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     selectedActivityId,
     onSelectionChange,
     selectedActivity,
-    // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag +
-    // setter the toolbar Comments button and the drawer's Close control drive. Inert flag-off.
+    // Plan notes right-side drawer (entry-route win 1): the open flag +
+    // setter the toolbar Comments button and the drawer's Close control drive.
     notesOpen,
     setNotesOpen,
     // The Float paths panel's whole state, actions and derived emphasis set, as ONE bundle rather
     // than eight loose fields — `PlanWorkspaceModel` is consumed by ~30 files and widening it a
-    // field at a time is how it got to this length. Inert when `VITE_FLOAT_PATHS` is off: nothing
-    // opens it and the query's `enabled` is false by construction.
+    // field at a time is how it got to this length.
     floatPaths,
-    // Resources dialog target from the canvas selection bar (entry-route win 2, `VITE_ENTRY_ROUTES`):
+    // Resources dialog target from the canvas selection bar (entry-route win 2):
     // the opener + the resolved row + the close setter. `resourcesActivity` re-derives from the live
-    // query, so it closes the dialog when the row is deleted. Inert flag-off.
+    // query, so it closes the dialog when the row is deleted.
     onResourcesActivity,
     resourcesActivity,
     setResourcesActivity,

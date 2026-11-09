@@ -133,7 +133,6 @@ import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
-  CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
@@ -1263,10 +1262,10 @@ export function TsldCanvas({
    * Publish the bar the in-flight gesture is dragging into the SCENE (ADR-0054 §1), mirroring
    * {@link setActiveLagId}: written — and the scene marked dirty — only when it actually changes,
    * so a drag costs exactly two scene repaints (arm and drop), never one per pointer move. Called
-   * after every `gestureRef` transition; flag-off it is a permanent no-op (the id stays null).
+   * after every `gestureRef` transition.
    */
   const syncGestureSource = (): void => {
-    const id = CANVAS_LIVE_FEEDBACK_ENABLED ? gestureSourceId(gestureRef.current) : null;
+    const id = gestureSourceId(gestureRef.current);
     if (gestureSourceIdRef.current === id) return;
     gestureSourceIdRef.current = id;
     sceneRef.current = { ...sceneRef.current, gestureSourceId: id };
@@ -2330,22 +2329,18 @@ export function TsldCanvas({
           visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
           hover: gestureActiveRef.current ? null : hoverRef.current,
           // Live feedback (ADR-0054 §1): the ghost carries the dragged bar's own label, progress
-          // and glyph. Null off-flag and whenever no bar is being manipulated (a create has none),
-          // so the ghost falls back to the ADR-0052 treatment byte-for-byte.
-          ghost: CANVAS_LIVE_FEEDBACK_ENABLED
-            ? gestureGhostDetail(gestureRef.current, activityById)
-            : null,
+          // and glyph. Null whenever no bar is being manipulated (a create has none), so the
+          // ghost falls back to the ADR-0052 treatment.
+          ghost: gestureGhostDetail(gestureRef.current, activityById),
           // The cursor date readout (ADR-0054 §2). The day comes from the gesture where one is in
           // flight — so the chip states the date that will be COMMITTED, not the pixel under the
           // pointer — and from the pointer's own column when idle.
-          cursor: CANVAS_LIVE_FEEDBACK_ENABLED
-            ? cursorReadout({
-                state: gestureRef.current,
-                point: cursorPointRef.current,
-                view: viewRef.current,
-                dataDate: sceneRef.current.dataDate,
-              })
-            : null,
+          cursor: cursorReadout({
+            state: gestureRef.current,
+            point: cursorPointRef.current,
+            view: viewRef.current,
+            dataDate: sceneRef.current.dataDate,
+          }),
           // The live marquee sweep (M2-T5). Read straight off the gesture state, which keeps raw
           // screen points — so the rectangle drawn is the rectangle the release will resolve, with
           // no second derivation that could disagree at the boundary. Null in every other state.
@@ -3020,7 +3015,7 @@ export function TsldCanvas({
           // readout, because THIS line is what withholds it); only its stated cause was stale, and
           // a stale cause is what a later edit reasons from. Found while moving the readout into
           // the ruler for #148, and repaired rather than stepped over.
-          if (CANVAS_LIVE_FEEDBACK_ENABLED && editing) {
+          if (editing) {
             cursorPointRef.current = localPoint(e);
             interactionDirtyRef.current = true;
           }

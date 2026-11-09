@@ -22,7 +22,6 @@ vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   CANVAS_AUTHORING_ENABLED: true,
   CANVAS_LENSES_ENABLED: true,
-  CANVAS_LIVE_FEEDBACK_ENABLED: true,
   CANVAS_NAV_ENABLED: true,
   CANVAS_RESOURCE_VIEW_ENABLED: true,
   CANVAS_MULTI_SELECT_ENABLED: true,
@@ -30,10 +29,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
   GUEST_SHARE_LINKS_ENABLED: true,
   EARNED_VALUE_ENABLED: true,
   RESOURCE_CURVES_ENABLED: true,
-  SCHEDULE_INTERCHANGE_ENABLED: true,
   NOTES_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: true,
-  GANTT_VIEW_ENABLED: true,
 }));
 
 /**

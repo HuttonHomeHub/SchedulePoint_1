@@ -38,8 +38,8 @@ function PlanResultRow({
 
 /**
  * The **programme scheduling** control for a plan that has live cross-plan links (inter-project M2,
- * ADR-0045). Rendered only behind `VITE_PROGRAMME_SCHEDULING` by its hosts, and — because the plan
- * summary carries the `scheduleStale` field **only when the plan has at least one cross-plan edge** —
+ * ADR-0045). The plan
+ * summary carries the `scheduleStale` field **only when the plan has at least one cross-plan edge**, so
  * it renders nothing at all for an ordinary plan, so a plan with no cross-plan links is unaffected.
  *
  * When present it offers:

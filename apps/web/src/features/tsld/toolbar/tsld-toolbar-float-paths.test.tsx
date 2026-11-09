@@ -29,14 +29,10 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
  * a planner with nothing selected no longer sees the precondition spelled out, because they no
  * longer see the command. *"stays ENABLED on a plan that has never been recalculated"* has no
  * counterpart either: the item reads no `hasDiagram`, and the context it is built from has none.
- *
- * The flag-off shape (the item **absent**, not a "Coming soon" stub) is pinned by the parity suite
- * in `features/float-paths`.
  */
 
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  FLOAT_PATHS_ENABLED: true,
   CANVAS_NAV_ENABLED: true,
 }));
 

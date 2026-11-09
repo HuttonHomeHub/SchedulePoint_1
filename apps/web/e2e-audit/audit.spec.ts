@@ -4,7 +4,7 @@ import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from '../e2e-support/test';
 
 /**
- * Flag-ON **audit log** journey (`VITE_AUDIT_LOG`, ADR-0072).
+ * **Audit log** journey (ADR-0072).
  *
  * The audit log is a claim about writes that happened somewhere else, so almost nothing about it is
  * testable against a mocked fetch: a mock cannot be wrong about a row it invented. What needs a

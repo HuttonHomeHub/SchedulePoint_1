@@ -12,7 +12,6 @@ import { router } from './router';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   RESOURCES_ENABLED: true,
-  AUDIT_LOG_ENABLED: true,
   GUEST_SHARE_LINKS_ENABLED: true,
 }));
 

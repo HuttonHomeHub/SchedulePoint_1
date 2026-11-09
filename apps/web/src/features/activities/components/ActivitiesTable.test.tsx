@@ -12,15 +12,6 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 import { menuItemLabel } from '@/test/menu-item-label';
 
-// This is the BASE table suite — the M4/M5 flag surfaces (Conflict badge, per-activity calendar
-// column) are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
-// `ActivitiesTable.constraint-violation.test.tsx` / `.calendar.test.tsx` suites.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_CONSTRAINTS_ENABLED: false,
-  ACTIVITY_CALENDAR_ENABLED: false,
-}));
-
 const ACTIVITY: ActivitySummary = anActivity({
   planId: 'pl1',
   status: 'IN_PROGRESS',
@@ -226,13 +217,6 @@ describe('ActivitiesTable', () => {
     const rows = within(screen.getByRole('table')).getAllByRole('row');
     const cells = within(rows[rows.length - 1]!).getAllByRole('cell');
     expect(cells[5]).toHaveTextContent('—');
-  });
-
-  it('does not show the Conflict badge while VITE_ADVANCED_CONSTRAINTS is off, even when violated', () => {
-    // The engine flag is set on the row, but the badge is gated on the (default-off) feature flag —
-    // so the flag-off surface never surfaces it. (Flag-on behaviour is in the dedicated suite.)
-    renderTable(false, [{ ...ACTIVITY, constraintViolated: true }]);
-    expect(screen.queryByText('Conflict')).not.toBeInTheDocument();
   });
 
   it('shows computed dates, float and a Critical badge for a calculated activity', () => {

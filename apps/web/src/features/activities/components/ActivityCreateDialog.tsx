@@ -57,11 +57,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FormProblemCount } from '@/components/ui/form';
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
-import {
-  ACTIVITY_CALENDAR_ENABLED,
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  EARNED_VALUE_ENABLED,
-} from '@/config/env';
+import { ADVANCED_ACTIVITY_TYPES_ENABLED, EARNED_VALUE_ENABLED } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
@@ -659,26 +655,24 @@ function ActivityCreateForm({
               />
             ) : null}
 
-            {ACTIVITY_CALENDAR_ENABLED ? (
-              <FormSection
-                title="Working time"
-                description="Which calendar's working days this activity's duration is measured in."
-              >
-                <ActivityCalendarField
-                  value={calendarId ?? ''}
-                  onChange={(value) =>
-                    scheduling.form.setValue('calendarId', value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                  calendars={calendars}
-                  loading={calendarsLoading}
-                  errored={calendarsError}
-                  activityType={type}
-                />
-              </FormSection>
-            ) : null}
+            <FormSection
+              title="Working time"
+              description="Which calendar's working days this activity's duration is measured in."
+            >
+              <ActivityCalendarField
+                value={calendarId ?? ''}
+                onChange={(value) =>
+                  scheduling.form.setValue('calendarId', value, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+                calendars={calendars}
+                loading={calendarsLoading}
+                errored={calendarsError}
+                activityType={type}
+              />
+            </FormSection>
 
             <ActivityConstraintFields form={scheduling.form} />
 
