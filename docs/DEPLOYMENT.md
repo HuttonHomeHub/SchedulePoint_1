@@ -485,6 +485,11 @@ secret manager — never baked into images or committed. See
   before the new API version serves traffic. Where backups are switched on, the entrypoint
   first takes a copy when a migration is pending, and a failed copy holds the update (see
   [Backups](#backups)).
+- The entrypoint's first step is `schedulepoint-backup preflight` (ADR-0215): it refuses, before any copy
+  or migration, a database made before the 1.1 baseline, one it cannot read and one that is not
+  SchedulePoint's, logging `boot.database_refused` and pointing at
+  [`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md). A 1.1 database that a later 1.1.x
+  has migrated still passes, so rolling back by image tag works inside 1.1.
 - Migrations are backward-compatible where feasible (expand/contract) so a
   rollout can proceed without downtime and a rollback stays safe.
 
@@ -1432,6 +1437,7 @@ None needs an outside service. A ping to an external monitor after each good cop
 | `check [file] [--keep]`  | Load a copy into a scratch database, print counts beside the live ones, drop it. Ends `CHECK PASSED` |
 | `restore <file> [--yes]` | Replace the live database with a copy; needs the API stopped. Ends `RESTORE FINISHED`                |
 | `health`                 | Exit 0 when a nightly copy is under 26 hours old (the healthcheck)                                   |
+| `preflight`              | What the API's entrypoint calls first: refuses a pre-1.1 database; not for hand use                  |
 | `pre-migrate`            | What the API's entrypoint calls; not for hand use                                                    |
 
 File arguments must be `schedulepoint-*.dump` names inside the backups folder.

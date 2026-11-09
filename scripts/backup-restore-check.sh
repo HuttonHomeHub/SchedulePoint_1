@@ -28,7 +28,10 @@
 #   5. `pre-migrate` decides correctly in each branch (spec §4.12): not enabled, fresh, none pending,
 #      taken, held on an unwritable folder, held on an unreachable database, held on a full disk;
 #   6. pruning, the status file, `health`, `list`, and every refusal `check` and `restore` make;
-#      and a real `restore` swaps in a copy identical to the source and keeps the old database.
+#      and a real `restore` swaps in a copy identical to the source and keeps the old database;
+#   7. `preflight` (ADR-0215) decides correctly for each lineage — fresh, empty migrations table, 1.1
+#      baseline, baseline plus a later migration, 1.0, mixed, unknown, unreachable — writing nothing; and a
+#      1.0 copy is counted by `check` with a note and refused by `restore`.
 #
 # The script's exit status is the only result. It creates and drops databases named bkt_*/…_check_*/
 # …_restoring and temporary folders; it never writes to the source database.
@@ -385,14 +388,24 @@ run_bk check schedulepoint-2026-01-01T0200Z.dump
 expect "check refuses a copy whose checksum is right but pg_restore cannot read it" \
   failed_with "CHECK FAILED" "cannot be read"
 
-OLDER="$work/migs-older"
-cp -r "$real_migrations" "$OLDER"
-newest_migration="$(files_matching "$real_migrations" '^[0-9]+_' | sort | tail -1)"
-rm -rf "${OLDER:?}/${newest_migration:?}"
+# A copy made by a later 1.1.x release: the same database with one more applied migration than this image
+# ships. Since the 1.1 baseline there is one migration directory, so "an older image" can no longer be
+# simulated by deleting the newest folder (that would be an image without the baseline, which no release is).
+NEWERDB="bkt_newer_$$"
+make_db "$NEWERDB"
+pgtool pg_restore --no-owner --no-privileges --exit-on-error -d "$NEWERDB" <"$MAIN/$COPY"
+dbq "$NEWERDB" "INSERT INTO _prisma_migrations (id, checksum, migration_name, started_at, finished_at, applied_steps_count)
+  VALUES ('00000000-0000-0000-0000-000000000001', 'x', '20271231000000_a_later_release', now(), now(), 1)" >/dev/null
+NEWER="$(newdir)"
+BK_DIR="$NEWER"
+OUT="$( (export PGDATABASE="$NEWERDB"; bk now) 2>&1)" && RC=0 || RC=$?
+NEWERCOPY="$(files_matching "$NEWER" '^schedulepoint-2.*\.dump$' | head -1)"
+expect "a copy of the later release's database was made" test -n "$NEWERCOPY"
 BK_DIR="$MAIN"
-BK_MIGS="$OLDER"
-run_bk check "$COPY"
+BK_DIR="$NEWER"
+run_bk check "$NEWERCOPY"
 expect "check refuses a copy newer than the installed version" failed_with "newer version"
+BK_DIR="$MAIN"
 
 # A restore target that is not the source: a scratch copy, so the real database is never at risk.
 TARGET="bkt_restore_$$"
@@ -400,11 +413,11 @@ make_db "$TARGET"
 pgtool pg_restore --no-owner --no-privileges --exit-on-error -d "$TARGET" <"$MAIN/$COPY"
 dbq "$TARGET" "UPDATE organizations SET name = name || ' (tampered)' WHERE id = (SELECT id FROM organizations ORDER BY id LIMIT 1)" >/dev/null
 fingerprint "$TARGET" >"$work/fp.target-before"
-BK_MIGS="$OLDER"
 run_bk_t() { OUT=""; RC=0; OUT="$( (export PGDATABASE="$TARGET"; "$@") 2>&1)" || RC=$?; }
-run_bk_t bk restore "$COPY" --yes
+BK_DIR="$NEWER"
+run_bk_t bk restore "$NEWERCOPY" --yes
+BK_DIR="$MAIN"
 expect "restore refuses a copy newer than the installed version" failed_with "newer version"
-BK_MIGS="$real_migrations"
 expect "...and changed nothing" target_unchanged "$TARGET"
 expect "...and left no half-loaded database" test "$(dbq postgres "SELECT count(*) FROM pg_database WHERE datname='${TARGET}_restoring'")" = 0
 
@@ -548,7 +561,7 @@ EXTRA="$work/migs-extra"
 cp -r "$real_migrations" "$EXTRA"
 mkdir "$EXTRA/99999999999999_ci_pending_probe"
 echo 'SELECT 1;' >"$EXTRA/99999999999999_ci_pending_probe/migration.sql"
-chmod -R a+rX "$EXTRA" "$OLDER"
+chmod -R a+rX "$EXTRA"
 migrations_before="$(dbq "$SRC_DB" "SELECT count(*) FROM _prisma_migrations")"
 
 BK_MIGS="$real_migrations"
@@ -672,6 +685,131 @@ expect "health ignores a pre-update copy (an update at 01:00 never stands in for
 expect "pre-migrate never changed the source database" \
   test "$(dbq "$SRC_DB" "SELECT count(*) FROM _prisma_migrations")" = "$migrations_before"
 expect "...and the source is still identical to what was fingerprinted" same_as_source "$SRC_DB"
+
+# --- 5. preflight: the refusal at boot (ADR-0215) ------------------------------------------------
+
+echo "==> preflight decisions"
+BASELINE="$(sed -n 's/^BASELINE_MIGRATION="\(.*\)"$/\1/p' "$script_src")"
+expect "the script's baseline constant is the oldest migration directory" \
+  test -n "$BASELINE" -a "$BASELINE" = "$(files_matching "$real_migrations" '^[0-9]+_' | sort | head -1)"
+LEGACY_NAME="20260709142606_add_identity_tables"
+LATER_NAME="20271231000000_a_later_release"
+migs_table="CREATE TABLE _prisma_migrations (migration_name text, finished_at timestamptz, rolled_back_at timestamptz)"
+add_row() { dbq "$1" "INSERT INTO _prisma_migrations (migration_name, finished_at) VALUES ('$2', now())" >/dev/null; }
+migs_of() { dbq "$1" "SELECT coalesce(string_agg(migration_name || '/' || coalesce(finished_at::text, '-') || '/' || coalesce(rolled_back_at::text, '-'), ',' ORDER BY migration_name), 'none') FROM _prisma_migrations"; }
+pf() { # <database> — preflight against it, with a backups folder that must stay empty
+  BK_DIR="$(newdir)"
+  RC=0
+  OUT="$( (export PGDATABASE="$1"; bk preflight) 2>&1)" || RC=$?
+}
+no_file_written() { test -z "$(ls -A "$BK_DIR")"; }
+refused_with() { failed_with "DATABASE REFUSED" "\"event\":\"boot.database_refused\"" "\"reason\":\"$1\"" "docs/guides/start-fresh-on-1-1.md"; }
+accepted_as() { succeeded_with "\"event\":\"boot.database_accepted\"" "\"state\":\"$1\""; }
+
+PF_FRESH="bkt_pf_fresh_$$"
+make_db "$PF_FRESH"
+BK_DIR=""
+RC=0
+OUT="$( (export PGDATABASE="$PF_FRESH"; bk preflight) 2>&1)" || RC=$?
+expect "preflight: a fresh database (no tables) proceeds, with no backups folder mounted at all" accepted_as fresh
+
+PF_EMPTY="bkt_pf_empty_$$"
+make_db "$PF_EMPTY"
+dbq "$PF_EMPTY" "$migs_table" >/dev/null
+pf "$PF_EMPTY"
+expect "preflight: an empty migrations table proceeds" accepted_as fresh
+expect "...and wrote no file" no_file_written
+
+PF_CURRENT="bkt_pf_current_$$"
+make_db "$PF_CURRENT"
+dbq "$PF_CURRENT" "$migs_table" >/dev/null
+add_row "$PF_CURRENT" "$BASELINE"
+before="$(migs_of "$PF_CURRENT")"
+pf "$PF_CURRENT"
+expect "preflight: the 1.1 baseline applied proceeds" accepted_as current
+expect "...and wrote no file" no_file_written
+expect "...and left _prisma_migrations as it was" test "$(migs_of "$PF_CURRENT")" = "$before"
+
+add_row "$PF_CURRENT" "$LATER_NAME"
+before="$(migs_of "$PF_CURRENT")"
+pf "$PF_CURRENT"
+expect "preflight: the baseline plus a later migration this image lacks proceeds (a 1.1.x rollback by tag)" accepted_as current
+expect "...and left _prisma_migrations as it was" test "$(migs_of "$PF_CURRENT")" = "$before"
+
+PF_OLD="bkt_pf_old_$$"
+make_db "$PF_OLD"
+dbq "$PF_OLD" "$migs_table" >/dev/null
+add_row "$PF_OLD" "$LEGACY_NAME"
+dbq "$PF_OLD" "CREATE TABLE users (id text PRIMARY KEY)" >/dev/null
+before="$(migs_of "$PF_OLD")"
+pf "$PF_OLD"
+expect "preflight: a 1.0 database is refused, with the event and the guide" refused_with pre_1_1_lineage
+expect "...in three lines of text and one event" test "$(printf '%s\n' "$OUT" | grep -c .)" -eq 4
+expect "...and wrote no file" no_file_written
+expect "...and left _prisma_migrations as it was" test "$(migs_of "$PF_OLD")" = "$before"
+expect "...and created nothing in the database" test "$(dbq "$PF_OLD" "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'")" = 2
+
+PF_MIXED="bkt_pf_mixed_$$"
+make_db "$PF_MIXED"
+dbq "$PF_MIXED" "$migs_table" >/dev/null
+add_row "$PF_MIXED" "$LEGACY_NAME"
+add_row "$PF_MIXED" "$BASELINE"
+pf "$PF_MIXED"
+expect "preflight: the baseline beside a 1.0 migration (a 1.0 image was started on it) is refused" refused_with mixed_lineage
+
+PF_UNKNOWN="bkt_pf_unknown_$$"
+make_db "$PF_UNKNOWN"
+dbq "$PF_UNKNOWN" "CREATE TABLE somebody_elses_table (id int)" >/dev/null
+pf "$PF_UNKNOWN"
+expect "preflight: tables but no migrations table is refused" refused_with unknown_database
+expect "...and wrote no file" no_file_written
+
+PF_STRANGE="bkt_pf_strange_$$"
+make_db "$PF_STRANGE"
+dbq "$PF_STRANGE" "$migs_table" >/dev/null
+add_row "$PF_STRANGE" "$LATER_NAME"
+pf "$PF_STRANGE"
+expect "preflight: rows that are neither 1.0 nor the baseline are refused (fail closed)" refused_with unknown_database
+
+BK_DIR="$(newdir)"
+RC=0
+OUT="$( (export PGPORT=1; bk preflight) 2>&1)" || RC=$?
+expect "preflight: an unreachable database is refused (fail closed), not waved through" refused_with cannot_read
+expect "...and wrote no file" no_file_written
+
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$secret_url"; bk preflight) 2>&1)" || RC=$?
+expect "preflight: a credential-bearing DATABASE_URL never reaches the output" refused_with cannot_read
+expect "...(no secret in the output)" test "$(grep -c s3cr3t <<<"$OUT")" -eq 0
+
+old_url="postgresql://$PGUSER:%61pp@$PGHOST:$PGPORT/$PF_OLD?schema=public"
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$old_url"; bk preflight) 2>&1)" || RC=$?
+expect "preflight: connects through DATABASE_URL as the API container does, and refuses a 1.0 database" refused_with pre_1_1_lineage
+
+# --- 6. a 1.0 copy: check counts it with a note, restore refuses it -----------------------------------
+
+echo "==> a copy made by SchedulePoint 1.0"
+OLDCOPYDB="bkt_oldcopy_$$"
+make_db "$OLDCOPYDB"
+pgtool pg_restore --no-owner --no-privileges --exit-on-error -d "$OLDCOPYDB" <"$MAIN/$COPY"
+dbq "$OLDCOPYDB" "UPDATE _prisma_migrations SET migration_name = '$LEGACY_NAME'" >/dev/null
+OLD="$(newdir)"
+BK_DIR="$OLD"
+OUT="$( (export PGDATABASE="$OLDCOPYDB"; bk now) 2>&1)" && RC=0 || RC=$?
+OLDCOPY="$(files_matching "$OLD" '^schedulepoint-2.*\.dump$' | head -1)"
+expect "a copy of a 1.0-lineage database was made" test -n "$OLDCOPY"
+run_bk check "$OLDCOPY"
+expect "check loads and counts a 1.0 copy, and says only a 1.0 image can restore it" \
+  succeeded_with "made by SchedulePoint 1.0 or earlier" "CHECK PASSED" "organizations"
+expect "...and does not call it newer" test "$(grep -c 'newer version' <<<"$OUT")" -eq 0
+fingerprint "$TARGET" >"$work/fp.oldcopy.before"
+OUT="$( (export PGDATABASE="$TARGET"; bk restore "$OLDCOPY" --yes) 2>&1)" && RC=0 || RC=$?
+expect "restore refuses a 1.0 copy, naming the 1.0 image" failed_with "RESTORE REFUSED" "SchedulePoint 1.0 or earlier" "1.0 image"
+fingerprint "$TARGET" >"$work/fp.oldcopy.after"
+expect "...and changed nothing" same_file "$work/fp.oldcopy.before" "$work/fp.oldcopy.after"
+expect "...and left no half-loaded database" test "$(dbq postgres "SELECT count(*) FROM pg_database WHERE datname='${TARGET}_restoring'")" = 0
+expect "...and took no safety copy" test -z "$(files_matching "$OLD" '^schedulepoint-pre-restore-')"
 
 echo
 echo "==> $pass checks passed, $failed failed"

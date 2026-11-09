@@ -197,6 +197,46 @@ fi
 echo "run lock held (advisory key ${DB_LOCK_KEY}/${lock_db_name})"
 
 # --- 3. Schema --------------------------------------------------------------
+#
+# **A database from before the 1.1 baseline is thrown away and rebuilt, and only that** (ADR-0215).
+# 1.1 replaced 84 migrations with one baseline, so `migrate deploy` against a long-lived `app_test`
+# built from the old chain cannot apply it (the first `CREATE TYPE` collides) and every suite after it
+# fails on the schema rather than on the change under test. Two states are stale and neither can be
+# repaired by migrating: a row named before the baseline, and a baseline row whose checksum is not that
+# of the file in this checkout (the baseline is unreleased and may still be edited; Prisma would refuse
+# the drift). A database already on the current baseline is never touched, and the one reset here is of
+# the database in DATABASE_URL, which this run holds the lock on and is about to migrate: `app_test`
+# unless somebody pointed it elsewhere.
+log "Schema lineage"
+baseline_dir="$(ls -1 apps/api/prisma/migrations | grep -E '^[0-9]+_' | LC_ALL=C sort | head -1)"
+baseline_sum="$(sha256sum "apps/api/prisma/migrations/${baseline_dir}/migration.sql" | cut -d ' ' -f 1)"
+lineage="$(psql -qtA "$db_conninfo" -c "SELECT CASE
+    WHEN to_regclass('public._prisma_migrations') IS NULL THEN 'unmigrated'
+    WHEN EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name COLLATE \"C\" < '${baseline_dir}' AND rolled_back_at IS NULL) THEN 'pre-1.1'
+    WHEN EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '${baseline_dir}' AND checksum <> '${baseline_sum}') THEN 'baseline-changed'
+    ELSE 'current' END" 2>/dev/null || true)"
+case "$lineage" in
+  pre-1.1 | baseline-changed)
+    case "$lock_db_name" in
+      '' | *[!A-Za-z0-9_]*)
+        echo "Refusing to reset a database whose name is not letters, digits and underscores: '${lock_db_name}'." >&2
+        exit 1
+        ;;
+    esac
+    if [ "$lineage" = pre-1.1 ]; then
+      echo "${lock_db_name} was built from migrations before the 1.1 baseline (${baseline_dir}); dropping and recreating it."
+    else
+      echo "${lock_db_name}'s ${baseline_dir} row does not match this checkout's migration.sql (sha256 ${baseline_sum%"${baseline_sum#????????????}"}...); dropping and recreating it."
+    fi
+    db_owner="$(psql -qtA "$lock_conninfo" -c "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = '${lock_db_name}'")"
+    psql -q -v ON_ERROR_STOP=1 "$lock_conninfo" \
+      -c "DROP DATABASE \"${lock_db_name}\" WITH (FORCE)" \
+      -c "CREATE DATABASE \"${lock_db_name}\" OWNER \"${db_owner:-app}\""
+    echo "${lock_db_name} reset."
+    ;;
+  *) echo "${lock_db_name}: lineage ${lineage:-unknown}; left as it is." ;;
+esac
+
 log "Migrations"
 pnpm --filter @repo/api exec prisma migrate deploy
 
