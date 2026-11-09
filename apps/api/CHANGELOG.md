@@ -1,5 +1,14 @@
 # @repo/api
 
+## 1.1.1
+
+### Patch Changes
+
+- [#1297](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1297) [`8ee9c0a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8ee9c0a4a0607fd86fb6b69b3004976cc88ced71) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The boot database check now refuses a `DATABASE_URL` whose `schema` parameter names anything other than `public`
+  (reason `other_schema`, the usual three-line refusal, nothing read or written). The check reads the `public` schema
+  only, so a pre-1.1 database living in another schema used to read as an empty one and be accepted as fresh. The
+  shipped compose files use `schema=public` and are unaffected.
+
 ## 1.1.0
 
 ### Minor Changes
