@@ -1297,7 +1297,7 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   link is dashed any more — see the link grammar below). _Corrected by the
   2026-09-29 reconciliation pass, which found this bullet still describing both
   in the present tense._
-- **TSLD Today pill (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F6b, ADR-0056)** — one
+- **TSLD Today pill (`VITE_CANVAS_TIME_AXIS`, retired in 1.1, tsld-toolbar-canvas-refinements F6b, ADR-0056)** — one
   new token, `--color-destructive-foreground` reused as `todayInk` (no new CSS variable — every
   theme already defines it for its destructive-hue text), added to both palette resolvers as the
   pill's label colour against the existing `palette.today` (destructive-hue) fill. The pill
@@ -1307,7 +1307,7 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   and are never mistaken for each other (different hue). It draws only alongside the fractional
   line (`scene.todayFraction` present, from `todayDayFraction`/`useNow`), never on the flag-off
   midnight-boundary line, so the flag-off canvas gains no new draw calls.
-- **TSLD time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5)** —
+- **TSLD time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, retired in 1.1, tsld-toolbar-canvas-refinements F5)** —
   three new tokens, `--canvas-grid-day` / `--canvas-grid-month` / `--canvas-grid-year`, authored per
   theme block beside `--canvas` / `--canvas-band` (mapped in `@theme inline` as
   `--color-canvas-grid-*`) and added to **both** `resolveTsldPalette` and `resolvePrintPalette` (the
@@ -1337,7 +1337,7 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   grouped listbox, which carry membership in text, so no reader depends on perceiving it. In a contrast
   theme the diagram bitmap keeps its own palette (ADR-0191 D3), so the aliases get no override;
   `token-architecture.test.ts` pins that the forced-colours block declares no canvas token. ADR-0206 records this basis.
-- **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F7a,
+- **TSLD non-working hatch (`VITE_CANVAS_TIME_AXIS`, retired in 1.1, tsld-toolbar-canvas-refinements F7a,
   ADR-0056)** — one new token, `--canvas-nonworking-hatch`, authored per theme block beside
   `--canvas-band` (mapped as `--color-canvas-nonworking-hatch`) and added to both palette
   resolvers. A step **stronger** than the `--color-muted` wash it draws over, so a weekend/holiday
@@ -1346,10 +1346,10 @@ destructive`; sizes `default | sm | lg | icon | icon-row | icon-sm`; icon button
   Guarded: an offscreen 2D context that can't be created (older browsers, minimal test contexts)
   falls back to the existing flat fill, so the `fillRect` count never changes either way. The
   month-band ground (ADR-0055 §4) gains its own `View▾ → Structure → Month bands` switch in the
-  same milestone — `VITE_CANVAS_VISUAL_LANGUAGE` stays the gate and default; the switch only lets
+  same milestone — `VITE_CANVAS_VISUAL_LANGUAGE` (retired in 1.1) was the gate and default; the switch only lets
   a user turn an existing layer off for the session. The same switch tints the date ruler's
   odd months with `--canvas-band` (TECH_DEBT #58), so the ruler's stripes continue the diagram's.
-- **TSLD marker channels & the data-date line (`VITE_CANVAS_DATA_DATE`, canvas status & feedback
+- **TSLD marker channels & the data-date line (`VITE_CANVAS_DATA_DATE`, retired in 1.1, canvas status & feedback
   M1; proposes ADR-0078)** — the canvas's full-height and near-full-height marks each own a
   **channel** (shape + weight + hue), decided as one vocabulary rather than per-mark, because
   ADR-0056 already had to reason about the dash channel in the absence of such a record. The table

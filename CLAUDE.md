@@ -46,8 +46,8 @@ browser-native team use. See the full product context in
 > reproduce something — and note what it exists to cover: the conformance harness
 > proves the **engine**, never a write path, a DTO or a guard.
 >
-> The **Gantt view shipped** on 2026-07-28 (ADR-0059, `VITE_GANTT_VIEW`
-> default-on) — first read-only, with WBS rows, the baseline variance bar and
+> The **Gantt view shipped** on 2026-07-28 (ADR-0059; its `VITE_GANTT_VIEW`
+> flag has since retired) — first read-only, with WBS rows, the baseline variance bar and
 > a printed programme — and **became a working surface on 2026-08-17** (ADR-0095:
 > in-cell editing with per-cell write scope, bar moves, dependency arrows behind a
 > default-off toggle; typed dates followed in ADR-0134). It delivers the last
@@ -630,7 +630,8 @@ A lighter-weight running log of smaller decisions is in
   The owner's host sets all three and the console works there (owner, 2026-11-09); `docs/TECH_DEBT.md` #100 is
   still deferred until an alert is seen to arrive. On any other host, "shipped" does not mean "in use".
 - **Backups run only where an operator set them up** (ADR-0192). The `backup` service, the API's `/backups`
-  mount and the closed database port exist only in a compose file the operator edits by hand
+  mount and the closed database port ship in `docker-compose.release.yml`; a host running an older copy of
+  that file (the owner's Dockge stack) has them only once its operator has added them by hand
   (`docs/guides/back-up-and-restore.md`); without the mount an update migrates exactly as before and no
   copy is taken. With it, an update that changes the database is **held** if its copy cannot be made, and
   copies live on the same disk as the database. **The owner's host has run 1.1.0 on a fresh, empty database
@@ -673,8 +674,8 @@ A lighter-weight running log of smaller decisions is in
   the read that leads to building a second mail path — and `docs/BACKLOG.md`
   still listed "Mail transport" as an unbuilt foundation until 2026-08-05, in
   the one file that decides what gets built next. **The deployed host has a real
-  transport configured and sending** (product owner, 2026-08-05), which is what
-  unblocked `VITE_PASSWORD_RESET`. What is still missing is knowing a send
+  transport configured and sending** (product owner, 2026-08-05), which unblocked
+  password reset (`VITE_PASSWORD_RESET`, retired in 1.1). What is still missing is knowing a send
   **failed**: Better Auth swallows the rejection after handoff, so a broken
   relay produces silently unrecoverable accounts (`docs/TECH_DEBT.md` #94).
 - **Every deletion a user can reach is a soft delete — and two paths behind it are

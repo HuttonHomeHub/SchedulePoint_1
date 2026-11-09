@@ -2,11 +2,11 @@
 /**
  * **Every feature flag has a recorded enablement date and a retirement batch** (ADR-0084).
  *
- * `apps/web/src/config/env.ts` declares 56 `VITE_` flags and `flagDefaultOff` is called zero
- * times: every one of them is default-**on**, i.e. a rollback contract left behind by the epic that
- * shipped it. (This said 58 until 2026-08-10 — a wrong count in the docblock of the gate that
- * enforces counts, which is the ADR-0076 Class 1 shape. The live figure is printed on success and
- * derived from the register, so only this sentence could rot.) That is right on the day a feature flips and wrong a month later, when the flag-off
+ * `apps/web/src/config/env.ts` declared 56 `VITE_` flags, every one default-**on**, i.e. a rollback
+ * contract left behind by the epic that shipped it; all were retired in 1.1 (ADR-0215 D8) and none is
+ * live now. (The count in this sentence was wrong once — 58 until 2026-08-10 — the ADR-0076 Class 1
+ * shape. The live figure is printed on success and derived from the register, so no figure is kept
+ * here.) That is right on the day a feature flips and wrong a month later, when the flag-off
  * branch has never been run by anybody and its parity suite is asserting that an unused
  * configuration still works.
  *

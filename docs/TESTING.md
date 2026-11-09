@@ -219,7 +219,7 @@ test that re-states the code.
 
 Journeys include automated accessibility assertions.
 
-**`VITE_CANVAS_LINK_ROUTING` deliberately has no journey of its own**, and that is
+**Link routing (once `VITE_CANVAS_LINK_ROUTING`, retired in 1.1) deliberately has no journey of its own**, and that is
 the exception the rule above should have to argue with rather than a lapse. What
 it changes is which pixels a line occupies inside a canvas that is `aria-hidden`
 by design (ADR-0026 D7) — there is no accessible name, role or text for a journey
@@ -227,9 +227,9 @@ to assert against, and a screenshot comparison would pin antialiasing. It is
 covered instead by two gates that can each fail for a specific reason:
 `link-routing.test.ts` on what the geometry returns (including the no-obstacle
 byte-identity, point for point) and `paint.routing-budget.test.ts` on what the
-**painter** does with it — that flag-off still draws through the obstacle, that
-flag-on does not, and that the extra work is bounded. The routing is exercised
-end to end by every existing canvas journey, since it is now default-on.
+**painter** does with it — that the routing-off option still draws through the obstacle, that
+routing-on does not, and that the extra work is bounded. The routing is exercised
+end to end by every existing canvas journey, since it is always on.
 
 ### Viewports we test (ADR-0179)
 
@@ -466,38 +466,38 @@ reflowed it into cells and the ten steps below it lost their header and rendered
 pipe-separated text. `check:doc-links` only checks links, so nothing caught it; a review reading the
 file did. Worth keeping as the reason the note sits above the table rather than inside it.
 
-| #   | Run                                                         | When                                                                                              |
-| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                            |
-| 2   | `pnpm test`                                                 | always                                                                                            |
-| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                            |
-| 3a  | `scripts/e2e-local.sh api backup`                           | you touched `apps/api/backup/`, either compose file's `backup` block, or a migration (ADR-0192)   |
-| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a Playwright suite, or changed a surface one drives                      |
-| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                            |
-| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))              |
-| 4c  | `scripts/e2e-sweep.sh`                                      | you replaced a **screen every journey signs in through**, or moved a control every journey clicks |
-| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                                    |
-| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile                        |
-| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file                   |
-| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`           |
-| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
-| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
-| 10a | `git fetch origin main && pnpm check:engine-parity`         | always: reads branch position like step 10, and fails every push once its declared row closes     |
-| 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
-| 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                   |
-| 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                     |
-| 14  | `pnpm check:ci-roster`                                      | you added a `check:*` script, renamed one, or changed a CI gate step or any CI `run:` command     |
-| 15  | `pnpm check:licenses`                                       | you added or bumped a dependency, or edited `scripts/licence-policy.json`                         |
-| 15a | `pnpm check:e2e-roster`                                     | you added, renamed or removed a Playwright suite, or changed a CI end-to-end step                 |
-| 16  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
-| 17  | `pnpm check:doc-links`                                      | you added, moved, renamed or deleted a doc, or changed a relative link                            |
-| 18  | `pnpm check:adr-coverage`                                   | you filed an ADR, or edited `docs/adr/README.md` or `docs/ROADMAP.md`                             |
-| 19  | `pnpm check:flags`                                          | you added, retired or re-dated a `VITE_` flag in `apps/web/src/config/env.ts` (ADR-0084)          |
-| 20  | `pnpm check:surface-contract`                               | you gave a scheduling field a storage or API half — the gate asks for its UI half                 |
-| 21  | `pnpm check:browser-safe`                                   | you changed a shared package's barrel, or imported a Node-only module into one                    |
-| 22  | `pnpm check:advisory-agreement`                             | you changed `prepush.sh`'s `ADVISORY_GATES`, or a gate's exit convention                          |
-| 23  | `pnpm check:format`                                         | always (`pnpm format` fixes it); CI runs the same command                                         |
-| 24  | `pnpm check:web-bundle`                                     | you changed anything the web bundle imports — a dependency, a route, a lazy boundary (ADR-0160)   |
+| #   | Run                                                         | When                                                                                                       |
+| --- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                                     |
+| 2   | `pnpm test`                                                 | always                                                                                                     |
+| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                                     |
+| 3a  | `scripts/e2e-local.sh api backup`                           | you touched `apps/api/backup/`, either compose file's `backup` block, or a migration (ADR-0192)            |
+| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a Playwright suite, or changed a surface one drives                               |
+| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                                     |
+| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** (none exist since 1.1; [below](#flipping-a-default-changes-the-base-suite)) |
+| 4c  | `scripts/e2e-sweep.sh`                                      | you replaced a **screen every journey signs in through**, or moved a control every journey clicks          |
+| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                                             |
+| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile                                 |
+| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file                            |
+| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`                    |
+| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                                   |
+| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                             |
+| 10a | `git fetch origin main && pnpm check:engine-parity`         | always: reads branch position like step 10, and fails every push once its declared row closes              |
+| 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                           |
+| 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or any register gate                                            |
+| 13  | `pnpm check:spec-status`                                    | you added a spec, filed an ADR, or shipped an epic (ADR-0131)                                              |
+| 14  | `pnpm check:ci-roster`                                      | you added a `check:*` script, renamed one, or changed a CI gate step or any CI `run:` command              |
+| 15  | `pnpm check:licenses`                                       | you added or bumped a dependency, or edited `scripts/licence-policy.json`                                  |
+| 15a | `pnpm check:e2e-roster`                                     | you added, renamed or removed a Playwright suite, or changed a CI end-to-end step                          |
+| 16  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                                     |
+| 17  | `pnpm check:doc-links`                                      | you added, moved, renamed or deleted a doc, or changed a relative link                                     |
+| 18  | `pnpm check:adr-coverage`                                   | you filed an ADR, or edited `docs/adr/README.md` or `docs/ROADMAP.md`                                      |
+| 19  | `pnpm check:flags`                                          | you added, retired or re-dated a `VITE_` flag in `apps/web/src/config/env.ts` (ADR-0084)                   |
+| 20  | `pnpm check:surface-contract`                               | you gave a scheduling field a storage or API half — the gate asks for its UI half                          |
+| 21  | `pnpm check:browser-safe`                                   | you changed a shared package's barrel, or imported a Node-only module into one                             |
+| 22  | `pnpm check:advisory-agreement`                             | you changed `prepush.sh`'s `ADVISORY_GATES`, or a gate's exit convention                                   |
+| 23  | `pnpm check:format`                                         | always (`pnpm format` fixes it); CI runs the same command                                                  |
+| 24  | `pnpm check:web-bundle`                                     | you changed anything the web bundle imports — a dependency, a route, a lazy boundary (ADR-0160)            |
 
 **One spec rather than a whole suite:** `scripts/e2e-local.sh web:<suite> -- <playwright args>` (or
 `measure:<name> -- <args>`) forwards everything after `--` to Playwright with the bootstrap intact —
@@ -751,6 +751,8 @@ journey times out on a heading. ADR-0175 makes that visible.
   `test.fail()` twins to fail; with the fixture's throw removed they go red.
 
 ### Flipping a default changes the base suite
+
+_History, and applicable only if a web flag is ever added again: there are none since 1.1 (ADR-0215 D8)._
 
 A flag flip is not covered by step 4, and the wording used to read as if it were.
 The new journey you wrote pins the flag **on**, so it passes; what moves under you

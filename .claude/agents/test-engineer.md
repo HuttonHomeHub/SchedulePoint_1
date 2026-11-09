@@ -44,16 +44,15 @@ exist** — ADR-0057 deleted them. Read real suites instead:
   gate, differential "flip-one-option-must-differ" scenarios, and self-baselined
   golden snapshots (no external oracle). Negative cases follow the
   reject/repair/report contract (N-numbers).
-- **Flag-off parity suites** — `vi.mock` of `@/config/env` with the flag false,
-  pinning the prior surface byte-for-byte. Never weaken one to make a change pass,
-  and never strand one: a retirement converts or deletes its harness **in the same
-  commit** (ADR-0084 batch 1 retired three flags and CI caught two, because a whole
-  `playwright*.config.ts` can BE a flag-off harness). **Do not call one "the rollback
-  contract"** — this bullet did, and ADR-0088 D1 disproved the premise: a `VITE_`
-  constant is inlined at build time and no published image can switch one off. That
-  ADR also measured what such a suite has caught here: **once**, ever (ADR-0070's
-  `+1d` rounding). Weigh a proposed unit parity suite against a flag-on journey,
-  which is where nearly every real catch in this register came from.
+- **There are no web feature flags** (all 48 retired in 1.1, ADR-0215 D8; `pnpm check:flags`
+  reads 0 live). If one is ever added it follows ADR-0084/0088: never weaken its flag-off
+  parity suite to make a change pass, and never strand one — a retirement converts or deletes
+  its harness **in the same commit** (ADR-0084 batch 1 retired three flags and CI caught two,
+  because a whole `playwright*.config.ts` can BE a flag-off harness). **Do not call one "the
+  rollback contract"**: a `VITE_` constant is inlined at build time and no published image can
+  switch one off (ADR-0088 D1), and such a suite caught a real defect **once**, ever (ADR-0070's
+  `+1d` rounding). Weigh a proposed unit parity suite against a journey, which is where nearly
+  every real catch in this register came from.
 - **Canvas budgets are asserted by shape, not milliseconds** — the paint budget
   tests count calls, because a CI runner's absolute timings are noise.
 - **Write the test that would fail.** Two recent near-misses: a hidden-pane rAF
@@ -67,8 +66,8 @@ exist** — ADR-0057 deleted them. Read real suites instead:
   (`export-census`, `export-format-doc`) that read the Prisma schema and
   `docs/ORGANISATION_EXPORT_FORMAT.md`. A new model needs the census row; a format change
   needs the document. The round trip needs a database; the structural suites do not, so say which you ran.
-- **e2e is suite-scoped:** several dozen Playwright configs, each serving the app
-  with a specific flag and environment set; a journey for a new capability gets its
+- **e2e is suite-scoped:** several dozen Playwright configs, each serving the default
+  bundle with its own environment (ports, rate limits, seeded data); a journey for a new capability gets its
   own suite and its own CI step. **Do not restate the count** — this bullet said "15"
   long after it was wrong by a factor of nearly three. `pnpm check:counts` derives it
   and fails if CLAUDE.md's banner disagrees (ADR-0076); `ls apps/web/e2e-*` is the

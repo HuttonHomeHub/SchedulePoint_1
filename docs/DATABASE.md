@@ -998,8 +998,8 @@ The four columns of the same name on `baselines` freeze it. Two rules govern the
   in a column a reader has no way to doubt, a rule that baseline may never have seen. This
   deliberately does **not** follow `hours_per_day_minutes DEFAULT 1440` one field along — that
   default was legal because 1440 was _true of every existing row_. The governing precedent is
-  `baseline_activities.budgeted_expense`, nullable, whose docblock records rejecting
-  `NOT NULL DEFAULT 0` because "0 is a claim".
+  `baseline_activities.budgeted_expense`, which was nullable until 1.1 (ADR-0215, tidy T3) and whose
+  docblock records rejecting `NOT NULL DEFAULT 0` because "0 is a claim".
 
 `ck_baselines_criticality_snapshot_all_or_none` (`num_nonnulls(...) IN (0, 4)`) makes half a rule
 unrepresentable, which is what lets a reader test one column and be right about all four;
@@ -1288,7 +1288,7 @@ and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 | Column / table                      | Frozen from                         | Means                                                                                                                           |
 | ----------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `baselines.swimlane_snapshot_level` | the capture path                    | `FULL` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1, and `swimlane_source` NOT NULL by T4) — swimlanes were recorded |
-| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`                                                                               |
+| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NOT NULL since 1.1 (tidy T4)                                                                  |
 | `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                                                                                              |
 | `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was                                                                            |
 | `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim                                                                               |
@@ -1577,11 +1577,11 @@ NULL DEFAULT 0`, progress), **`actual_units`** (`DECIMAL(18,4) NOT NULL DEFAULT 
   **DEFAULT `CPI`** = P6's headline `EAC = BAC / CPI`, Q3) and **`currency_code`**
   (`CHAR(3)?` ISO-4217, `ck_plans_currency_code_iso4217` nullable-safe format guard;
   `NULL` = inherit the org default). Single-row plan options, unindexed.
-- **`baseline_activities.budgeted_cost`** (`BIGINT?`) — the **cost baseline** (ADR-0025
+- **`baseline_activities.budgeted_cost`** (`BIGINT`, NOT NULL since 1.1) — the **cost baseline** (ADR-0025
   amendment): the activity's budgeted cost **frozen at capture**, immutable, giving the
-  active baseline a committed PV/BCWS reference. `NULL` for a baseline captured before
-  this rung ⇒ PV falls back to the live budget (`costBaselineMissing`), never an error.
-  `ck_baseline_activities_budgeted_cost_nonneg` (nullable-safe, defence-in-depth).
+  active baseline a committed PV/BCWS reference. A plan with no active baseline has no snapshot at all
+  and PV falls back to the live budget (`costBaselineMissing`), never an error.
+  `ck_baseline_activities_budgeted_cost_nonneg` (defence-in-depth).
 
 **N24** (actual cost/units on a not-started activity) is a **warn, not a reject** — the
 EV read surfaces it as a count — so it is deliberately **not** a CHECK. No new index is

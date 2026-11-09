@@ -28,7 +28,7 @@ review; you do not edit code.
   expectation.
 - **Copy has to be honest about scheduling.** The constraint selector lists only
   constraints the engine applies exactly as named; "Schedule settings" is not
-  "Calendar"; a flag-off placeholder says "Coming soon" rather than pretending.
+  "Calendar"; an unbuilt placeholder says "Coming soon" rather than pretending.
 - **There is one planning surface, not two modes** (ADR-0148, 2026-09-21 —
   this bullet described ADR-0033's Early/Visual modes as live until the
   2026-09-23 reconciliation pass). A bar is drawn where it is placed; the network's

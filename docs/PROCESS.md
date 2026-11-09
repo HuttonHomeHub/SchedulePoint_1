@@ -163,7 +163,7 @@ product**:
   ships dark — a schema, a pure model, a read path behind a later surface — says _that_,
   in the same place. There is no third state, and "the model landed" is not a claim that
   the capability exists.
-- **The flag-on journey lands with the first user-facing milestone, not at
+- **The journey lands with the first user-facing milestone, not at
   enablement** — even as one skeletal step that opens the surface and presses the
   control. This is the enforcement half. The hole above survived a plan, a spec, a
   measurement harness, unit tests and a human read, and died the first time something
@@ -244,12 +244,12 @@ A feature is complete **only** when all hold:
 - ✓ **The pre-push gate was run, not just written** — `pnpm prepush`
   (one command: it derives every `check:*` gate, format and the web bundle budget included, from
   `package.json` — `CLAUDE.md` §19.8), plus `scripts/e2e-local.sh api` for an `apps/api`
-  change and `scripts/e2e-local.sh web:<suite>` for a new or changed flag-on
+  change and `scripts/e2e-local.sh web:<suite>` for a new or changed
   journey (see [`docs/TESTING.md`](TESTING.md) "Before you push"). **CI is the
   second opinion, never the first.** A journey drives a real browser against a
   real API, so no unit suite can catch a wrong locator, a control whose
   accessible name differs from the assumption, or a panel that is collapsed
-  under the flags that suite sets — and each of those costs a full CI cycle to
+  under the environment that suite sets — and each of those costs a full CI cycle to
   learn.
 - ✓ **Documentation updated** (docs/, ADRs, READMEs)
 - ✓ **Security reviewed** (security-reviewer: authN/Z, scope/IDOR, validation,
