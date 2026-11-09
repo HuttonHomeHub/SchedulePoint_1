@@ -1,7 +1,8 @@
 -- SchedulePoint 1.1 baseline (ADR-0215).
 --
--- This one migration builds, from an EMPTY database, exactly the schema that the 84 migrations of
--- api-v1.0.0 built (20260709142606_add_identity_tables … 20261108120000_total_float_minutes). That
+-- This one migration builds, from an EMPTY database, the schema that the 84 migrations of
+-- api-v1.0.0 built (20260709142606_add_identity_tables … 20261108120000_total_float_minutes), plus
+-- only the tidy listed in docs/specs/fresh-start-1-1/schema-design.md §3 (ADR-0215 D1). That
 -- history is not lost: it is the git tag api-v1.0.0, and every "was:" line below names the legacy
 -- migration an object came from, which is where its reasoning and any recorded measurement (the
 -- docs/DATABASE.md "measure before adding an index" rule) still live.
@@ -25,7 +26,9 @@
 --      session cannot bypass them (ADR-0072, ADR-0085 D1).
 --
 -- Proof of equivalence: docs/specs/fresh-start-1-1/schema-design.md, "M2-T1 equivalence proof" (a
--- catalogue comparison against the api-v1.0.0 chain, no differences). Plain CHECKs, no NOT VALID,
+-- catalogue comparison against the api-v1.0.0 chain, no differences), and its "M3 tidy" entries: the
+-- chain plus the schema design's §3 tidy, as an executable allow-list, equals this file. Every object
+-- the tidy changed says so on its "was:" line. Plain CHECKs, no NOT VALID,
 -- no CONCURRENTLY, no INSERT: the file runs in one transaction on empty tables.
 
 -- ============================================================================================
@@ -1956,10 +1959,16 @@ ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_currency_code_iso4217" CHECK (((cur
 ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_critical_float_threshold_minutes_range" CHECK (((schedule_critical_float_threshold_minutes IS NULL) OR ((schedule_critical_float_threshold_minutes >= 0) AND (schedule_critical_float_threshold_minutes <= 5256000))));
 -- was: 20260905120000_plan_schedule_criticality_mirror (git tag api-v1.0.0)
 ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_criticality_all_or_none" CHECK ((num_nonnulls(schedule_critical_path_definition, schedule_critical_float_threshold_minutes, schedule_total_float_mode, schedule_make_open_ends_critical) = ANY (ARRAY[0, 4])));
--- was: 20260905120000_plan_schedule_criticality_mirror (git tag api-v1.0.0)
-ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_criticality_requires_cursor" CHECK (((schedule_critical_path_definition IS NULL) OR (schedule_computed_at IS NOT NULL)));
--- was: 20261107120000_schedule_instants (git tag api-v1.0.0)
-ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_instants_requires_cursor" CHECK (((schedule_instants_computed_at IS NULL) OR (schedule_computed_at IS NOT NULL)));
+-- was: 20260905120000_plan_schedule_criticality_mirror (git tag api-v1.0.0), one-way, as
+-- ck_plans_schedule_criticality_requires_cursor. Tidy T5 (ADR-0215): both ways, because the only plans
+-- with a cursor and no mirror were recalculated by an image older than the mirror, and a fresh 1.1
+-- database has none. stampScheduleComputedAt writes the cursor and the mirror in one statement.
+ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_criticality_matches_cursor" CHECK (((schedule_critical_path_definition IS NULL) = (schedule_computed_at IS NULL)));
+-- was: 20261107120000_schedule_instants (git tag api-v1.0.0), one-way, as
+-- ck_plans_schedule_instants_requires_cursor. Tidy T5 (ADR-0215, retiring ADR-0212 D4's rollback
+-- rationale): the instants stamp EQUALS the cursor. One statement writes both with one now(), and
+-- the only writer that advanced the cursor alone was an image older than the instants.
+ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_instants_match_cursor" CHECK ((NOT (schedule_instants_computed_at IS DISTINCT FROM schedule_computed_at)));
 -- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0)
 ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_swimlane_source_level" CHECK ( CASE swimlane_source
     WHEN 'NONE'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))

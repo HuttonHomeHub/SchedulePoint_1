@@ -299,9 +299,16 @@ describe.skipIf(!hasDatabase)('cross-plan instants (e2e)', () => {
       )[0]!.equal;
     expect(await stamps(), 'the recalculation stamped both in one statement').toBe(true);
 
-    // FC-5: an upstream whose instants are not stamped (a plan never calculated) reads from its date.
+    // FC-5: an upstream whose instants are not stamped reads from its date. The stamp is one fact
+    // (tidy T5, ck_plans_schedule_instants_match_cursor and ..._criticality_matches_cursor), so the
+    // state is "never stamped": the cursor, the instants stamp and the criticality rule all NULL
+    // beside dates, which the project-delete race beside TECH_DEBT #492 can leave on a restored plan
+    // (fresh-start-1-1 m3-inventory.md §4).
     await prisma.$executeRawUnsafe(
-      `UPDATE "plans" SET "schedule_instants_computed_at" = NULL WHERE "id" = $1::uuid`,
+      `UPDATE "plans" SET "schedule_computed_at" = NULL, "schedule_instants_computed_at" = NULL,
+         "schedule_critical_path_definition" = NULL, "schedule_critical_float_threshold_minutes" = NULL,
+         "schedule_total_float_mode" = NULL, "schedule_make_open_ends_critical" = NULL
+       WHERE "id" = $1::uuid`,
       up,
     );
     await recalc(agent, down);

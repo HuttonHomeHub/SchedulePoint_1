@@ -1083,7 +1083,7 @@ export class ScheduleRepository {
    * (ADR-0022). A raw UPDATE, not a Prisma `update` (which would touch `updated_at`/`version`).
    *
    * **`criticality` is REQUIRED, and the compiler is the enforcement.** The four mirrors and the
-   * cursor describe the same recalculation, and `ck_plans_schedule_criticality_requires_cursor` says
+   * cursor describe the same recalculation, and `ck_plans_schedule_criticality_matches_cursor` says
    * so in the database; a required parameter is what stops a future caller stamping the cursor alone
    * and leaving the mirror describing an older computation. It is the object spread into that
    * computation's `ComputeOptions`, never a re-read of the plan's settings columns — those are the
@@ -1092,7 +1092,8 @@ export class ScheduleRepository {
    *
    * **`schedule_instants_computed_at` is written in THIS statement, never a second one** (ADR-0212 D4;
    * m2-schema-design.md B1): `now()` is one value per statement, so a recalculation always leaves
-   * it EQUAL to `schedule_computed_at`; the derivation trusts a stored instant on that basis.
+   * it EQUAL to `schedule_computed_at`, which `ck_plans_schedule_instants_match_cursor` holds in the
+   * database (tidy T5, ADR-0215); the derivation trusts a stored instant on that basis.
    *
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.

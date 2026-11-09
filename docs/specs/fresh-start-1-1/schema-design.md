@@ -679,3 +679,47 @@ DISTINCT` each produced a one-line difference.
 
 **Not covered, deliberately:** column order (§7.1) and `_prisma_migrations` itself (Prisma's own table,
 whose rows are the history this change replaces).
+
+### M3 tidy — T5 (2026-11-09, database-architect, M3-T1)
+
+**Change.** Tidy T5 folded into the unreleased baseline in place. The two one-way `plans` CHECKs become
+both-way; nothing else in the file changed except its header (now "plus only the §3 tidy") and the two
+objects' `was:` lines, which name the legacy constraint and say it was tidied. No Prisma-visible change
+(CHECKs are never declared in `schema.prisma`, TECH_DEBT #54); the model comments on
+`scheduleCriticalPathDefinition` and `scheduleInstantsComputedAt` were rewritten to match.
+
+```sql
+ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_criticality_matches_cursor" CHECK (((schedule_critical_path_definition IS NULL) = (schedule_computed_at IS NULL)));
+ALTER TABLE "plans" ADD CONSTRAINT "ck_plans_schedule_instants_match_cursor" CHECK ((NOT (schedule_instants_computed_at IS DISTINCT FROM schedule_computed_at)));
+```
+
+The second is written in the catalogue's own rendering: PostgreSQL stores `a IS NOT DISTINCT FROM b` as
+`NOT (a IS DISTINCT FROM b)`, so the file says what `pg_get_constraintdef` prints (the M2-T1 convention).
+
+**Allow-list** (`tidy.sql`, applied to the api-v1.0.0 chain in one transaction; exactly T5):
+
+```sql
+ALTER TABLE "plans" DROP CONSTRAINT "ck_plans_schedule_criticality_requires_cursor",
+  ADD CONSTRAINT "ck_plans_schedule_criticality_matches_cursor" CHECK (("schedule_critical_path_definition" IS NULL) = ("schedule_computed_at" IS NULL)),
+  DROP CONSTRAINT "ck_plans_schedule_instants_requires_cursor",
+  ADD CONSTRAINT "ck_plans_schedule_instants_match_cursor" CHECK ("schedule_instants_computed_at" IS NOT DISTINCT FROM "schedule_computed_at");
+```
+
+**Command:** the M2-T1 one, with `psql $P/sq_chain -v ON_ERROR_STOP=1 -1 -f tidy.sql` between the chain's
+`migrate deploy` and the catalogue runs (fresh `sq_chain` and `sq_base`, PostgreSQL 16.15).
+
+**Result:** `NO-DIFF` on both `catalog.final.sql` (1,173 lines each side) and `catalog.extra.sql` (1,409
+each side). **Discriminates:** the chain **without** `tidy.sql` against the new baseline differs in exactly
+the two expected pairs (`requires_cursor` → `matches_cursor`, `instants_requires_cursor` →
+`instants_match_cursor`) and nothing else. `DATABASE_URL=$P/sq_base pnpm --filter @repo/api
+prisma:check-drift` → "No difference detected". New file: 2,076 lines, 111,084 bytes, sha256
+`28124a0b…af7a26`, equal to the `_prisma_migrations.checksum` Prisma recorded; a local `app_test` still
+holding M2-T1's `84f2c9d9…92fa0b` is dropped and rebuilt by `scripts/e2e-local.sh` (`baseline-changed`).
+
+**Writers checked before tightening.** One statement writes all six columns, `stampScheduleComputedAt`
+(`schedule.repository.ts`, `SET schedule_computed_at = now(), schedule_instants_computed_at = now(),
+schedule_critical_* = …`), with one `now()` per statement, so equality holds even when two queued
+recalculations move the cursor backwards (the reason m2-schema-design.md B3 rejected `<=`). `rg` over
+`apps/api/src` finds no other write of any of the six. Two e2e specs wrote the states the old one-way CHECKs
+admitted for an older image; they now assert the refusal (`schedule-instants.e2e-spec.ts`) or set the
+"never stamped" state whole (`cross-plan-instants.e2e-spec.ts` FC-5).

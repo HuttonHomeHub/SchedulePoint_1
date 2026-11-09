@@ -1046,8 +1046,8 @@ model Plan {
   /// stays the pure network value either way (ADR-0041 Q2).
   ///
   /// NULLABLE WITH NO DEFAULT, and that is the load-bearing decision. NULL is a SENTINEL meaning
-  /// "the rule that produced this plan's persisted criticality is UNKNOWN" — never recalculated, or
-  /// recalculated before this shipped. It is never a claim. A constant DEFAULT would state, in a
+  /// "the rule that produced this plan's persisted criticality is UNKNOWN" — the plan was never
+  /// stamped (on a 1.1 database, the cursor is NULL too). It is never a claim. A constant DEFAULT would state, in a
   /// column a reader has no way to doubt, a rule the recalculation may never have used; the source
   /// columns carry defaults legitimately because a NEW plan genuinely starts there, and a plan that
   /// has ALREADY been computed has not. The values are UNBACKFILLABLE — nothing surviving records
@@ -1055,8 +1055,10 @@ model Plan {
   ///
   /// Three CHECKs back this: all-or-none (`num_nonnulls(...) IN (0, 4)`, so a caller may test one
   /// column and be right about all four), a nullable-safe range mirroring the source column's, and
-  /// — with no `baselines` analogue — "a mirror may never exist without the cursor it describes",
-  /// which makes a second, un-stamping write path fail loudly. No index: read with their own row.
+  /// — with no `baselines` analogue — ck_plans_schedule_criticality_matches_cursor, "the mirror is
+  /// set exactly when the cursor is" (both ways since 1.1, tidy T5, ADR-0215; it was one-way only
+  /// for plans recalculated by an older image), which makes a second write path that stamps one
+  /// without the other fail loudly. No index: read with their own row.
   scheduleCriticalPathDefinition        CriticalPathDefinition? @map("schedule_critical_path_definition")
   scheduleCriticalFloatThresholdMinutes Int?                    @map("schedule_critical_float_threshold_minutes")
   scheduleTotalFloatMode                TotalFloatMode?         @map("schedule_total_float_mode")
@@ -1109,19 +1111,20 @@ model Plan {
   scheduleInputsChangedAt               DateTime                @default(now()) @map("schedule_inputs_changed_at") @db.Timestamptz(3)
   /// The instant this plan's activity INSTANT columns were last written (ADR-0212 D4; cross-plan-instants
   /// m2-schema-design.md B1). ENGINE-OWNED: stamped `now()` by `stampScheduleComputedAt` in the SAME
-  /// statement as `schedule_computed_at`, so a current recalculation always leaves the two EQUAL. A
-  /// reader trusts a plan's `*_instant` columns only when this is non-null and equals
-  /// `scheduleComputedAt`. An image that predates the instants advances the cursor without this, so its
-  /// plans read as "instants not current" and the cross-plan derivation falls back to the date (FC-5,
-  /// FC-8). That is the whole rollback safety, with no operator step.
+  /// statement as `schedule_computed_at`, and the database holds the two EQUAL: CHECK
+  /// ck_plans_schedule_instants_match_cursor (`IS NOT DISTINCT FROM`; raw SQL, migration only).
+  /// Before 1.1 that CHECK was one-way (`… requires_cursor`) so that an image older than the
+  /// instants could still advance the cursor alone during a rollback; a 1.1 database has no such
+  /// image (tidy T5, ADR-0215, retiring ADR-0212 D4's rollback rationale). So a plan's `*_instant`
+  /// columns are trusted whenever this is non-null, and the column is kept (not dropped) only
+  /// because it is a published export column (ADR-0194).
   ///
-  /// NULLABLE, NO DEFAULT, no backfill: NULL is "never written by an instant-aware recalculation".
-  /// Never accepted from a DTO; touches no version/updated_at/updated_by (ADR-0022). CHECK
-  /// ck_plans_schedule_instants_requires_cursor (raw SQL, migration only). Deliberately NO `<=`/equality
-  /// CHECK: the cursor can move backwards when two recalculations queue on the plan lock, and such a
-  /// CHECK would fail an older image's recalculation during a rollback. No index: read with its own
-  /// plan row (via the cross-plan include and the export), never filtered or sorted across plans (the
-  /// scheduleComputedAt precedent).
+  /// NULLABLE, NO DEFAULT: NULL is "never stamped", exactly when `scheduleComputedAt` is NULL; the
+  /// cross-plan derivation then reads the date (FC-5). Never accepted from a DTO; touches no
+  /// version/updated_at/updated_by (ADR-0022). Two recalculations queued on the plan lock can move
+  /// the cursor backwards; equality still holds, because each statement writes both from one
+  /// `now()`. No index: read with its own plan row (via the cross-plan include and the export),
+  /// never filtered or sorted across plans (the scheduleComputedAt precedent).
   scheduleInstantsComputedAt            DateTime?               @map("schedule_instants_computed_at") @db.Timestamptz(3)
   /// Where this plan's swimlanes come from (swimlanes schema-design §3.2). NOT NULL DEFAULT 'NONE',
   /// true of every plan that predates the feature. NOT a scheduling input (`NOT_INPUT` in
@@ -1579,7 +1582,7 @@ model Activity {
   //   * calculation is a PLAN-level event with a plan-level column. `writeResults` writes every
   //     activity of a plan in one statement and throws unless the count matches, so "not yet
   //     calculated" is never a property of one row; `plans.schedule_computed_at` is that fact at
-  //     that grain (and ck_plans_schedule_criticality_requires_cursor already makes it the
+  //     that grain (and ck_plans_schedule_criticality_matches_cursor already makes it the
   //     discriminator other engine-owned columns are read against).
   //   * `visual_drift_days` one line up carries the identical conflation (NULL = unplaced OR
   //     uncalculated), as do `leveled_start`/`leveling_delay_minutes` below. Direct precedent, not
@@ -1745,8 +1748,8 @@ model Activity {
   //   * ENGINE-OWNED: written ONLY by `writeResults`' batched unnest UPDATE for EVERY activity type, in
   //     the statement that writes the dates. NEVER from a DTO; NEVER touching
   //     version/updated_at/updated_by (ADR-0022).
-  //   * TRUSTED ONLY WHEN plans.schedule_instants_computed_at = plans.schedule_computed_at (see Plan).
-  //     NULL = not written since the columns landed; read the date (FC-5). No backfill (needs the
+  //   * TRUSTED ONLY WHEN plans.schedule_instants_computed_at is set, which the database holds equal
+  //     to plans.schedule_computed_at (see Plan). NULL = not written; read the date (FC-5). No backfill (needs the
   //     engine).
   //   * CHECK ck_activities_schedule_instants_all_or_none_with_dates (raw SQL, migration only): all
   //     four NULL, or all four set with their four dates set. No ordering CHECK: the dates tolerate a

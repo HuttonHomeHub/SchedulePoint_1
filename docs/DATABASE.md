@@ -2080,13 +2080,11 @@ back-relations inside their blocks' column widths).
   columns belong to the recalculation pass. Until a plan is recalculated, a reader that positions a
   finish milestone from these columns with the new end-of-day rule shows it one day later than the
   engine will. This applies to every finish milestone, placed or not.
-- **Reverse** (forward-only in production; the compensating step is in the migration header and
-  `docs/DEPLOYMENT.md`): with the API stopped, in one transaction, lock the record table (the guard —
-  it fails if the reverse already ran), `visual_start + 1` on **every** finish-milestone placement
-  present (after the release they are all in the new encoding, including ones written since, so the
-  record is a check rather than the selector), compare against `prior_visual_start`, drop the table
-  and delete the migration's `_prisma_migrations` row so a later roll-forward applies it afresh.
-  Measured: 2,266 rows restored to their exact pre-migration values; a second run fails at the lock.
+- **Reverse (history).** Until 1.0, `docs/DEPLOYMENT.md` "Rolling back past the finish-milestone
+  date release" shifted every finish-milestone placement back one day against this record, then
+  dropped the table and the migration's `_prisma_migrations` row (measured: 2,266 rows restored
+  exactly; a second run failed at the lock). It does not apply to a 1.1 database, where this table
+  is created empty and never written; the procedure is at git tag `api-v1.0.0`.
 - **Non-scheduling.** The CPM engine never reads it.
 
 ### CrossPlanLagMigration: the record of cross-plan lags re-encoded to working minutes (cross-plan-day-boundary M2-T2)
@@ -2139,17 +2137,14 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
   Only `lag_minutes` and `version` moved (md5 over every other column and every table read); drift
   clean on the populated database. The full record is
   `docs/specs/cross-plan-day-boundary/m2/migration-cost.md`.
-- **Engine-owned dates are not rewritten.** A linked plan's stored dates stay as the old rule
-  computed them until it is recalculated (M3's one-time boot re-derivation, keyed on this
-  migration's `_prisma_migrations.finished_at`).
-- **Reverse** (`docs/DEPLOYMENT.md` "Rolling back past the cross-plan lag release"): first a
-  factor-drift finder. Then, with the API stopped and as one transaction: lock the record (a one-shot
-  guard), restore recorded links (bumping `version` again), convert unrecorded links back to
-  `days × 1440` with the migration's `resolved` CTE copied verbatim and `floor(x + 0.5)` to match
-  `Math.round`, run two checks, drop the record and delete the migration's `_prisma_migrations` row.
-  The migration test runs both blocks as written, and asserts that they carry the CTE verbatim.
-  Measured on the populated database: every link's `(id, lag_minutes)` restored exactly, and a
-  second run refused at the lock.
+- **Engine-owned dates were not rewritten (history).** Until 1.0 a linked plan's stored dates stayed
+  as the old rule computed them until a one-time boot re-derivation, keyed on this migration's
+  `_prisma_migrations.finished_at`, recalculated it. The 1.1 baseline (ADR-0215) has no such
+  migration row and the service is gone (see "Re-derivation markers (history)" below).
+- **Reverse (history).** Until 1.0, `docs/DEPLOYMENT.md` "Rolling back past the cross-plan lag
+  release" re-encoded every link back to `days × 1440` against this record, and an e2e spec ran it
+  as written. Neither applies to a 1.1 database, where this table is created empty and never
+  written; the procedure, its measurement and its test are at git tag `api-v1.0.0`.
 - **Non-scheduling.** Nothing in the application reads it.
 
 ### Re-derivation markers (history)
