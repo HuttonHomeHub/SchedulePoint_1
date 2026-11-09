@@ -73,8 +73,9 @@ export class EmailVerificationService {
 
     // **The response is discarded on purpose, `Set-Cookie` included.** Confirming must never sign
     // anyone in. Today that holds because `autoSignInAfterVerification` is not configured
-    // (`email-verification.mjs:297-298`) and `user.changeEmail` is not enabled; enabling
-    // `changeEmail` mints `updateTo` tokens whose verification creates a session, so doing so
+    // (`email-verification.mjs:297-298`) and `user.changeEmail` is not enabled. Enabling
+    // `changeEmail` mints `updateTo` tokens whose verification writes the session cookie (as of
+    // 1.7.18 only for an already-signed-in caller; 1.7.14 also created a session), so doing so
     // means re-reviewing this endpoint before it ships.
     const response = await this.auth.handler(new Request(url, { method: 'GET', headers }));
     if (response.ok) return;

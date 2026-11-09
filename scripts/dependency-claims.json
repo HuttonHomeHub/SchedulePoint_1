@@ -1,32 +1,32 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.7.14",
-    "better-call": "1.4.4",
+    "better-auth": "1.7.18",
+    "better-call": "1.4.5",
     "@better-fetch/fetch": "1.3.3",
     "nodemailer": "10.3.1",
     "zod": "4.6.7",
     "@nestjs/throttler": "6.7.1",
     "react-hook-form": "7.91.0",
     "react-dom": "19.3.1",
-    "lucide-react": "1.61.0",
+    "lucide-react": "1.70.0",
     "axe-core": "4.14.0",
     "@axe-core/playwright": "4.14.0",
     "@tanstack/react-router": "1.170.46",
     "@tanstack/history": "1.162.5",
     "@tanstack/router-core": "1.171.39",
     "playwright-core": "1.64.1",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.4",
     "@tanstack/query-core": "5.105.0",
-    "@nestjs/core": "12.3.2",
-    "@nestjs/common": "12.3.2",
-    "@nestjs/platform-express": "12.3.2",
+    "@nestjs/core": "12.3.3",
+    "@nestjs/common": "12.3.3",
+    "@nestjs/platform-express": "12.3.3",
     "eslint-plugin-react-hooks": "7.1.1",
     "@tanstack/react-query": "5.105.0",
     "body-parser": "2.4.0",
     "eslint": "9.39.5",
     "@prisma/client": "6.19.3",
     "yazl": "3.3.1",
-    "@better-auth/core": "1.7.14"
+    "@better-auth/core": "1.7.18"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -575,7 +575,7 @@
       "ref": "email-verification.mjs:285-286",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "287-288",
+      "lines": "279-280",
       "anchor": "\tif (user.user.emailVerified) {\n\t\tif (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["docs/specs/verify-email-confirm/spec.md", "docs/TECH_DEBT.md"]
     },
@@ -583,7 +583,7 @@
       "ref": "email-verification.mjs:287-288",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "287-288",
+      "lines": "279-280",
       "anchor": "\tif (user.user.emailVerified) {\n\t\tif (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["apps/web/src/routes/verify-email.tsx"]
     },
@@ -591,7 +591,7 @@
       "ref": "index.mjs:168",
       "package": "better-auth",
       "path": "dist/api/index.mjs",
-      "lines": "173",
+      "lines": "174",
       "anchor": "const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);",
       "citedBy": [
         "docs/adr/0075-mail-delivery-is-best-effort.md",
@@ -634,7 +634,7 @@
       "ref": "internal-adapter.mjs:773-783",
       "package": "better-auth",
       "path": "dist/db/internal-adapter.mjs",
-      "lines": "786-796",
+      "lines": "821-831",
       "anchor": "* return it. The first concurrent caller receives the latest row for the",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
@@ -820,7 +820,7 @@
       "package": "better-auth",
       "path": "dist/api/routes/sign-in.mjs",
       "lines": "341-353",
-      "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.email, void 0, ctx.context.options.emailVerification?.expiresIn);",
+      "anchor": "const token = await createEmailVerificationToken(ctx.context.secret, user.email, void 0, ctx.context.options.emailVerification?.expiresIn, { userId: user.id });",
       "citedBy": [
         "apps/web/src/features/auth/api/use-session.ts",
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"
@@ -983,7 +983,7 @@
       "ref": "lucide-react.d.ts:342",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "341",
+      "lines": "354",
       "anchor": "declare const AlignHorizontalJustifyStart:",
       "citedBy": ["docs/specs/workspace-modes/feature-spec.md"]
     },
@@ -991,7 +991,7 @@
       "ref": "lucide-react.d.ts:4306",
       "package": "lucide-react",
       "path": "dist/lucide-react.d.ts",
-      "lines": "4410",
+      "lines": "4475",
       "anchor": "declare const ChartColumnStacked: LucideIcon;",
       "citedBy": [
         "docs/specs/toolbar-redesign/feature-spec.md",
@@ -1608,7 +1608,7 @@
       "ref": "email-verification.mjs:189",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "189",
+      "lines": "277",
       "anchor": "if (!user) return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);",
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
@@ -1619,7 +1619,7 @@
       "ref": "email-verification.mjs:294-296",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "294-296",
+      "lines": "286-288",
       "anchor": "afterEmailVerification(updatedUser, ctx.request)",
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
@@ -1630,7 +1630,7 @@
       "ref": "email-verification.mjs:297-298",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "297-298",
+      "lines": "289-290",
       "anchor": "autoSignInAfterVerification",
       "citedBy": [
         "apps/api/src/common/auth/better-auth.ts",
