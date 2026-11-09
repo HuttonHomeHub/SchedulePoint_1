@@ -8,38 +8,8 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// This suite covers the **flag-off** registry (plain Add toggle, no Link tool). Now that
-// `VITE_CANVAS_AUTHORING` defaults on, pin it off here; the flag-on registry is covered by
-// `tsld-toolbar-authoring.test.tsx`.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: false,
-  // Pin the canvas insight lenses OFF here too (this is the flag-off registry suite): the search field
-  // stays the disabled stub and filter/colour-by/baseline-overlay stay "Coming soon" placeholders. The
-  // real flag-on lens controls are covered in tsld-toolbar-lenses.test.tsx.
-  CANVAS_LENSES_ENABLED: false,
-  // Pin canvas nav OFF here too: isolate / next-conflict / snap stay "Coming soon" placeholders. The
-  // real flag-on nav controls are covered in tsld-toolbar-canvas-nav.test.tsx.
-  CANVAS_NAV_ENABLED: false,
-  // Pin export & print OFF here too (this is the flag-off registry suite): `export`/`print` stay their
-  // "Coming soon" placeholders. The real flag-on Export menu is covered in tsld-toolbar-export.test.tsx.
-  EXPORT_PRINT_ENABLED: false,
-  // Pin External-Guest share links OFF here too (now ON by default, ADR-0051 F-M4): `share` stays its
-  // "Coming soon" placeholder. The real flag-on Share… item is covered in tsld-toolbar-share.test.tsx.
-  GUEST_SHARE_LINKS_ENABLED: false,
-  // Pin the on-canvas advanced activity types (Stage D) OFF here too: the Add menu's "Span between"
-  // section stays today's disabled Level-of-effort + Hammock "Soon" placeholders (the flag-on single
-  // "Level of Effort (hammock)" item is covered in tsld-toolbar-activity-types.test.tsx).
-  CANVAS_ACTIVITY_TYPES_ENABLED: false,
-  // Pin the canvas resource-view lens (Stage E, ADR-0049) OFF here too: `resource-view` AND the M2
-  // `over-allocation` highlight stay their "Coming soon" placeholders (the flag-on toggles are covered
-  // in tsld-toolbar-resource-view.test.tsx).
-  CANVAS_RESOURCE_VIEW_ENABLED: false,
-  // Pin the time-axis legibility epic OFF here too (now ON by default, M7): the zoom-preset menu rows
-  // stay their plain "Month" labels, not the range-anchored "Month — 3 months" copy. The real flag-on
-  // labels are covered in tsld-toolbar-time-axis.test.tsx.
-  CANVAS_TIME_AXIS_ENABLED: false,
-}));
+// The authoring tools' own registry (the Add split-button's menu, the Link tool) is covered by
+// `tsld-toolbar-authoring.test.tsx`; this suite covers the rest of the bar.
 
 const spies = {
   setZoomPreset: vi.fn(),
@@ -307,7 +277,7 @@ describe('TSLD toolbar registry (two-row)', () => {
 
   it('pen-gates Add activity: disabled read-only, enabled + wired when authoring', () => {
     const { rerender } = renderRows(ctx(), false);
-    const add = screen.getByRole('button', { name: 'Add activity' });
+    const add = screen.getByRole('button', { name: 'Add' });
     expect(add).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(add);
     expect(spies.toggleAddActivity).not.toHaveBeenCalled();
@@ -318,7 +288,7 @@ describe('TSLD toolbar registry (two-row)', () => {
         <Toolbar items={rows.strip} context={ctx()} label="Plan commands" authoringEnabled />
       </div>,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     expect(spies.toggleAddActivity).toHaveBeenCalledOnce();
   });
 
@@ -383,7 +353,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(screen.getByRole('button', { name: /View/ })).toBeInTheDocument();
     expect(screen.queryByText('Finish: 01 Aug 2026')).not.toBeInTheDocument();
     // Author + recalc remain reachable.
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
   it('keeps Auto-arrange on the bar and greys it without the pen (shade-don’t-hide)', () => {
@@ -403,77 +373,6 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(arrange).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(arrange);
     expect(requestAutoArrange).toHaveBeenCalledOnce();
-  });
-
-  it('renders the search field and inline roadmap placeholders, disabled with a reason', () => {
-    renderRows(ctx());
-    // Search leads the Find cluster as a disabled field (not a menu item).
-    expect(screen.getByRole('searchbox', { name: /Search or filter activities/ })).toBeDisabled();
-    // The rest are inline "Coming soon" icon buttons whose tooltip names them.
-    // `Colour by…` left this list in ADR-0090 M2-T2 along with the live control. Its flag-off
-    // placeholder was NOT left behind on Row 1: a placeholder occupying the width the live control
-    // just vacated defeats the move exactly. Flag-off, `View ▾`'s Insight section has no colour
-    // group at all.
-    // Print and Share folded into the Share & export menu in ADR-0090 M2-T4, and Export became that
-    // menu's trigger — so only one top-level placeholder remains where three stood.
-    for (const name of ['Share & export']) {
-      const item = screen.getByRole('button', { name });
-      expect(item).toHaveAttribute('aria-disabled', 'true');
-      // The title repeats the label ONLY when the button is icon-only, because then it is the
-      // single thing identifying which control is refusing. A labelled button already shows its
-      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
-      // than hard-coded, so this case keeps working whichever side of that line an item is on.
-      // NOT `hasAttribute('aria-label')` — see the sibling case: a labelled button with a linked
-      // reason carries one too. The visible label is the button's first text node.
-      const iconOnly = !item.textContent?.startsWith(name);
-      if (iconOnly) {
-        expect(item).toHaveAttribute('title', `${name} — Coming soon`);
-      } else {
-        // ADR-0204: a labelled shaded control shows its reason as a tip, not a hover-only `title`.
-        expect(item).not.toHaveAttribute('title');
-        fireEvent.focus(item);
-        expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Coming soon');
-      }
-    }
-  });
-
-  it('offers no resource-view lens at all inside View when VITE_CANVAS_RESOURCE_VIEW is off', () => {
-    // CANVAS_RESOURCE_VIEW_ENABLED is pinned off (top of file). Both lenses moved into `View ▾` in
-    // ADR-0090 M2-T2, and their Row-1 "Coming soon" placeholders went with them rather than staying
-    // behind — a placeholder occupying the width the live control just vacated defeats the move
-    // exactly. So flag-off the Insight section simply has no such row, which is what this now pins:
-    // absence, not a stub. The assertion opens the popover, because "not on Row 1" would pass even
-    // if the row were wrongly rendered inside it.
-    renderRows(ctx());
-    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
-    for (const name of ['Resource view', 'Flag over-allocated']) {
-      expect(screen.queryByRole('checkbox', { name })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
-    }
-  });
-
-  it('shows the canvas-nav features as "Coming soon" placeholders when VITE_CANVAS_NAV is off', () => {
-    // CANVAS_NAV_ENABLED is left at its real default (off) — this suite doesn't mock it — so the ids
-    // must resolve to their byte-for-byte placeholder stubs (the flag-off parity gate).
-    //
-    // The subject has narrowed twice. `Isolate logic path` left in ADR-0090 M2-T1 (it moved to the
-    // selection bar, and its Row-1 placeholder went with it rather than being reproduced there — a
-    // placeholder earns its place on a persistent row a planner scans, not on a transient bar).
-    // `Snap to grid` left on 2026-08-13, deleted with the control: the engine rolls every
-    // `visualStart` forward to a working day unconditionally, so the toggle had nothing to toggle.
-    // `Next conflict` is what remains.
-    //
-    // **It moved back INLINE on 2026-08-13 (ADR-0094).** From ADR-0090 M2 until then it was a
-    // tier-3 item, so flag-off its placeholder lived in the `⋯` and this test opened the menu to
-    // find it. The epic promoted it to tier 1 — and because one `nextConflictShape` is spread into
-    // both the flag-on item and its `placeholderItem()` stub, the PLACEHOLDER moved with it. That is
-    // the shared-shape pattern working as intended: the two branches cannot drift, including in
-    // where they sit. The paragraph is updated with the assertion because a stale explanation is
-    // the half a reader would otherwise trust.
-    renderRows(ctx({ selectedActivity: undefined }));
-    const btn = screen.getByRole('button', { name: 'Next conflict' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAccessibleDescription('Coming soon');
   });
 
   it('has no axe violations across both rows', async () => {

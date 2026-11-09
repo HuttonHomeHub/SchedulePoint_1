@@ -11,7 +11,6 @@ import { ActivityEditorDialog } from '@/features/activities/components/ActivityE
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

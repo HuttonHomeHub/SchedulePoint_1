@@ -13,7 +13,6 @@ export {
   useUpdateDependency,
   useDeleteDependency,
 } from './api/use-dependencies';
-export { DependencyEditor } from './components/DependencyEditor';
 export { ActivityLogicPanel } from './components/ActivityLogicPanel';
 export { DEPENDENCY_TYPE_LABELS, formatLag } from './schemas/dependency-schemas';
 export { lagHoursPerDay, lagEndpoint, ELAPSED_HOURS_PER_DAY } from './model/lag-factor';

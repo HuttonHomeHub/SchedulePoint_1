@@ -77,7 +77,6 @@ import {
   zoomAt,
   ELAPSED_DAY_WALK,
   LANE_HEIGHT,
-  LEGACY_MAX_PX_PER_DAY,
   MAX_PX_PER_DAY,
   type ClassifyHitOptions,
   type DayWalk,
@@ -129,15 +128,6 @@ import {
 } from './viewport-column';
 
 import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_LINK_ROUTING_ENABLED,
-  CANVAS_LIVE_FEEDBACK_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
-} from '@/config/env';
 import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
@@ -268,15 +258,6 @@ function originStyle(wbsBandHeightPx: number, gutterWidthPx: number): React.CSSP
 
 const CLICK_MOVE_THRESHOLD_PX = 4;
 
-/**
- * The zoom-scale ceiling this build actually allows: the raised {@link MAX_PX_PER_DAY} once
- * `VITE_CANVAS_TIME_AXIS` is on, else the pre-epic {@link LEGACY_MAX_PX_PER_DAY} — resolved once
- * here (the flag is a build-time constant) rather than at each of the four call sites below, so a
- * flag-off build's wheel/pinch/button/preset zoom stays byte-for-byte within the old ceiling
- * (a component-review finding on an earlier draft that read `MAX_PX_PER_DAY` unconditionally).
- */
-const RESOLVED_MAX_PX_PER_DAY = CANVAS_TIME_AXIS_ENABLED ? MAX_PX_PER_DAY : LEGACY_MAX_PX_PER_DAY;
-
 /** The pending create ghost (day/lane geometry) held open under the name popover. */
 export interface PendingGhost {
   startDay: number;
@@ -344,17 +325,12 @@ export interface TsldCanvasProps {
    * false, a body press falls through to M1 select — no dangling ghost that no-ops on release. */
   canReposition?: boolean;
   /** Whether a bar-end grab in select mode may start a duration resize (i.e. a resize handler is
-   * wired — ADR-0052 M2 finish edge, M3 start edge). Only effective under
-   * `VITE_CANVAS_DIRECT_MANIPULATION`; when false (or flag-off) the bar ends keep their previous
-   * behaviour byte-for-byte. */
+   * wired — ADR-0052 M2 finish edge, M3 start edge). When false the bar ends
+   * are not resize handles. */
   canResize?: boolean;
   /** Whether a drawn lag anchor may be dragged to change its link's lag (i.e. a lag handler is
-   * wired — ADR-0052 M3). Only effective under `VITE_CANVAS_DIRECT_MANIPULATION`; when false (or
-   * flag-off) no lag-anchor zones exist, byte-for-byte. */
+   * wired — ADR-0052 M3). When false no lag-anchor zones exist. */
   canLag?: boolean;
-  /** Whether an edge-handle grab may start a dependency-draw (i.e. a link handler is wired).
-   * When false, a handle press falls through to M1 select — no dangling rubber-band. */
-  canLink?: boolean;
   /** Called with a committed edit + the (container-clamped) anchor point for its popover. */
   onIntent?: (intent: EditIntent, anchor: Point) => void;
   /** LOE endpoint-pick step feedback (Stage D) — the parallel-DOM a11y channel `TsldPanel` announces +
@@ -417,10 +393,10 @@ export interface TsldCanvasProps {
   /** Day offset (from `dataDate`) of "today", or null when it isn't placeable. */
   todayOffset?: number | null;
   /** The viewer-local time-of-day fraction (0…1) added to `todayOffset` for a fractional (not
-   * midnight-boundary) Today line + pill (F6a/F6b, `VITE_CANVAS_TIME_AXIS`). Absent/null ⇒ the
+   * midnight-boundary) Today line + pill. Absent/null ⇒ the
    * plain integer offset ⇒ byte-for-byte today's paint (the flag-off parity claim). */
   todayFraction?: number | null;
-  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────
   // All default-absent ⇒ byte-for-byte today's paint. `TsldPanel` derives these (memoised).
   /** Ids of activities the active filter dimmed (non-matches); they paint muted, keeping the outline. */
   dimmedIds?: ReadonlySet<string> | undefined;
@@ -451,7 +427,7 @@ export interface TsldCanvasProps {
    * from the same projection that swapped in the display lanes (memoised). Absent ⇒ no swimlanes ⇒
    * byte-for-byte today's paint (SC-3). */
   swimlaneMarks?: SwimlaneMarks | undefined;
-  // ── Resource strip (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`) ──────────────────
+  // ── Resource strip (Stage E, ADR-0049) ──────────────────
   // Both default-absent ⇒ byte-for-byte today's `measure()` + paint (the parity gate): no band is
   // reserved and the rAF loop does no strip work when the strip is inactive.
   /** When true, reserve the {@link RESOURCE_STRIP_HEIGHT} band at the container bottom and paint the
@@ -965,7 +941,6 @@ export function TsldCanvas({
   canReposition = false,
   canResize = false,
   canLag = false,
-  canLink = false,
   onIntent,
   onLoeSpanStep,
   onLinkPickStep,
@@ -1159,36 +1134,20 @@ export function TsldCanvas({
     linkPickStepRef.current = onLinkPickStep;
   });
 
-  // Edge handles are the flag-off edge-drag affordance. Canvas-first authoring (ADR-0032 M5) replaces
-  // edge-drag with the two-click `link` tool, so the handles are suppressed there — no dangling
-  // rubber-band path when the flag is on. `canLink` still gates whether linking is offered at all.
-  // Under direct manipulation (ADR-0052 §1) the bar ends are repurposed as RESIZE handles, so the
-  // selected-bar edge marks advertise resize instead (and the painter suppresses them for
-  // resize-ineligible types); flag-off keeps today's expression byte-for-byte.
-  const showEdgeHandles = CANVAS_DIRECT_MANIPULATION_ENABLED
-    ? editing && canResize
-    : editing && canLink && !CANVAS_AUTHORING_ENABLED;
-  // Whether a bar-end press/hover means "resize" (ADR-0052 M2/M3): flag + editing + Select tool +
-  // a wired handler. Build-time flag first, so flag-off short-circuits to false with zero extra
-  // work. `lagArmed` is the same gate for the drawn lag-anchor grab zones (M3) — and, since the
+  // Canvas-first authoring (ADR-0032 M5) links with the two-click `link` tool, so there is no
+  // edge-drag. Under direct manipulation (ADR-0052 §1) the bar ends are RESIZE handles, so the
+  // selected-bar edge marks advertise resize (and the painter suppresses them for resize-ineligible
+  // types).
+  const showEdgeHandles = editing && canResize;
+  // Whether a bar-end press/hover means "resize" (ADR-0052 M2/M3): editing + Select tool + a wired
+  // handler. `lagArmed` is the same gate for the drawn lag-anchor grab zones (M3) — and, since the
   // fix, for the painted handles that advertise them, so the affordance and the target appear and
   // disappear together (a read-only surface gets neither).
-  const resizeArmed =
-    CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canResize;
-  const lagArmed = CANVAS_DIRECT_MANIPULATION_ENABLED && editing && mode === 'select' && canLag;
-  /**
-   * Whether the pointer-transparent **interaction** canvas is mounted.
-   *
-   * It was `editing` alone, which was right while every gesture that drew on it was a write. The
-   * marquee is not one: selecting is a read (the ADR-0063 M4b rule), so a Viewer can arm the tool
-   * and sweep — and gated on `editing` the sweep would be invisible to exactly the person who has
-   * no other feedback on this canvas. Flag-off the expression is `editing`, so the read-only
-   * surface is byte-for-byte today's.
-   */
-  const interactionLayerMounted = editing || CANVAS_MULTI_SELECT_ENABLED;
+  const resizeArmed = editing && mode === 'select' && canResize;
+  const lagArmed = editing && mode === 'select' && canLag;
   // Ground, not data: the flag decides whether the band layer paints at all, so flag-off the scene
   // carries no `monthBands` and the frame is byte-for-byte today's (ADR-0055 §4). The user's own
-  // `view?.monthBands` preference (F7b, `VITE_CANVAS_TIME_AXIS`) only narrows the flag-on case — it
+  // `view?.monthBands` preference only narrows the flag-on case — it
   // never widens flag-off, which is what keeps the parity claim structural. Hoisted to one
   // expression (component-review finding) so the initial scene ref and the resync effect below
   // can't drift out of step.
@@ -1208,7 +1167,6 @@ export function TsldCanvas({
   const {
     monthBands: monthBandsEnabled,
     dataDateLine: dataDateLineEnabled,
-    gridTiers,
     timeTrueLinks,
     visualRefresh,
     linkRouting,
@@ -1226,9 +1184,6 @@ export function TsldCanvas({
     todayFraction,
     monthBands: monthBandsEnabled,
     dataDateLine: dataDateLineEnabled,
-    // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
-    // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-    gridTiers,
     dimmedIds,
     barFill,
     barInk,
@@ -1238,16 +1193,13 @@ export function TsldCanvas({
     compareLinks,
     flaggedIds,
     swimlaneMarks,
-    // Time-true link anchoring + arrowheads (ADR-0052 M1). A build-time constant, so it never
-    // re-triggers the scene effect; flag-off the painter keeps today's routing byte-for-byte.
-    timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
-    // The M4 bar visual refresh rides the SAME env flag (one flag, one flag-off parity gate);
-    // its own scene field keeps the two render changes independently testable in the painter.
-    visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
-    // Obstacle-aware link corridors (ADR-0064 M2). A build-time constant like its siblings; flag-off
-    // the painter builds no interval index and the geometry takes its no-obstacle default, which is
-    // today's line point-for-point.
-    linkRouting: CANVAS_LINK_ROUTING_ENABLED,
+    // Time-true link anchoring + arrowheads (ADR-0052 M1), the M4 bar visual refresh and the
+    // obstacle-aware link corridors (ADR-0064 M2). Constants, so they never re-trigger the scene
+    // effect; each is its own scene field so the painter's render changes stay independently
+    // testable.
+    timeTrueLinks: true,
+    visualRefresh: true,
+    linkRouting: true,
     // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
     hoverId: null,
     // The visible lag-anchor handles ride the SAME gate as their grab zones (`lagArmed`), so the
@@ -1263,10 +1215,10 @@ export function TsldCanvas({
    * Publish the bar the in-flight gesture is dragging into the SCENE (ADR-0054 §1), mirroring
    * {@link setActiveLagId}: written — and the scene marked dirty — only when it actually changes,
    * so a drag costs exactly two scene repaints (arm and drop), never one per pointer move. Called
-   * after every `gestureRef` transition; flag-off it is a permanent no-op (the id stays null).
+   * after every `gestureRef` transition.
    */
   const syncGestureSource = (): void => {
-    const id = CANVAS_LIVE_FEEDBACK_ENABLED ? gestureSourceId(gestureRef.current) : null;
+    const id = gestureSourceId(gestureRef.current);
     if (gestureSourceIdRef.current === id) return;
     gestureSourceIdRef.current = id;
     sceneRef.current = { ...sceneRef.current, gestureSourceId: id };
@@ -1363,9 +1315,6 @@ export function TsldCanvas({
       todayFraction,
       monthBands: monthBandsEnabled,
       dataDateLine: dataDateLineEnabled,
-      // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
-      // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-      gridTiers,
       dimmedIds,
       barFill,
       barInk,
@@ -1396,11 +1345,10 @@ export function TsldCanvas({
     activities,
     edges,
     dataDate,
-    // The four flag-derived layers, now that they come from `sceneLayers` rather than being read
+    // The flag-derived layers, now that they come from `sceneLayers` rather than being read
     // inline as build-time constants. They are booleans off a `useMemo` keyed on `view`, so they
     // are referentially stable and adding them cannot make this effect run more often — which is
     // the whole reason `layers` is destructured rather than listed as an object.
-    gridTiers,
     timeTrueLinks,
     visualRefresh,
     linkRouting,
@@ -1428,11 +1376,7 @@ export function TsldCanvas({
   // Report the active preset when the zoom stop crosses a boundary (called at the pxPerDay-changing
   // sites only). Kept off the per-frame path since pan never changes pxPerDay.
   const reportZoomStop = (): void => {
-    const level = presetOf(
-      viewRef.current.pxPerDay,
-      sizeRef.current.width,
-      CANVAS_TIME_AXIS_ENABLED,
-    );
+    const level = presetOf(viewRef.current.pxPerDay, sizeRef.current.width);
     if (level !== lastStopRef.current) {
       lastStopRef.current = level;
       onZoomStopChangeRef.current?.(level);
@@ -1505,24 +1449,13 @@ export function TsldCanvas({
     controlRef,
     () => ({
       zoomToPreset: (level: ZoomLevel) => {
-        viewRef.current = zoomToPreset(
-          viewRef.current,
-          sizeRef.current,
-          level,
-          CANVAS_TIME_AXIS_ENABLED,
-          RESOLVED_MAX_PX_PER_DAY,
-        );
+        viewRef.current = zoomToPreset(viewRef.current, sizeRef.current, level, MAX_PX_PER_DAY);
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
       },
       stepZoom: (factor: number) => {
-        viewRef.current = stepZoom(
-          viewRef.current,
-          sizeRef.current,
-          factor,
-          RESOLVED_MAX_PX_PER_DAY,
-        );
+        viewRef.current = stepZoom(viewRef.current, sizeRef.current, factor, MAX_PX_PER_DAY);
         dirtyRef.current = true;
         interactionDirtyRef.current = true;
         reportZoomStop();
@@ -1589,7 +1522,7 @@ export function TsldCanvas({
           framed,
           size,
           sceneRef.current.dataDate,
-          Math.min(RESOLVED_MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
+          Math.min(MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
         );
         // **The lane axis is repaired after the fit** (`docs/TECH_DEBT.md` #152). `fitToContent`
         // frames the TIME axis and pins `originY` to the padding — right for whole-plan Fit at
@@ -2274,7 +2207,7 @@ export function TsldCanvas({
               sceneRef.current.activities,
               size,
               sceneRef.current.dataDate,
-              RESOLVED_MAX_PX_PER_DAY,
+              MAX_PX_PER_DAY,
             )
           : DEFAULT_VIEWPORT;
         fittedRef.current = true;
@@ -2295,7 +2228,7 @@ export function TsldCanvas({
       syncRuler();
       syncAxisMarkers();
       syncGutter();
-      const ictx = interactionLayerMounted ? interactionCanvasRef.current?.getContext('2d') : null;
+      const ictx = interactionCanvasRef.current?.getContext('2d');
       if (ictx && interactionDirtyRef.current) {
         const p = pendingRef.current;
         const overlay: InteractionOverlay = {
@@ -2325,45 +2258,38 @@ export function TsldCanvas({
           ),
           lag: liveLag(gestureRef.current, viewRef.current),
           // M4 refresh: restyled ghosts + the idle-hover ring (suppressed while a gesture is in
-          // flight — the ghost is the live affordance then). Flag-off both fields are inert
-          // (`visualRefresh` false, `hover` never written) ⇒ byte-for-byte today's overlay.
-          visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
+          // flight — the ghost is the live affordance then).
+          visualRefresh: true,
           hover: gestureActiveRef.current ? null : hoverRef.current,
           // Live feedback (ADR-0054 §1): the ghost carries the dragged bar's own label, progress
-          // and glyph. Null off-flag and whenever no bar is being manipulated (a create has none),
-          // so the ghost falls back to the ADR-0052 treatment byte-for-byte.
-          ghost: CANVAS_LIVE_FEEDBACK_ENABLED
-            ? gestureGhostDetail(gestureRef.current, activityById)
-            : null,
+          // and glyph. Null whenever no bar is being manipulated (a create has none), so the
+          // ghost falls back to the ADR-0052 treatment.
+          ghost: gestureGhostDetail(gestureRef.current, activityById),
           // The cursor date readout (ADR-0054 §2). The day comes from the gesture where one is in
           // flight — so the chip states the date that will be COMMITTED, not the pixel under the
           // pointer — and from the pointer's own column when idle.
-          cursor: CANVAS_LIVE_FEEDBACK_ENABLED
-            ? cursorReadout({
-                state: gestureRef.current,
-                point: cursorPointRef.current,
-                view: viewRef.current,
-                dataDate: sceneRef.current.dataDate,
-              })
-            : null,
+          cursor: cursorReadout({
+            state: gestureRef.current,
+            point: cursorPointRef.current,
+            view: viewRef.current,
+            dataDate: sceneRef.current.dataDate,
+          }),
           // The live marquee sweep (M2-T5). Read straight off the gesture state, which keeps raw
           // screen points — so the rectangle drawn is the rectangle the release will resolve, with
           // no second derivation that could disagree at the boundary. Null in every other state.
           marquee:
-            CANVAS_MULTI_SELECT_ENABLED && gestureRef.current.kind === 'marqueeing'
+            gestureRef.current.kind === 'marqueeing'
               ? rectFromCorners(gestureRef.current.originPoint, gestureRef.current.currentPoint)
               : null,
           // Peer ghosts during a plural drag (#108): null in every other state, so the overlay
-          // and the painter are byte-for-byte outside the one gesture this exists for.
-          peers: CANVAS_MULTI_SELECT_ENABLED
-            ? livePeerGhostRects(
-                gestureRef.current,
-                sceneRef.current.selectedIds,
-                activityById,
-                viewRef.current,
-                sceneRef.current.dataDate,
-              )
-            : null,
+          // and the painter are untouched outside the one gesture this exists for.
+          peers: livePeerGhostRects(
+            gestureRef.current,
+            sceneRef.current.selectedIds,
+            activityById,
+            viewRef.current,
+            sceneRef.current.dataDate,
+          ),
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         cursorAnchorRef.current = overlay.cursor?.x ?? 0;
@@ -2538,7 +2464,7 @@ export function TsldCanvas({
         viewRef.current,
         e.clientX - rect.left,
         e.deltaY < 0 ? 1.1 : 1 / 1.1,
-        RESOLVED_MAX_PX_PER_DAY,
+        MAX_PX_PER_DAY,
       );
       dirtyRef.current = true;
       interactionDirtyRef.current = true;
@@ -2578,16 +2504,12 @@ export function TsldCanvas({
       // Deliberately about text ENTRY, not "anything that is not the canvas": Escape typed on a
       // toolbar button does not mean "undo my typing", so the tool contract still applies there.
       //
-      // Flag-gated, because flag-off must be byte-for-byte the prior behaviour — including this
-      // listener (spec §4.8, the rollback contract).
-      if (CANVAS_SEARCH_NAV_ENABLED) {
-        const target = e.target;
-        if (
-          target instanceof HTMLElement &&
-          target.closest('input, textarea, select, [contenteditable="true"]')
-        ) {
-          return;
-        }
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
       }
       if (gestureActiveRef.current) {
         gestureActiveRef.current = false;
@@ -2605,7 +2527,7 @@ export function TsldCanvas({
         syncGestureSource();
         interactionDirtyRef.current = true;
         linkPickStepRef.current?.(null);
-      } else if (CANVAS_MULTI_SELECT_ENABLED && modeRef.current === 'marquee') {
+      } else if (modeRef.current === 'marquee') {
         // The marquee is the one tool mode **not** gated on `editing` — selecting is a read, so a
         // Viewer can arm it. Its disarm must be ungated for the same reason, or the tool arms for a
         // reader who then has no way out of it: the plan's "arming a mode nobody can leave" risk,
@@ -2643,20 +2565,11 @@ export function TsldCanvas({
     // band toggle would leave the scene sized for the wrong offset — the canvas would look right
     // and every pointer y would be out by the band's height. It is a stable `0` when the band is
     // off, so the flag-off loop init is unchanged.
-    // `editing` as well as `interactionLayerMounted`: the two were the same expression until the
-    // marquee made the layer mount without the pen, and this effect's Escape handler still reads
-    // `editing` to decide whether an authoring tool may be disarmed. Dropping it would have closed
-    // over the value from the render that first mounted the layer.
+    // `editing`: this effect's Escape handler reads it to decide whether an authoring tool may be
+    // disarmed, so dropping it would close over a stale value.
     // `minimapActive` for the interaction-canvas reason above it: the panel mounts after the last
     // measure, and the loop's own backing-store check needs the re-inited loop to run at all.
-  }, [
-    interactionLayerMounted,
-    editing,
-    resourceStripActive,
-    wbsBandHeightPx,
-    gutterWidthPx,
-    minimapActive,
-  ]);
+  }, [editing, resourceStripActive, wbsBandHeightPx, gutterWidthPx, minimapActive]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
@@ -2929,8 +2842,7 @@ export function TsldCanvas({
           // pen — a Viewer, or a writer who has not taken the lock. Everything else in this branch
           // is an edit gesture and stays gated on `editing`; the reducer itself will only reach the
           // `marqueeing` state from an empty-ground press in the two armed cases.
-          const marqueeArmable =
-            CANVAS_MULTI_SELECT_ENABLED && (mode === 'marquee' || e.ctrlKey || e.metaKey);
+          const marqueeArmable = mode === 'marquee' || e.ctrlKey || e.metaKey;
           if ((editing || marqueeArmable) && mode !== 'link' && mode !== 'loe') {
             // A reposition/resize write is in flight (canvas status & feedback M2): refuse to START
             // another edit gesture. The panel's `onIntent` would drop its result anyway, and a drag
@@ -2944,14 +2856,10 @@ export function TsldCanvas({
             const p = localPoint(e);
             const rawHit = classifyAt(p, resizeArmed, lagArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
-            // Downgrade a handle to a body hit when linking isn't wired — OR when direct
-            // manipulation is on (ADR-0052 §1 gates the legacy edge-drag-link off under the flag;
-            // linking is the two-click tool) — so it never starts a dangling rubber-band and falls
-            // through to reposition (if wired) or M1 select.
-            const hit: HitZone =
-              isHandle && (!canLink || CANVAS_DIRECT_MANIPULATION_ENABLED) && rawHit.id
-                ? { kind: 'body', id: rawHit.id }
-                : rawHit;
+            // Downgrade a handle to a body hit (ADR-0052 §1: there is no edge-drag link; linking is
+            // the two-click tool) so it never starts a dangling rubber-band and falls through to
+            // reposition (if wired) or M1 select.
+            const hit: HitZone = isHandle && rawHit.id ? { kind: 'body', id: rawHit.id } : rawHit;
             // A body grab in select mode needs the activity's current geometry to reposition it —
             // but only when a reposition handler is wired, else it falls through to M1 select. A
             // bar-end resize grab (ADR-0052 M2 finish, M3 start) needs the same geometry (its
@@ -3014,13 +2922,13 @@ export function TsldCanvas({
           //
           // **The reason this comment used to give was false, and had been for a while.** It said
           // "the interaction canvas only exists while editing (`ictx` is null otherwise)" —
-          // ADR-0080 changed that at `:836`, where `interactionLayerMounted` became
-          // `editing || CANVAS_MULTI_SELECT_ENABLED` so a Viewer could see a marquee sweep. The
+          // ADR-0080 changed that, mounting the layer for every reader
+          // so a Viewer could see a marquee sweep. The
           // gate's EFFECT was right throughout (a reader without the pen has never seen the cursor
           // readout, because THIS line is what withholds it); only its stated cause was stale, and
           // a stale cause is what a later edit reasons from. Found while moving the readout into
           // the ruler for #148, and repaired rather than stepped over.
-          if (CANVAS_LIVE_FEEDBACK_ENABLED && editing) {
+          if (editing) {
             cursorPointRef.current = localPoint(e);
             interactionDirtyRef.current = true;
           }
@@ -3186,7 +3094,7 @@ export function TsldCanvas({
           // modifier is never computed, so this call is the one-argument call it has always been —
           // and `Shift` in particular MUST stay unclaimed there, because the legacy link chord
           // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
-          const modifier = CANVAS_MULTI_SELECT_ENABLED ? selectModifierOf(e) : undefined;
+          const modifier = selectModifierOf(e);
           const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
           if (modifier) onSelect(target, modifier);
           else onSelect(target);
@@ -3224,15 +3132,15 @@ export function TsldCanvas({
           interactionDirtyRef.current = true;
         }}
       />
-      {interactionLayerMounted ? (
-        <canvas
-          ref={interactionCanvasRef}
-          aria-hidden="true"
-          data-layer="interaction"
-          style={originStyle(wbsBandHeightPx, gutterWidthPx)}
-          className="pointer-events-none absolute inset-x-0"
-        />
-      ) : null}
+      {/* The interaction layer is mounted for every reader, not only those who may edit: the marquee
+          is a read (the ADR-0063 M4b rule), so a Viewer can arm it and must see the sweep. */}
+      <canvas
+        ref={interactionCanvasRef}
+        aria-hidden="true"
+        data-layer="interaction"
+        style={originStyle(wbsBandHeightPx, gutterWidthPx)}
+        className="pointer-events-none absolute inset-x-0"
+      />
       {/* Layer 3 — the resource-strip band (Stage E, ADR-0049): an aria-hidden, pointer-transparent
           sibling canvas pinned to the container bottom (the a11y equivalent is the reused `<table>` in
           the DOM `ResourceStripPanel`). Rendered only when active, so the scene is byte-for-byte today's

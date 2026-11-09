@@ -36,11 +36,10 @@ describe('the plan mode row is fully segmented', () => {
    * second assertion for exactly this reason; ADR-0108's census passed its "nothing unclassified"
    * check because its glob matched zero files). This case closes that path.
    *
-   * What the first version claimed was that the flags could empty the row — that with
-   * `GANTT_VIEW_ENABLED` off "a build that rendered no mode row at all would pass this file
-   * perfectly". **That is false today**: `rows.mode` comes from `splitByRow`, which partitions on
+   * What the first version claimed was that a flag could empty the row — that "a build that
+   * rendered no mode row at all would pass this file perfectly". **That is false today**: `rows.mode` comes from `splitByRow`, which partitions on
    * the static `row` field alone and never consults `isVisible`, so every item is always here
-   * whatever the flags say. The guard is against a future refactor that filters at registration
+   * whatever any flag says. The guard is against a future refactor that filters at registration
    * time, not against today's mechanism — which is a weaker reason, and the real one (component
    * review, 2026-08-30).
    */

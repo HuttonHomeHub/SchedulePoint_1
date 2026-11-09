@@ -8,7 +8,7 @@
  *
  * **What it seeds, and where it bypasses the product** (ADR-0081). The four organisation shapes are
  * ADR-0098's own, taken from
- * `prisma/migrations/20260818220000_overview_recently_changed_indexes/migration.sql:16-20` rather
+ * `20260818220000_overview_recently_changed_indexes/migration.sql:16-20` at api-v1.0.0 rather
  * than invented — a benchmark over shapes somebody chose to be convenient says nothing. Clients,
  * projects and the organisations themselves are created through the public REST API; **the plans
  * and activities are bulk-inserted in SQL** (no dependencies or baselines are seeded at all —

@@ -16,8 +16,6 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     showDiagram: true,
     activityCount: 3,
     mode: 'select',
-    authoringFlowEnabled: true,
-    hasPlacementMigrationNotice: false,
     hasTouchGestureHint: false,
     hasArrangeOffer: false,
     hasLayoutResolvedNotice: false,
@@ -57,10 +55,10 @@ describe('resolveDockStrip', () => {
   });
 
   /**
-   * The empty notice's three remaining conditions, each withdrawn on its own. Without these the
+   * The empty notice's remaining conditions, each withdrawn on its own. Without these the
    * function could return `'empty'` unconditionally and every case above would still pass.
    */
-  it('withholds the empty notice unless the canvas is drawing, idle and authoring-enabled', () => {
+  it('withholds the empty notice unless the canvas is drawing and idle', () => {
     expect(
       resolveDockStrip(input({ activityCount: 0, showDiagram: false })),
       'no diagram',
@@ -68,10 +66,6 @@ describe('resolveDockStrip', () => {
     expect(
       resolveDockStrip(input({ activityCount: 0, mode: 'adding' })),
       'a tool armed',
-    ).toBeNull();
-    expect(
-      resolveDockStrip(input({ activityCount: 0, authoringFlowEnabled: false })),
-      'flag off',
     ).toBeNull();
   });
 
@@ -85,53 +79,12 @@ describe('resolveDockStrip', () => {
   });
 
   /**
-   * The migration notice is the lowest rung, and each case below names what it expects to have
-   * LOST to — asserting "the notice is absent" on its own cannot tell "something outranked it"
-   * from "it is broken", which is the whole reason this function is a value rather than a guard.
-   */
-  describe('the placement-migration notice', () => {
-    it('shows on an otherwise settled canvas', () => {
-      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: true }))).toBe(
-        'placement-migration',
-      );
-    });
-
-    it('loses to a conflict — a failed write outranks a historical fact', () => {
-      expect(
-        resolveDockStrip(input({ hasPlacementMigrationNotice: true, hasConflict: true })),
-      ).toBe('conflict');
-    });
-
-    it('loses to an armed tool — what the next click does outranks what a deploy did', () => {
-      expect(
-        resolveDockStrip(input({ hasPlacementMigrationNotice: true, modeStatement: ARMED })),
-      ).toBe('mode');
-    });
-
-    it('loses to the empty-plan notice, which is the more useful sentence for that reader', () => {
-      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: true, activityCount: 0 }))).toBe(
-        'empty',
-      );
-    });
-
-    it('is absent when the migration changed nothing here', () => {
-      expect(resolveDockStrip(input({ hasPlacementMigrationNotice: false }))).toBeNull();
-    });
-  });
-
-  /**
-   * The `Arrange` offer, asserted the same way as its neighbour: every case says what it BEAT or
-   * LOST to, so a green run can never mean "the strip is broken".
+   * The `Arrange` offer, asserted so that every case says what it BEAT or
+   * LOST to: a green run can never mean "the strip is broken".
    */
   describe('the Arrange offer', () => {
     it('shows on an otherwise settled canvas', () => {
       expect(resolveDockStrip(input({ hasArrangeOffer: true }))).toBe('arrange-offer');
-    });
-
-    it('beats the migration notice — a live fact outranks what a deploy did', () => {
-      expect(
-        resolveDockStrip(input({ hasArrangeOffer: true, hasPlacementMigrationNotice: true })),
-      ).toBe('arrange-offer');
     });
 
     it('loses to a conflict, to an armed tool, and to the empty-plan notice', () => {
@@ -157,12 +110,10 @@ describe('resolveDockStrip', () => {
       expect(resolveDockStrip(input(resolved))).toBe('layout-resolved');
     });
 
-    it('beats the Arrange offer and the migration notice — both are standing facts that wait', () => {
-      expect(
-        resolveDockStrip(
-          input({ ...resolved, hasArrangeOffer: true, hasPlacementMigrationNotice: true }),
-        ),
-      ).toBe('layout-resolved');
+    it('beats the Arrange offer — a standing fact that waits', () => {
+      expect(resolveDockStrip(input({ ...resolved, hasArrangeOffer: true }))).toBe(
+        'layout-resolved',
+      );
     });
 
     it('loses to a conflict and to an armed tool', () => {
@@ -203,7 +154,6 @@ describe('resolveDockStrip', () => {
             historyResult: 'success',
             hasLayoutResolvedNotice: true,
             hasArrangeOffer: true,
-            hasPlacementMigrationNotice: true,
           }),
         ),
       ).toBe('history');
@@ -230,7 +180,6 @@ describe('resolveDockStrip', () => {
       ['a layout-resolved notice', { hasLayoutResolvedNotice: true }, 'layout-resolved'],
       ['the empty-plan notice', { activityCount: 0 }, 'empty'],
       ['the Arrange offer', { hasArrangeOffer: true }, 'arrange-offer'],
-      ['the migration notice', { hasPlacementMigrationNotice: true }, 'placement-migration'],
     ];
     it.each(others)('loses to %s', (_name, overrides, expected) => {
       expect(resolveDockStrip(input({ hasTouchGestureHint: true, ...overrides }))).toBe(expected);

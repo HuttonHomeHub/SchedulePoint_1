@@ -41,7 +41,6 @@ import { fieldByLabel, nextTask, startProbe, typeNow, type Probe } from '@/test/
  */
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

@@ -1,12 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Stage E (ADR-0049): with the resource-view feature on, the legend gains an "Over-allocated" cue
 // (N3). The flag-off legend is covered by the default TsldPanel / TsldLegendPanel suites.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
-}));
 
 import { TsldLegend } from './TsldLegend';
 

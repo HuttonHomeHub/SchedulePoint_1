@@ -11,6 +11,8 @@
   ADR-0087 (scheduled work), ADR-0088 D1 (no flag), ADR-0096 (the retention expiry that needs a backup first),
   ADR-0110 (a check is proven red), ADR-0160 (why this is not a `check:*` gate) and ADR-0190 (what 1.0 promises).
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** `pre-migrate` now runs after the refusal, and a 1.0 copy is checked and restored with the 1.0.0 image, not the 1.1.0 one.
+
 ## Context
 
 Nothing copied the database anywhere. Every plan lives in one PostgreSQL database in one Docker volume (`db-data`) on

@@ -5,11 +5,6 @@ import { NO_START_HINT, useScheduleSummary } from '../api/use-schedule';
 import { Button } from '@/components/ui/button';
 import { ContextStrip, ContextStripSkeleton, type ContextFact } from '@/components/ui/form-layout';
 import { LoadingShape } from '@/components/ui/page';
-import {
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-} from '@/config/env';
 import { activitiesQueryOptions } from '@/features/activities';
 import { countLevelledWithoutGhost } from '@/features/tsld/render/lenses';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -45,7 +40,7 @@ export function ScheduleSummaryStrip({
   // fetch waits until there is a levelled count to explain; the plan workspace has them cached already.
   const activities = useQuery({
     ...activitiesQueryOptions(orgSlug, planId),
-    enabled: RESOURCE_LEVELLING_ENABLED && (summary.data?.leveledActivityCount ?? 0) > 0,
+    enabled: (summary.data?.leveledActivityCount ?? 0) > 0,
   });
 
   const shell = (children: React.ReactNode) => (
@@ -81,15 +76,13 @@ export function ScheduleSummaryStrip({
   const { dataDate, projectFinish, activityCount, criticalCount, nearCriticalCount } = summary.data;
   const { constraintViolationCount, constraintWarningCount } = summary.data;
   // How many activities an external / inter-project bound drove this recalc (ADR-0043). Shown only
-  // behind the flag and only when non-zero, matching the other engine-count chips.
-  const externalDrivenCount = INTER_PROJECT_DATES_ENABLED ? summary.data.externalDrivenCount : 0;
+  // when non-zero, matching the other engine-count chips.
+  const { externalDrivenCount } = summary.data;
   // Resource-dependent activities the engine could find no driving assignment for (ADR-0035 §23).
   // The API has returned this count since M7.2 and nothing displayed it, so a plan could schedule
-  // work on the wrong calendar with no indication anywhere. Gated on the flag that offers the type.
-  const resourceDriverMissingCount = ADVANCED_ACTIVITY_TYPES_ENABLED
-    ? summary.data.resourceDriverMissingCount
-    : 0;
+  // work on the wrong calendar with no indication anywhere.
   const {
+    resourceDriverMissingCount,
     leveledProjectFinish,
     leveledActivityCount,
     levelingWindowExceededCount,
@@ -97,8 +90,8 @@ export function ScheduleSummaryStrip({
   } = summary.data;
   // The plan has levelled once the engine has written a levelled finish (`levelResources` on + a
   // recalculation has run). Off / never-levelled leaves it null, so the whole overlay stays hidden
-  // even with the flag on — nothing to show until a levelled recalculation exists.
-  const hasLevelled = RESOURCE_LEVELLING_ENABLED && leveledProjectFinish !== null;
+  // — nothing to show until a levelled recalculation exists.
+  const hasLevelled = leveledProjectFinish !== null;
   // Delays inside one day are counted by the engine and drawn by nothing (the ghost needs a date to
   // differ), so the strip says so. Unknown — still loading, or the read failed — says nothing.
   const levelledWithoutGhost =

@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -10,8 +10,7 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activities table's "Needs a driver" badge (ADR-0035 §23) with `VITE_ADVANCED_ACTIVITY_TYPES`
- * forced ON — the same shape as the "Conflict" and "External" badge suites.
+ * The activities table's "Needs a driver" badge (ADR-0035 §23) — the same shape as the "Conflict" and "External" badge suites.
  *
  * **Why this test exists at all.** The engine has flagged `resourceDriverMissing` since M7.2, the API
  * has returned it, the database has stored it — and nothing rendered it. A resource-dependent
@@ -19,10 +18,6 @@ import { anActivity } from '@/test/activity-fixture';
  * Every layer was tested; the one that was missing had no test to fail. The badge is the fix, so the
  * badge is what gets pinned.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-}));
 
 const BASE: ActivitySummary = anActivity({
   planId: 'pl1',

@@ -56,21 +56,8 @@ import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_ACTIVITY_TYPES_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-  ENTRY_ROUTES_ENABLED,
-  FLOAT_PATHS_ENABLED,
-  NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
-} from '@/config/env';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
-import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
   CodeAssignButton,
@@ -101,9 +88,6 @@ import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editi
 import { useGanttGridPrefs } from '@/features/gantt/model/use-gantt-grid-prefs';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
-import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
-import { PlacementMigrationNotice } from '@/features/placement-migration/components/PlacementMigrationNotice';
-import { dismiss, isDismissed } from '@/features/placement-migration/model/dismissal';
 import {
   buildSelectionBarContext,
   type SelectionContextInput,
@@ -421,22 +405,16 @@ export function ToolbarPlanWorkspace({
   // would not re-render the portal or the toggle's reason when they arrive.
   const [viewportSlot, setViewportSlot] = useState<HTMLDivElement | null>(null);
   const [minimapRoom, setMinimapRoom] = useState(true);
-  // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
+  // Resource-view lens (Stage E, ADR-0049): the DOM `ResourceStripPanel`
   // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
   // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
-  // mounts the panel — only when the lens is open, the flag is on, and the plan is diagrammable (has a
-  // data date). Flag-off ⇒ always inactive ⇒ byte-for-byte today's canvas + no panel.
+  // mounts the panel — only when the lens is open and the plan is diagrammable (has a data date).
   const [stripSnapshot, setStripSnapshot] = useState<ResourceStripSnapshot | null>(null);
   const onStripSnapshot = useCallback(
     (snapshot: ResourceStripSnapshot | null) => setStripSnapshot(snapshot),
     [],
   );
-  const resourceViewActive =
-    CANVAS_RESOURCE_VIEW_ENABLED && model.resourceViewOpen && plan.plannedStart !== null;
-  // The **Comments** button's reveal target (toolbar quick-wins F2): a ref on the plan-notes heading +
-  // a stable, guarded callback that scrolls it into view and moves focus to it. A no-op when the
-  // section isn't mounted (`VITE_NOTES` off), so it never throws.
-  const notesHeadingRef = useRef<HTMLHeadingElement>(null);
+  const resourceViewActive = model.resourceViewOpen && plan.plannedStart !== null;
   const setNotesOpen = model.setNotesOpen;
   // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
   // right docks. No VITE_ flag (ADR-0088 D1): the rollback is a commit boundary.
@@ -566,32 +544,21 @@ export function ToolbarPlanWorkspace({
     [closeDockOf],
   );
   const revealComments = useCallback(() => {
-    // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button is a genuine TOGGLE for the docked
-    // notes panel (open when closed, close when open) — the panel docks in the layout below and pushes
-    // the canvas, never overlays. Flag-off keeps the original behaviour — scroll the inline notes
-    // heading into view + focus it.
-    if (ENTRY_ROUTES_ENABLED) {
-      // One-dock-at-a-time, derived from the SET (right-docks.ts) — never a hand-written pair.
-      closeOtherDocks('notes');
-      setNotesOpen((open) => !open);
-      return;
-    }
-    const el = notesHeadingRef.current;
-    // No explicit `behavior` — let the app's global `prefers-reduced-motion` CSS `scroll-behavior`
-    // opt-out govern it (A3); an explicit `behavior: 'smooth'` would bypass that (mirrors
-    // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
-    el?.scrollIntoView({ block: 'start' });
-    el?.focus();
+    // Entry-route win 1: the Comments button is a genuine TOGGLE for the docked notes panel (open
+    // when closed, close when open) — the panel docks in the layout below and pushes the canvas,
+    // never overlays.
+    // One-dock-at-a-time, derived from the SET (right-docks.ts) — never a hand-written pair.
+    closeOtherDocks('notes');
+    setNotesOpen((open) => !open);
   }, [setNotesOpen, closeOtherDocks]);
 
   /**
    * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
    * listbox (ADR-0026 D7).
    *
-   * **One callback rather than one per view**, because its caller is the placement-migration
-   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
-   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
-   * reason that one states.
+   * **One callback rather than one per view**, because its callers render in BOTH views and have no
+   * business knowing which. It queries for the same reason `focusGanttGrid` does — neither panel
+   * exposes a handle — and is referentially stable for the reason that one states.
    *
    * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
    * order is a tie-break that never fires rather than a precedence.
@@ -912,7 +879,7 @@ export function ToolbarPlanWorkspace({
   // whole row and the diagram column is `inert`. A render clamp only: the stored width is never
   // rewritten, so a width dragged at 1440 is back at 1440 after a visit at 640.
   const notesPanel = useNotesPanelPrefs();
-  const notesDockActive = NOTES_ENABLED && ENTRY_ROUTES_ENABLED && model.notesOpen;
+  const notesDockActive = model.notesOpen;
   const { bounds: notesBounds, onResize: onNotesResize } = useRightDockSize(
     notesPanel,
     NOTES_PANEL_MIN_WIDTH,
@@ -929,7 +896,7 @@ export function ToolbarPlanWorkspace({
   // The Float paths dock (audit F4) — the notes dock's sibling. Mutually exclusive with notes; see
   // `toggleFloatPathsInto` above for why.
   const floatPathsPrefs = useFloatPathsPanelPrefs();
-  const floatPathsDockActive = FLOAT_PATHS_ENABLED && floatPaths.open;
+  const floatPathsDockActive = floatPaths.open;
   const { bounds: floatPathsBounds, onResize: onFloatPathsResize } = useRightDockSize(
     floatPathsPrefs,
     FLOAT_PATHS_PANEL_MIN_WIDTH,
@@ -1212,67 +1179,8 @@ export function ToolbarPlanWorkspace({
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
 
-  /**
-   * What the one-time placement migration changed on this plan (one-planning-surface M-I).
-   *
-   * **The host owns all three parts** — the query, the account the dismissal is keyed to, and the
-   * rendered strip — because `TsldPanel` has no org slug and no session, and takes the finished
-   * node. It decides only precedence.
-   *
-   * **The dismissal is DERIVED, not synchronised, and the state holds the KEY rather than a
-   * boolean.** The obvious shape — an effect that reads `localStorage` into a boolean — is a
-   * `setState` inside an effect (which `react-hooks` refuses here, and rightly: it is a cascading
-   * render for a value that was already available), and it has a second defect the lint rule does
-   * not see. A bare boolean does not reset when the planner switches plans, so dismissing the
-   * notice on one plan would hide it on the next one they opened — and the toolbar does not
-   * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
-   * both problems go away at once: it is self-invalidating.
-   */
-
-  const session = useSession();
-  const migrationUserId = session.data?.user.id ?? null;
-  const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-  // `planId` is read out of `model` first so the memo depends on the id rather than on the whole
-  // model object. **Not because the rule cannot see through a member expression** — it accepts a
-  // property read like `model.planId` with no further ask (`docs/TECH_DEBT.md` #353 E20; it asks
-  // for the whole object only when a method is CALLED on it, e.g. `model.scheduleRefusal(...)`,
-  // `plan-workspace-toolbar.tsx`'s `scheduleState` memo). The extraction still does real work: it
-  // stops this memo from re-reading `localStorage` on every plan mutation, which is what listing
-  // `model` itself — a new object on every render (E9) — would otherwise force.
-  const migrationPlanId = model.planId;
-  // **The key is never null, and that is a fix rather than a tidy-up.** It was
-  // `migrationUserId === null ? null : …`, which made `dismissedKey !== migrationKey` compare
-  // `null !== null` before the session resolved — so the notice was suppressed in that window, and
-  // permanently on any render where the session is absent. Caught by the host wiring test, which
-  // renders without a session and therefore hit the case head-on. An `'anon'` segment keeps the
-  // comparison honest (the initial `null` can never equal it) while the `localStorage` write below
-  // stays guarded on a real user id, so nothing is ever persisted under a fake one.
-  const migrationKey = `${migrationUserId ?? 'anon'}:${migrationPlanId}`;
-  const storedDismissal = useMemo(
-    () =>
-      migrationUserId === null
-        ? false
-        : isDismissed(window.localStorage, migrationUserId, migrationPlanId),
-    [migrationUserId, migrationPlanId],
-  );
-  const migrationCount = placementMigration.data?.count ?? 0;
-  const placementMigrationNotice =
-    migrationCount > 0 && !storedDismissal && dismissedKey !== migrationKey ? (
-      <PlacementMigrationNotice
-        count={migrationCount}
-        rows={placementMigration.data?.rows ?? []}
-        restoreFocus={focusPlanSurface}
-        onDismiss={() => {
-          setDismissedKey(migrationKey);
-          if (migrationUserId !== null) {
-            dismiss(window.localStorage, migrationUserId, model.planId);
-          }
-        }}
-      />
-    ) : null;
-  // The one-time touch tip (`docs/specs/long-press-hint/`). Built here for the migration notice's
-  // reason: it renders in BOTH views' docks. Dismissal is per device, not per plan or account.
+  // The one-time touch tip (`docs/specs/long-press-hint/`). Built here because it renders in BOTH
+  // views' docks. Dismissal is per device, not per plan or account.
   const touchHint = useTouchGestureHint();
   const touchGestureHint = touchHint.due ? (
     <TouchGestureHint
@@ -1282,7 +1190,7 @@ export function ToolbarPlanWorkspace({
     />
   ) : null;
   // What an edit's automatic overlap resolution did (NetPoint-layout M3, ADR-0153). Built here, not
-  // in the canvas, for the migration notice's reason: it renders in BOTH views' docks, and a table
+  // in the canvas: it renders in BOTH views' docks, and a table
   // or Gantt edit can resolve an overlap as readily as a canvas drag. Focus goes to the plan
   // surface first, because both buttons unmount the strip that holds them.
   const layoutResolvedNotice =
@@ -1357,15 +1265,13 @@ export function ToolbarPlanWorkspace({
   // Canvas-first authoring makes the empty canvas an *interactive, drawable* surface, so it must not
   // be shown while the activities/dependencies are still loading — an empty array then reads as a
   // genuinely blank plan and invites a draw into data that's about to arrive (ux review). Until they
-  // resolve, show a loading placeholder distinct from the empty state. (Flag-off the empty canvas is
-  // inert, so this window is harmless and we keep the byte-for-byte render.)
+  // resolve, show a loading placeholder distinct from the empty state.
   //
   // The same holds for swimlanes (ADR-0202): while their list is on its way the FIRST paint stays in
   // this state rather than painting the swimlane-free layout and then jumping every bar into its
   // swimlane. Once the panel has painted it is never unmounted for a swimlane list: a toggle made
   // later would otherwise drop focus to <body> and lose the selection and the viewport.
-  const loadingBeforeSwimlanes =
-    CANVAS_AUTHORING_ENABLED && (model.activities.isPending || model.dependencies.isPending);
+  const loadingBeforeSwimlanes = model.activities.isPending || model.dependencies.isPending;
   const [panelPainted, setPanelPainted] = useState(false);
   const canvasLoading = loadingBeforeSwimlanes || (swimlaneScene.pending && !panelPainted);
   if (!canvasLoading && !panelPainted) setPanelPainted(true);
@@ -1467,7 +1373,7 @@ export function ToolbarPlanWorkspace({
     // Copy/paste ride the SAME gate as undo/redo — flag on, and the planner can actually author.
     // A copy alone is a read, but the paste it exists to feed is not, and a `Ctrl+C` that works
     // followed by a `Ctrl+V` that refuses is a worse dead end than a shortcut that is simply off.
-    clipboardEnabled: ACTIVITY_COPY_PASTE_ENABLED && model.canEditSchedule && !lateOverlayActive,
+    clipboardEnabled: model.canEditSchedule && !lateOverlayActive,
     onCopy: model.copySelection,
     onPaste: () => void model.pasteClipboard(),
   });
@@ -1599,16 +1505,7 @@ export function ToolbarPlanWorkspace({
       levelResources={plan.levelResources}
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
-      // The reason follows the COMPARISON, not the picker: `comparePlanId` is the request and this
-      // is a fact about the payload on screen, which is a beat behind it while a switch is in
-      // flight. Reading the payload keeps the sentence true of the picture it describes.
-      compareUndrawableReason={
-        activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
-          ? 'NOT_COMPARABLE'
-          : 'NOT_RECORDED'
-      }
       hasRevisionPair={hasRevisionPair}
-      placementMigrationNotice={placementMigrationNotice}
       touchGestureHint={touchGestureHint}
       layoutResolvedNotice={layoutResolvedNotice}
       historyResultNotice={historyResultNotice}
@@ -1630,8 +1527,7 @@ export function ToolbarPlanWorkspace({
       onCreate={model.onTsldCreate}
       onReposition={model.onTsldReposition}
       // Bar-end resize (ADR-0052 M2/M3) + lag-anchor drag (M3). Always passed like onReposition;
-      // the canvas only arms them under `VITE_CANVAS_DIRECT_MANIPULATION`, so flag-off is
-      // byte-for-byte.
+      // the canvas arms them only for an editor who may resize and link.
       onResize={model.onTsldResize}
       onLag={model.onTsldLag}
       onLink={model.onTsldLink}
@@ -1640,10 +1536,8 @@ export function ToolbarPlanWorkspace({
       // does not make the panel trigger a recalculation, only describe one.
       recalcPending={model.autoRecalc.isPending}
       projectFinish={scheduleSummary.data?.projectFinish ?? null}
-      // LOE endpoint-pick span (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`). Gated on the flag so flag-off is
-      // byte-for-byte today's canvas — the LOE tool-mode is then unreachable (the Add-menu item is also
-      // flag-gated), so the prop is simply absent.
-      {...(CANVAS_ACTIVITY_TYPES_ENABLED ? { onLoeSpan: model.createLoeSpan } : {})}
+      // LOE endpoint-pick span (Stage D): the tool-mode the Add menu's Level-of-Effort item arms.
+      onLoeSpan={model.createLoeSpan}
       // Quiescence during an open two-click pick + the ADR-0048 inverse the link confirmation
       // offers (ADR-0064 T5/T7) — the same three the legacy layout passes.
       //
@@ -1674,7 +1568,7 @@ export function ToolbarPlanWorkspace({
       onDuplicateActivity={(a) => void model.onDuplicateActivity(a)}
       onDuplicateBand={model.onDuplicateBand}
       // Entry-route selection-bar actions (Resources / Report progress / Steps). Always passed; each
-      // toolbar item is flag-gated, so flag-off is byte-for-byte. Progress is role-gated via
+      // toolbar item decides its own visibility. Progress is role-gated via
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.
       onResources={model.onResourcesActivity}
       onProgress={model.onProgressActivity}
@@ -1706,9 +1600,9 @@ export function ToolbarPlanWorkspace({
       calendar={model.tsldCalendar}
       todayIso={model.todayIso}
       todayFraction={model.todayFraction}
-      // Baseline overlay lens (VITE_CANVAS_LENSES): reuse the shipped variance rows (route-composed for
-      // the activities table) — no new fetch. Absent when the flag is off ⇒ no ghost layer.
-      {...(CANVAS_LENSES_ENABLED ? { varianceRows: model.variance.data?.rows } : {})}
+      // Baseline overlay lens: reuse the shipped variance rows (route-composed for the activities
+      // table) — no new fetch.
+      varianceRows={model.variance.data?.rows}
       // Resource-view strip (Stage E, ADR-0049): reserve the band + paint the demand bars from the
       // snapshot the ResourceStripPanel below publishes. Inactive ⇒ no band, byte-for-byte today's.
       resourceStripActive={resourceViewActive}
@@ -1718,8 +1612,8 @@ export function ToolbarPlanWorkspace({
       onViewportSlot={setViewportSlot}
       onMinimapRoomChange={setMinimapRoom}
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
-      // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
-      overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}
+      // mode, independent of the demand strip being open.
+      overAllocationHighlight={model.overAllocationHighlight}
       // Float-path emphasis (audit F4): the ONE derived set, handed to the canvas here and to the
       // Gantt below. Empty unless a path is selected ⇒ no scene field ⇒ byte-for-byte today's paint.
       floatPathIds={floatPaths.emphasisIds}
@@ -1757,7 +1651,7 @@ export function ToolbarPlanWorkspace({
   // The ONE emphasis set the Gantt receives (M4). The canvas gets the matches through its own dim
   // seam; both read `ctx.matchedIds`, which `useSearchNavigation` derives once — so the two views
   // cannot disagree about what the search matched, which is the whole point of lifting it.
-  const searchNavActive = CANVAS_SEARCH_NAV_ENABLED && ctx.matchedIds.size > 0;
+  const searchNavActive = ctx.matchedIds.size > 0;
   // The undo reveal holds only while its activity is still the selection: choosing anything else hands
   // the scroll back, and the Gantt withdraws it itself once it has scrolled.
   const undoRevealId =
@@ -2075,34 +1969,12 @@ export function ToolbarPlanWorkspace({
         */}
         <CanvasDock>
           <SelectionActionsBar context={ganttSelectionCtx} restoreFocus={focusGanttGrid} />
-          {/*
-            The placement-migration notice (one-planning-surface M-I), in the Gantt **as well as**
-            the diagram — and it is here because the first version of M-I passed it to `TsldPanel`
-            alone, which is verbatim the one-host-and-not-its-neighbour shape this register records
-            at ADR-0080 (`bulk` wired into one layout and not the one its flag selects), ADR-0064 §7
-            and ADR-0067 M4. Found by reading this file rather than by anything failing.
-
-            A planner who works in the Gantt would otherwise never be told that the constraints on
-            their plan had been converted — and the Gantt is where the consequence is most visible,
-            because its Float column shows the number that moves.
-
-            Beside the selection bar it needed no precedence decision until NetPoint-layout M3 gave
-            the Gantt a second transient strip; the two now follow the canvas ladder's order, below.
-
-            Dismissal is per plan per user rather than per view, so dismissing it here dismisses it
-            on the diagram too — which is right: it is one fact about one plan, not two notices.
-          */}
           {/* **One transient strip at a time, in the canvas's order** (`resolveDockStrip`): an
-              overlap resolved by the planner's last edit outranks the migration notice, which is a
-              standing fact and waits. Stacking them, as the first version did, gave the same
-              facts one strip on the diagram and several on the Gantt (component review). The
-              undo/redo result is the newest of the four candidates — it describes the step just
+              overlap resolved by the planner's last edit outranks the touch tip, which waits. The
+              undo/redo result is the newest of the candidates — it describes the step just
               taken, and replaces the overlap notice it would otherwise contradict. The touch tip
               is last of all: it teaches a gesture and describes nothing about the plan. */}
-          {historyResultNotice?.node ??
-            layoutResolvedNotice ??
-            placementMigrationNotice ??
-            touchGestureHint}
+          {historyResultNotice?.node ?? layoutResolvedNotice ?? touchGestureHint}
         </CanvasDock>
       </>
     ) : (
@@ -2111,13 +1983,12 @@ export function ToolbarPlanWorkspace({
 
   // The floating Legend panel is overlaid on whichever canvas region is active (its container is
   // `relative`); it renders null when closed, so dropping it in both layout branches is cheap. Under
-  // VITE_CANVAS_LENSES it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry. The band
+  // the canvas lenses it renders the ACTIVE Colour-by mode's key + the baseline-overlay entry. The band
   // colours come from the **var()** legend palette (`lensLegendVarPalette`), so the swatches are raw
   // `var(--color-*)` inline styles — inherently theme-reactive with zero JS, so the legend never goes
   // theme-stale on a light/dark switch (C1/U3; the canvas fills, which can't use `var()`, re-resolve via
-  // `themeVersion` instead). Flag-off it renders today's default key, byte-for-byte.
-  const lensLegend = useMemo<LensLegendInfo | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED) return undefined;
+  // `themeVersion` instead).
+  const lensLegend = useMemo<LensLegendInfo>(() => {
     const { colourMode, baselineOverlay } = canvasUi.lensState;
     return {
       colourMode,
@@ -2134,13 +2005,13 @@ export function ToolbarPlanWorkspace({
       onPositionChange={legend.setPosition}
       leftInsetPx={swimlaneManagement.gutterWidthPx}
       swimlaneBoundary={swimlaneScene.input !== null}
-      {...(lensLegend ? { lens: lensLegend } : {})}
+      lens={lensLegend}
     />
   );
 
   // The docked-notes panel content (entry-route win 1) — the shared `SheetHeader` (title + Close, which
-  // toggles the dock shut) over a scrollable, unbounded `PlanNotesSection`. Built once and placed in the
-  // right column. `headingRef` keeps the flag-off scroll target wired.
+  // toggles the dock shut) over a scrollable `PlanNotesSection`. Built once and placed in the
+  // right column.
   const notesDockContent = (
     // A named landmark for the dock (a11y) — "Plan notes panel" so it doesn't collide with the inner
     // note-thread region. Escape closes it (the non-modal dock has no native cancel) and returns focus
@@ -2161,13 +2032,11 @@ export function ToolbarPlanWorkspace({
       <SheetHeader title="Plan notes" onClose={closeNotes} closeLabel="Close plan notes" />
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {/* `chromeless`: the SheetHeader "Plan notes" above is the single header + this `<section>` is
-            the landmark, so PlanNotesSection drops its own heading/description/card (ux review). */}
+            the landmark, so PlanNotesSection carries no heading, description or card of its own (ux review). */}
         <PlanNotesSection
           orgSlug={model.orgSlug}
           planId={model.planId}
           canWrite={model.canWriteNotes}
-          bounded={false}
-          chromeless
         />
       </div>
     </section>
@@ -2745,32 +2614,15 @@ export function ToolbarPlanWorkspace({
             view={ctx.planView}
           />
 
-          {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
-          has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
-          {PROGRAMME_SCHEDULING_ENABLED ? (
-            <div className="px-4 pt-2">
-              <ProgrammeScheduleSection
-                orgSlug={model.orgSlug}
-                planId={model.planId}
-                canRecalc={model.canRecalc}
-              />
-            </div>
-          ) : null}
-
-          {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
-          in a docked, resizable RIGHT panel inside the body below (toggled by Comments), so the always-
-          inline block renders ONLY flag-off — byte-for-byte the prior behaviour. */}
-          {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
-            <div className="px-4 pt-2">
-              <PlanNotesSection
-                orgSlug={model.orgSlug}
-                planId={model.planId}
-                canWrite={model.canWriteNotes}
-                bounded
-                headingRef={notesHeadingRef}
-              />
-            </div>
-          ) : null}
+          {/* Programme scheduling (ADR-0045) — renders nothing unless the plan has live cross-plan
+          links, so the slim toolbar layout is unchanged for an ordinary plan. */}
+          <div className="px-4 pt-2">
+            <ProgrammeScheduleSection
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              canRecalc={model.canRecalc}
+            />
+          </div>
 
           {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
           {lateOverlayActive && model.canEditSchedule ? (

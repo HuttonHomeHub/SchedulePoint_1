@@ -52,7 +52,6 @@ export function baselineMovementOf(
     PlanStandingRow,
     | 'activityCount'
     | 'projectFinish'
-    | 'movementFinish'
     | 'baselineFinish'
     | 'baselineName'
     | 'baselineHoursPerDayMinutes'
@@ -60,21 +59,19 @@ export function baselineMovementOf(
   movementDaysBetween: (from: string, to: string) => number | null = calendarDaysBetween,
 ): BaselineMovement {
   if (row.activityCount === 0) return { kind: 'NOT_ASSESSABLE', reason: 'PLAN_EMPTY' };
-  if (row.projectFinish === null || row.movementFinish === null) {
+  if (row.projectFinish === null) {
     return { kind: 'NOT_ASSESSABLE', reason: 'PLAN_NOT_SCHEDULED' };
   }
   if (row.baselineName === null) return { kind: 'NOT_ASSESSABLE', reason: 'NO_BASELINE' };
   if (row.baselineFinish === null) {
-    // An active baseline exists but froze no project finish — an older capture, or one taken before
-    // the plan was calculated. Distinct from NO_BASELINE because the remedy differs: re-capture,
-    // rather than capture.
+    // An active baseline exists but none of its rows froze a placed finish. Distinct from
+    // NO_BASELINE because the remedy differs: re-capture, rather than capture.
     return { kind: 'NOT_ASSESSABLE', reason: 'BASELINE_HAS_NO_FINISH' };
   }
 
-  // **The live side is `movementFinish`, not `projectFinish`** (#405 (b)): the two baseline bases
-  // (placed, network) each need the live finish on their own basis, and the row's displayed finish
-  // is always the placed one.
-  const workingDays = movementDaysBetween(row.baselineFinish, row.movementFinish);
+  // Both sides are on the PLACED basis (#405 (b), ADR-0148): the baseline's frozen placed finish
+  // against the live placed finish the row displays.
+  const workingDays = movementDaysBetween(row.baselineFinish, row.projectFinish);
   // **The frame declining is a fifth reason, not a zero.** A plan whose calendar cannot be built or
   // walked has no working-day frame at all, and the only alternatives were both worse: falling back
   // to calendar days would print a number in a DIFFERENT frame from every other row on the screen

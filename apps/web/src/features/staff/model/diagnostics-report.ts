@@ -89,7 +89,6 @@ export function historyRetentionSentence(row: StaffDiagnosticRow): string | null
 const UNIT_NOUNS: Record<DiagnosticUnit, { one: string; many: string }> = {
   activity: { one: 'activity', many: 'activities' },
   plan: { one: 'plan', many: 'plans' },
-  baseline: { one: 'baseline', many: 'baselines' },
   'history-entry': { one: 'history entry', many: 'history entries' },
 };
 

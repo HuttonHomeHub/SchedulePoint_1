@@ -896,16 +896,16 @@ describe('the comparison overlay’s spoken summary', () => {
     expect(compareOverlaySummary([], 0)).toBeNull();
   });
 
-  it('says why work was not placed: the code wording under a code grouping, the old wording elsewhere', () => {
+  it('says why work was not placed: the code wording under a code grouping, the swimlane wording elsewhere', () => {
     const none = { drawn: 0, undrawable: 0 };
-    const handMade = compareOverlaySummary([ghost('Gone', true)], 0, none, 'NOT_RECORDED', 2);
+    const handMade = compareOverlaySummary([ghost('Gone', true)], 0, none, 2);
     expect(handMade?.heading).toContain(
       '2 not shown because their swimlane or row can no longer be matched',
     );
     expect(handMade?.undrawnLabel).toBe(
       '2 changes are not shown — their swimlane or row can no longer be matched.',
     );
-    const byCode = compareOverlaySummary([ghost('Gone', true)], 0, none, 'NOT_RECORDED', 1, 'CODE');
+    const byCode = compareOverlaySummary([ghost('Gone', true)], 0, none, 1, 'CODE');
     expect(byCode?.heading).toContain(
       '1 not shown because the earlier revision was grouped differently, or its value is no longer in use',
     );
@@ -915,14 +915,7 @@ describe('the comparison overlay’s spoken summary', () => {
   });
 
   it('still speaks when everything changed was withheld by the swimlanes', () => {
-    const summary = compareOverlaySummary(
-      [],
-      0,
-      { drawn: 0, undrawable: 0 },
-      'NOT_RECORDED',
-      1,
-      'CODE',
-    );
+    const summary = compareOverlaySummary([], 0, { drawn: 0, undrawable: 0 }, 1, 'CODE');
     expect(summary?.heading).toContain(
       '1 not shown because the earlier revision was grouped differently',
     );
@@ -961,7 +954,7 @@ describe('the comparison overlay’s spoken summary', () => {
     // A diagram has no "showing N of M", so a picture missing rows is unnoticeable.
     const summary = compareOverlaySummary([ghost('Piling')], 3);
     expect(summary?.heading).toContain('3 not shown');
-    expect(summary?.heading).toContain('did not record where they were');
+    expect(summary?.heading).toContain('lay their activities out independently');
   });
 
   it('counts changed links and points at the change list, never listing them', () => {
@@ -978,53 +971,43 @@ describe('the comparison overlay’s spoken summary', () => {
     expect(summary?.heading).not.toContain('under Changes');
   });
 
-  describe('the undrawable reason — two comparisons, two TRUE answers', () => {
+  describe('the undrawable reason — a true sentence for the only comparison that reaches it', () => {
     /**
-     * **The likeliest defect in the cross-plan milestone, and it is a false sentence rather than a
-     * missing one.**
-     *
-     * Same-plan the old side genuinely did not record a position. Cross-plan the other plan DID
-     * record it — the position simply is not comparable, because two independently imported plans
-     * derive their lane order separately. Shipping the same-plan wording would state something
-     * untrue about the other plan's data, which is worse than saying nothing, and it is likely
-     * precisely because the mechanism is correct and reusing it feels like reuse.
+     * **A false sentence is worse than a missing one.** Removed work counted as undrawable is a
+     * cross-plan fact: the other plan DID record a lane, but two independently imported plans derive
+     * their lane order separately, so the position names a different row in each. The sentence says
+     * the positions are not comparable, never that the earlier revision failed to record them — a
+     * plan's own revisions record every lane, so the old "did not record" wording was retired with
+     * the baselines it described (ADR-0215 D6).
      */
-    it('the same-plan sentence is UNCHANGED — asserted, not assumed', () => {
-      // The default, and the exact wording that shipped. If a cross-plan edit reaches this branch
-      // it is a regression on the comparison nobody was working on.
+    it('says the plans lay their activities out independently, never that a revision did not record', () => {
       const summary = compareOverlaySummary([ghost('Piling')], 3);
-      expect(summary?.heading).toContain(
-        '3 not shown because the old revision did not record where they were',
-      );
-      expect(summary?.heading).not.toContain('independently');
-    });
-
-    it('the cross-plan sentence says the positions are not COMPARABLE, never unrecorded', () => {
-      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_COMPARABLE');
       expect(summary?.heading).toContain('3 not shown');
       expect(summary?.heading).toContain('lay their activities out independently');
-      // The false half, asserted absent rather than left to a reader to notice.
       expect(summary?.heading).not.toContain('did not record');
       // And it points at where the work IS carried, so the fact survives the position not doing so.
       expect(summary?.heading).toContain('Changes');
     });
 
-    it('the reason changes nothing else — the removed list and the counts are identical', () => {
-      // A discriminator that quietly altered a neighbouring sentence would be the widening this
-      // repository keeps recording; the two summaries differ in exactly one clause.
-      const rows = [ghost('Piling'), ghost('Site hoarding', true)];
-      const samePlan = compareOverlaySummary(rows, 2);
-      const crossPlan = compareOverlaySummary(rows, 2, undefined, 'NOT_COMPARABLE');
-      expect(crossPlan?.removed).toEqual(samePlan?.removed);
-      expect(crossPlan?.undrawn).toBe(samePlan?.undrawn);
-      expect(crossPlan?.heading).toContain('1 moved');
-      expect(crossPlan?.heading).toContain('1 removed');
+    it('words the visible label as a place to draw the change, never as a gap in the record', () => {
+      const summary = compareOverlaySummary([ghost('Piling')], 3, { drawn: 0, undrawable: 1 });
+      expect(summary?.undrawn).toBe(4);
+      expect(summary?.undrawnLabel).toBe(
+        '4 changes are not shown — there is nothing on this diagram to draw them against. ' +
+          'They are listed under Changes.',
+      );
+      expect(summary?.undrawnLabel).not.toContain('did not record');
+      const one = compareOverlaySummary([], 0, { drawn: 0, undrawable: 1 });
+      expect(one?.undrawnLabel).toBe(
+        '1 change is not shown — there is nothing on this diagram to draw it against. ' +
+          'It is listed under Changes.',
+      );
     });
   });
 
   describe('bars the swimlanes could not place (ADR-0127: a reason is true of its cause)', () => {
     it('has its own clause, and does not say the old revision failed to record anything', () => {
-      const summary = compareOverlaySummary([ghost('Piling')], 0, undefined, 'NOT_RECORDED', 2);
+      const summary = compareOverlaySummary([ghost('Piling')], 0, undefined, 2);
       expect(summary?.heading).toContain(
         '2 not shown because their swimlane or row can no longer be matched',
       );
@@ -1036,24 +1019,19 @@ describe('the comparison overlay’s spoken summary', () => {
     });
 
     it('keeps the server count on its own sentence and joins both when both are non-zero', () => {
-      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_RECORDED', 1);
+      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 1);
       expect(summary?.heading).toContain(
-        '3 not shown because the old revision did not record where they were',
+        '3 not shown because the two plans lay their activities out independently',
       );
       expect(summary?.heading).toContain(
         '1 not shown because their swimlane or row can no longer be matched',
       );
       expect(summary?.undrawn).toBe(4);
       expect(summary?.undrawnLabel).toBe(
-        '3 changes are not shown — the earlier revision did not record where they were. ' +
+        '3 changes are not shown — there is nothing on this diagram to draw them against. ' +
+          'They are listed under Changes. ' +
           '1 change is not shown — their swimlane or row can no longer be matched.',
       );
-    });
-
-    it('beside the cross-plan sentence it leaves that sentence alone', () => {
-      const summary = compareOverlaySummary([ghost('Piling')], 3, undefined, 'NOT_COMPARABLE', 1);
-      expect(summary?.heading).toContain('lay their activities out independently');
-      expect(summary?.heading).toContain('1 not shown because their swimlane or row');
     });
 
     it('is silent at zero, so an unchanged summary is unchanged', () => {

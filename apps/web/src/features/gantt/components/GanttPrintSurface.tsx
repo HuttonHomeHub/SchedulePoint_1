@@ -28,7 +28,6 @@ import {
 import { buildRulerTicks } from '../layout/ruler-ticks';
 import type { GanttColumnKey } from '../model/gantt-view-state';
 
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BarDateSource } from '@/lib/bar-dates';
 import { codeCellText, type CodeColumn } from '@/lib/code-columns';
 import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document';
@@ -178,7 +177,7 @@ export function GanttPrintSurface({
   // than on the screen that found it.
   const predecessorNames = predecessorNamesBySuccessor(dependencies);
   const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
-    unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+    unassignedBucket: true,
     barDateSource,
   });
   const span = rowsDateSpan(rows, barDateSource);
@@ -188,12 +187,7 @@ export function GanttPrintSurface({
   // (`placement-baseline-variance`, US-2) — only worth stating when variance is actually
   // printed, and only when the caller knows the answer (an absent `basis`, an older API
   // image mid rolling-update, ADR-0047, says nothing rather than guessing).
-  const basisSuffix =
-    showVariance && varianceBasis === 'PLACED'
-      ? ' (placed dates)'
-      : showVariance && varianceBasis === 'NETWORK'
-        ? ' (earliest dates)'
-        : '';
+  const basisSuffix = showVariance && varianceBasis === 'PLACED' ? ' (placed dates)' : '';
   const standardWidth = columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0);
   const varianceWidth = showVariance ? PRINT_VARIANCE_WIDTH : 0;
   const { printed: printedCodes, omitted: omittedCodes } = fitPrintCodeColumns(

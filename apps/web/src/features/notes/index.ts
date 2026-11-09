@@ -1,7 +1,7 @@
 /**
  * Public surface of the Notes feature (Notes M3, ADR-0046) — attributed, time-ordered note threads on
- * plans and activities. Gated at the composition sites behind `VITE_NOTES` (the CRUD + batch-counts API
- * is already live). One thread/composer/item set (Option B) serves both the plan and activity surfaces.
+ * plans and activities. Composed at the sites that host it (the CRUD + batch-counts API
+ * is live). One thread/composer/item set (Option B) serves both the plan and activity surfaces.
  */
 export { ActivityNotesSection } from './components/ActivityNotesSection';
 export { PlanNotesSection } from './components/PlanNotesSection';

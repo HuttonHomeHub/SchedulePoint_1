@@ -73,7 +73,7 @@ export function layoutSnapshotsOf(
   // The one derivation (SC-5), with the band off: summaries stay in the scene here, so each takes a
   // lane like any member rather than vanishing from the swimlane picture.
   const { swimlaneScene: projection } = deriveDiagramSource(activities, {
-    wbsBand: { enabled: false, toggleOn: false },
+    wbsBand: { toggleOn: false },
     swimlanes: input,
     source: 'visual',
     dataDate: ANY_ORIGIN,

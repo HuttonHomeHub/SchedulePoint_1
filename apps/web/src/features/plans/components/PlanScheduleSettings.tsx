@@ -35,8 +35,7 @@ import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
  *
  * Writers (`canEdit`) edit the three; everyone else sees them read-only. Each change persists immediately
  * (a targeted PATCH of just that field + `version`); it changes no dates itself — a later **Recalculate**
- * applies the new definition/measure to the computed critical path. Flagged behind
- * `VITE_FLOAT_CRITICAL_SETTINGS` (the API/engine behind it is already live; only the picker is gated).
+ * applies the new definition/measure to the computed critical path.
  *
  * Each control shares the optimistic/busy/focus-restore machinery via the shared
  * {@link PlanScheduleOptionSelect}, keyed on its own server value so it stays busy until the refetched

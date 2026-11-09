@@ -4,18 +4,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 /**
  * **M-A — the placement schema's two UNGATED decisions, asserted against a real database.**
  *
- * One-planning-surface M-A ships dark: three migrations add columns and a table, and nothing
+ * One-planning-surface M-A ships dark: three migrations added columns, and nothing
  * computes or reads any of them. So this file deliberately does not restate the whole shape —
  * **it asserts only what no other gate can see.**
  *
  * **What the drift check already covers, measured rather than assumed** (2026-09-20, against this
- * repository's own `prisma:check-drift` command). A raw-SQL `CREATE INDEX` on `remaining_float` and
- * a raw-SQL `CREATE UNIQUE INDEX` on `placement_migrations(plan_id, activity_id)` were added by
- * hand and `prisma migrate diff --from-url … --to-schema-datamodel --exit-code` reported both
- * (`[-] Removed index on columns (remaining_float)`, `[-] Removed unique index …`) and exited **2**.
- * So the migrations' "no index" and "no unique constraint" decisions are gated, and asserting them
- * here would be decoration. They are named so the next reader does not add them back as though
- * nothing watched.
+ * repository's own `prisma:check-drift` command). A raw-SQL `CREATE INDEX` on `remaining_float`
+ * added by hand was reported (`[-] Removed index on columns (remaining_float)`) and exited **2**, so
+ * the "no index" decision is gated and asserting it here would be decoration. (The table that
+ * shared that run, `placement_migrations`, left the schema in 1.1.0 with ADR-0215 D6.)
  *
  * **What it CANNOT see is a CHECK constraint** — the same run reported the hand-added
  * `ck_probe_rf` **not at all**, which is this repository's documented position (`docs/DATABASE.md`:
@@ -28,8 +25,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *
  * **Why the database and not the migration file.** Reading the SQL would prove a constraint was
  * once absent and would pass happily after a later migration added one — the assertion would
- * describe history rather than the running system (`perf-probe-sweep-columns.e2e-spec.ts`,
- * `account-issuer-migration.e2e-spec.ts`).
+ * describe history rather than the running system (`perf-probe-sweep-columns.e2e-spec.ts`).
  *
  * The column-shape cases below are a weaker instrument and are labelled as one: a database drifted
  * BY HAND fails them, and a schema changed CONSISTENTLY does not. They are kept because the
@@ -151,17 +147,19 @@ describe.skipIf(!hasDatabase)('the placement schema (one-planning-surface M-A)',
     }
   });
 
-  it("placement_snapshot_level is NOT NULL and defaults to 'NONE'", async () => {
+  it('placement_snapshot_level is NOT NULL with NO default, and has the one label', async () => {
     const shape = await readColumn(prisma, 'baselines', 'placement_snapshot_level');
 
     expect(shape, 'placement_snapshot_level must exist on the running database').toBeDefined();
     expect(shape?.is_nullable).toBe('NO');
-    // 'NONE' is the literal truth of every baseline captured before this column, and a constant
-    // default is what makes the ADD COLUMN metadata-only. It is also the CONSERVATIVE value: a
-    // write path not yet taught the capture reads as "no placement recorded", never as
-    // recorded-but-empty — which is the distinction no per-row test and no row count can make,
-    // because every one of the three columns above has a legitimate NULL under 'FULL'.
-    expect(shape?.column_default).toContain("'NONE'");
+    // Single-valued since 1.1.0 (ADR-0215 D6): `NONE` described baselines that predate the column,
+    // and a 1.1 database has none. With no default, a write path not taught the capture is a
+    // not-null violation instead of a row that quietly reads as "recorded".
+    expect(shape?.column_default).toBeNull();
+    const labels = await prisma.$queryRaw<{ enumlabel: string }[]>`
+      SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'PlacementSnapshotLevel' ORDER BY e.enumsortorder`;
+    expect(labels.map((l) => l.enumlabel)).toEqual(['FULL']);
   });
 
   it('remaining_float is a NULLABLE integer with NO default', async () => {

@@ -1,7 +1,6 @@
 import { ASSIGNMENT_LAG_MINUTES_MAX } from '@repo/types';
 import { z } from 'zod';
 
-import { ASSIGNMENT_LAG_ENABLED } from '@/config/env';
 import {
   DURATION_PARSE_MESSAGE,
   checkDurationText,
@@ -41,11 +40,6 @@ import {
 /** Can this field read **days** right now? Narrows `hoursPerDay` for the caller. */
 export function canAuthorLagDays(hoursPerDay: number | undefined): hoursPerDay is number {
   return hoursPerDay !== undefined;
-}
-
-/** Is the control shown at all? One place, so the row, the form and their tests cannot disagree. */
-export function assignmentLagEnabled(): boolean {
-  return ASSIGNMENT_LAG_ENABLED;
 }
 
 /** The visible label. Names the unit only while the unit is restricted — otherwise it just says what it is. */

@@ -15,17 +15,6 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { redactChanges } from './activity-history.redaction';
 import type { StoredChanges } from './activity-history.types';
 
-/**
- * The migration that created the table. Its `finished_at` on this database is when recording began
- * here, which is the honest answer to "since when?" — a date written into this file would be the
- * date the code was merged, not the date any host started recording (`_prisma_migrations` is read
- * the same way by `finish-milestone-rederive.service.ts`).
- */
-const HISTORY_MIGRATION = '20261003120000_activity_history_entries';
-
-/** When this database began recording; `null` until first read. */
-let recordingStartedAt: Date | null = null;
-
 const UNKNOWN_ACTOR = 'Unknown user';
 
 interface EntryRow {
@@ -112,36 +101,16 @@ export class ActivityHistoryService {
     }
 
     const last = page[page.length - 1];
-    const recordingSince = await this.recordingSince(activity.createdAt);
     this.logger.debug({ activityId, returned: items.length, hasMore }, 'activity history read');
     return {
       items,
       meta: {
         nextCursor: hasMore && last ? encodeCursor(last.firstRecordedAt, last.id) : null,
         hasMore,
-        recordingSince: recordingSince.toISOString(),
+        // The table exists from the first migration, so recording began with the activity.
+        recordingSince: activity.createdAt.toISOString(),
       },
     };
-  }
-
-  /** The later of the activity's creation and the day this database started recording. */
-  private async recordingSince(createdAt: Date): Promise<Date> {
-    // The migration's `finished_at` never changes once the table exists, so it is read once per
-    // process rather than on every page (a miss — before the migration, which cannot happen on a
-    // running API — is not cached).
-    if (recordingStartedAt === null) {
-      recordingStartedAt = await this.readRecordingStart();
-    }
-    const startedAt = recordingStartedAt;
-    return startedAt !== null && startedAt > createdAt ? startedAt : createdAt;
-  }
-
-  private async readRecordingStart(): Promise<Date | null> {
-    const rows = await this.prisma.$queryRaw<{ startedAt: Date | null }[]>`
-      SELECT m."finished_at" AS "startedAt" FROM "_prisma_migrations" m
-       WHERE m."migration_name" = ${HISTORY_MIGRATION}
-         AND m."finished_at" IS NOT NULL AND m."rolled_back_at" IS NULL`;
-    return rows[0]?.startedAt ?? null;
   }
 
   /** One batched lookup for the page's actors; an erased user resolves to the tombstone name. */

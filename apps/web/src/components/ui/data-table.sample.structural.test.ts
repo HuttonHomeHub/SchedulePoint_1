@@ -77,11 +77,6 @@ const DECLARED: Record<string, Declared> = {
     reason: NOT_SC3,
   },
   'features/schedule/components/ApplyLevellingDialog.tsx': { fit: 3, sampled: 0, reason: NOT_SC3 },
-  'features/placement-migration/components/PlacementMigrationNotice.tsx': {
-    fit: 1,
-    sampled: 0,
-    reason: NOT_SC3,
-  },
   'features/staff/ui/accounts-panel.tsx': { fit: 1, sampled: 1 },
   'features/staff/ui/activity-panel.tsx': { fit: 1, sampled: 1 },
   'features/staff/ui/mail-panel.tsx': {

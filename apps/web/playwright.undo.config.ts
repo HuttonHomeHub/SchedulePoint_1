@@ -74,11 +74,6 @@ export default defineConfig({
             // the coverage inversion that epic exists to remove: thirteen configs pinning off the
             // surface the collapse makes universal, so almost nothing drove it end to end. The flag
             // now takes its default, which is what a shipped bundle carries (ADR-0088 D1).
-            env: {
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-            },
           },
         ],
       }),

@@ -24,10 +24,6 @@ import { ActivitiesTable } from './ActivitiesTable';
  * What these cases cannot see is the server: the mutation is mocked, so the pen, the optimistic
  * version and the restore's parent-active guard are all invisible. The journey drives those.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 const deleteMutate = vi.fn();
 const dissolveMutate = vi.fn();
@@ -74,7 +70,6 @@ function renderTable(handlers: {
         planId="pl1"
         canEditSchedule
         editorGating={deriveActivityEditorGating({
-          penManaged: true,
           holdsPen: true,
           canWrite: true,
           canProgress: false,

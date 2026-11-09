@@ -24,8 +24,6 @@ import type { ScopeGate } from '@/lib/scope-gate';
  *   single fused Save would have to pick one of these three rules and break the other two.
  */
 export interface ActivityEditorGatingInput {
-  /** Is the pen layer active at all (`pen.penManaged`). */
-  penManaged: boolean;
   /** Does the caller currently hold the pen (`pen.holdsPen`). */
   holdsPen: boolean;
   /**
@@ -76,12 +74,12 @@ const NO_PROGRESS_ROLE = 'Your role cannot report progress.';
 const NO_NOTES_ROLE = 'Your role cannot add notes.';
 
 export function deriveActivityEditorGating(input: ActivityEditorGatingInput): ActivityEditorGating {
-  const { penManaged, holdsPen, canWrite, canProgress, canReadCost, holder = null } = input;
+  const { holdsPen, canWrite, canProgress, canReadCost, holder = null } = input;
 
   // The definition rule, shared by all four definition scopes and (since M0) by steps.
   const penGated = (): ScopeGate => {
     if (!canWrite) return { writable: false, reason: NO_ROLE, readable: true, roleDenied: true };
-    if (penManaged && !holdsPen) return { writable: false, reason: noPen(holder), readable: true };
+    if (!holdsPen) return { writable: false, reason: noPen(holder), readable: true };
     return { writable: true, reason: null, readable: true };
   };
 

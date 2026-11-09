@@ -24,15 +24,10 @@ import type { CodeColumn } from '@/lib/code-columns';
  * The table itself still re-renders on a tick (it reads the store for the bulk bar); what must not
  * run is a row's **cell renderers**, which is what the badge counts.
  *
- * One summary is in the plan so the select column exists (`WBS_IMPROVEMENTS_ENABLED` forced on).
+ * One summary is in the plan so the select column exists.
  */
 const badgeRenders = vi.hoisted(() => ({ count: 0 }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-  NOTES_ENABLED: true,
-}));
 vi.mock('@/features/notes', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   NoteCountBadge: ({ count }: { count: number }) => {

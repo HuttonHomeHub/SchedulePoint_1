@@ -238,3 +238,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0212](0212-a-plan-keeps-the-instant-beside-the-date.md)                                        | A plan keeps the instant beside the date, and a cross-plan link reads it                   | Accepted           |
 | [0213](0213-the-shell-asks-its-own-frame-whether-it-is-short.md)                                | The shell asks its own frame whether it is short                                           | Accepted           |
 | [0214](0214-a-frozen-float-carries-its-minutes.md)                                              | A frozen float carries its minutes                                                         | Accepted           |
+| [0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)               | A fresh start is a new database, and the image refuses the old one                         | Proposed           |

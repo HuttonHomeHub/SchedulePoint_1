@@ -76,20 +76,9 @@ describe('the revision ghost builder', () => {
     expect(buildRevisionGhosts([], [row({ activityId: 'new' })], CAP).ghosts).toEqual([]);
   });
 
-  it('COUNTS a moved activity whose old lane was never recorded, and draws nothing', () => {
-    // A pre-ADR-0126 baseline. Drawing it in lane 0 would say the work was in the top row.
-    const result = buildRevisionGhosts(
-      [row({ activityId: 'a', laneIndex: null })],
-      [row({ activityId: 'a', earlyStart: '2026-03-05' })],
-      CAP,
-    );
-    expect(result.ghosts).toEqual([]);
-    expect(result.undrawable).toBe(1);
-  });
-
   it('does NOT count an unscheduled old side as undrawable', () => {
     // Nothing was lost by a missing column — the plan was never calculated, which the completion
-    // half already reports. Counting it would attribute an absent capture to an absent schedule.
+    // half already reports. Counting it would attribute an absent schedule to a lost drawing.
     const result = buildRevisionGhosts(
       [row({ activityId: 'a', earlyStart: null, earlyFinish: null })],
       [row({ activityId: 'a' })],
@@ -106,6 +95,22 @@ describe('the revision ghost builder', () => {
       CAP,
     );
     expect(result.ghosts).toEqual([]);
+  });
+
+  it('never reports undrawable ghosts for a same-plan comparison', () => {
+    // The web sentence for `undrawable` says "the two plans lay their activities out independently"
+    // unconditionally, which is only true because a same-plan ghost always has a recorded lane: it
+    // is placed at its own frozen index, moved or removed. If this fails, that sentence is false.
+    const from = [
+      row({ activityId: 'moved', laneIndex: 1 }),
+      row({ activityId: 'gone', laneIndex: 3 }),
+    ];
+    const to = [row({ activityId: 'moved', laneIndex: 2 })];
+
+    const result = buildRevisionGhosts(from, to, CAP, 'SAME_PLAN');
+
+    expect(result.ghosts.map((g) => g.activityId).sort()).toEqual(['gone', 'moved']);
+    expect(result.undrawable).toBe(0);
   });
 
   it('draws both milestone types as milestones', () => {

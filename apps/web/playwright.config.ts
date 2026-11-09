@@ -62,20 +62,12 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // This is the FLAGS-OFF baseline suite: it pins the editing flags off
-            // so the read-only TSLD surface and the role-only (no-pen) editing
-            // journeys stay covered even though both now default ON in the shipped
-            // bundle (apps/web/src/config/env.ts, 2026-07-12). The flags-ON editing
-            // surface has its own harness, playwright.edit.config.ts (test:e2e:edit).
-            // It ALSO pinned VITE_CANVAS_WORKSPACE off until ADR-0088 D3 retired that flag, so
-            // these journeys exercised the legacy stacked plan-detail page. Eight of the
-            // seventeen specs here were converted to the surviving workspace when it went; the
-            // other nine never rendered plan-detail content at all and were untouched. The pen
-            // pins above are a SEPARATE question and deliberately stay (TECH_DEBT #121).
-            env: {
-              VITE_TSLD_EDITING: 'false',
-              VITE_PLAN_EDIT_LOCK: 'false',
-            },
+            // No flag is pinned: this is the base journey and it runs the bundle as shipped, pen
+            // layer and editing surface both on. Every spec that edits takes the pen through the UI
+            // (`e2e-support/pen.ts`); `PLAN_EDIT_LOCK_ENFORCED` stays at its default (off) on the
+            // API, so the pen is real on the client without refusing a write that skips it. The two
+            // pins that used to sit here put this suite in a configuration no shipped bundle can
+            // be in (docs/TECH_DEBT.md #121).
           },
         ],
       }),

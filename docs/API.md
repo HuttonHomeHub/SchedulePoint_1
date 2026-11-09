@@ -41,13 +41,28 @@ A field renamed within a version is added under its new name, kept under its old
 `deprecated: true` in OpenAPI until the next breaking change, which also needs an ADR (above). Both
 carry **one value**, set from one expression, so they cannot disagree. Nothing is deprecated today.
 
-| Removed                                                                                         | Use instead                                      | Where                                                                                              | Removed in    |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------- |
-| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare` | `api` 0.106.0 |
+| Removed                                                                                         | Use instead                                      | Where                                                                                                       | Removed in    |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------- |
+| `fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish`, `toEarlyFinish` (`docs/TECH_DEBT.md` #405) | `fromStart`, `toStart`, `fromFinish`, `toFinish` | `criticalPath.entered[]` and `.left[]` of `…/revision-compare` and `…/cross-plan-revision-compare`          | `api` 0.106.0 |
+| `placementNotAssessableReason`                                                                  | nothing: it could only ever be `null`            | `changes` of `…/revision-compare` and `…/cross-plan-revision-compare`                                       | `api` 1.1.0   |
+| `costPhasingApproximatedCount`                                                                  | nothing: it could only ever be `0`               | `…/schedule/earned-value`                                                                                   | `api` 1.1.0   |
+| `floatNotComparableCount`                                                                       | nothing: it could only ever be `0`               | `meta` of `…/baselines/variance`; the top level of `…/revision-compare` and `…/cross-plan-revision-compare` | `api` 1.1.0   |
+
+The three `api` 1.1.0 rows, and the **values** removed in the table below, are the one-time exception
+[ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md) D6 records: every
+database is replaced at 1.1.0, so the states these described no longer exist, and nothing outside
+SchedulePoint calls the API. It is not a precedent.
+
+| Removed value     | Now                                                 | Where                                                                                | Removed in  |
+| ----------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------- |
+| `NETWORK`         | `PLACED` is the only value                          | `meta.basis` of `…/baselines/variance`; `datesBasis` of both revision-compare routes | `api` 1.1.0 |
+| `NOT_SNAPSHOTTED` | `SIDE_NOT_SCHEDULED`, `CODE_IS_THE_CORRELATION_KEY` | `notAssessableReason` of a change class                                              | `api` 1.1.0 |
+| `NONE`            | `FULL` is the only value                            | `placementSnapshotLevel`, `swimlaneSnapshotLevel` of a baseline                      | `api` 1.1.0 |
 
 This is a removal record. The old names said "early" but held the placed dates when `datesBasis` is `PLACED`;
 they were removed (2026-11-08, `RELEASE_1_0.md` row 9) as a release of their own, and a client still reading
-them gets `undefined`. The response carries only the four basis-neutral names.
+them gets `undefined`. The response carries only the four basis-neutral names. A client reading a removed
+field the same way gets `undefined`, and one reading a removed value never receives it.
 
 ## Response envelope
 
@@ -348,45 +363,39 @@ are never accepted on a write and never change `durationMinutes`, which stays th
 
 ### Baseline variance basis (`placement-baseline-variance`, amending ADR-0025)
 
-`GET …/plans/:planId/baselines/variance`'s `meta.basis: 'PLACED' | 'NETWORK' | null` names which
-dates the read compared, chosen **once per read** from the active baseline's
-`placementSnapshotLevel` — never per row, which would mix two questions in one table. `null` only
-when `meta.baselineId` is `null` (no active baseline — nothing was compared; nothing is guessed).
+`GET …/plans/:planId/baselines/variance`'s `meta.basis: 'PLACED' | null` names which dates the read
+compared. `null` only when `meta.baselineId` is `null` (no active baseline — nothing was compared;
+nothing is guessed).
 
-- **`PLACED`** (`placementSnapshotLevel: 'FULL'`, every baseline captured since `api-v0.70.0`): the
-  frozen `placedStart`/`placedFinish` (where the bar sat at capture) against the live
+- **`PLACED`**: the frozen `placedStart`/`placedFinish` (where the bar sat at capture) against the live
   `visualEffectiveStart`/`visualEffectiveFinish` (where it is drawn now, ADR-0148). A bar that has
   genuinely moved reads as moved; removing a binding constraint and placing the bar exactly where
   the constraint held it does not read as movement, because neither side has changed.
-- **`NETWORK`** (`placementSnapshotLevel: 'NONE'`, a baseline captured before placement capture
-  existed): the frozen `baselineStart`/`baselineFinish` against the live `earlyStart`/`earlyFinish`
-  — the only comparison such a baseline can honestly make. The accepted residual: on a `NETWORK`
-  baseline, converting a binding constraint into a placement (or a later drag) still reads as
-  "ahead", because the network dates moved and the placed ones were never recorded.
+
+`PLACED` is the only value since 1.1.0. The `NETWORK` basis (the frozen `baselineStart`/`baselineFinish`
+against the live `earlyStart`/`earlyFinish`) existed for a baseline captured before placement capture,
+and a 1.1 database holds none (ADR-0215 D6; see the removal record above).
 
 `baselineStart`, `baselineFinish`, `currentStart`, `currentFinish` and the start/finish variance
 fields are on `meta.basis`; the field names do **not** change with the basis (a field named "early"
-sometimes holding a placed date would be the silent redefinition ADR-0148 refused elsewhere).
-`currentTotalFloat`, `baselineTotalFloat` and `floatVarianceDays` are total float on **both** bases,
-always — no baseline has ever frozen remaining float.
+holding a placed date would be the silent redefinition ADR-0148 refused elsewhere).
+`currentTotalFloat`, `baselineTotalFloat` and `floatVarianceDays` are total float — no baseline has
+ever frozen remaining float.
 
 **Float is compared in minutes** (`#318`, ADR-0214). `floatVarianceMinutes` is `current − baseline`
 total float in working minutes, exact; `floatVarianceDays` is that figure converted once on the baseline's
 frozen `hoursPerDayMinutes`, the same factor the start and finish variance use. **Both are `null`, never
-`0`**, when the activity is not in the baseline, was removed, or either side's float has no minutes (a
-baseline captured, or a plan last recalculated, before `total_float_minutes` was stored). `meta.floatNotComparableCount`
-counts the activities in the baseline and live whose float was calculated on both sides but has no minutes on one;
-it is `0` with no active baseline. The minutes are never rescaled: they cannot be recovered from a rounded day.
+`0`**, when the activity is not in the baseline, was removed, or either side's float was never calculated.
+The two float columns are one fact (`total_float` and `total_float_minutes` are null together, a CHECK on
+`activities` and on `baseline_activities`), so a float with days and no minutes does not exist. The minutes
+are never rescaled: they cannot be recovered from a rounded day.
 
-`GET …/baselines` and `GET …/baselines/:baselineId` expose the same discriminator directly:
-`BaselineSummary.placementSnapshotLevel` says which basis a variance read against that baseline
-will use, and each snapshot row's `placedStart`/`placedFinish`/`visualStart` are meaningful only
-under `FULL` — on a `NONE` baseline they are null because nothing was recorded, never inferred from
-the null.
+`GET …/baselines` and `GET …/baselines/:baselineId` expose the discriminator directly:
+`BaselineSummary.placementSnapshotLevel` is `FULL` (the only value since 1.1.0), and each snapshot row's
+`placedStart`/`placedFinish`/`visualStart` are null only for an activity nothing had calculated at capture.
 
 `BaselineSummary.swimlaneSnapshotLevel` is the same kind of discriminator for swimlanes (swimlanes
-M1-T1b, ADR-0025's sixth amendment): `FULL` for every baseline captured since swimlanes shipped, `NONE`
-for every earlier one. A `FULL` capture freezes the plan's swimlane source and level, each activity's
+M1-T1b, ADR-0025's sixth amendment): `FULL` on every baseline since 1.1.0 (`NONE` was removed). A capture freezes the plan's swimlane source and level, each activity's
 own swimlane, and a verbatim copy of its lane rows for every basis (the organisation export carries all
 of it: `baselines`, `baseline-activities` and `baseline-activity-swimlane-lanes`). Read the level, never
 the absence of lane copies: a plan nobody laid out freezes none and is still `FULL`.
@@ -402,17 +411,14 @@ organisation export already lists all of them (format 2.3).
 ### Earned Value planned-value basis (`ev-placed-planned-value`, amending ADR-0042)
 
 `GET …/plans/:planId/schedule/earned-value` phases Planned Value on **one basis per read**, chosen
-from the active baseline's `placementSnapshotLevel`, and the response does not name it (its shape is
-unchanged). The same rule as variance above, with one difference: there is no `null` case, because
-the live-budget fallback always phases on something.
+and the response does not name it. The same rule as variance above, with one difference: there is no
+`null` case, because the live-budget fallback always phases on something.
 
-- **Placed** — no active baseline, or `placementSnapshotLevel: 'FULL'`: the frozen
-  `placedStart`/`placedFinish` from the baseline, and the live `visualEffectiveStart`/
-  `visualEffectiveFinish` (ADR-0148) for an activity the baseline does not hold, or holds without a
-  placed date. It never falls back to an early date.
-- **Network** — `placementSnapshotLevel: 'NONE'`: the frozen `baselineStart`/`baselineFinish` and the
-  live `earlyStart`/`earlyFinish`, exactly as before. A baseline that never recorded a placement cannot
-  be backfilled with one.
+- **Placed** — the frozen `placedStart`/`placedFinish` from the active baseline, and the live
+  `visualEffectiveStart`/`visualEffectiveFinish` (ADR-0148) for an activity the baseline does not hold, or
+  holds without a placed date, and for a plan with no active baseline. It never falls back to an early date.
+  It is the only basis since 1.1.0; the early-date basis for a baseline that recorded no placement was
+  removed (ADR-0215 D6).
 
 **An activity's last day is planned.** Every finish above is the inclusive display date (ADR-0023),
 so Planned Value phases to the end of that day: a Monday-to-Friday UNIFORM activity is 20% at the end
@@ -426,35 +432,19 @@ early.
 `tcpi` read no date and do not change. A plan with no placement reads byte-identically on either
 basis. The resource histogram reads the placed dates too (below).
 
-**Revision comparison reports whether placements are comparable at all.** Both
-`…/revision-compare` and `…/cross-plan-revision-compare` carry
-`placementNotAssessableReason` — `null` when both sides recorded a placement, `NOT_SNAPSHOTTED` when
-one did not. A baseline froze where the **network** said work could go and never where a planner had
-put it, so every baseline captured before that change is `placement_snapshot_level: NONE` and
-**permanently** so: a backfill would state as history a placement that baseline never saw. It is
-reported whether or not either plan happens to hold a placement, because a reason that appeared only
-when there was something to compare could not separate "nobody looked" from "we looked and there was
-nothing".
-
 **Revision comparison states which dates it compared — `datesBasis`** (`#405` (a), ADR-0025
-Amendment 3), on both routes and always present. `PLACED` when every baseline side is
-`placement_snapshot_level: FULL`: frozen `placedStart`/`placedFinish` against the live
-effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, the ghosts, the moved
-rows' `from`/`toStart` and `from`/`toFinish`, and the completion's finish dates). `NETWORK` when any baseline side is
-`NONE`: earliest dates on both sides, exactly as before, and it is a property of the **pair** — one
-short side makes the whole read `NETWORK` rather than mixing two questions in one report. It is
-chosen once per read, never per row. It sits in `data` (the revision comparison has no `meta`) and
-is deliberately named `datesBasis` rather than `basis`, which is the variance read's `meta.basis`.
-The moved rows (`criticalPath.entered` and `.left`) name those four dates `fromStart`, `toStart`,
-`fromFinish` and `toFinish`, which hold whichever dates `datesBasis` states; the former
-`fromEarlyStart`, `toEarlyStart`, `fromEarlyFinish` and `toEarlyFinish` were removed (see "Deprecated fields" above). Criticality and float stay network
-quantities on either basis. Two live plans (cross-plan) have no baseline
-side and are `PLACED`. **A `NETWORK` read is not comparable with an earlier `PLACED` read of the
-same pair**: the basis can flip when a baseline is re-captured, so compare `datesBasis` before
-comparing figures across reads. On `PLACED` the live side reads `visualEffectiveStart`/`Finish`
-and falls back to the early date for a row that has none; that fallback is kept rather than proved
-unreachable, because nothing here establishes that a live row always carries an effective-Visual
-span.
+Amendment 3), on both routes and always present: `PLACED`, the frozen `placedStart`/`placedFinish` against
+the live effective-Visual span, so a bar moved by placement alone is a move (`REDATED`, the ghosts, the moved
+rows' `from`/`toStart` and `from`/`toFinish`, and the completion's finish dates). It is the only value since
+1.1.0: `NETWORK` (earliest dates on both sides, when any baseline side predated placement capture) and the
+`placementNotAssessableReason` field that reported that case were removed (ADR-0215 D6). It sits in `data` (the
+revision comparison has no `meta`) and is deliberately named `datesBasis` rather than `basis`, which is the
+variance read's `meta.basis`. The moved rows (`criticalPath.entered` and `.left`) name those four dates
+`fromStart`, `toStart`, `fromFinish` and `toFinish`; the former `fromEarlyStart`, `toEarlyStart`,
+`fromEarlyFinish` and `toEarlyFinish` were removed (see "Deprecated fields" above). Criticality and float stay
+network quantities. The live side reads `visualEffectiveStart`/`Finish` and falls back to the early date for a
+row that has none; that fallback is kept rather than proved unreachable, because nothing here establishes that
+a live row always carries an effective-Visual span.
 
 **Float on the revision comparison is compared in minutes and shown on one frame** (`#318`, ADR-0214),
 on both routes. Each moved row (`criticalPath.entered` and `.left`) carries `fromTotalFloatMinutes`,
@@ -462,41 +452,22 @@ on both routes. Each moved row (`criticalPath.entered` and `.left`) carries `fro
 `toTotalFloatDays` and `floatMovementDays` are those minutes as whole days on **`dayFactorMinutes`** (the
 earlier revision's plan working day, the factor the completion movement is measured on). Each is `null`
 where its minutes are, **even when that side's float was calculated in days**: a side with no minutes
-reads `null` days, and a calculated float with no minutes on a side is **not comparable**, never `0` and
-never rescaled. The top-level `floatNotComparableCount` is how a client tells that state from an
-unknown float; it counts the matched non-summary activities in
-that state (`0` when a side was never calculated or the plans share no activity codes). The rows are ordered by `floatMovementMinutes`. The
+reads `null` days, and an activity whose float was never calculated is never `0`. The rows are ordered by `floatMovementMinutes`. The
 `CRITICALITY` change-list class lists an activity when its `isCritical` flipped or its float in whole days
-on `dayFactorMinutes` differs, both sides holding minutes; its labels read `float 2 d (16 h)`,
+on `dayFactorMinutes` differs, both sides holding a float; its labels read `float 2 d (16 h)`,
 `critical · float 0 d (0 h)` or `float unknown`. A day-length edit that moves no date therefore moves no
 float and lists nothing.
 
-### The placement migration report (one-planning-surface M-I)
+### Removed in 1.1.0: the placement migration report
 
-`GET …/plans/:planId/placement-migration` — **any member** of the organisation
-(`plan:read` + `activity:read`), org-scoped with the uniform anti-IDOR **404**.
-
-A one-time SQL migration converted the constraints a drag had written into hand-placements, on the
-plans that carried them. The act is **irreversible**, and `PATCH …/activities/:activityId` is
-classified `PLAN_CONTENT` in the audit census — permanently excluded under ADR-0073 — so nothing in
-`audit_events` will ever record it. This route is the only thing that can say what happened.
-
-`{ planId, count, rows }`, oldest first. Each row carries the activity's id, its code and name **as
-they stood at migration time** (never refreshed by a rename), the removed `priorConstraintType` /
-`priorConstraintDate`, a `priorVisualStart` that is expected null on every row, and a `migratedAt`
-shared by the whole batch. `activityId` is a plain correlation id with **no foreign key** — the row
-survives the activity being deleted, which is when it is most wanted.
-
-**Deliberately unpaginated**, and the exemption is noted here per the house rule below: the rows are
-written once by a schema migration and by nothing else, so a plan's count is fixed at that instant
-and can never grow. A cursor would be a contract with no subject. `count` is sent anyway, redundant
-with `rows.length` today, so the first cap added cannot silently turn the array's length into a
-different quantity for a client that had been reading it as the total.
-
-It reports only what **changed**. Three classes of start-no-earlier-than constraint were left alone
-— inert, unclassified, and any activity already carrying a placement — and they are absent because
-nothing happened to them. Their estate-wide classification belongs to the ADR-0140 staff diagnostics
-(`snet-inert`, `snet-unclassified`), which are addressed to an operator rather than to a planner.
+`GET …/plans/:planId/placement-migration` **no longer exists** and answers 404 from the router. It
+listed the constraints a one-time SQL migration had converted into hand-placements on a database
+upgraded from before that migration; the 1.1 image starts from a new database
+([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md) D6), so
+there is nothing for it to report, and its table `placement_migrations` is gone. This is a
+**one-time exception** to the 1.0 promise, taken with the same decision as the organisation export's
+format 3.0 (`ORGANISATION_EXPORT_FORMAT.md`), which dropped the `records-placement-migrations` file
+with it. The 1.0 behaviour is at tag `api-v1.0.0`.
 
 ### Cross-plan dependencies (ADR-0045)
 
@@ -973,8 +944,8 @@ changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `
   named **as it was when recorded** — a later rename never rewrites an entry. Quantities on an
   assignment are canonical fixed-4 decimal **strings** (`"40.0000"`). A description is `{ changed: true }`
   only: its text and digest never leave the server.
-- `meta` — `{ nextCursor, hasMore, recordingSince }`; `recordingSince` is the later of the activity's
-  creation and the moment the database began recording, which is what "no changes recorded since …"
+- `meta` — `{ nextCursor, hasMore, recordingSince }`; `recordingSince` is the activity's creation instant
+  (history is recorded from the start since 1.1.0, ADR-0215), which is what "no changes recorded since …"
   must say.
 
 **Who sees what.** Every organisation member holds `activity:read`, Viewers included; there is **no
@@ -2000,7 +1971,7 @@ Two shape rules are load-bearing and worth stating here rather than only in the 
   recalculation persisted**: the **placed** finish (ADR-0148) for `projectFinish`, the flag counts, and the active
   baseline's frozen finish. `baselineMovement` compares the two **on the baseline's basis**
   (`docs/TECH_DEBT.md` #405 (b)): placed against the latest frozen `placed_finish` for a
-  `placementSnapshotLevel: FULL` baseline, earliest against the frozen early finish for a `NONE` one. **The CPM engine is not invoked** — `computeSchedule` is not imported by
+  baseline. **The CPM engine is not invoked** — `computeSchedule` is not imported by
   the read or by the pure derivation beside it, pinned by
   `modules/overview/plan-standing-engine-free.structural.spec.ts` — so the ADR-0034 recalculation
   parity gate is untouched by construction.
@@ -2133,14 +2104,14 @@ plan, client, project or activity is ever named, at any size**, and nothing is r
 
 Beside those counts the row carries the **registry's own literals** — `id`, `label`, `nature` and
 `unit` — each a member of a closed union the registry exports, each a fact about the QUESTION and
-never about the installation. `unit` says what one examined row IS (`activity`, `plan`,
-`baseline` or `history-entry`): the sentence names that noun out loud, and until `docs/TECH_DEBT.md` #362 it was a
+never about the installation. `unit` says what one examined row IS (`activity`, `plan` or
+`history-entry`): the sentence names that noun out loud, and until `docs/TECH_DEBT.md` #362 it was a
 hard-coded literal, so the two entries that do not count activities reported their counts as counts
 of activities. A closed union rather than free text is what keeps the structural gate able to tell a
 registry literal from a value somebody interpolated.
 
 It **narrows ADR-0086 D6** rather than sitting outside it — the SQL reads `activities`, `plans`,
-`calendars`, `resource_assignments`, `resources` and `activity_history_entries` — and the narrowing rests on three clauses, of
+`resource_assignments`, `resources` and `activity_history_entries` — and the narrowing rests on three clauses, of
 which the second is load-bearing for anyone reading this file while deciding what to add next:
 
 1. the disclosure is bounded by the **return type**, not by the query's reach;
@@ -2152,7 +2123,8 @@ which the second is load-bearing for anyone reading this file while deciding wha
 3. the registry is closed and every entry produces one fixed all-numeric row, so "add a diagnostic"
    cannot become "add a field".
 
-The three `history-entries-*` entries are the **first time-relative diagnostics**: a fixed 28-day
+The registry holds **nine** entries since 1.1.0 (seven that described pre-1.1 data were removed with
+it, ADR-0215). The three `history-entries-*` entries are the **first time-relative diagnostics**: a fixed 28-day
 window written as a SQL literal (a property of the question, never a parameter, so clause 2 holds),
 and like every entry they return counts only — nothing of an entry's actor or `changes` is projected.
 
@@ -2588,10 +2560,9 @@ CrashReportRow { id, reference, boundary, errorName, message, routePattern, webV
     the vocabulary**, so a class is never simply missing. Each carries its own
     assessability: a class that could not be judged says so with a
     `notAssessableReason` and carries **no rows and a zero total that must not be
-    read as "nothing changed"**. `NOT_SNAPSHOTTED` is **permanent for the two
-    revisions involved** — a baseline captured before the snapshot extension
-    recorded no logic, constraints, calendar, WBS parent, lane or progress, and
-    no backfill is possible. Rows are ordered by **time, never by magnitude**;
+    read as "nothing changed"**. The reasons are `SIDE_NOT_SCHEDULED` and, on the
+    cross-plan route, `CODE_IS_THE_CORRELATION_KEY`; `NOT_SNAPSHOTTED` was removed
+    in 1.1.0 (ADR-0215 D6) because every baseline records the shape. Rows are ordered by **time, never by magnitude**;
     each carries `subjectId` (unique within its class — a logic row's subject is
     the dependency, not an activity) and `existsLive`, which the **server**
     answers because a re-laned or progressed activity appears in no delta list at
@@ -2621,14 +2592,14 @@ CrashReportRow { id, reference, boundary, errorName, message, routePattern, webV
     ghost from the boolean alone; before the field existed every milestone ghost
     was drawn half a day from its live diamond (`docs/TECH_DEBT.md` #383).
 
-    A ghost of **removed** work also carries, additively, its baseline's frozen swimlane facts when that
-    baseline is `swimlaneSnapshotLevel: FULL`: `frozenSwimlaneId`, `frozenLanes[]` (one entry per basis,
+    A ghost of **removed** work on the plan-nested route also carries, additively, its baseline's frozen
+    swimlane facts: `frozenSwimlaneId`, `frozenLanes[]` (one entry per basis,
     verbatim) and `frozenAncestorIds` (root first, from the baseline's own parent links). The server
     places nothing: which swimlane the ghost falls in depends on the plan's source today, which the
-    client derives. A `NONE` baseline's removed ghosts carry none of the three, and the client counts
-    them. Moved ghosts never carry them, and neither does the cross-plan comparison.
+    client derives. Moved ghosts never carry them, and neither does the cross-plan comparison (its
+    removed ghosts are counted).
 
-    When that baseline is `FULL` with `codeSnapshotLevel: SWIMLANE_TYPE` and its frozen source was a code
+    When that baseline's frozen source was a code
     (`swimlaneSource: ACTIVITY_CODE`), a removed ghost also carries `frozenCodeTypeId` (the type the
     swimlanes were then made from), `frozenCodeValueId` (its value of that type; `null` is "no value", the
     `No <type>` band) and `frozenCodeLane` (`{ laneIndex }`; `null` is "never placed there"). Again the

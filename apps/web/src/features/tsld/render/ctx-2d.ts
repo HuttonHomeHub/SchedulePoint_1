@@ -39,7 +39,7 @@ export type Ctx2D = Pick<
    * so the draw budget holds; a minimal test context never throws. */
   arcTo?: (x1: number, y1: number, x2: number, y2: number, radius: number) => void;
   /** Optional like `roundRect`/`arcTo`: builds a repeating fill pattern from an offscreen tile —
-   * used only for the non-working hatch (F7a, `VITE_CANVAS_TIME_AXIS`). Absent ⇒ the flat-fill
+   * used only for the non-working hatch. Absent ⇒ the flat-fill
    * fallback, which is also the path every existing painter unit suite exercises (jsdom serves no
    * `canvas` package, so the offscreen tile itself never builds). */
   createPattern?: (image: CanvasImageSource, repetition: string | null) => CanvasPattern | null;

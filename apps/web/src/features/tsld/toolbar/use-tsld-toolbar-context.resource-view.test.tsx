@@ -13,15 +13,11 @@ import type {
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
- * The resource-view (`VITE_CANVAS_RESOURCE_VIEW`, Stage E) glue on the REAL builder: `hasOverAllocation`
+ * The resource-view glue on the REAL builder: `hasOverAllocation`
  * must derive from `activities.some(isOverAllocated)` (the engine-owned `levelingWindowExceeded ||
  * selfOverAllocated` flags, ADR-0041 — never a client re-derivation), and the ephemeral open/highlight
  * flags + their toggles must pass straight through from the model. Only this flag is forced on.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
-}));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));

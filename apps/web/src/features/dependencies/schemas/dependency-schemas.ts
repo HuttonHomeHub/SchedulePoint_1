@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import { lagTextField } from '../model/lag-field';
 
-import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
 import { formatDurationText } from '@/lib/duration-text';
 
 /**
@@ -79,7 +78,6 @@ export function formatLag(
 ): string {
   const minutesPerDay = hoursPerDay === undefined ? 0 : Math.round(hoursPerDay * 60);
   if (
-    SUB_DAY_DURATIONS_ENABLED &&
     hoursPerDay !== undefined &&
     minutesPerDay > 0 &&
     dependency.lagMinutes % minutesPerDay !== 0
@@ -90,8 +88,7 @@ export function formatLag(
   // The whole-day branch prints the row's OWN `lagDays` rather than re-deriving it from minutes.
   // The server computed that on the relationship's lag calendar (ADR-0068 §4); re-dividing here
   // would round a sub-day lag UP whenever the exact branch is not taken — which is exactly what
-  // happens flag-off, where a four-hour lag would have started reading as "+1d" on a path whose
-  // whole job is to be byte-identical to what shipped. (Found by this epic's own parity test.)
+  // happens with no known day factor, where a four-hour lag would start reading as "+1d".
   const { lagDays } = dependency;
   if (lagDays === 0) return '0d';
   return lagDays > 0 ? `+${String(lagDays)}d` : `−${String(Math.abs(lagDays))}d`;

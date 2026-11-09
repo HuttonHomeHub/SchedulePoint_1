@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Theme-parametrised accessibility, flag OFF** (ADR-0055 §5, `docs/specs/designed-ui/`).
+ * **Theme-parametrised accessibility** (ADR-0055 §5, `docs/specs/designed-ui/`).
  * It boots the shell once per theme — a thing the shared `e2e` project cannot express, since the
  * theme is chosen before first paint — and scans each for WCAG violations.
  *
@@ -62,10 +62,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // `VITE_CANVAS_VISUAL_LANGUAGE` off keeps the diagram out of the theme sweep, which
-            // is about the shell's chrome and not the plot (ADR-0097 Landing E gave the canvas its
-            // own scope and its own pairs in the contrast matrix).
-            env: { VITE_CANVAS_VISUAL_LANGUAGE: 'false' },
           },
         ],
       }),

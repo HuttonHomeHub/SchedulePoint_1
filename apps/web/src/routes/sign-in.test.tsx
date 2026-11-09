@@ -16,9 +16,9 @@ import { authClient } from '@/lib/auth-client';
  * `/accept-invite?token=…` after they sign in — the hand-off `AcceptInvitationCard` composes — and
  * a regression there strands them on the org home with the invitation apparently gone.
  *
- * The `PASSWORD_RESET_ENABLED` link gating is deliberately **not** re-asserted here: it is already
- * pinned, on both branches, by `features/auth/password-reset.parity.test.tsx`, which exists as the
- * flag's rollback contract. A second copy would drift from it rather than reinforce it (ADR-0062).
+ * The "Forgot your password?" link is deliberately **not** re-asserted here: it is already pinned
+ * by `features/auth/sign-in-forgot-link.test.tsx`. A second copy would drift from it rather than
+ * reinforce it (ADR-0062).
  *
  * Written against the **pre-M4 screen** and asserting behaviour and accessible names only, never
  * structure or class names — which is what has to make it survive the brand-surface redesign

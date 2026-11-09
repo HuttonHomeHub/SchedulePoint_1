@@ -8,7 +8,7 @@ import {
 
 /**
  * The pure, DOM-free **export-viewport geometry** for the TSLD Diagram-PNG deliverable (spec
- * `docs/specs/export-print/` §Milestone 2, behind `VITE_EXPORT_PRINT`). Like `render/render-model.ts`
+ * `docs/specs/export-print/` §Milestone 2). Like `render/render-model.ts`
  * it owns only geometry — no canvas, React or data-fetching — so it is exhaustively unit-tested. It
  * frames an **off-screen** canvas the shipped `paintScene` then draws into (`render-export-image.ts`),
  * so the live-draw budget (ADR-0026) is untouched.

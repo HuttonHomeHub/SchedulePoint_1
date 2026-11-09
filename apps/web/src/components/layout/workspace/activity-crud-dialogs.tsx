@@ -7,12 +7,6 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FormSection } from '@/components/ui/form-layout';
 import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
-} from '@/config/env';
-import {
   ActivityCreateDialog,
   ActivityEditorDialog,
   deleteActivityDescription,
@@ -294,60 +288,50 @@ export function ActivityCrudDialogs({
               ),
             }
           : {})}
-        {...(ACTIVITY_EDITOR_CONVERGENCE_ENABLED
+        // The Logic tab's seams. Each is a thing that dies silently if it is dropped — the undo
+        // recording for a removed link, the keyboard lag nudge, and the cross-plan section this
+        // feature must not import sideways — so each has its own regression test.
+        logic={{
+          onAdded: model.recordDependencyAdd,
+          onRemoved: model.recordDependencyRemove,
+          onEdited: model.recordDependencyEdit,
+          ...(model.canManageLogic ? { onNudgeLag: model.nudgeDependencyLag } : {}),
+          ...(intended
+            ? {
+                crossPlanSlot: (
+                  <CrossPlanLinksSection
+                    orgSlug={orgSlug}
+                    planId={planId}
+                    activity={intended}
+                    onAdded={model.recordCrossPlanLinkAdd}
+                    onRemoved={model.recordCrossPlanLinkRemove}
+                    canManageLogic={model.canManageLogic}
+                    // The slot only exists while an activity is open, so the section always has
+                    // its subject when it renders.
+                    enabled
+                  />
+                ),
+              }
+            : {}),
+        }}
+        {...(intended
           ? {
-              // The Logic tab's seams, which `plan-dialogs` wired into the Logic dialog before
-              // this. Each is named in the plan as a thing that dies silently if it is dropped
-              // in the move — the undo recording for a removed link, the keyboard lag nudge, and
-              // the cross-plan section this feature must not import sideways — so each has its
-              // own regression test.
-              logic: {
-                onAdded: model.recordDependencyAdd,
-                onRemoved: model.recordDependencyRemove,
-                onEdited: model.recordDependencyEdit,
-                ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
-                  ? { onNudgeLag: model.nudgeDependencyLag }
-                  : {}),
-                ...(PROGRAMME_SCHEDULING_ENABLED && intended
-                  ? {
-                      crossPlanSlot: (
-                        <CrossPlanLinksSection
-                          orgSlug={orgSlug}
-                          planId={planId}
-                          activity={intended}
-                          onAdded={model.recordCrossPlanLinkAdd}
-                          onRemoved={model.recordCrossPlanLinkRemove}
-                          canManageLogic={model.canManageLogic}
-                          // `intended` is already narrowed truthy by this branch's own
-                          // condition (`PROGRAMME_SCHEDULING_ENABLED && intended`), so this
-                          // section is always showing its subject when it renders at all.
-                          enabled
-                        />
-                      ),
-                    }
-                  : {}),
-              },
-              ...(NOTES_ENABLED && intended
-                ? {
-                    notesSlot: (
-                      <ActivityNotesSection
-                        orgSlug={orgSlug}
-                        planId={planId}
-                        activity={intended}
-                        canWrite={model.canWriteNotes}
-                        // The **Add note** entry point asks for focus in the composer, not on the
-                        // tab (`docs/TECH_DEBT.md` #68). Read from the intent here rather than
-                        // inside the editor, because the slot is a `ReactNode` the editor cannot
-                        // reach into.
-                        autoFocusComposer={model.editorIntent?.focusNotes === true}
-                        // Same reasoning as the cross-plan slot above: `intended` is already
-                        // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
-                        // intended`).
-                        enabled
-                      />
-                    ),
-                  }
-                : {}),
+              notesSlot: (
+                <ActivityNotesSection
+                  orgSlug={orgSlug}
+                  planId={planId}
+                  activity={intended}
+                  canWrite={model.canWriteNotes}
+                  // The **Add note** entry point asks for focus in the composer, not on the
+                  // tab (`docs/TECH_DEBT.md` #68). Read from the intent here rather than
+                  // inside the editor, because the slot is a `ReactNode` the editor cannot
+                  // reach into.
+                  autoFocusComposer={model.editorIntent?.focusNotes === true}
+                  // Same reasoning as the cross-plan slot above: the slot exists only while
+                  // an activity is open.
+                  enabled
+                />
+              ),
             }
           : {})}
       />

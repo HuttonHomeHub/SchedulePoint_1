@@ -33,7 +33,7 @@ import {
  * `add-activity` draws bars; `link` is the two-click dependency tool (ADR-0032 M5): click a
  * predecessor, then a successor — replacing the flag-off edge-drag rubber-band. `loe` is the
  * two-click **Level of Effort (hammock)** endpoint-pick tool (Stage D,
- * `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`): click a start driver,
+ * `docs/specs/canvas-activity-types/`): click a start driver,
  * then a finish driver — the shell composes a `LEVEL_OF_EFFORT` span (SS + FF) from the pair. A single
  * `EditMode` value makes the four tools **mutually exclusive** — arming one leaves any other.
  */

@@ -8,16 +8,12 @@ import { ResourceFormDialog } from './ResourceFormDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The resource cost-rate field (`costPerUnit`, EV4b / ADR-0042) with `VITE_EARNED_VALUE` forced ON —
+ * The resource cost-rate field (`costPerUnit`, EV4b / ADR-0042) —
  * the surface ships dark by default, so this suite pins the flag to prove the field renders, converts
  * MAJOR-unit entry to minor units on submit (omitted when blank), and seeds + round-trips a stored
  * value on edit (blank clears it to null). Flag-off behaviour (field hidden, seeded value still
  * round-trips) is covered by `ResourceFormDialog.test.tsx`.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

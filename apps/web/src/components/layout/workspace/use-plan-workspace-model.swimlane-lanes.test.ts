@@ -37,11 +37,6 @@ const h = vi.hoisted(() => ({
   onWriteRejected: vi.fn((): { kind: 'none' | 'lock' } => ({ kind: 'none' })),
 }));
 
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: true, NOTES_ENABLED: false };
-});
-
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanEditHistory: () => ({
@@ -64,7 +59,7 @@ vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
 vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'u1' } } }) }));
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ penManaged: true, holdsPen: true, onWriteRejected: h.onWriteRejected }),
+  usePlanPen: () => ({ holdsPen: true, onWriteRejected: h.onWriteRejected }),
 }));
 vi.mock('@/features/plans', () => ({
   usePlan: () => query(h.plan),

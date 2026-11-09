@@ -4,10 +4,8 @@ import type { GroupProps } from './group-props';
 
 import { TextField } from '@/components/ui/form';
 import { FieldGrid, FormSection } from '@/components/ui/form-layout';
-import { INTER_PROJECT_DATES_ENABLED } from '@/config/env';
 import type { ActivitySchedulingValues } from '@/features/activities/schemas/activity-scope-schemas';
 
-/** Both members are behind `VITE_INTER_PROJECT_DATES`. */
 export const EXTERNAL_DATES_FIELDS = [
   'externalEarlyStart',
   'externalLateFinish',
@@ -36,9 +34,7 @@ export function ActivityExternalDatesFields({
 }: GroupProps<ActivitySchedulingValues> & {
   /** The engine says an external bound is currently driving this activity's dates. */
   externalDriven?: boolean;
-}): JSX.Element | null {
-  if (!INTER_PROJECT_DATES_ENABLED) return null;
-
+}): JSX.Element {
   return (
     <FormSection
       title="External interfaces"

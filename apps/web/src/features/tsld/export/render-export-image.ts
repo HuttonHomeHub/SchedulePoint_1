@@ -28,11 +28,9 @@ import {
   type ExportGutterFrame,
 } from './export-swimlane-gutter';
 
-import { CANVAS_DATA_DATE_ENABLED, CANVAS_RESOURCE_VIEW_ENABLED } from '@/config/env';
-
 /**
  * The thin, off-screen **Diagram-PNG renderer** for the TSLD export deliverables (spec
- * `docs/specs/export-print/` §Milestone 2, behind `VITE_EXPORT_PRINT`). It creates its **own** canvas
+ * `docs/specs/export-print/` §Milestone 2). It creates its **own** canvas
  * (`document.createElement('canvas')`, matching how the live `TsldCanvas` allocates its surface), runs
  * the shipped `paintScene` against it with the light print palette + the pure {@link buildExportViewport}
  * geometry, composites a white paper ground behind the diagram, draws the title band + legend into the
@@ -248,11 +246,8 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   // holds both.
   //
   // The data-date status line (canvas status & feedback M1) is drawn SOLID, before Today, per the
-  // marker-channel table. Flag-off it is absent, so the export legend is byte-for-byte the prior
-  // row (the parity gate).
-  ...(CANVAS_DATA_DATE_ENABLED
-    ? [{ label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const]
-    : []),
+  // marker-channel table.
+  { label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const,
   { label: 'Today', kind: 'today', colour: (p) => p.today },
   { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
   { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
@@ -307,7 +302,7 @@ function cutNamesEntry(count: number): LegendEntry {
 
 /** The legend rows this picture's scene calls for. */
 function legendFor(scene: TsldScene, cutNames: number): readonly LegendEntry[] {
-  const drawsBadge = CANVAS_RESOURCE_VIEW_ENABLED && (scene.flaggedIds?.size ?? 0) > 0;
+  const drawsBadge = (scene.flaggedIds?.size ?? 0) > 0;
   const drawsSwimlanes = scene.swimlaneMarks !== undefined;
   const rows = [
     ...EXPORT_LEGEND,

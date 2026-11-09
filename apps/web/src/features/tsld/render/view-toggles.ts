@@ -15,12 +15,12 @@ export interface TsldViewToggles {
   nonWorking: boolean;
   /** On-canvas activity labels (`{code} {name} · {n}d`). */
   labels: boolean;
-  /** Flanking start/finish **dates** on each bar (ADR-0054 §3, `VITE_CANVAS_LIVE_FEEDBACK`).
-   * Optional so every existing caller/fixture stays valid and paints byte-for-byte; absent or
+  /** Flanking start/finish **dates** on each bar (ADR-0054 §3).
+   * Optional so every existing caller/fixture stays valid; absent or
    * false ⇒ the pass never runs and not one `measureText` is spent. */
   dates?: boolean;
   /**
-   * The **feasible window** (one-planning-surface M-E, `VITE_CANVAS_LIVE_FEEDBACK`): one hollow
+   * The **feasible window** (one-planning-surface M-E): one hollow
    * bracket spanning `[earlyStart, lateFinish]` with a cap at each end, drawn beneath the bar so
    * the bar occludes its middle.
    *
@@ -72,23 +72,22 @@ export interface TsldViewToggles {
    * analysis. Per-user client state (never persisted); while on, all edit gestures are suppressed.
    * Default off. Ungated since the mode collapsed (one-planning-surface M-F-T5). */
   lateOverlay: boolean;
-  /** User preference for the alternating month-band ground (F7b, `VITE_CANVAS_TIME_AXIS` +
-   * `VITE_CANVAS_VISUAL_LANGUAGE`) — a plain boolean here so the pure painter module never imports
-   * a flag; `TsldCanvas` composes the actual gate (`CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands
-   * ?? true)`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
+  /** User preference for the alternating month-band ground — a
+   * plain boolean here so the pure painter module never imports a flag; `sceneLayers` composes the
+   * actual gate (`view?.monthBands ?? false`) into `TsldScene.monthBands`, which is what the painter actually reads. Optional so
    * every existing caller/fixture stays valid; the default below is a plain literal, not a flag
    * read, so this module stays flag-free. */
   monthBands?: boolean;
-  /** The **data-date line** (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1). A plain
-   * boolean here — the pure painter module never imports a flag; `TsldCanvas` composes the gate
-   * (`CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true)`) into `TsldScene.dataDateLine`,
+  /** The **data-date line** (canvas status & feedback M1). A plain
+   * boolean here — the pure painter module reads no host state; `sceneLayers`
+   * (`view?.dataDate ?? true`) derives `TsldScene.dataDateLine` from it,
    * which is what the painter reads (the `monthBands` precedent). Optional so every existing
    * caller/fixture stays valid. */
   dataDate?: boolean;
-  /** The pinned **WBS band** across the top of the canvas (ADR-0063, `VITE_WBS_IMPROVEMENTS`).
+  /** The pinned **WBS band** across the top of the canvas (ADR-0063).
    * Default **off**: the band takes canvas height, and ADR-0031's canvas-maximal layout is not a
    * decision this may quietly reverse for every existing plan. A plain boolean here — the pure
-   * painter module never imports a flag; the host composes the gate. Optional ⇒ absent/false ⇒ no
+   * painter module reads no host state. Optional ⇒ absent/false ⇒ no
    * band is reserved, mounted or painted (the parity path). */
   wbsBand?: boolean;
   /**

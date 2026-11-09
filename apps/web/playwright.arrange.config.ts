@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  * enforced, which is the only place the pen gate and the optimistic-`version` batch can be tested
  * at all (a mocked fetch accepts any version).
  *
- * `VITE_SCHEDULE_INTERCHANGE` is on because one case is a **real `.xer` import**: M-C0-T3a
+ * One case is a **real `.xer` import**: M-C0-T3a
  * established that a healthy import leaves nothing for the offer to say, and an absence assertion
  * that never ran against a real import proves nothing about imports.
  */
@@ -74,12 +74,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_SCHEDULE_INTERCHANGE: 'true',
-            },
           },
         ],
       }),

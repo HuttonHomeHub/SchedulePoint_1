@@ -1,21 +1,12 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TsldPanel } from './TsldPanel';
 
 import { useTooltip } from '@/components/ui/tooltip';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_SEARCH_NAV_ENABLED: true,
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_AUTHORING_FLOW_ENABLED: true,
-  TSLD_EDITING_ENABLED: true,
-}));
 
 /**
  * **An Escape typed into a text field belongs to that field**

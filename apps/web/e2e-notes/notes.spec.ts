@@ -2,12 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { holdRead } from '../e2e-support/hold-read';
+import { takeThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { addActivity, createAndOpenPlan, onboard, openProject } from './support';
 
 /**
- * Flag-ON **Notes** journey (`VITE_NOTES`, Notes M3, ADR-0046). Proves the surface runs end-to-end in
+ * **Notes** journey (Notes M3, ADR-0046). Proves the surface runs end-to-end in
  * a real browser against the real API:
  *
  * 1. A plan with one activity.
@@ -19,16 +20,16 @@ import { addActivity, createAndOpenPlan, onboard, openProject } from './support'
  * 6. **Delete** the note → the thread is empty and the badge is gone.
  * 7. An **axe** wcag2a/wcag2aa pass with the notes surface visible — zero violations.
  *
- * Runs on the plan workspace with the pen off (see the config); notes are not pen-gated regardless
- * (ADR-0046), so no lock dance. It ran on the legacy stacked page until that surface was retired
- * with `VITE_CANVAS_WORKSPACE`; the only change the move needed was expanding the activities panel,
- * which is collapsed by default here (`support.ts`).
+ * Runs on the plan workspace as shipped, so the planner takes the pen before adding the activity the
+ * notes hang off; the notes themselves are not pen-gated (ADR-0046). The activities panel is
+ * collapsed by default here (`support.ts`).
  */
 test('a member adds, edits and deletes a note and the row badge tracks it', async ({ page }) => {
   const stamp = Date.now();
   await onboard(page, stamp);
   await openProject(page);
   await createAndOpenPlan(page, 'Tower');
+  await takeThePen(page);
   await addActivity(page, 'Erect frame');
 
   // **The row menu has a `Notes` route now** (`docs/specs/object-bar-defects/` M2), so this is one
@@ -119,6 +120,7 @@ test('Notes shows note-shaped placeholders and one sentence while its read is he
   await onboard(page, stamp);
   await openProject(page);
   await createAndOpenPlan(page, 'Tower');
+  await takeThePen(page);
   await addActivity(page, 'Erect frame');
 
   const held = await holdRead(page, /\/organizations\/[^/]+\/activities\/[^/]+\/notes(\?|$)/);

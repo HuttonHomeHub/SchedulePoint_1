@@ -14,13 +14,6 @@ import { RouteErrorScreen } from '@/app/route-error-screen';
 import { RoutePending } from '@/app/route-pending';
 import { NotFoundScreen } from '@/components/layout/not-found-screen';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  ACCOUNT_SETTINGS_ENABLED,
-  AUDIT_LOG_ENABLED,
-  GUEST_SHARE_LINKS_ENABLED,
-  PASSWORD_RESET_ENABLED,
-  RESOURCES_ENABLED,
-} from '@/config/env';
 import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
@@ -359,7 +352,7 @@ const membersRoute = createRoute({
 });
 
 /**
- * The organisation's audit log (behind `AUDIT_LOG_ENABLED`; only added to the tree when on).
+ * The organisation's audit log.
  *
  * Membership is checked in `beforeLoad` like every `:orgSlug` route; the `audit:read` permission is
  * NOT — the screen says why a non-admin cannot read it, which is more use than a redirect that
@@ -385,7 +378,7 @@ const organizationExportRoute = createRoute({
 });
 
 /**
- * The caller's own audit events (behind `AUDIT_LOG_ENABLED`).
+ * The caller's own audit events.
  *
  * Deliberately NOT org-scoped: the events span every organisation the reader belongs to, and the
  * five authentication ones belong to no organisation at all. Nesting it under `/orgs/$orgSlug`
@@ -439,7 +432,7 @@ const calendarsRoute = createRoute({
   component: CalendarsScreen,
 });
 
-/** Resources library (behind `RESOURCES_ENABLED`; only added to the tree when on). */
+/** Resources library. */
 const resourcesRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/orgs/$orgSlug/resources',
@@ -465,7 +458,7 @@ const projectDetailRoute = createRoute({
 });
 
 /**
- * A single plan — the TSLD canvas, and (behind `VITE_GANTT_VIEW`) the Gantt projection of the
+ * A single plan — the TSLD canvas, and the Gantt projection of the
  * same model. Which view is showing lives in `?view=` so it is deep-linkable and survives a
  * reload (ADR-0059 §3). Validation keeps the raw string and lets `parsePlanViewMode` degrade an
  * unrecognised value to the TSLD — a hand-edited URL must never crash a screen.
@@ -496,8 +489,6 @@ const recentlyDeletedRoute = createRoute({
  * PUBLIC External-Guest read-only plan view (ADR-0051 F-M4). A **sibling of `_authed`** — no session
  * guard, no `beforeLoad`, no app-shell chrome: an outsider with a share token reads exactly one plan.
  * The token rides in the URL fragment (`/share#sp_share_…`), read client-side (never a search param).
- * Registered ONLY behind `VITE_GUEST_SHARE_LINKS` (like the resources route), so with the flag off the
- * route tree is byte-identical — there is no `/share` route at all (the surface stays fully dark).
  */
 /**
  * Code-split the public guest screen: it pulls in the read-only TSLD canvas, which anonymous guests
@@ -572,9 +563,7 @@ const shareGuestRoute = createRoute({
 /**
  * The two public password-reset routes (ADR-0074 M4).
  *
- * Both are registered — and the sign-in link rendered — behind the SAME `PASSWORD_RESET_ENABLED`
- * constant. Splitting them is the stranding failure the flag's docblock describes: a link to a
- * conditionally-registered route compiles in both branches, so typecheck cannot catch it.
+ * Both are registered unconditionally, and the sign-in link is always rendered.
  *
  * Only `/reset-password` parses search, and `validateSearch` is permissive there. Better Auth
  * composes the `?token=` / `?error=` redirect itself, a mail client may mangle the query, and a
@@ -657,12 +646,10 @@ const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   // Unconditional by design — see the route's own docblock. Three unflagged surfaces link here.
   verifyEmailRoute,
-  // Dark surface (ADR-0074 M4): both reset routes join the tree only when the flag is on — and the
-  // sign-in link is gated on the same constant, which is what stops it becoming a link to nothing.
-  ...(PASSWORD_RESET_ENABLED ? [forgotPasswordRoute, resetPasswordRoute] : []),
-  // Dark surface (ADR-0051 F-M4): the public guest `/share` route joins the tree only when the flag is
-  // on, so the app is byte-identical when off (no route registered — a sibling of the shell, never under it).
-  ...(GUEST_SHARE_LINKS_ENABLED ? [shareGuestRoute] : []),
+  forgotPasswordRoute,
+  resetPasswordRoute,
+  // The public guest `/share` route (ADR-0051 F-M4) — a sibling of the shell, never under it.
+  shareGuestRoute,
   // Unconditional and outside the shell — see the route's docblock for both reasons.
   staffConsoleRoute,
   authedRoute.addChildren([
@@ -678,15 +665,10 @@ const routeTree = rootRoute.addChildren([
     recentlyDeletedRoute,
     organizationExportRoute,
     orgNotFoundRoute,
-    // Dark surface (ADR-0039): the resources route joins the tree only when the flag is on, so the
-    // app is byte-identical when off (no route, no nav link, no row action).
-    ...(RESOURCES_ENABLED ? [resourcesRoute] : []),
-    // Dark surface (ADR-0072): both audit routes join the tree only when the flag is on, so the
-    // app is byte-identical when off — no route, no nav entry, no query.
-    ...(AUDIT_LOG_ENABLED ? [auditLogRoute, myActivityRoute] : []),
-    // Dark surface (ADR-0074 M3): the account route joins the tree only when the flag is on, so
-    // the app is byte-identical when off — no route and no menu entry.
-    ...(ACCOUNT_SETTINGS_ENABLED ? [accountRoute] : []),
+    resourcesRoute,
+    auditLogRoute,
+    myActivityRoute,
+    accountRoute,
   ]),
 ]);
 

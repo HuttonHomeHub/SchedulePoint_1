@@ -64,8 +64,8 @@ import {
  * the basis is stated once here rather than implied by the name (#405).
  */
 export const DATES_BASIS_NOTE =
-  '`YYYY-MM-DD`. Holds the PLACED date when the read’s `datesBasis` is `PLACED`, and the ' +
-  'network’s earliest date when it is `NETWORK`, whatever the field’s name says.';
+  '`YYYY-MM-DD`. Holds the PLACED date (the bar as drawn, `datesBasis: PLACED`), whatever the ' +
+  'field’s name says.';
 
 export class RevisionSideDto implements RevisionSide {
   @ApiProperty({ enum: REVISION_SIDE_KINDS, description: 'Which kind of revision this side is.' })
@@ -150,8 +150,8 @@ export class RevisionMovedActivityDto implements RevisionMovedActivity {
     nullable: true,
     type: Number,
     description:
-      '`to − from` in working minutes, exact. **Null** when either side’s float is unknown or has ' +
-      'no minutes; the rows are then counted in `floatNotComparableCount`.',
+      '`to − from` in working minutes, exact. **Null** when either side’s float is unknown (never ' +
+      'calculated).',
   })
   floatMovementMinutes!: number | null;
 
@@ -328,7 +328,7 @@ export class RevisionChangeRowDto implements RevisionChangeRow {
     type: String,
     description:
       'How the OLD side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
-      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+      'placed dates (`datesBasis: PLACED`).',
   })
   from!: string | null;
   @ApiProperty({
@@ -336,7 +336,7 @@ export class RevisionChangeRowDto implements RevisionChangeRow {
     type: String,
     description:
       'How the NEW side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
-      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+      'placed dates (`datesBasis: PLACED`).',
   })
   to!: string | null;
 
@@ -367,9 +367,7 @@ export class RevisionClassAssessmentDto implements RevisionClassAssessment {
     description:
       'Null when assessed; a reason when it could not be. **NEVER read a reason as "no ' +
       'changes"** — `rows` is empty and `total` is zero in both states, and only this field ' +
-      'separates them. `NOT_SNAPSHOTTED` is PERMANENT for the two revisions involved: a baseline ' +
-      'captured before the snapshot extension recorded no logic, constraints, calendar, WBS ' +
-      'parent, lane or progress, and no backfill is possible.',
+      'separates them.',
   })
   notAssessableReason!: RevisionNotAssessableReason | null;
 
@@ -391,24 +389,6 @@ export class RevisionChangeReportDto implements RevisionChangeReport {
   classes!: readonly RevisionClassAssessmentDto[];
 
   @ApiProperty() cap!: number;
-
-  @ApiProperty({
-    nullable: true,
-    enum: REVISION_NOT_ASSESSABLE_REASONS,
-    description:
-      'Whether the comparison read the two sides’ PLACEMENTS — null when both recorded one, a ' +
-      'reason when they did not. Null is exactly `datesBasis: PLACED`: every frozen side recorded ' +
-      'where its bars were placed (and the live side always has its own), so the dates compared, ' +
-      'the delta and the ghosts all use the placed dates. A reason is exactly `datesBasis: ' +
-      'NETWORK`: one side is a baseline captured before placements were frozen, and comparing a ' +
-      'placed span with a network span would report every placement as a move, so the whole pair ' +
-      'falls back to the network’s earliest dates. Such a baseline is `placement_snapshot_level: ' +
-      'NONE` **permanently**: a backfill would state as history a placement that baseline never ' +
-      'saw. Reported whether or not either plan happens to hold a placement — a reason that ' +
-      'appeared only when there was something to compare could not separate "nobody looked" from ' +
-      '"we looked and there was nothing".',
-  })
-  placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
 
 export class RevisionGhostFrozenLaneDto implements RevisionGhostFrozenLane {
@@ -430,8 +410,7 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() name!: string;
   @ApiProperty({
     description:
-      '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost. ' +
-      'The old span is placed when `datesBasis` is `PLACED`, earliest when `NETWORK`.',
+      '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost. The old span is the placed one.',
   })
   fromStart!: string;
   @ApiProperty({ description: DATES_BASIS_NOTE }) fromFinish!: string;
@@ -458,16 +437,16 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
     format: 'uuid',
     nullable: true,
     description:
-      'Removed work only, and only from a baseline that froze swimlanes (`swimlaneSnapshotLevel` ' +
-      '`FULL`): the activity’s own swimlane at capture, null for none. Absent means the baseline ' +
-      'recorded none, and the client counts the ghost rather than drawing it.',
+      'Removed work only, and only on the plan-nested route: the activity’s own swimlane at ' +
+      'capture, null for none. Absent (cross-plan) means no frozen fact, and the client counts the ' +
+      'ghost rather than drawing it.',
   })
   frozenSwimlaneId?: string | null;
 
   @ApiPropertyOptional({
     type: () => [RevisionGhostFrozenLaneDto],
     description:
-      'Removed work from a `FULL` baseline: every lane row the activity held at capture, one per ' +
+      'Removed work (plan-nested route): every lane row the activity held at capture, one per ' +
       'basis, verbatim. The client picks the one for the basis today’s source resolves to.',
   })
   frozenLanes?: readonly RevisionGhostFrozenLaneDto[];
@@ -476,8 +455,7 @@ export class RevisionGhostBarDto implements RevisionGhostBar {
     type: String,
     format: 'uuid',
     description:
-      'Removed work from a `FULL` baseline with `codeSnapshotLevel` `SWIMLANE_TYPE` whose frozen source ' +
-      'was `ACTIVITY_CODE`: the code ' +
+      'Removed work whose baseline froze its swimlanes from `ACTIVITY_CODE`: the code ' +
       'type the swimlanes were then made from. Absent otherwise, and the client counts the ghost ' +
       'rather than drawing it.',
   })
@@ -524,14 +502,11 @@ export class RevisionCompareDto implements RevisionCompare {
   @ApiProperty() planName!: string;
 
   @ApiProperty({
-    enum: ['PLACED', 'NETWORK'],
+    enum: ['PLACED'],
     description:
-      'Which dates every date-bearing figure compares, chosen once per read. `PLACED` when every ' +
-      'baseline side recorded where its bars were placed (placed spans against the live ' +
-      'effective-Visual span — ADR-0025 Amendment 3, ADR-0148); `NETWORK` when any baseline side ' +
-      'predates that record, so earliest dates are compared on both sides. The `Early*` fields ' +
-      'carry whichever dates this states. Criticality and float are network quantities on either ' +
-      'basis.',
+      'Which dates every date-bearing figure compares: `PLACED` — placed spans against the live ' +
+      'effective-Visual span (ADR-0025 Amendment 3, ADR-0148). It is the only value since 1.1.0 ' +
+      '(`NETWORK` was removed, ADR-0215 D6). Criticality and float are network quantities.',
   })
   datesBasis!: VarianceBasis;
 
@@ -548,22 +523,13 @@ export class RevisionCompareDto implements RevisionCompare {
   dayFactorMinutes!: number;
 
   @ApiProperty({
-    description:
-      'Matched activities whose float was calculated on both sides but has no minutes on at ' +
-      'least one (a baseline captured, or a live plan last recalculated, before minutes were ' +
-      'stored). Their float movement is null and the change list does not judge their float ' +
-      '(ADR-0214). 0 when a side was never calculated.',
-  })
-  floatNotComparableCount!: number;
-
-  @ApiProperty({
     enum: REVISION_SETTINGS_VERDICTS,
     description:
       'Whether both sides’ numbers came from the same criticality RULE. **Three-valued, and ' +
       'UNKNOWN must never be rendered as MATCH**: `isCritical` and `totalFloat` are the OUTPUT ' +
       'of a rule, so a comparison across a changed rule reports a large, real-looking set as ' +
       'having entered the critical path while every bar sits where it did. UNKNOWN is what a ' +
-      'side that never recorded its rule reports — permanent on a baseline, self-clearing on the ' +
+      'side whose plan was never calculated reports — permanent on a baseline, self-clearing on the ' +
       'live plan at its next recalculation.',
   })
   settingsVerdict!: RevisionSettingsVerdict;

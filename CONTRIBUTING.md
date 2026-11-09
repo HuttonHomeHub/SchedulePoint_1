@@ -18,6 +18,10 @@ corepack enable          # provides pnpm
 pnpm dev
 ```
 
+A local database volume from before 1.1 must be recreated: 1.1 replaced the migration history with one
+baseline, so `prisma migrate deploy` cannot upgrade it (`docker compose down -v`, then start again).
+`scripts/e2e-local.sh` resets its own `app_test` by itself when it finds one.
+
 ## Workflow
 
 1. **Find or open an issue** describing the change. Search first to avoid

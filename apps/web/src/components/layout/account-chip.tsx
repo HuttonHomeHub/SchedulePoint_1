@@ -3,7 +3,6 @@ import { ChevronDown, Keyboard, ScrollText, UserCog, Wrench } from 'lucide-react
 
 import { useShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
-import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
 import { cn } from '@/lib/utils';
@@ -104,32 +103,28 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             account's — there is nowhere else the account screen could live without inventing a
             settings IA the product does not have. ADR-0074 M3. ("and above the theme group" until
             2026-08-19, naming a group ADR-0097 had removed.) */}
-        {ACCOUNT_SETTINGS_ENABLED ? (
-          <MenuItem
-            onSelect={() => {
-              void navigate({ to: '/account' });
-            }}
-          >
-            <UserCog aria-hidden="true" className="size-4" />
-            Your account
-          </MenuItem>
-        ) : null}
+        <MenuItem
+          onSelect={() => {
+            void navigate({ to: '/account' });
+          }}
+        >
+          <UserCog aria-hidden="true" className="size-4" />
+          Your account
+        </MenuItem>
         {/* `/me/activity` is not org-scoped — it spans every organisation the reader belongs to and
             includes the org-less authentication rows — so the organisation nav is the wrong home
             for it and this menu, which is already the account's, is the right one. Without it the
             screen existed with no route to it but a typed URL, while the audit log's own refusal
             told the reader their activity was "on My activity" — a sentence naming a place the
             product did not take them. ADR-0072. */}
-        {AUDIT_LOG_ENABLED ? (
-          <MenuItem
-            onSelect={() => {
-              void navigate({ to: '/me/activity' });
-            }}
-          >
-            <ScrollText aria-hidden="true" className="size-4" />
-            My activity
-          </MenuItem>
-        ) : null}
+        <MenuItem
+          onSelect={() => {
+            void navigate({ to: '/me/activity' });
+          }}
+        >
+          <ScrollText aria-hidden="true" className="size-4" />
+          My activity
+        </MenuItem>
         {/* **The staff console, for the one person in the installation who has one.**
             Shown from RUNTIME EVIDENCE — a `GET /staff/me` that answered 200 — and never from a
             `VITE_` constant, which is ADR-0074's rule applied to its natural case: staff-ness is a

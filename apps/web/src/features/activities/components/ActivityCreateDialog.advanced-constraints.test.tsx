@@ -9,11 +9,9 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The M4 advanced-constraints editor (ADR-0035 §7–§11) with `VITE_ADVANCED_CONSTRAINTS` forced ON —
- * the surface ships dark by default, so this suite pins the flag to prove the secondary constraint
+ * The M4 advanced-constraints editor (ADR-0035 §7–§11) — this suite proves the secondary constraint
  * (paired), the ALAP toggle and the expected-finish date render, persist, round-trip a seeded value,
- * and enforce the secondary pair rule. (The flag-off behaviour — fields hidden, seeded value still
- * round-trips — is covered by `ActivityCreateDialog.test.tsx`.)
+ * and enforce the secondary pair rule.
  *
  * **Two edit-mode cases moved** when `ActivityCreateDialog` lost its edit path
  * (activity-dialog-unification epic): "seeds the advanced fields from the row and round-trips them
@@ -25,11 +23,6 @@ import { anActivity } from '@/test/activity-fixture';
  * `scheduleAsLateAsPossible`-false-on-update case by its "keeps a false as a false on an update"
  * case).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_CONSTRAINTS_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
 const ACTIVITY: ActivitySummary = anActivity({

@@ -18,8 +18,7 @@ import type { CalendarRepository } from '../calendars/calendar.repository';
  * use {@link schedulingCalendarId}.
  *
  * `null` on both sides means "no calendar", which the engine treats as all-minutes
- * (`buildPlanCalendar`'s fallback). Its factor is the 24-hour constant, so a plan without a
- * calendar behaves exactly as it did before this column existed.
+ * (`buildPlanCalendar`'s fallback). Its factor is the 24-hour constant.
  */
 export function ownCalendarId(
   activityCalendarId: string | null,

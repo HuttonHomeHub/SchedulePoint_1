@@ -9,12 +9,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
 
 // The convergence flag ON. Its sibling suite (`…convergence.flag-off.test.tsx`) pins the other
 // state, which is the rollback contract — both are kept, per ADR-0053 M6.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED: true,
-  RESOURCES_ENABLED: true,
-  NOTES_ENABLED: true,
-}));
 
 const REQUESTS: { url: string; method: string }[] = [];
 
@@ -35,7 +29,6 @@ function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -43,7 +36,6 @@ const PLANNER_WITH_PEN = deriveActivityEditorGating({
 });
 
 const PLANNER_NO_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,
@@ -215,7 +207,6 @@ describe('ActivityEditorDialog — the History tab (ADR-0174)', () => {
 
   it('is open to a reader who can edit nothing, and is never marked read-only', () => {
     const readOnly = deriveActivityEditorGating({
-      penManaged: true,
       holdsPen: false,
       canWrite: false,
       canProgress: false,

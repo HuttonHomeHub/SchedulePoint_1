@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { holdRead } from '../e2e-support/hold-read';
+import { takeThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -50,6 +51,7 @@ async function openNewPlan(page: Page): Promise<void> {
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
+  await takeThePen(page);
 }
 
 async function addActivity(page: Page, name: string): Promise<void> {
@@ -98,6 +100,8 @@ async function useAllDaysCalendar(page: Page, orgSlug: string): Promise<void> {
   // The PATCH bumped the plan's `version` behind React Query's cache, so the next `Edit plan` save
   // would send the stale one and be refused as "changed elsewhere". Reload so the page reads it.
   await page.reload();
+  // A reload releases the pen (the page that held it is gone), so the journey takes it again.
+  await takeThePen(page);
 }
 
 /** An activity's id, optimistic version and drawn start, read straight off the API. */
@@ -253,6 +257,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   // queries have not seen it — reload rather than waiting on a mechanism with nothing to
   // trigger it.
   await page.reload();
+  await takeThePen(page);
   await showActivities(page);
   await expect(page.getByRole('cell', { name: '5 d behind' })).toHaveCount(2); // Start + Finish
 

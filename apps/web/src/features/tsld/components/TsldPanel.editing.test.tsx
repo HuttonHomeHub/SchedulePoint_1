@@ -1,15 +1,7 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-// The M2 editing gate reads a build-time flag; force it on for these tests. Direct manipulation
-// (ADR-0052, now default-ON) turns the bar-end zones into resize handles and retires the legacy
-// edge-drag link gesture this suite exercises, so pin it off — the flag-on handle/resize/lag
-// behaviour has its own suites (TsldPanel.resize.test.tsx, TsldCanvas.hover.test.tsx, paint.test.ts).
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: true, CANVAS_DIRECT_MANIPULATION_ENABLED: false };
-});
 
 // Capture live-region announcements so we can assert on (or the absence of) status messages.
 const announceSpy = vi.fn();
@@ -21,6 +13,7 @@ vi.mock(
 );
 
 import { BAR_HEIGHT, BAR_PAD, DEFAULT_VIEWPORT, LANE_HEIGHT } from '../render/render-model';
+import { useTsldCanvasUiState } from '../toolbar/use-tsld-canvas-ui-state';
 
 import { TsldPanel } from './TsldPanel';
 
@@ -79,7 +72,7 @@ function renderEditable(onCreate = vi.fn().mockResolvedValue({ recalcConflict: n
   return { ...utils, canvas, onCreate };
 }
 
-describe('TsldPanel editing (M2, flag on)', () => {
+describe('TsldPanel editing (M2)', () => {
   it('shows the editing toolbar with a Select / Add activity tool', () => {
     renderEditable();
     expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument();
@@ -449,31 +442,42 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(listbox).toHaveFocus();
   });
 
-  it('draws a dependency by dragging from a bar edge to another bar → onLink (FS by default)', async () => {
-    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
-    const succ = activity({
-      id: 'a2',
-      name: 'Pour',
-      laneIndex: 1,
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
-    });
-    const utils = render(
+  /**
+   * The Link tool, driven by keyboard (ADR-0064 T6): with the tool armed, Enter picks the
+   * predecessor and Enter on a different activity commits the link — the sequence the pointer
+   * performs with two clicks. There is no edge-drag link gesture (ADR-0052 §1).
+   */
+  function LinkHarness(props: Partial<React.ComponentProps<typeof TsldPanel>>): React.ReactElement {
+    const canvasUi = useTsldCanvasUiState();
+    useEffect(() => {
+      canvasUi.setMode('link');
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- arm once on mount
+    }, []);
+    return (
       <TsldPanel
-        activities={[activity(), succ]}
+        activities={[activity(), activity({ id: 'a2', name: 'Pour', laneIndex: 1 })]}
         dependencies={NO_DEPS}
         dataDate="2026-01-01"
         canEdit
+        canvasUi={canvasUi}
         onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
-        onLink={onLink}
-      />,
+        {...props}
+      />
     );
-    const canvas = utils.container.querySelector('canvas');
-    if (!canvas) throw new Error('canvas not rendered');
-    // Grab a1's finish handle (right end ≈ x78) and release over a2's body (lane 1 ≈ y82).
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+  }
+
+  function linkFirstToSecond(): void {
+    const listbox = screen.getByRole('listbox');
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // the cursor lands on a1
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // pick the predecessor
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // move to a2
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // commit
+  }
+
+  it('draws a dependency with the Link tool → onLink (FS by default)', async () => {
+    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
+    render(<LinkHarness onLink={onLink} />);
+    linkFirstToSecond();
     await waitFor(() =>
       expect(onLink).toHaveBeenCalledWith({ predecessorId: 'a1', successorId: 'a2', type: 'FS' }),
     );
@@ -484,13 +488,6 @@ describe('TsldPanel editing (M2, flag on)', () => {
 
   it('short-circuits an illegal (duplicate) link on drop — no POST, banner explains (D5 pre-check)', async () => {
     const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
-    const succ = activity({
-      id: 'a2',
-      name: 'Pour',
-      laneIndex: 1,
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
-    });
     // An a1→a2 FS edge already exists, so drawing it again is a duplicate the client can pre-empt.
     const existing: DependencySummary[] = [
       {
@@ -508,21 +505,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
         successor: { id: 'a2', code: null, name: 'Pour' },
       },
     ];
-    const utils = render(
-      <TsldPanel
-        activities={[activity(), succ]}
-        dependencies={existing}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
-        onLink={onLink}
-      />,
-    );
-    const canvas = utils.container.querySelector('canvas');
-    if (!canvas) throw new Error('canvas not rendered');
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    render(<LinkHarness dependencies={existing} onLink={onLink} />);
+    linkFirstToSecond();
     // The doomed POST is never made; the banner (and live region) explain why locally.
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /already exists between these activities/i,
@@ -530,72 +514,12 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(onLink).not.toHaveBeenCalled();
   });
 
-  it('picks SS when Shift is held during the link drag', async () => {
-    const onLink = vi.fn().mockResolvedValue({ applied: true, conflict: null });
-    const succ = activity({
-      id: 'a2',
-      laneIndex: 1,
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
-    });
-    const utils = render(
-      <TsldPanel
-        activities={[activity(), succ]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
-        onLink={onLink}
-      />,
-    );
-    const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, {
-      clientX: 78,
-      clientY: LANE_MID_0,
-      pointerId: 1,
-      shiftKey: true,
-    });
-    fireEvent.pointerMove(canvas, {
-      clientX: 130,
-      clientY: LANE_MID_1,
-      pointerId: 1,
-      shiftKey: true,
-    });
-    fireEvent.pointerUp(canvas, {
-      clientX: 130,
-      clientY: LANE_MID_1,
-      pointerId: 1,
-      shiftKey: true,
-    });
-    await waitFor(() =>
-      expect(onLink).toHaveBeenCalledWith(expect.objectContaining({ type: 'SS' })),
-    );
-  });
-
   it('on a cycle/duplicate rejection shows the banner and does not announce a link', async () => {
     const onLink = vi
       .fn()
       .mockResolvedValue({ applied: false, conflict: 'That link would create a cycle.' });
-    const succ = activity({
-      id: 'a2',
-      laneIndex: 1,
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
-    });
-    const utils = render(
-      <TsldPanel
-        activities={[activity(), succ]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
-        onLink={onLink}
-      />,
-    );
-    const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    render(<LinkHarness onLink={onLink} />);
+    linkFirstToSecond();
     expect(await screen.findByRole('alert')).toHaveTextContent('create a cycle');
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Linked'));
   });
@@ -619,7 +543,7 @@ describe('TsldPanel editing (M2, flag on)', () => {
     expect(onOpenLogic).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
   });
 
-  it('with no onLink wired, a handle grab downgrades to reposition (no dangling rubber-band)', async () => {
+  it('a bar-end grab with no resize handler is a body grab: it repositions (no dangling rubber-band)', async () => {
     const onReposition = vi.fn().mockResolvedValue({ applied: true, conflict: null });
     const utils = render(
       <TsldPanel
@@ -629,11 +553,11 @@ describe('TsldPanel editing (M2, flag on)', () => {
         canEdit
         onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
         onReposition={onReposition}
-        // deliberately no onLink → canLink is false
+        // deliberately no onResize
       />,
     );
     const canvas = utils.container.querySelector('canvas')!;
-    // Grab a1's finish handle (x≈78) and drag: without a link handler it must reposition, not link.
+    // Grab a1's finish handle (x≈78) and drag: with no edge-drag link gesture it must reposition, not link.
     fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
     fireEvent.pointerMove(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 120, clientY: LANE_MID_0, pointerId: 1 });
@@ -647,27 +571,8 @@ describe('TsldPanel editing (M2, flag on)', () => {
     const onLink = vi
       .fn()
       .mockResolvedValue({ applied: false, conflict: 'That link already exists.' });
-    const succ = activity({
-      id: 'a2',
-      laneIndex: 1,
-      earlyStart: '2026-01-06',
-      earlyFinish: '2026-01-08',
-    });
-    const utils = render(
-      <TsldPanel
-        activities={[activity(), succ]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={vi.fn().mockResolvedValue({ recalcConflict: null })}
-        onLink={onLink}
-        onRefresh={onRefresh}
-      />,
-    );
-    const canvas = utils.container.querySelector('canvas')!;
-    fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE_MID_0, pointerId: 1 });
-    fireEvent.pointerMove(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
-    fireEvent.pointerUp(canvas, { clientX: 130, clientY: LANE_MID_1, pointerId: 1 });
+    render(<LinkHarness onLink={onLink} onRefresh={onRefresh} />);
+    linkFirstToSecond();
     const refresh = await screen.findByRole('button', { name: 'Refresh' });
     fireEvent.click(refresh);
     expect(onRefresh).toHaveBeenCalledTimes(1);

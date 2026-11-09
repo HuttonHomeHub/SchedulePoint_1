@@ -22,7 +22,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **External-Guest per-plan share links** journey (`VITE_GUEST_SHARE_LINKS`, ADR-0051 F-M4).
+ * Flag-ON **External-Guest per-plan share links** journey.
  * Proves the whole share loop runs across TWO real browser contexts — the member's authenticated
  * session and a completely session-less "outsider with a link" context:
  *

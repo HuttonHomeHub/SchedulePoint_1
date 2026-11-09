@@ -2,8 +2,9 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 43
-> models across 84 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 40
+> models built by 1 baseline migration — is the single source of truth for the data model.
+> The history before 1.1 is the git tag `api-v1.0.0` (ADR-0215).
 > See ADR-0008.
 
 ## Philosophy
@@ -54,11 +55,17 @@
   redeploying the previous image; destructive changes are gated and reviewed
   with extra care.
 - Migrations are deterministic and independent of application code state.
-- **A re-derivation marker may be a migration with no statement.** When a release changes
-  what the engine writes into engine-owned columns without changing any stored input, a boot
-  service recalculates the affected plans once, keyed on a migration's
-  `_prisma_migrations.finished_at`. If the release has no data migration to key on, the key
-  is a comment-only file of its own. See "Re-derivation markers" below.
+- **One baseline since 1.1 (ADR-0215).** `migrations/20261109000000_baseline_1_1` builds the whole
+  schema from an empty database: Prisma's generated DDL, then a hand-written section holding every
+  object Prisma cannot express (CHECKs, partial and `NULLS NOT DISTINCT` indexes, EXCLUDE
+  constraints, `btree_gist`, the `audit_events` triggers with `ENABLE ALWAYS`). Each hand-written
+  object names the pre-1.1 migration it came from (`-- was: <name> (git tag api-v1.0.0)`), and that
+  migration at the tag is where its reasoning and any recorded measurement live, so "record the
+  measurement in the migration comment" is met by reference for everything before 1.1. Every later
+  migration must sort after the baseline. It was proven equal to the 84-migration chain by a catalogue
+  comparison (`docs/specs/fresh-start-1-1/schema-design.md`, "M2-T1 equivalence proof").
+- **Re-derivation markers are history.** Before 1.1 a marker migration keyed a one-shot boot
+  recalculation; the baseline removed them all. See "Re-derivation markers (history)" below.
 
 ## Indexes
 
@@ -549,19 +556,15 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   hours-per-day. Engine-owned like `total_float` (recalc `unnest` write only, never from a DTO,
   never touching `version`). `INTEGER`: the engine's value is a signed whole count of minutes
   bounded by its ~200-year horizon (< 2^31). Nullable, no default, no backfill, no index.
-  - **The NULL rule replaces a discriminator, deliberately** — a departure from the
-    `*_snapshot_level` rule recorded in both column comments: minutes NULL with days set means
-    "calculated or captured before this column, not comparable" (never 0); both NULL means "not
-    calculated". The product owner decided on 2026-11-08 that every plan is wiped at the 1.0
-    roll-out and no backwards compatibility is owed, so a discriminator would only describe a
-    population about to disappear.
-  - **One-way CHECKs** (`ck_activities_total_float_minutes_requires_days`,
-    `ck_baseline_activities_total_float_minutes_requires_days`): minutes never exist without days.
-    Not both-or-none: a `NOT VALID` check still applies to `UPDATE`, so it would refuse every edit
-    of a pre-existing row. No sign check — negative float is valid.
-  - **Rollback caveat.** An image older than the writer recalculates `total_float` and leaves the
-    minutes alone, so after a rollback they can be stale, not NULL, until the next recalculation on
-    a current image.
+  - **The pair is one fact** (both-way CHECKs since 1.1, tidy T6, ADR-0215):
+    `ck_activities_total_float_minutes_with_days` and
+    `ck_baseline_activities_total_float_minutes_with_days`,
+    `(total_float_minutes IS NULL) = (total_float IS NULL)`. NULL means "not calculated"; there is
+    no discriminator because there is nothing left to discriminate. Before 1.1 the checks were
+    one-way (`…_requires_days`) so rows calculated before the column (days set, minutes NULL, "not
+    comparable") stayed editable and an older image could recalculate days alone during a
+    rollback; a 1.1 database has neither (history at the git tag `api-v1.0.0`). No sign check —
+    negative float is valid.
 - **`remaining_float` — the room a PLACED bar has left** (one-planning-surface §4.3 /
   US-3; CQ-1 answered "persist"). `total_float` is measured from the pure-network
   **early** finish; once a planner hand-places a bar, the float they can still spend is
@@ -1020,30 +1023,26 @@ activity's own expense keeps `[start, finish)`, so the committed PV curve needs 
 cost **decomposed per component**. Three additions, all additive and all dark until the M3
 service slice reads them:
 
-| Addition                               | Shape                                                       | Meaning                                                                                 |
-| -------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `baselines.cost_snapshot_level`        | `BaselineCostSnapshotLevel`, NOT NULL, `DEFAULT 'ACTIVITY'` | **the discriminator** — `ACTIVITY` = a total only; `ASSIGNMENT` = total + decomposition |
-| `baseline_activities.budgeted_expense` | `BIGINT` nullable, no default                               | the activity-expense component, frozen; `NULL` = not decomposed                         |
-| `baseline_assignments`                 | new table, one row per assignment                           | that assignment's frozen `budgeted_cost` **and** its frozen `lag_minutes`               |
+| Addition                               | Shape                                                         | Meaning                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.cost_snapshot_level`        | `BaselineCostSnapshotLevel`, NOT NULL, no default (since 1.1) | **the discriminator** — `ASSIGNMENT` = total + decomposition; `ACTIVITY` (a total only) was removed by tidy T3 (ADR-0215 D6) |
+| `baseline_activities.budgeted_expense` | `BIGINT` NOT NULL, no default (since 1.1)                     | the activity-expense component, frozen; `0` is a real "no expense"                                                           |
+| `baseline_assignments`                 | new table, one row per assignment                             | that assignment's frozen `budgeted_cost` **and** its frozen `lag_minutes`                                                    |
 
-**The back-fill is impossible, not skipped.** A baseline captured before this froze one number
-per activity, and that number cannot be decomposed after the fact — the assignments it was made
-of may since have been re-costed, re-lagged, added or unassigned, and their resources'
-`cost_per_unit` may have moved. Any back-fill would compute a breakdown out of **today's** rows
-and stamp it as history, which is precisely what ADR-0025's copy-not-reference rule exists to
-prevent. Pre-ADR-0071 baselines therefore keep the **live-budget-shares approximation
-permanently**, and the Earned-Value read carries both paths for good.
+**No back-fill, and none is needed.** A baseline that froze one number per activity cannot be
+decomposed after the fact — the assignments it was made of may since have been re-costed, re-lagged,
+added or unassigned — and any back-fill would stamp **today's** rows as history, which is what
+ADR-0025's copy-not-reference rule exists to prevent. That was the reason `ACTIVITY` (a total only)
+existed: such a baseline kept the live-budget-shares approximation permanently. A 1.1 database holds
+no such baseline, so the label, the approximation and the Earned-Value path that carried them were
+removed (tidy T3, ADR-0215 D6).
 
-Which is why the discriminator exists, and why it is the load-bearing part of the design: a
-baseline with **zero** `baseline_assignments` rows is either **(a)** captured before this
-existed — undecomposable, so PV must fall back to live shares — or **(b)** captured from a plan
-whose activities genuinely carry no resource assignments, in which case the snapshot is
-**complete** and PV is exact with no assignment component at all. Those are opposite
-instructions, and `count(*) = 0` cannot tell them apart. `cost_snapshot_level` can, and it is
-the **only** thing that can. Never infer the level from a row count, and never from
-`budgeted_expense IS NULL` — those are corroborating facts, not the decision. The constant
-`DEFAULT 'ACTIVITY'` is true of every row that already exists **and** is the safe direction: a
-write path not yet taught the new pass reads as approximate, never as exact-but-empty.
+The discriminator stays because a baseline with **zero** `baseline_assignments` rows is also one
+captured from a plan whose activities genuinely carry no resource assignments: the snapshot is
+**complete** and PV is exact with no assignment component at all. `count(*) = 0` cannot say whether
+the decomposition was recorded; `cost_snapshot_level` can. Never infer the level from a row count.
+It has no default (since 1.1), so a write path not taught the capture is a not-null violation, not a
+row that quietly reads as recorded.
 
 The pairing between the discriminator and the child rows **cannot be a CHECK** — they are in
 different tables, and a CHECK sees one row of one table. It is a service invariant held inside
@@ -1100,17 +1099,17 @@ it, moved it to another calendar, re-parented it under a different summary, or r
 against it. Enumerated against the schema, eight of the fourteen change classes a planner is asked
 to defend already fell out of existing columns; the six that did not are the ones argued over.
 
-| Addition                                     | Shape                                               | Meaning                                                                                                    |
-| -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `baselines.revision_snapshot_level`          | `RevisionSnapshotLevel`, NOT NULL, `DEFAULT 'NONE'` | **the discriminator** — `NONE` = output only; `FULL` = output plus the ten columns and the edge rows below |
-| `baseline_activities.lane_index`             | `INTEGER` nullable, no default                      | the TSLD row it occupied                                                                                   |
-| `baseline_activities.parent_id`              | `UUID` nullable, no default, **no FK**              | its WBS summary, in the **source activity id space**; `NULL` = top level                                   |
-| `baseline_activities.calendar_id`            | `UUID` nullable, no default, **no FK**              | its own calendar; `NULL` = inherit the plan's                                                              |
-| `baseline_activities.constraint_type/_date`  | nullable pair, no default                           | the primary constraint; `NULL` = none                                                                      |
-| `baseline_activities.secondary_constraint_*` | nullable pair, no default                           | the secondary constraint; `NULL` = none                                                                    |
-| `baseline_activities.percent_complete`       | `INTEGER` nullable, no default                      | **schedule** %-complete; `0` = not started                                                                 |
-| `baseline_activities.actual_start/_finish`   | `DATE` nullable, no default                         | `NULL` = not started / not finished                                                                        |
-| `baseline_dependencies`                      | new table, one row per dependency active at capture | the frozen edge: `type`, signed `lag_minutes`, `lag_calendar`, `is_driving`                                |
+| Addition                                     | Shape                                                     | Meaning                                                                                                                           |
+| -------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.revision_snapshot_level`          | `RevisionSnapshotLevel`, NOT NULL, no default (since 1.1) | **the discriminator** — `FULL` = output plus the ten columns and the edge rows below; `NONE` (output only) was removed by tidy T3 |
+| `baseline_activities.lane_index`             | `INTEGER` NOT NULL, no default (since 1.1)                | the TSLD row it occupied                                                                                                          |
+| `baseline_activities.parent_id`              | `UUID` nullable, no default, **no FK**                    | its WBS summary, in the **source activity id space**; `NULL` = top level                                                          |
+| `baseline_activities.calendar_id`            | `UUID` nullable, no default, **no FK**                    | its own calendar; `NULL` = inherit the plan's                                                                                     |
+| `baseline_activities.constraint_type/_date`  | nullable pair, no default                                 | the primary constraint; `NULL` = none                                                                                             |
+| `baseline_activities.secondary_constraint_*` | nullable pair, no default                                 | the secondary constraint; `NULL` = none                                                                                           |
+| `baseline_activities.percent_complete`       | `INTEGER` NOT NULL, no default (since 1.1)                | **schedule** %-complete; `0` = not started                                                                                        |
+| `baseline_activities.actual_start/_finish`   | `DATE` nullable, no default                               | `NULL` = not started / not finished                                                                                               |
+| `baseline_dependencies`                      | new table, one row per dependency active at capture       | the frozen edge: `type`, signed `lag_minutes`, `lag_calendar`, `is_driving`                                                       |
 
 **`lane_index` is the trap, and it is worth naming on its own.** The live column is `NOT NULL
 DEFAULT 0`, so mirroring its shape is the reflex — and **lane 0 is a real lane**. A `NOT NULL
@@ -1134,15 +1133,16 @@ zero `baseline_dependencies` rows under `FULL`. That is the `cost_snapshot_level
 one table along, and the two now read the same way on purpose. Never infer the level from a column's
 nullness or a list's length. Like its cost sibling the pairing **cannot be a CHECK** (three tables;
 a CHECK sees one row of one table): it is a service invariant of the single capture transaction,
-which is why the constant `DEFAULT 'NONE'` is also the safe direction — a write path not yet taught
-the new pass reads as _nothing recorded_, never as _recorded and empty_.
+which is why the level has no default (since 1.1) — a write path not yet taught the new pass is a
+not-null violation, never a row that reads as _recorded and empty_.
 
-**The value is entirely prospective, and that was put in front of the decision rather than left in a
-consequences section.** No baseline captured before this can ever be told what its logic,
+**The value was entirely prospective, and that was put in front of the decision rather than left in
+a consequences section.** A baseline captured before this could never be told what its logic,
 constraints, calendars, WBS or progress were: the data was never recorded, a capture cannot be
-re-run, and a backfill could only stamp today's shape as history. Every baseline on every host reads
-`NONE`, which is the literal truth about it, and the read model states that per class rather than
-omitting the class or reporting a silent "no change".
+re-run, and a backfill could only stamp today's shape as history. Such baselines read `NONE`, and the
+read model stated that per class rather than omitting the class or reporting a silent "no change".
+A 1.1 database holds none (ADR-0215 D6), so `NONE`, the `NOT_SNAPSHOTTED` reason and the per-class
+statement of it were removed; the columns stay NOT NULL with no default.
 
 `baseline_dependencies` is a **sibling of `baseline_activities` in every respect**: `source_*` ids
 are plain correlation UUIDs with **no** foreign key, rows are immutable after capture, the full
@@ -1221,12 +1221,12 @@ basis along.
 Three nullable `date` columns on `baseline_activities` close it, and a fourth column on `baselines`
 says whether they were recorded at all:
 
-| Column                               | Frozen from                          | Means                                               |
-| ------------------------------------ | ------------------------------------ | --------------------------------------------------- |
-| `baseline_activities.placed_start`   | `activities.visual_effective_start`  | where the **bar sat** (engine output)               |
-| `baseline_activities.placed_finish`  | `activities.visual_effective_finish` | "                                                   |
-| `baseline_activities.visual_start`   | `activities.visual_start`            | what the **planner placed** (the one planner input) |
-| `baselines.placement_snapshot_level` | the capture path                     | `NONE` \| `FULL` — whether the three were recorded  |
+| Column                               | Frozen from                          | Means                                                                                     |
+| ------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `baseline_activities.placed_start`   | `activities.visual_effective_start`  | where the **bar sat** (engine output)                                                     |
+| `baseline_activities.placed_finish`  | `activities.visual_effective_finish` | "                                                                                         |
+| `baseline_activities.visual_start`   | `activities.visual_start`            | what the **planner placed** (the one planner input)                                       |
+| `baselines.placement_snapshot_level` | the capture path                     | `FULL` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1) — the three were recorded |
 
 **`visual_start` is frozen too, and it is not redundant with the other two.** `placed_*` is an
 engine **output**; `visual_start` is the planner's **input**, and after this epic it is the only one
@@ -1242,7 +1242,7 @@ are placed", and after this epic **neither** is true of a capture: every post-ep
 the whole ADR-0034 matrix depend on it) and the three columns land **beside** it rather than instead
 of it. So the row is not one or the other, and the question a reader has is not "which basis?" but
 "was the placement recorded at all?" — which only a level can answer. It is `revision_snapshot_level`'s
-argument verbatim, and `DEFAULT 'NONE'` is the literal truth of every existing row.
+argument verbatim; the level has no default since 1.1.
 
 **And no per-row test and no row count can substitute** — the same two traps as the two levels above
 it, and here the first one is the _common_ case. All three columns have a legitimate NULL under
@@ -1285,18 +1285,19 @@ in [`docs/specs/swimlanes/schema-design.md`](specs/swimlanes/schema-design.md) �
 **removed** work can be drawn in a swimlane rather than only counted: its position is a membership
 and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 
-| Column / table                      | Frozen from                         | Means                                                     |
-| ----------------------------------- | ----------------------------------- | --------------------------------------------------------- |
-| `baselines.swimlane_snapshot_level` | the capture path                    | `NONE` \| `FULL` — whether swimlanes were recorded at all |
-| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`         |
-| `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                        |
-| `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was      |
-| `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim         |
+| Column / table                      | Frozen from                         | Means                                                                                                                           |
+| ----------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.swimlane_snapshot_level` | the capture path                    | `FULL` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1, and `swimlane_source` NOT NULL by T4) — swimlanes were recorded |
+| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`                                                                               |
+| `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                                                                                              |
+| `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was                                                                            |
+| `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim                                                                               |
 
 - **A level, not `swimlane_source IS NULL`.** The source has its own `NONE`, so a nullable source
   would carry two nothings ("recorded, swimlanes off" and "not recorded"). The fail-closed
-  `ck_baselines_swimlane_snapshot_shape` binds the level to the frozen pair (`NONE` ⇒ both NULL;
-  `FULL` ⇒ `ck_plans_swimlane_source_level` verbatim), so the three are one fact.
+  `ck_baselines_swimlane_snapshot_shape` binds the level to the frozen pair (`FULL` ⇒
+  `ck_plans_swimlane_source_level` verbatim, and `swimlane_source` is NOT NULL since 1.1), so the
+  three are one fact.
 - **Every lane row, not one effective lane.** Which row is effective depends on the source, level
   and tree, i.e. on a rule; a snapshot records facts. Copying the rows also lets a ghost be placed
   under the source the plan has **today**. `lane_updated_at` copies the live `updated_at`, which is
@@ -1308,9 +1309,9 @@ and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 - **The capture locks the plan's live activities in id order** after the plan advisory lock, because
   a positions batch writes lanes under the activity row lock and not the plan lock; without it the
   frozen lanes can be one write newer than the frozen activities. The order matches the plan cascade.
-- **Every existing baseline reads `NONE`, permanently**, and with swimlanes on its removed work is
-  counted, not drawn. A backfill to (`FULL`, `NONE`) would be true of them but buys nothing visible
-  (they have no lane copies) and was rejected (§13.5 of the design).
+- **Every baseline is `FULL`.** A pre-swimlanes baseline read `NONE` permanently (its removed work was
+  counted, not drawn, and a backfill was rejected, §13.5 of the design); a 1.1 database holds none, so
+  the label was removed (tidy T3, ADR-0215 D6).
 - Correlation ids carry **no FK** (ADR-0025). The two CHECKs on the copies are the live table's,
   verbatim. One `NULLS NOT DISTINCT` unique serves the freeze-once guarantee, the `baseline_id` FK
   RESTRICT check and the load; without it the expiry's baselines delete was ~45× slower.
@@ -1330,20 +1331,20 @@ added at most 1 s to one capture of the largest plan, and only the swimlane sour
 Copying every type of a 5,000-activity, 30-type plan (150,000 rows) measured **2.4–2.8 s**, and the
 row write alone was over 1 s whatever the keys and indexes, so the narrower shape shipped:
 
-| Frozen column                                                  | Copied from                                               | Meaning                                                                             |
-| -------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `baselines.swimlane_code_type_id`                              | `plans.swimlane_code_type_id`                             | the code type the swimlanes came from; set iff the frozen source is `ACTIVITY_CODE` |
-| `baselines.code_snapshot_level`                                | the capture path                                          | `NONE` \| `SWIMLANE_TYPE` — whether the three columns below were recorded           |
-| `baseline_activities.code_value_id`                            | the activity's assignment for that type                   | its value at capture; NULL is "no value of that type"                               |
-| `baseline_activities.code_lane_index`, `.code_lane_updated_at` | its `code_swimlane_lanes` row for (that type, that value) | its lane there; both NULL is "never placed there"                                   |
+| Frozen column                                                  | Copied from                                               | Meaning                                                                                                          |
+| -------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `baselines.swimlane_code_type_id`                              | `plans.swimlane_code_type_id`                             | the code type the swimlanes came from; set iff the frozen source is `ACTIVITY_CODE`                              |
+| `baselines.code_snapshot_level`                                | the capture path                                          | `SWIMLANE_TYPE` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1) — the three columns below were recorded |
+| `baseline_activities.code_value_id`                            | the activity's assignment for that type                   | its value at capture; NULL is "no value of that type"                                                            |
+| `baseline_activities.code_lane_index`, `.code_lane_updated_at` | its `code_swimlane_lanes` row for (that type, that value) | its lane there; both NULL is "never placed there"                                                                |
 
 - **`swimlane_code_type_id` is mandatory in this release whatever Q1 said**: the capture copies the
   plan's source verbatim, so without it the first capture of a code-sourced plan would fail
   `ck_baselines_swimlane_snapshot_shape` (whose inner `CASE` is the new plan CHECK verbatim).
 - **A level, as for every other snapshot**: `SWIMLANE_TYPE` is written unconditionally by the capture
   once it is taught codes, and requires `swimlane_snapshot_level = 'FULL'`
-  (`ck_baselines_code_snapshot_shape`), because the frozen source is what names the type. Every
-  existing baseline reads `NONE` permanently.
+  (`ck_baselines_code_snapshot_shape`), because the frozen source is what names the type. `NONE`
+  (baselines before codes) was removed with the fresh start.
 - **Columns, not a table**: one value per activity, so they ride the `baseline_activities` row the
   capture already writes — no extra rows and no extra key checks. Correlation ids with no foreign key
   (ADR-0025). `ck_baseline_activities_code_lane_pair` keeps the frozen lane whole and non-negative.
@@ -1902,353 +1903,42 @@ IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. An
   on create/list/revoke; returning the raw token **once** on create and **never** in the
   list; and the guest guard's uniform-404 resolution + live-plan re-check.
 
-### PlacementMigration: the record of a stripped constraint (one-planning-surface M-A/M-I)
+### Records of one-time data migrations before 1.1 (history)
 
-`placement_migrations` is the durable record of **one drag-created constraint being converted into
-a hand-placement** (one-planning-surface §4.6 / US-2 / US-9; CQ-7 and CQ-8 answered by the product
-owner 2026-09-20). Before that epic a drag in Early mode wrote a binding `SNET`; the collapse strips
-those once, on a four-class test, and where the constraint was **binding**
-(`early_start = constraint_date`) the activity's `visual_start` becomes the constraint's date and
-the constraint is cleared — so **the bar does not move** and the downstream float it was never
-genuinely owed comes back.
+Until 1.0 the schema carried three write-once tables, each the only record of a one-time rewrite of
+customer data that `audit_events` does not cover (activity and link content edits are excluded under
+ADR-0073). The 1.1 baseline (ADR-0215) dropped all three (`docs/specs/fresh-start-1-1/schema-design.md`
+§3 T1, T2): on a database the baseline builds, the rewrite they recorded has nothing to act on, so
+the tables could only ever be empty. Their design, measurements, compensating reverses and tests are
+at git tag `api-v1.0.0` (this file, `docs/DEPLOYMENT.md`, and the three migrations named below).
 
-**It exists because that edit is unauditable by construction.** `PATCH …/activities/:activityId` is
-classified `REASONS.PLAN_CONTENT` (`audit-coverage.structural.spec.ts:264`), permanently excluded
-from `audit_events` under ADR-0073's content-edit rule. **Nothing in the audit log will ever record
-a stripped constraint.** This table is the only record there will be, and its second job —
-diagnostic — is what survived FC-10 clause B's withdrawn bound: it is how anybody finds out the
-strip did something nobody predicted, because a migration with no record turns a surprising result
-into a **mystery instead of a diff**.
+- **`placement_migrations` (`PlacementMigration`)** recorded each drag-created `SNET` constraint that
+  the ADR-0148 collapse (`20260921120000_strip_drag_constraints`) converted into a `visual_start`.
+  Its reader, `GET …/plans/:planId/placement-migration`, and the dock notice it fed were removed with
+  it (one-time exception, ADR-0215 D6), as was the export file `records-placement-migrations`.
+- **`finish_milestone_date_migrations` (`FmDateMigration`)** recorded each finish-milestone placement
+  moved one day earlier by `20260923120000_finish_milestone_end_of_day_placements`. **What still
+  holds:** the engine reads a `FINISH_MILESTONE`'s stored dates as the **end** of the day given
+  (`finishMilestoneDateInstant`, `engine/instants.ts`; ADR-0155, `docs/TECH_DEBT.md` #381).
+- **`cross_plan_lag_migrations` (`CrossPlanLagMigration`)** recorded each cross-plan link whose
+  `lag_minutes` `20260926120000_cross_plan_lag_working_minutes` re-encoded from `days × 1440`.
+  **What still holds:** `cross_plan_dependencies.lag_minutes` means what `dependencies.lag_minutes`
+  means, working minutes on the link's resolved lag calendar (ADR-0068 §4, ADR-0161;
+  `docs/TECH_DEBT.md` #385).
 
-- **Write-once: no `version`, no `created_at`/`updated_at`, no `deleted_at`/`delete_batch_id`.**
-  Soft delete is this schema's default for customer data, so the omission is **said** rather than
-  left to read as an oversight. The `perf_probe_results`/`mail_events` reasoning applies verbatim:
-  the producer writes each row exactly once inside the migration transaction and nothing edits one,
-  so `created_at` would equal `migrated_at` on every row and `version` would guard an edit that
-  cannot happen. Soft delete would be **worse than absent** — a record of an irreversible act that
-  the product can make disappear is not a record.
-- **`plan_id` FK is `ON DELETE CASCADE`**, and the shape is derived rather than preferred.
-  `hierarchy-expiry.structural.spec.ts`'s completeness census reads the **Prisma DMMF** and
-  considers only to-one relations whose `relationOnDelete` is `Restrict`. So `RESTRICT` here would
-  **require** `hierarchy-expiry.runner.ts` to delete this table before `plans` (and the census would
-  fail until it did); **no FK at all** would be structurally **invisible** to that census while
-  ADR-0096's expiry hard-deletes the plan out from under these rows, orphaning org-scoped customer
-  content forever with nothing failing anywhere; and **CASCADE** is the shape the census explicitly
-  excludes _because the database already handles it_ — the row dies with its plan and no
-  hand-maintained list grows (`plan_locks` is the shipped precedent). It is a deliberate departure
-  from `plan_shares`, whose plan FK is `RESTRICT` **because a share participates in the soft-delete
-  cascade and must come back with its plan**. This row has no soft delete to participate in.
-- **`activity_id` has no foreign key** — a plain correlation UUID on ADR-0025's
-  `source_activity_id` leg. The moment this record is most wanted is **after the activity is gone**
-  ("what happened to the bar that used to be here?"), so a reference that either blocked the delete
-  or rotted with it is the wrong shape. It stands on that leg **alone**: the RESTRICT-trap
-  justification is withdrawn — `docs/TECH_DEBT.md` #253 records that ADR-0126 breakage as **test
-  teardown**, since fixed by `clearBaselineTree`, never a production hazard. Carrying the stale
-  reason is what would lead a reader to extend non-FK to `plan_id`.
-- **`organization_id` FK is `RESTRICT`**, denormalised from the plan by the migration inside its own
-  transaction, never client input — the `PlanLock`/`PlanShare`/`Note` pattern, purely as the tenant
-  scope tag for the plan-scoped read. Inert in practice, because plan → org `RESTRICT` fires first.
-- **A denormalised `activity_code` and `activity_name`** — the `audit_events.subject_label` rule:
-  after a hard delete an id names nothing and the report could otherwise only say "N activities".
-  Shapes copied exactly from the live columns (code nullable, name not). A frozen copy, never
-  refreshed.
-- **`prior_visual_start` is expected to be NULL on every row, and a non-NULL value is a finding.**
-  The four-class test **excludes** an activity already carrying a `visual_start`, because
-  `visual_start` is accepted regardless of mode so a row can carry a stale placement **and** a
-  binding `SNET`, and the naive `WHERE` would overwrite the placement. This column records the value
-  the write was about to replace **whatever it was** — so if that exclusion ever fails, the
-  destroyed placement is in a row rather than gone. A reader who finds it always NULL and deletes it
-  as dead weight has removed the evidence for the one failure mode nobody could otherwise
-  reconstruct.
-- **`prior_constraint_type`/`prior_constraint_date` are `NOT NULL`**, structurally rather than
-  optimistically: a row exists **only because a constraint was removed**, so both are known at write
-  time — which is also what makes the pair CHECK its nullable siblings need
-  (`ck_baseline_activities_constraint_pair`) unnecessary here. The pair cannot be half-set.
-- **`migrated_at` takes `DEFAULT CURRENT_TIMESTAMP`, not a service clock.** Inside a transaction
-  that is the **transaction start** time, so every row of one batch shares one instant and the batch
-  is identifiable without a correlation column — measured: 454 rows, one distinct value. It is also
-  why the index carries `id`: `migrated_at` cannot order rows _within_ a batch.
-- **Indexes.** `(plan_id, id)` serves the report read (`GET …/plans/:planId/placement-migration`)
-  and the plan FK on its leftmost prefix. **The FK half is not discretionary**: `ON DELETE CASCADE`
-  has to _find_ the children, so without it every plan hard-delete sequentially scans this table —
-  the `idx_activities_parent_id_fk` shape that cost 3m47s for a single plan, landing inside the
-  ADR-0096 expiry which catches, logs `hierarchy_expiry.permanent_failure` and retries hourly
-  forever. `(organization_id)` backs the org FK and IDOR loads, full rather than partial because
-  every row is in the read set.
-- **No unique constraint anywhere, and the refusal is the point.** `(plan_id, activity_id)` would be
-  true today — a one-time migration strips an activity at most once — and a unique index does not
-  assert a fact, it **refuses a row**. On a table whose second job is telling us the strip did
-  something nobody predicted, refusing the second row turns that surprise into a failed migration
-  with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim.
-- **Outside `RETENTION_TABLES`, with no window** (CQ-8). That set has never contained
-  organisation-scoped customer content, and `retention-boundary.structural.spec.ts:55-57` asserts it
-  **by equality** — so this is a decision written down rather than an omission. The Cascade FK
-  already gives the row the only lifecycle it should have.
-- **The `id` is generated as a UUID v7 in SQL, not `gen_random_uuid()`** (M-I-T1). The column has
-  no database default — Prisma's `@default(uuid(7))` is application-side — and the producer is a
-  raw-SQL migration, so it must supply one. A v4 would make two shipped claims false: the report
-  repository orders on `id` because _"`id` is UUID v7, so it is monotonic by creation"_, and the
-  DTO says **"Oldest first"**. `migrated_at` cannot substitute, because it is the **transaction
-  start** instant and is therefore identical for every row in the batch — which is deliberate (it
-  is how a batch is identified) and is why **the two clocks must not be unified**: the id takes
-  `clock_timestamp()` per row, `migrated_at` takes `now()` once.
-- **The strip bumps `activities.version`, departing from every sibling data migration** (M-I-T1),
-  and the departure is recorded here because a reader comparing migrations will notice it. The
-  convention — no `version`, no `updated_at`, no `updated_by` — comes from ADR-0022 and exists so an
-  **engine** write stays invisible to optimistic locking. The strip writes a **planner-owned input**
-  and wants the opposite: `updateBody` resends `constraintType`/`constraintDate` on every definition
-  save seeded from the row the dialog opened with, and `useBatchPlacements` additionally resends
-  `visualStart`, so without the bump a tab left open across the deploy would silently re-write the
-  stripped constraint — and through the batch route would clear the placement the migration just
-  wrote. `updated_at`/`updated_by` are still left alone, and for a reason of their own: stamping
-  them would put every affected plan at the top of the overview's _Recently changed_ feed
-  (ADR-0098), attributed to `UNKNOWN`, displacing real human work on the day of the deploy.
-- **Non-scheduling.** The CPM engine never reads it.
+The export files `records-finish-milestone-dates` and `records-cross-plan-lags` went with their
+tables; all three were `stability: 'informational'` (`docs/ORGANISATION_EXPORT_FORMAT.md`
+"Versioning").
 
-**Open, and named so it is not mistaken for settled** (see `docs/specs/one-planning-surface/m-a/`):
-the table records the **converted** rows only. The three left classes (inert, unclassified, already
-placed) are counted and reported by M-I from **live** rows, and a plan with **zero** log rows is
-therefore indistinguishable from a plan the migration never examined — the same "a row count cannot
-separate nothing-to-do from nobody-looked" trap the three baseline snapshot levels exist to close.
-That is acceptable while the strip is a **one-time** migration whose answer is global, and if M-I
-needs it per-plan the extension is an `outcome` discriminator with a constant `DEFAULT` that is true
-of every existing row — metadata-only, and honest.
+### Re-derivation markers (history)
 
-### FmDateMigration: the record of finish-milestone placements re-encoded for the end-of-day rule (finish-milestone-date M2-T3)
-
-From the finish-milestone-date release the CPM engine reads a `FINISH_MILESTONE`'s dates as the
-**end** of the day given, where it used to read the start (`docs/TECH_DEBT.md` #381; spec
-`docs/specs/finish-milestone-date/`). The product owner chose to keep every placed diamond where it
-was (Q1 A), so migration `20260923120000_finish_milestone_end_of_day_placements` rewrites every
-stored placement on a finish milestone one calendar day earlier —
-`visual_start := visual_start - 1` — and records each row in `finish_milestone_date_migrations`
-(Prisma model `FmDateMigration`; the short name only keeps the `Organization` and `Plan`
-back-relations inside their blocks' column widths).
-
-- **Why D − 1 keeps the instant.** The old parse of a placement D is
-  `rollForwardToWorking(cal, D 00:00)`. The new parse (`finishMilestoneDateInstant`,
-  `engine/instants.ts`) is `rollForwardToWorking(cal, date 00:00 + 1 day)` for a bare date, which on
-  D − 1 is the old parse of D — on every calendar, before or after the data date. It relies on the
-  engine receiving a bare `YYYY-MM-DD` (the loader passes `formatCalendarDate`,
-  `schedule.service.ts:2625`); the helper reads a longer string as an instant and adds no day. The
-  migration header records a 1,440-case check with the real helpers and its failing control.
-- **Scope.** `activities.visual_start` on `FINISH_MILESTONE` rows, nothing else: not constraint or
-  external dates (Q2 A moves those deliberately), not actuals, not other types, not
-  `baseline_activities`.
-- **Soft-deleted rows are included**, the opposite of the ADR-0148 strip. Every stored
-  finish-milestone placement was written under the old rule and will be read under the new one when
-  restored, so excluding a recycle-bin row would bring it back a working day later than it was
-  deleted.
-- **A new table rather than `placement_migrations`.** That table's rows mean "a constraint was
-  removed" (`prior_constraint_type`/`prior_constraint_date` are `NOT NULL` for that reason) and its
-  one reader is the planner-facing notice about removed constraints. Reusing it would mean relaxing
-  both columns and filtering the reader, or telling planners their milestones lost constraints they
-  never had.
-- **Same write-once shape and FK reasoning as `PlacementMigration`**: no `version`, timestamps or
-  soft delete; `plan_id` `ON DELETE CASCADE` (out of the hierarchy-expiry census, dies with its
-  plan); `organization_id` `RESTRICT`, copied from the plan; `activity_id` a correlation id with no
-  FK; frozen `activity_code`/`activity_name`; UUID v7 ids generated in SQL; `migrated_at` from
-  `CURRENT_TIMESTAMP`; no unique constraint. Outside `RETENTION_TABLES`.
-- **Indexes: `(plan_id)` only.** It backs the `CASCADE` lookup on a plan hard-delete. There is no
-  application read, so no second column, and no `(organization_id)` index: organisations are never
-  hard-deleted and their ids never change, so that `RESTRICT` check never runs.
-- **`version` is bumped, `updated_at`/`updated_by` are not** — the strip's reasoning. A stale tab
-  resends `visualStart` with its version (`useBatchPlacements`); without the bump the old D would be
-  written back and read as the end of D, a day late.
-- **Not re-applied by a manual re-run.** Re-running the file fails at `CREATE TABLE`; re-running
-  only the statement skips recorded activities (`NOT EXISTS`). Placements written after the release
-  are not in the record, so running the statement by hand after the API has served would move them.
-- **Cost, measured** (PostgreSQL 16.13, all prior migrations replayed, 102,000 activities / 18 MB,
-  2,266 placed finish milestones of which 206 soft-deleted): 113–175 ms over five `EXPLAIN ANALYZE`
-  runs, 121 ms as recorded by `prisma migrate deploy`. Sequential scan of `activities`, anti-join
-  against the empty record, hash join to `plans`, primary-key update per row. No index added on
-  `activities` for a once-ever statement. Verified afterwards: exactly those 2,266 rows changed, only
-  in `visual_start` (−1 day) and `version` (+1); every other activity row and every
-  `baseline_activities` row byte-identical; CI drift check clean on the populated and on an empty
-  database.
-- **Engine-owned dates are not rewritten, and stay in the old rule until each plan is
-  recalculated.** `early_*`/`late_*`/`visual_effective_*`/`leveled_*` on finish milestones still hold
-  the dates the old rule projected. The new projection is not "old date minus one" (a milestone after
-  a Friday task on a Mon–Fri calendar goes from Monday to Friday), so SQL cannot compute it, and those
-  columns belong to the recalculation pass. Until a plan is recalculated, a reader that positions a
-  finish milestone from these columns with the new end-of-day rule shows it one day later than the
-  engine will. This applies to every finish milestone, placed or not.
-- **Reverse** (forward-only in production; the compensating step is in the migration header and
-  `docs/DEPLOYMENT.md`): with the API stopped, in one transaction, lock the record table (the guard —
-  it fails if the reverse already ran), `visual_start + 1` on **every** finish-milestone placement
-  present (after the release they are all in the new encoding, including ones written since, so the
-  record is a check rather than the selector), compare against `prior_visual_start`, drop the table
-  and delete the migration's `_prisma_migrations` row so a later roll-forward applies it afresh.
-  Measured: 2,266 rows restored to their exact pre-migration values; a second run fails at the lock.
-- **Non-scheduling.** The CPM engine never reads it.
-
-### CrossPlanLagMigration: the record of cross-plan lags re-encoded to working minutes (cross-plan-day-boundary M2-T2)
-
-**`cross_plan_dependencies.lag_minutes` changes unit in this release.** Until it, the column held
-`lagDays × 1440` whatever the calendar and was read back as `/ 1440`, while the in-plan
-`dependencies.lag_minutes` holds working minutes on the relationship's lag calendar (ADR-0068 §4).
-The schema comment ("working-MINUTE lag") was therefore false for every cross-plan link on a
-calendar shorter than 24 hours. From migration `20260926120000_cross_plan_lag_working_minutes` the
-two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
-`docs/specs/cross-plan-day-boundary/` §4.4, E6). The migration rewrites every stored value as
-`round(lag_minutes::numeric × factor / 1440)` and records each link in `cross_plan_lag_migrations`
-(Prisma model `CrossPlanLagMigration`; back-relation `xplanLagMigrations`, short only to keep the
-`Organization` and `Plan` blocks' column widths).
-
-- **The factor is the lag calendar's `hours_per_day_minutes`**, resolved per link:
-  `TWENTY_FOUR_HOUR` pinned at 1440; `PROJECT_DEFAULT` the **successor activity's** plan's calendar
-  (CQ-2); `PREDECESSOR`/`SUCCESSOR` that endpoint's scheduling calendar (its driving resource's for
-  a live `RESOURCE_DEPENDENT` activity with an active driver, else its own, else **its own** plan's);
-  1440 when no calendar is on the path. Plans are always reached through the endpoint activity's
-  `plan_id`, never through the link's denormalised `*_plan_id` columns. M2-T3's TypeScript function
-  implements the same rule, and the migration test is where the two are compared.
-- **The driving join uses the partial unique index's predicate exactly**
-  (`is_driving AND deleted_at IS NULL`, `uq_resource_assignments_activity_driving`), plus the
-  activity and resource soft-delete guards. A join that fanned out would fail the statement on the
-  record's `UNIQUE` (measured), which on a deployed database is the ADR-0107 restart loop. The
-  calendar join is deliberately unfiltered, matching `findHoursPerDayMinutes`.
-- **`numeric`, never `int4`.** In `int4` the product overflows before the division: from 1,036 days
-  at factor 1440, from 3,107 days at 480, and at the ±3,650-day CHECK bound for any factor ≥ 409
-  (each threshold run in `psql`). The cast back is safe because the factor is at most 1440.
-- **Soft-deleted links are included**, so a restored link does not come back in the old unit.
-- **Every resolved link is recorded, changed or not; only changed links are updated.** The converted
-  set is a strict subset of the recorded set. Two readers need the unchanged rows: M2-T3's
-  differential (a link wrongly resolved to 1440 is left unchanged), and the reverse, which reads
-  "no record" as "created after the release".
-- **`version` is bumped on changed links; `updated_at` is not touched** (the ADR-0148/ADR-0155
-  reasoning). There is no update route for a cross-plan link, so the bump invalidates no edit.
-- **Write-once, like `FmDateMigration`**: no `version`, timestamps pair or soft delete; `plan_id`
-  (the successor activity's plan) `ON DELETE CASCADE` with a plain index for the cascade, which keeps
-  it out of the hierarchy-expiry census; `organization_id` `RESTRICT`, copied from the link, no
-  index; no FK on the link id or the calendar id, so the record outlives both. Outside
-  `RETENTION_TABLES`.
-- **One deliberate divergence from the precedent: `UNIQUE (cross_plan_dependency_id)`.** The
-  precedent has no unique constraint because a refusal would fail the boot. This one cannot refuse
-  inside the migration: the table is created empty by the same file, the statement runs once, and
-  every join is at most one-to-one. It exists because the reverse needs exactly one record per link.
-  It also makes a manual re-run of the statement refuse rather than convert a second time.
-- **Cost, measured** (PostgreSQL 16.13, 100,000 activities, 10,000 links over all four lag calendars):
-  351.7–399.5 ms across five `EXPLAIN ANALYZE` runs, 415 ms as `prisma migrate deploy` recorded it.
-  Only `lag_minutes` and `version` moved (md5 over every other column and every table read); drift
-  clean on the populated database. The full record is
-  `docs/specs/cross-plan-day-boundary/m2/migration-cost.md`.
-- **Engine-owned dates are not rewritten.** A linked plan's stored dates stay as the old rule
-  computed them until it is recalculated (M3's one-time boot re-derivation, keyed on this
-  migration's `_prisma_migrations.finished_at`).
-- **Reverse** (`docs/DEPLOYMENT.md` "Rolling back past the cross-plan lag release"): first a
-  factor-drift finder. Then, with the API stopped and as one transaction: lock the record (a one-shot
-  guard), restore recorded links (bumping `version` again), convert unrecorded links back to
-  `days × 1440` with the migration's `resolved` CTE copied verbatim and `floor(x + 0.5)` to match
-  `Math.round`, run two checks, drop the record and delete the migration's `_prisma_migrations` row.
-  The migration test runs both blocks as written, and asserts that they carry the CTE verbatim.
-  Measured on the populated database: every link's `(id, lag_minutes)` restored exactly, and a
-  second run refused at the lock.
-- **Non-scheduling.** Nothing in the application reads it.
-
-### Re-derivation markers: a migration whose only product is its `_prisma_migrations` row (#421)
-
-Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
-When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
-it as stale (ADR-0155 D9). Five boot services now recalculate such plans once, and each is
-keyed on a migration's `finished_at`:
-
-| Service                           | Marker migration                                        | Has DDL/data |
-| --------------------------------- | ------------------------------------------------------- | ------------ |
-| `FinishMilestoneRederiveService`  | `20260923120000_finish_milestone_end_of_day_placements` | yes          |
-| `CrossPlanRederiveService`        | `20260926120000_cross_plan_lag_working_minutes`         | yes          |
-| `ProgressedVisualRederiveService` | `20260930120000_progressed_predecessor_visual_marker`   | **no**       |
-| `MilestoneRederiveService`        | `20261026120000_milestone_cross_calendar_marker`        | **no**       |
-| `CrossPlanInstantRederiveService` | `20261107120100_cross_plan_instants_marker`             | **no**       |
-
-- **Why `finished_at` is the right key.** `docker-entrypoint.sh` runs `prisma migrate deploy`
-  before `node dist/main.js`, in the image that carries the engine change (ADR-0018). So the row
-  appears at the moment the new engine takes over on that host. Any plan with
-  `schedule_computed_at` earlier than it was written by the old engine. Recalculating stamps
-  `schedule_computed_at`, so each plan leaves the set once it is done. A `NULL`
-  `schedule_computed_at` has no old dates and is never in the set.
-- **Fail-closed.** The services compare against a scalar subquery. With no row, or with a rolled-back
-  row, that subquery is `NULL`, and `x < NULL` admits no plan.
-- **Why a file of its own for #421.** The release changes Pass 2 of the engine and no stored
-  input, so there is no data migration to key on. Every alternative was checked, and the reasons
-  they fail are in the migration's header: an earlier migration's row misses plans recalculated
-  between releases, a constant in code differs per host, and a column on `plans` is DDL on the
-  hottest table to store what one `_prisma_migrations` row already records. The file has no
-  statement. `prisma migrate deploy` applies it and records it (measured on PostgreSQL 16.13).
-- **Do not delete a marker's row as a reset.** The next deploy would re-apply the file with a new
-  `finished_at`, and every matching plan computed before then would be recalculated again. That is
-  harmless but unrequested.
-- **The cross-plan instants marker (ADR-0212 D5, `CrossPlanInstantRederiveService`).** Same shape, no
-  statement. A plan is pending when it is live, has a data date, was computed before the marker and is an
-  endpoint of a live cross-plan link in either direction, so the upstream writes its instants before the
-  downstream reads them. It is keyed on `20261107120100_cross_plan_instants_marker`, which lands in the
-  same release as the cross-plan read. It is a file of comments, so its row is its only product, and it
-  cannot be keyed on the earlier `schedule_instants` migration: between that release and this one the
-  image wrote instants while still reading dates, so a downstream recalculated in that window has current
-  instants and old-read dates that only this row can find. A rollback of the image must delete the row
-  (`docs/DEPLOYMENT.md`).
-- **The #421 pending read, measured** (PostgreSQL 16.13, all `72 migrations` applied, 10
-  organisations, 2,000 plans, 200,000 activities, 580 plans pending: 1 plan in 4 with actuals,
-  plus the Expected-Finish plans, less soft-deleted ones; the count was checked by hand against
-  the fixture's arithmetic). The query is the one the M2 builder brief specifies: the marker as a
-  scalar subquery (the precedents' shape), and an `EXISTS` over `activities` keyed on `plan_id`
-  only. Five `EXPLAIN (ANALYZE, BUFFERS)` runs per state:
-  - **First boot:** 39–61 ms. The plan is a hash semi-join: one sequential scan of `activities`
-    hashed against the pending `plans`.
-  - **Steady state** (nothing pending): 0.51–0.91 ms. The `activities` scan is never executed,
-    because the `plans` scan returns nothing first.
-  - **A few plans left pending** (10, for example plans whose recalculation fails and is retried at
-    each boot): 38–45 ms. The planner cannot see the subquery's value at plan time, so it estimates
-    a third of `plans` and still scans `activities`. With the marker passed in as a parameter it
-    took 7 ms: a nested loop probing `idx_activities_plan_updated_at`, which is partial on
-    `deleted_at IS NULL` and leads with `plan_id`. That saving is not worth a second read and a second shape, because it
-    only arises while a plan keeps failing.
-  - **`a.organization_id = p.organization_id` is left out of the `EXISTS` on purpose.** With it,
-    the parameterised form made a `BitmapAnd` with `activities_organization_id_idx`, which read
-    20,200 index entries per plan and took 13.8 ms rather than 7.1 ms. It protects nothing here.
-    The output's organisation comes from the `plans` row, and `recalculateAsSystem` re-reads the
-    plan scoped to that organisation.
-  - **No index is added.** The read is bounded by one scan of `activities` once per host, and
-    under 1 ms after that. An index on `actual_start`/`actual_finish`/`expected_finish` would serve
-    only this once-per-release read, and every progress write would pay for it for ever.
-- **The #539 marker, and what its pending set adds** (`MilestoneRederiveService`, ADR-0207; designed
-  by the database-architect). Same shape, no statement. A plan is pending when it is live, has a data
-  date, was computed before the marker, and either holds a live zero-span activity or is an endpoint of
-  a live cross-plan link whose other end is one. The activity predicate mirrors the engine's
-  `isZeroSpan` (zero duration, not a level-of-effort or WBS summary) **widened to both milestone
-  types**, because nothing forces a milestone's stored duration to 0 (the column defaults to 480; only
-  the service enforces it). A zero-duration LOE or summary is excluded: those types always store 0, and
-  counting them would make every plan with a summary pending.
-- **The cross-plan arms are not optional.** The derivation stopped back-rolling a zero-duration
-  REMOTE's late date. The remote is a successor in another plan, read through the upstream plan's
-  OUTGOING edge, so a plan with no zero-span activity of its own whose outgoing link reaches a
-  milestone reads a different late bound now. It is upstream of the plan the downstream extension
-  starts from, and ADR-0045 staleness reads upstream `schedule_computed_at` only, so nothing else
-  would flag it. The incoming arm is already covered by the downstream extension when the upstream
-  plan recalculates in the same run; it is included for a run in which that plan failed.
-- **The #539 pending read, measured** by the database-architect on a local scratch database (PostgreSQL 16.15; production runs PostgreSQL 17, so the figures are indicative of shape, not absolute) (`77 migrations` plus a hand-inserted marker, 10
-  organisations, 2,000 plans, 200,000 activities, 100 live cross-plan links from plans with no
-  zero-span activity to start milestones; 5% soft-deleted, 2% never calculated, one plan in seven
-  holding only a zero-duration LOE and summary; 1,710 pending, checked by hand with an independent
-  `count(*)`). `EXPLAIN ANALYZE`, last five of six runs:
-  - **First boot:** 31–46 ms: one parallel scan of `activities` into the `zero_span` CTE, hashed, with
-    the edges hash-joined. No JIT.
-  - **Steady state:** 0.47–0.83 ms. `stale` returns nothing, so `zero_span` never runs.
-  - **A few left pending** (10 failing): 23–31 ms.
-  - **Two shapes were measured and rejected; do not "simplify" into either.** Three `OR EXISTS` arms
-    correlated on `plans` returned the right rows, but the plan cost (225,184) exceeded
-    `jit_above_cost` (100,000), so JIT compiled on every boot: 51 ms of JIT for a steady state that
-    finds nothing. One `EXISTS` with `a.plan_id = p.id OR a.id IN (…edges…)` took 28–31 **seconds** on
-    the first boot, because the correlated OR blocks every index and hash. The CTE form materialises
-    the stale plans first.
-  - **No `organization_id` predicate in the subqueries, and no new index**, for the #421 reasons above.
-- **Restoring a copy.** A copy taken before this release has no marker row; `migrate deploy` applies it
-  with `finished_at` = now and every affected plan in the copy is re-derived. A copy taken after it
-  carries the marker, and plans already done are stamped after it. A plan restored from the recycle bin
-  keeps its old `schedule_computed_at`, so it is pending at the next boot (as with the three above).
-- **Rolling the image back must delete the marker row** (`docs/DEPLOYMENT.md` "Rolling back past the
-  milestone cross-calendar release"; "Rolling back past the progressed-predecessor release" for the #421
-  marker). The previous image ignores an extra applied row, stamps the plans it recalculates after
-  `finished_at`, and a later roll-forward would never re-derive them.
+Until 1.0, a release that changed what the engine writes into engine-owned columns (ADR-0022)
+shipped a migration whose `_prisma_migrations.finished_at` keyed a one-shot boot service that
+recalculated the plans computed before it (ADR-0155 D9). Five such services existed. The 1.1
+baseline (ADR-0215) removed every marker row and the services with them; a fresh database has no
+plan computed by an older engine. The design, the measured pending reads, the restore behaviour and
+the rollback rule are at git tag `api-v1.0.0` (this file and `docs/DEPLOYMENT.md`). A release after
+1.1 that needs the technique again defines it afresh.
 
 ### MailEvent: operational telemetry, and the one ordinary table (staff console M1)
 

@@ -12,6 +12,8 @@
   [M5 decision](../specs/better-auth-1-7-account-issuer/m5-web-decision.md).
 - **Register row:** `docs/TECH_DEBT.md` #176.
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** D2's migration-proof specs went with the migrations they proved, and its sentence that Better Auth always writes `issuer` explicitly is corrected: it never does, so the column's `DEFAULT` stays.
+
 ## Context
 
 Better Auth 1.7 scopes account identity by an `issuer` column: `TEXT NOT NULL`, no default, declared
@@ -53,6 +55,14 @@ So the file is five ordered steps, each carrying its reason. **The ordering is l
 never observes the default. Without it, the stated rollback — redeploy the previous image tag — does
 not work: a pre-1.7 image writes no `issuer`, and against a `NOT NULL` column with no default its
 sign-up fails. **The rollback would cause a worse outage than the fault it rolls back.**
+
+> **Amended 2026-11-09 (ADR-0215, M3-T3).** The first sentence, "1.7 always writes `issuer` explicitly",
+> is wrong for the installed library: `better-auth@1.7.14`'s sign-up `linkAccount` call
+> (`dist/api/routes/sign-up.mjs:235-240`) passes `userId`, `providerId`, `accountId` and `password`
+> only, and `@better-auth/core` `dist/db/schema-diff.mjs:80-82` says it "never writes" the column. So
+> the `DEFAULT 'local:credential'` is what every sign-up `INSERT` relies on, **not only the rollback**,
+> and the 1.1 baseline keeps it (schema-design T7 was withdrawn for that reason). The default's
+> reason is therefore stronger than D2 states; the rest of D2 stands.
 
 The migration design initially had no default and named image-redeploy as the rollback. The two were
 written by different passes and neither noticed the other; the conflict surfaced only when the two

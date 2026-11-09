@@ -35,13 +35,6 @@ import type {
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { useAnnounce } from '@/components/ui/announcer';
 import { usePromotionStage } from '@/components/ui/toolbar/use-promotion-stage';
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  CANVAS_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-  EXPORT_PRINT_ENABLED,
-} from '@/config/env';
 import { printGanttSchedule } from '@/features/gantt';
 import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
@@ -56,7 +49,6 @@ import {
 } from '@/features/interchange';
 import type { PenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
-import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
 import { CodeColumnsUnavailableError } from '@/lib/code-columns';
 import { downloadBlob } from '@/lib/download-blob';
@@ -218,11 +210,9 @@ export function useTsldToolbarContext({
   // Schedule interchange export (ADR-0050 M4d): the caller's `interchange:export` PERMISSION — every
   // member holds it (Viewer upward), so most users see it. Derived in the model (`canExportSchedule`,
   // role-only) like the other capabilities. This context field is the permission ONLY (mirroring the
-  // NOTES `canWriteNotes` pattern); the `VITE_SCHEDULE_INTERCHANGE` flag gates visibility ONCE at the
-  // menu-item render site (`tsld-toolbar-items.tsx`), so the two gates stay orthogonal. UX only: the API
+  // NOTES `canWriteNotes` pattern); the menu-item render site (`tsld-toolbar-items.tsx`) reads it. UX only: the API
   // re-checks the permission + org-scopes the target plan (anti-IDOR).
   const canInterchangeExport = model.canExportSchedule;
-  const recalc = useRecalculateCommand(orgSlug, planId);
   // Diagram-PDF export (M3): true while a PDF is being produced (the first use lazy-loads jsPDF). Drives
   // the PDF menu items' loading state and guards against a double-click / concurrent export. Session-local
   // client state; nothing persists.
@@ -341,7 +331,7 @@ export function useTsldToolbarContext({
     requestSelectActivity,
   } = canvasUi;
 
-  // Canvas nav (VITE_CANVAS_NAV). Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
+  // Canvas nav. Moved to `commands/use-conflict-navigation` (ADR-0078 S11):
   // it is one of the two `canvasControlRef` readers `docs/TECH_DEBT.md` #85 named, and lifting
   // them out of this memo is what let the two `react-hooks/refs` suppressions be deleted.
   const { orderedConflictHits, currentConflict, goToNextConflict } = useConflictNavigation({
@@ -354,7 +344,7 @@ export function useTsldToolbarContext({
     announce,
   });
 
-  // Search that navigates (VITE_CANVAS_SEARCH_NAV) — the same shape as the conflict cycle above,
+  // Search that navigates — the same shape as the conflict cycle above,
   // sharing its walk so the two can never order a plan differently.
   const { searchStatus, goToMatch, matchedIds, escapeSearchField } = useSearchNavigation({
     activities,
@@ -412,18 +402,14 @@ export function useTsldToolbarContext({
     plan.editedSinceCalculated,
   ]);
 
-  // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2): whether the plan has ≥ 1
+  // Over-allocation highlight (Stage E M2): whether the plan has ≥ 1
   // engine-flagged over-allocated activity (ADR-0041 `levelingWindowExceeded || selfOverAllocated`),
   // read straight off the already-loaded activities — no new fetch, no client re-derivation of
   // over-allocation. Gates the `over-allocation` toolbar item's disabled-with-reason (a plan that
   // never levelled, or a levelled plan with none, has zero — mirroring Next-conflict's empty state).
-  // Gated on the flag so flag-off ⇒ `.some(...)` never runs and it degrades to false (zero cost).
-  const hasOverAllocation = useMemo(
-    () => CANVAS_RESOURCE_VIEW_ENABLED && activities.some(isOverAllocated),
-    [activities],
-  );
+  const hasOverAllocation = useMemo(() => activities.some(isOverAllocated), [activities]);
 
-  // Insight lenses (VITE_CANVAS_LENSES): the Baseline-overlay gate reads the SAME variance query the
+  // Insight lenses: the Baseline-overlay gate reads the SAME variance query the
   // activities table + the ghost builder consume (route-composed in the model) — no new fetch. An
   // active baseline exists iff the summary carries a `baselineId`; loading/error feed the toolbar item's
   // disabled-with-reason (ADR-0031 shade-don't-hide), so the toggle never enables without ghosts to draw.
@@ -431,23 +417,18 @@ export function useTsldToolbarContext({
   const varianceLoading = model.variance.isPending;
   const varianceError = model.variance.isError;
 
-  // Export & print (VITE_EXPORT_PRINT): the lens-narrowed "matching" set the conditional CSV item
-  // exports (CQ-3). Gated on the flag so flag-off adds nothing — mirroring how canvas-nav gated
-  // `orderedConflicts`: off ⇒ no lens predicate runs and `filterActive`/`matchingCount` degrade to
-  // false/0 (the flag's "flag-off ⇒ zero cost" + byte-for-byte contract). On ⇒ a bar matches when it
-  // passes BOTH the Stage-A filter (search + attributes) AND, if isolate is active with a selection, the
-  // Stage-B logic chain — the same predicates the canvas dims by (`render/lenses` + `render/logic-path`).
+  // Export & print: the lens-narrowed "matching" set the conditional CSV item exports (CQ-3). A bar
+  // matches when it passes BOTH the Stage-A filter (search + attributes) AND, if isolate is active
+  // with a selection, the Stage-B logic chain — the same predicates the canvas dims by
+  // (`render/lenses` + `render/logic-path`).
   const exportMatch = useMemo<{
     filterActive: boolean;
     matchingCount: number;
     isMatching: ((activity: ActivitySummary) => boolean) | undefined;
   }>(() => {
-    if (!EXPORT_PRINT_ENABLED)
-      return { filterActive: false, matchingCount: 0, isMatching: undefined };
-    const filterOn =
-      CANVAS_LENSES_ENABLED && isFilterActive(lensState.filterQuery, lensState.filterAttrs);
+    const filterOn = isFilterActive(lensState.filterQuery, lensState.filterAttrs);
     const isolateChain =
-      CANVAS_NAV_ENABLED && navState.isolateActive && selectedActivityId !== null
+      navState.isolateActive && selectedActivityId !== null
         ? computeLogicPath(selectedActivityId, dependencies, {
             mode: navState.isolateMode,
           })
@@ -564,7 +545,7 @@ export function useTsldToolbarContext({
       toggleView,
       // Which projection the workspace shows (ADR-0059). Sourced from the URL, so a switch is
       // deep-linkable and Back returns to the diagram. Offered to every role — reading the schedule
-      // as bars is not an edit — and hard-wired to `'tsld'` when `VITE_GANTT_VIEW` is off.
+      // as bars is not an edit.
       planView,
       ganttColumns,
       setPlanView,
@@ -587,8 +568,7 @@ export function useTsldToolbarContext({
       linkType,
       setLinkType,
       // Two-click LOE endpoint-pick tool (Stage D, ADR-0035 §21): a mode toggle mutually exclusive with
-      // add/link (a single EditMode). Reachable only when `VITE_CANVAS_ACTIVITY_TYPES` is on (the
-      // Add-menu item is flag-gated) and pen-gated as part of the authoring cluster.
+      // add/link (a single EditMode). Pen-gated as part of the authoring cluster.
       isLoeSpanning: mode === 'loe',
       toggleLoeSpanMode: withDiagram(() => setMode((m) => (m === 'loe' ? 'select' : 'loe'))),
       // The Add trigger reflects the LOE tool's mid-pick step (B4): once a start driver is picked the
@@ -625,20 +605,13 @@ export function useTsldToolbarContext({
       redoTo: model.undoRedo.redoTo,
       historyBusy: model.undoRedo.busy,
 
-      // Object / plan actions. With canvas-first authoring on, the manual button flushes the shared
-      // auto-recalc coalescer (ADR-0032 M3) so it and the debounced auto-recalcs are one path;
-      // flag-off it's the standalone recalc command, byte-for-byte.
+      // Object / plan actions. The manual button flushes the shared auto-recalc coalescer
+      // (ADR-0032 M3) so it and the debounced auto-recalcs are one path.
       canRecalc,
-      recalcPending: CANVAS_AUTHORING_ENABLED ? model.autoRecalc.isPending : recalc.isPending,
-      recalculate: () =>
-        CANVAS_AUTHORING_ENABLED
-          ? // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
-            // (ux review); errors already surface via the coalescer's onMessage → announce.
-            model.autoRecalc.flush(() => announce('Schedule recalculated.'))
-          : recalc.run({
-              onSuccess: () => announce('Schedule recalculated.'),
-              onError: (message) => announce(message),
-            }),
+      recalcPending: model.autoRecalc.isPending,
+      // A manual flush is an explicit action, so it confirms — unlike the silent auto-recalcs
+      // (ux review); errors already surface via the coalescer's onMessage → announce.
+      recalculate: () => model.autoRecalc.flush(() => announce('Schedule recalculated.')),
       openBaselines: () => openDialog('baselines'),
       openCalendar: () => openDialog('calendar'),
       openEarnedValue: () => openDialog('earned-value'),
@@ -655,17 +628,16 @@ export function useTsldToolbarContext({
       // (spec §4.11). Stage 0 where there is no `matchMedia`, which is every unit test's.
       promotion,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
-      // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
-      // is off (the `share` id resolves to its placeholder, so neither is read).
+      // `openShare` opens the workspace-hosted `ShareLinksDialog`.
       canShare: model.canShare,
       openShare: () => openDialog('share'),
       editPlan,
 
-      // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049) — the ephemeral open flag + toggle from
+      // Resource-view lens (ADR-0049) — the ephemeral open flag + toggle from
       // the model. Inert while the flag is off (the `resource-view` id resolves to its placeholder stub).
       resourceViewOpen: model.resourceViewOpen,
       toggleResourceView: model.toggleResourceView,
-      // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2) — the ephemeral mode flag +
+      // Over-allocation highlight (Stage E M2) — the ephemeral mode flag +
       // toggle from the model, plus the plan's over-allocation presence gate. Inert while the flag is
       // off (the `over-allocation` id resolves to its placeholder stub).
       overAllocationHighlight: model.overAllocationHighlight,
@@ -686,8 +658,7 @@ export function useTsldToolbarContext({
 
       hasDiagram,
 
-      // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) — the lifted selection + shipped seams the five
-      // real items call. Inert while the flag is off (the ids resolve to their placeholder stubs).
+      // Toolbar quick-wins — the lifted selection + shipped seams the five real items call.
       todayIso,
       selectedActivityId,
       selectedActivity,
@@ -702,7 +673,7 @@ export function useTsldToolbarContext({
       ...(penLock ? { penLock } : {}),
       lateOverlayActive,
 
-      // Insight lenses (VITE_CANVAS_LENSES) — read the lens view state + wire its setters; the Baseline
+      // Insight lenses — read the lens view state + wire its setters; the Baseline
       // gate reads the shared variance query. Inert while the flag is off (the ids resolve to stubs).
       filterQuery: lensState.filterQuery,
       setFilterQuery,
@@ -747,7 +718,7 @@ export function useTsldToolbarContext({
       varianceLoading,
       varianceError,
 
-      // Canvas nav (VITE_CANVAS_NAV) — the isolate/next-conflict/snap view state + commands. Inert while
+      // Canvas nav — the isolate/next-conflict/snap view state + commands. Inert while
       // the flag is off (the three ids resolve to their placeholder stubs).
       isolateActive: navState.isolateActive,
       isolateMode: navState.isolateMode,
@@ -767,9 +738,8 @@ export function useTsldToolbarContext({
       matchedIds,
       currentMatchId: canvasUi.lensState.searchCursorId,
 
-      // Export & print (VITE_EXPORT_PRINT) — client deliverables over already-fetched data. Inert while
-      // the flag is off (the `export`/`print` ids resolve to their placeholder stubs, so none of these
-      // are ever called). CSV (M1) / PNG (M2) / PDF (M3) / Print (M4) are all wired.
+      // Export & print — client deliverables over already-fetched data. CSV (M1) / PNG (M2) / PDF (M3) /
+      // Print (M4) are all wired.
       exportScheduleCsv: (scope) => {
         // Resolve the WBS-parent column client-side from the full list (a parent's code/name by id).
         const byId = new Map(activities.map((a) => [a.id, a]));
@@ -866,16 +836,14 @@ export function useTsldToolbarContext({
       // Browser Print (M4, feature-spec §4 CQ-4 — the IMAGE path): reuse the shared off-screen PNG for
       // the WHOLE diagram, mount it into the print-only `PrintSurface` (the print stylesheet hides the
       // app-shell root), open the browser print dialog, then tear the surface down on `afterprint` /
-      // fallback timeout. Gated on the flag (defensive — flag-off the `print` id is its placeholder stub,
-      // so this is never called) and re-entry-guarded via `printing` (the build is async). A build failure
+      // fallback timeout. Re-entry-guarded via `printing` (the build is async). A build failure
       // surfaces a user-safe message and never throws; `printing` always resets in `finally`. The live
       // canvas is never touched — only its viewport is READ by `buildDiagramImage`.
       printDiagram: () => {
-        if (!EXPORT_PRINT_ENABLED || printing) return;
+        if (printing) return;
 
         // The Gantt is DOM, so it prints as a document — no rasterisation (ADR-0059 M4). Branching on
-        // `planView` is enough to keep the flag-off path byte-identical: with `VITE_GANTT_VIEW` off it
-        // is hard-wired to `tsld`.
+        // `planView` picks between the two.
         //
         // **Async only for the code columns' names** (P6 activity codes, M3-T2): the host resolves each
         // shown type's values before anything mounts, so paper never carries "Loading…", "Unavailable"
@@ -979,10 +947,10 @@ export function useTsldToolbarContext({
       exportError,
       dismissExportError: () => setExportError(null),
 
-      // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) — a
+      // Schedule interchange export (interchange:export, ADR-0050 M4d) — a
       // GET that streams the plan as a foreign schedule file (P6 .xer / MS Project .xml) and rides the
       // fidelity report on the `X-Interchange-Report` header. Gated by `canInterchangeExport`; inert when
-      // the flag/permission is off (the menu group doesn't render, so this is never called).
+      // the permission is off (the menu group doesn't render, so this is never called).
       canInterchangeExport,
       interchangeExporting,
       exportNotice,
@@ -1079,7 +1047,6 @@ export function useTsldToolbarContext({
     // External-Guest share links (ADR-0051 F-M4) — re-identify when the share permission flips.
     model.canShare,
     editPlan,
-    recalc,
     model.autoRecalc,
     announce,
     openDialog,
@@ -1088,11 +1055,11 @@ export function useTsldToolbarContext({
     minimapOpen,
     toggleMinimap,
     minimapRoom,
-    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
+    // Resource-view lens — re-identify only when the open flag flips (the
     // toggle is a stable model callback).
     model.resourceViewOpen,
     model.toggleResourceView,
-    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW) — re-identify when the mode flips or the
+    // Over-allocation highlight — re-identify when the mode flips or the
     // plan's over-allocation presence changes (the toggle is a stable model callback).
     model.overAllocationHighlight,
     model.toggleOverAllocation,
@@ -1181,7 +1148,7 @@ export function useTsldToolbarContext({
     pdfExporting,
     printing,
     exportError,
-    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE) — re-identify when the permission flips,
+    // Schedule interchange export — re-identify when the permission flips,
     // the plan/org key changes (the fetch closes over `orgSlug`/`planId`/`plan.name`), the in-flight
     // flag toggles (drives the items' spinner), or the lossy-export notice appears/clears.
     canInterchangeExport,

@@ -1,5 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
@@ -9,13 +9,6 @@ import { PLAN_MODE_SEGMENT_LABELS } from '@/components/layout/workspace/plan-wor
 import { Deck } from '@/components/ui/toolbar/Deck';
 import { Toolbar } from '@/components/ui/toolbar/Toolbar';
 import { splitByRow, type ToolbarItem } from '@/components/ui/toolbar/toolbar-registry';
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_LENSES_ENABLED: true,
-  GANTT_VIEW_ENABLED: true,
-}));
 
 afterEach(cleanup);
 

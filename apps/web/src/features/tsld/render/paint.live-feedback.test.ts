@@ -5,12 +5,12 @@ import type { RenderActivity, Rect, Viewport } from './render-model';
 import { mockCtx } from './test-support/recording-ctx';
 
 /**
- * Canvas **live feedback** painter tests (ADR-0054 §1, `VITE_CANVAS_LIVE_FEEDBACK`) — the ghost
+ * Canvas **live feedback** painter tests (ADR-0054 §1) — the ghost
  * carrying the dragged bar's own detail, and the source bar receding while it does.
  *
  * The parity assertions matter as much as the feature ones: with `ghost`/`gestureSourceId` absent
- * (the flag-off path never writes either) every draw call must be exactly what ADR-0052 produced,
- * which is the epic's rollback contract.
+ * (no bar is being manipulated, so neither is written) every draw call must be exactly what
+ * ADR-0052 produced.
  */
 const PALETTE: TsldPalette = {
   canvasGround: '#14161c',
@@ -36,7 +36,7 @@ const PALETTE: TsldPalette = {
   nonWorking: '#222',
   today: '#f00',
   todayInk: '#fff',
-  // The data-date pair (VITE_CANVAS_DATA_DATE) — distinct fixture values so assertions can pin them.
+  // The data-date pair — distinct fixture values so assertions can pin them.
   dataDate: '#dd1',
   dataDateInk: '#dd2',
   conflict: '#fa0',

@@ -1,14 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **schedule interchange (XER import)**
- * (`VITE_SCHEDULE_INTERCHANGE`, Stage C2 M1, ADR-0050, `docs/specs/schedule-interchange/`) — the
+ * End-to-end configuration for **schedule interchange (XER import)**
+ * (Stage C2 M1, ADR-0050, `docs/specs/schedule-interchange/`) — the
  * project plan-create surface's "Import from file…" review dialog (dry-run → report → confirm →
- * commit), landing on the newly created plan. Serves the web bundle with
- * `VITE_SCHEDULE_INTERCHANGE=true` plus the canvas-first plan-workspace layers the payoff (opening the
+ * commit), landing on the newly created plan. Serves the web bundle with the canvas-first plan-workspace layers the payoff (opening the
  * committed plan) lands on (canvas authoring → toolbar → workspace → editing surface + pen; both on by
  * default already, pinned here explicitly for clarity — mirrors the on-canvas activity types / resource
- * view suites). Like the other flag-on configs the flags bake at `webServer` start, so this is a
+ * view suites). Like the other configs the flags bake at `webServer` start, so this is a
  * separate config on the same ports; it runs as its own CI step after the prior suites tear down.
  * Chromium only (TECH_DEBT #25a).
  */
@@ -60,12 +59,6 @@ export default defineConfig({
             // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
             // times, each citing its neighbours as precedent. The flag now takes its default, which is
             // what every shipped bundle carries (ADR-0088 D1).
-            env: {
-              VITE_SCHEDULE_INTERCHANGE: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-            },
           },
         ],
       }),

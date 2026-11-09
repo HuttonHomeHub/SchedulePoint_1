@@ -23,11 +23,6 @@ import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
  * way (levelling delay, say) would disagree with the picture on a part-day delay, which has a delay
  * and no ghost.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_NAV_ENABLED: false,
-}));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));

@@ -5,6 +5,15 @@
 # Postgres advisory lock, so concurrent replicas won't double-apply.
 set -e
 
+# Refuse a database this version must not touch (ADR-0215), FIRST. One made before the 1.1 baseline, one
+# that cannot be read and one that is not SchedulePoint's exit non-zero here, and `set -e` stops the
+# container before anything below runs. The order is load-bearing: `pre-migrate` sees the baseline as
+# pending on a 1.0 database and would take a copy of it on every restart Docker makes, and nothing prunes
+# those copies. It writes nothing and needs no backups folder. Removing this line is what the `image`
+# job's "Refuse a pre-1.1 database" step goes red on.
+echo "[entrypoint] checking which version made the database..."
+sh /app/backup/schedulepoint-backup.sh preflight
+
 # A copy of the database before it is changed (ADR-0192 D9, spec §4.12). The command does nothing
 # unless the operator mounted a backups folder AND a migration is pending, and then it writes the
 # copy first. A non-zero exit means "no safe copy": `set -e` above turns that into "stop here", so the

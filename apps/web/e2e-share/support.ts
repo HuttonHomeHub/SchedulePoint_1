@@ -4,7 +4,7 @@ import { pickAddKind } from '../e2e-support/toolbar';
 
 /**
  * Journey helpers for the flag-ON **External-Guest per-plan share links** suite
- * (`VITE_GUEST_SHARE_LINKS`, ADR-0051 F-M4). The onboarding + client/project/plan helpers and the
+ *. The onboarding + client/project/plan helpers and the
  * canvas-first "draw an activity" helper mirror `e2e-authoring/support.ts` verbatim (same underlying
  * canvas-authoring flags bake into this suite's `webServer`, so a plan opens on a draw-ready blank
  * canvas) — the onboarding actor becomes the org's Org Admin, which already satisfies `plan:share`

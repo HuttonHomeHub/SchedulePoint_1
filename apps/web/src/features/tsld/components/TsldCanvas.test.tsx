@@ -224,7 +224,7 @@ describe('TsldCanvas', () => {
 
   it('exposes an imperative zoom handle that reports the active preset only on a stop change', () => {
     // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset
-    // scales (VITE_CANVAS_TIME_AXIS, on by default — F3) are WIDTH-derived: at the container's
+    // scales (on by default — F3) are WIDTH-derived: at the container's
     // otherwise-clamped 1px floor every preset's target scale coincides at MIN_PX_PER_DAY, so
     // `presetOf` can no longer tell day from year apart. Give the container a realistic width so
     // this exercises the same math a real layout would.
@@ -484,7 +484,6 @@ describe('TsldCanvas — dropping an open link pick on the shell signal (T7)', (
         onSelect={vi.fn()}
         fitSignal={0}
         mode="link"
-        canLink
         linkPickPredecessorId={ACTIVITIES[0]!.id}
         dropLinkPickSignal={signal}
         onLinkPickStep={onLinkPickStep}
@@ -505,7 +504,6 @@ describe('TsldCanvas — dropping an open link pick on the shell signal (T7)', (
         onSelect={vi.fn()}
         fitSignal={0}
         mode="link"
-        canLink
         linkPickPredecessorId={ACTIVITIES[0]!.id}
         dropLinkPickSignal={1}
         onLinkPickStep={onLinkPickStep}

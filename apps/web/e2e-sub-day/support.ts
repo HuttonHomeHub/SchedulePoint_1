@@ -1,8 +1,8 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **sub-day durations and lags** suite
- * (`VITE_SUB_DAY_DURATIONS`, ADR-0070). The onboarding + hierarchy helpers mirror
+ * Journey helpers for the **sub-day durations and lags** suite
+ * (ADR-0070). The onboarding + hierarchy helpers mirror
  * `e2e-activity-editor/support.ts`; the plan surface is the legacy stacked page (canvas pinned off
  * in the config), so activities are added inline from the table.
  */

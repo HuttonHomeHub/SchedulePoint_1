@@ -17,10 +17,6 @@ import { anActivity } from '@/test/activity-fixture';
  * plain. What jsdom can say is which element carries which class and where it is: whether a finger
  * lands on it, and what it does not overlap, is `e2e-gantt/disclosure.spec.ts`, in a browser.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({

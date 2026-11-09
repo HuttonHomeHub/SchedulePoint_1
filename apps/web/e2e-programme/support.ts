@@ -1,11 +1,9 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **programme scheduling** suite (`VITE_PROGRAMME_SCHEDULING`,
- * inter-project M2, ADR-0045 F8) on the plan workspace. Same hierarchy-driving approach as the
- * other flag-on suites. The canvas and pen stay pinned off in the config — deliberately, this
- * journey is about cross-plan links and not about authoring — so activities are added through the
- * activities panel, which is collapsed by default (see `showActivities`).
+ * Journey helpers for the **programme scheduling** suite (inter-project M2, ADR-0045 F8) on the plan workspace. Same hierarchy-driving approach as the
+ * other flag-on suites. Specs take the pen (`e2e-support/pen.ts`) before they add an activity or a link, which
+ * they do through the activities panel, collapsed by default (see `showActivities`).
  */
 
 export async function onboard(page: Page, stamp: number): Promise<string> {

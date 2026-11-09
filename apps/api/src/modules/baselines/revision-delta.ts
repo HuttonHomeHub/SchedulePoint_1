@@ -51,8 +51,8 @@ export interface RevisionRow {
    */
   readonly totalFloatDays: number | null;
   /**
-   * The same float in unrounded working minutes (#318). NULL beside non-null `totalFloatDays` is a
-   * row calculated or captured before the minutes were stored: **not comparable**, never zero.
+   * The same float in unrounded working minutes (#318). Null exactly when `totalFloatDays` is
+   * (`ck_activities_total_float_minutes_with_days`): never calculated, and never zero.
    */
   readonly totalFloatMinutes: number | null;
   readonly earlyStart: string | null;
@@ -62,21 +62,18 @@ export interface RevisionRow {
    * **The frozen SHAPE** — how the plan was built (ADR-0126). Added by the changes epic like
    * `durationMinutes` above; the delta itself does not read any of them.
    *
-   * Every one is nullable, and a null is NOT a sentinel a reader may interpret. Each has a
-   * legitimate null on a fully-recorded side (no constraint, no parent, the plan's own calendar,
-   * and — because a NONE-level baseline stores NULLs throughout — on a side nobody recorded. The
-   * two are indistinguishable HERE by design: the answer lives one level up, in the classifier's
-   * `bothSnapshotted`, which is derived from `baselines.revision_snapshot_level` and is the only
-   * thing entitled to say whether these fields mean anything. Do not test them for absence.
+   * Where one is nullable, the null is a recorded fact: no constraint, no parent, the plan's own
+   * calendar. `laneIndex` and `percentComplete` are never null — both the live and the frozen
+   * column are NOT NULL.
    */
-  readonly laneIndex: number | null;
+  readonly laneIndex: number;
   readonly parentId: string | null;
   readonly calendarId: string | null;
   readonly constraintType: ConstraintType | null;
   readonly constraintDate: string | null;
   readonly secondaryConstraintType: ConstraintType | null;
   readonly secondaryConstraintDate: string | null;
-  readonly percentComplete: number | null;
+  readonly percentComplete: number;
   readonly actualStart: string | null;
   readonly actualFinish: string | null;
 }
@@ -105,10 +102,10 @@ export interface RevisionMovedRow {
   readonly activityId: string;
   readonly code: string | null;
   readonly name: string;
-  /** Each side's float in whole days on the comparison's frame; null where it has no minutes. */
+  /** Each side's float in whole days on the comparison's frame; null where it was never calculated. */
   readonly fromTotalFloatDays: number | null;
   readonly toTotalFloatDays: number | null;
-  /** `to - from` in working minutes — the exact figure. Null where either side is not comparable. */
+  /** `to - from` in working minutes — the exact figure. Null where either side was never calculated. */
   readonly fromTotalFloatMinutes: number | null;
   readonly toTotalFloatMinutes: number | null;
   readonly floatMovementMinutes: number | null;
@@ -118,8 +115,8 @@ export interface RevisionMovedRow {
    */
   readonly floatMovementDays: number | null;
   /**
-   * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
-   * Named for what they hold, not for one basis (`docs/TECH_DEBT.md` #405).
+   * The placed dates (`datesBasis`). Named for what they hold, not for one basis
+   * (`docs/TECH_DEBT.md` #405).
    */
   readonly fromStart: string | null;
   readonly toStart: string | null;
@@ -178,12 +175,6 @@ export interface RevisionDelta {
   readonly completion: RevisionCompletion;
   /** Reused from ADR-0116 M6 rather than reinvented: neither side has a critical activity. */
   readonly noCriticalPath: boolean;
-  /**
-   * Matched non-summary activities whose float was calculated on both sides but has no minutes on
-   * at least one (ADR-0214). Their movement is null everywhere it is shown, and the panel says how
-   * many there were rather than letting a missing figure read as agreement (ADR-0127's shape).
-   */
-  readonly floatNotComparableCount: number;
 }
 
 /**
@@ -331,7 +322,6 @@ export function computeRevisionDelta(
   const removed: RevisionPresenceRow[] = [];
   let remainedCriticalCount = 0;
   let remainedNonCriticalCount = 0;
-  let floatNotComparableCount = 0;
 
   for (const to of toRows) {
     const from = fromById.get(to.activityId);
@@ -349,14 +339,6 @@ export function computeRevisionDelta(
       else if (!to.isCritical && !from.isCritical) remainedNonCriticalCount += 1;
       else remainedNonCriticalCount += 1;
       continue;
-    }
-    if (
-      compareFloat(
-        { days: from.totalFloatDays, minutes: from.totalFloatMinutes },
-        { days: to.totalFloatDays, minutes: to.totalFloatMinutes },
-      ).kind === 'NOT_COMPARABLE'
-    ) {
-      floatNotComparableCount += 1;
     }
     if (to.isCritical && !from.isCritical) entered.push(moved(from, to, floatFrameMinutes));
     else if (!to.isCritical && from.isCritical) left.push(moved(from, to, floatFrameMinutes));
@@ -416,7 +398,6 @@ export function computeRevisionDelta(
     addedTotal: added.length,
     removedTotal: removed.length,
     completion,
-    floatNotComparableCount,
     noCriticalPath:
       !fromRows.some((r) => r.isCritical && !isSummary(r)) &&
       !toRows.some((r) => r.isCritical && !isSummary(r)),

@@ -3,15 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 /**
  * Canvas status & feedback M1: `EXPORT_LEGEND` is a HAND-AUTHORED mirror of the DOM legend
  * (TECH_DEBT #48(e)), so the data-date entry must land in the same change as the canvas mark or
- * the exported picture silently drifts from the screen's key. With `VITE_CANVAS_DATA_DATE` forced
- * ON, the export's title band draws a `Data date` legend entry as a SOLID vertical (lineWidth 2,
- * no dash) — the same channel the canvas uses. The flag-off absence is pinned by
- * `render-export-image.data-date-off.test.ts` (the rollback contract).
+ * the exported picture silently drifts from the screen's key. The export's title band draws a `Data date` legend entry as a SOLID vertical (lineWidth 2,
+ * no dash) — the same channel the canvas uses.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DATA_DATE_ENABLED: true,
-}));
 
 import type { TsldScene } from '../render/paint';
 import { resolvePrintPalette } from '../render/palette';

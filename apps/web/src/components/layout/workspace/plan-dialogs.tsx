@@ -1,158 +1,27 @@
-import { useRef } from 'react';
-
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
-import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  ENTRY_ROUTES_ENABLED,
-  NOTES_ENABLED,
-  PROGRAMME_SCHEDULING_ENABLED,
-  RESOURCES_ENABLED,
-} from '@/config/env';
-import { isMilestoneType } from '@/features/activities';
-import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
-import { DependencyEditor } from '@/features/dependencies';
-import { ActivityNotesSection } from '@/features/notes';
 import { PlanFormDialog } from '@/features/plans';
-import { ActivityResourcesDialog } from '@/features/resources';
-import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 /**
- * The two modal surfaces a plan needs regardless of layout: the per-activity
- * {@link DependencyEditor} (opened from the canvas or the activities table) and the
- * {@link PlanFormDialog} for editing the plan's metadata. Rendered once by whichever
- * layout is active (legacy stacked page or the canvas-first workspace), driven off the
- * shared {@link PlanWorkspaceModel} so both open/close them identically.
+ * The modal surface a plan needs regardless of layout: the {@link PlanFormDialog} for editing the
+ * plan's metadata. Driven off the shared {@link PlanWorkspaceModel}. The per-activity Logic and
+ * Resources editors are tabs of the activity editor (`activity-crud-dialogs`), so they are not
+ * mounted here — two live copies of those panels would mean two sets of queries on the page.
  */
-/**
- * `exactOptionalPropertyTypes` distinguishes "absent" from "present and `undefined`", and an
- * unresolved factor must be the former — the dialog's own default is what makes the field degrade
- * honestly rather than take a `undefined` it would have to re-check.
- */
-function hoursPerDayProp(hours: number | undefined): { activityHoursPerDay?: number } {
-  return hours === undefined ? {} : { activityHoursPerDay: hours };
-}
-
 export function PlanDialogs({
   model,
   plan,
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
-}): React.ReactElement {
-  // The activity Notes-section heading ref (toolbar quick-wins U4/A4): wired into both the
-  // `ActivityNotesSection` (which makes the heading focusable) and the `DependencyEditor` (which scrolls
-  // + focuses it when the panel is opened via the toolbar **Add note** button, `logicRevealNotes`).
-  const notesHeadingRef = useRef<HTMLHeadingElement>(null);
-  return (
-    <>
-      {/* The Logic dialog. Flag-on it is not mounted at all: **Logic** opens the editor's Logic tab,
-          which renders the same `ActivityLogicPanel` with the same seams (`activity-crud-dialogs`
-          passes them). Mounting both would put two live copies of the panel — and two sets of
-          dependency queries — on the page at once. */}
-      {ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? null : (
-        <DependencyEditor
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          planActivities={model.activities.data ?? []}
-          calendars={model.calendars.data ?? []}
-          {...(model.plan.data?.calendarId === null || model.plan.data?.calendarId === undefined
-            ? {}
-            : { planCalendarId: model.plan.data.calendarId })}
-          canManageLogic={model.canManageLogic}
-          open={model.logicActivity !== undefined}
-          onClose={() => model.setLogicActivity(undefined)}
-          onAdded={model.recordDependencyAdd}
-          onRemoved={model.recordDependencyRemove}
-          onEdited={model.recordDependencyEdit}
-          {...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
-            ? { onNudgeLag: model.nudgeDependencyLag }
-            : {})}
-          notesHeadingRef={notesHeadingRef}
-          revealNotes={model.logicRevealNotes}
-          {...(model.logicActivity ? { activity: model.logicActivity } : {})}
-          {...(PROGRAMME_SCHEDULING_ENABLED && model.logicActivity
-            ? {
-                crossPlanSlot: (
-                  <CrossPlanLinksSection
-                    orgSlug={model.orgSlug}
-                    planId={model.planId}
-                    activity={model.logicActivity}
-                    canManageLogic={model.canManageLogic}
-                    onAdded={model.recordCrossPlanLinkAdd}
-                    onRemoved={model.recordCrossPlanLinkRemove}
-                    enabled={model.logicActivity !== undefined}
-                  />
-                ),
-              }
-            : {})}
-          {...(NOTES_ENABLED && model.logicActivity
-            ? {
-                notesSlot: (
-                  <ActivityNotesSection
-                    orgSlug={model.orgSlug}
-                    planId={model.planId}
-                    activity={model.logicActivity}
-                    canWrite={model.canWriteNotes}
-                    enabled={model.logicActivity !== undefined}
-                    headingRef={notesHeadingRef}
-                  />
-                ),
-              }
-            : {})}
-        />
-      )}
-
-      {model.canWrite ? (
-        <PlanFormDialog
-          orgSlug={model.orgSlug}
-          projectId={plan.projectId}
-          open={model.editing}
-          onClose={() => model.setEditing(false)}
-          plan={plan}
-        />
-      ) : null}
-
-      {/* The per-activity resource-assignment editor the canvas selection bar's **Resources** action
-          opens (entry-route win 2, `VITE_ENTRY_ROUTES`), driven off `model.resourcesActivity`. Mounted
-          and toggled like the crud dialogs; its target re-derives from the live query, so it closes when
-          the row is deleted. Reuses the same dialog + prop shape as the activities-table row action; the
-          dialog enforces its own write gating via `canWrite`. Flag-off ⇒ not rendered (byte-for-byte). */}
-      {ENTRY_ROUTES_ENABLED && RESOURCES_ENABLED && !ACTIVITY_EDITOR_CONVERGENCE_ENABLED ? (
-        <ActivityResourcesDialog
-          orgSlug={model.orgSlug}
-          planId={model.planId}
-          open={model.resourcesActivity !== undefined}
-          onClose={() => model.setResourcesActivity(undefined)}
-          canWrite={model.canEditSchedule}
-          onAssignmentEdited={model.recordAssignmentEdit}
-          {...(model.resourcesActivity
-            ? {
-                activityId: model.resourcesActivity.id,
-                activityName: model.resourcesActivity.name,
-                activityDurationType: model.resourcesActivity.durationType,
-                isMilestone: isMilestoneType(model.resourcesActivity.type),
-                // The join lag's day↔minute factor (ADR-0071 M4), resolved exactly as
-                // `ActivitiesTable` resolves it for the same dialog. Omitting it here left this
-                // entry route permanently in the degraded state — the field rendered, looked
-                // right, and refused `2d` on a plan whose calendar was perfectly resolvable, which
-                // is the "renders, looks right, quietly refuses" failure the epic exists to stop.
-                ...hoursPerDayProp(
-                  effectiveHoursPerDay(model.calendars.data ?? [], {
-                    // The assignment join lag is framed on the activity's OWN calendar even when the activity
-                    // schedules on its driving resource's (ADR-0071 §1 / ADR-0035 §34). #86 did not change that.
-                    frame: { kind: 'own' },
-                    activityCalendarId: model.resourcesActivity.calendarId ?? '',
-                    ...(model.plan.data?.calendarId == null
-                      ? {}
-                      : { planCalendarId: model.plan.data.calendarId }),
-                  }),
-                ),
-              }
-            : {})}
-        />
-      ) : null}
-    </>
-  );
+}): React.ReactElement | null {
+  return model.canWrite ? (
+    <PlanFormDialog
+      orgSlug={model.orgSlug}
+      projectId={plan.projectId}
+      open={model.editing}
+      onClose={() => model.setEditing(false)}
+      plan={plan}
+    />
+  ) : null;
 }

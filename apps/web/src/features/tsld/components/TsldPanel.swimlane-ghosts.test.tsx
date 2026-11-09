@@ -8,10 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * bar's DISPLAY lane, so a ghost sits in the same row as the bar it describes. The canvas is replaced
  * by a recorder, because the subject is what the panel hands it; the derivation under it is real.
  */
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_LENSES_ENABLED: true };
-});
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 
 const seen = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }));
@@ -241,7 +237,9 @@ describe('TsldPanel — the comparison overlay words each count for its own caus
     ).toEqual([['b', 1]]);
     // The canvas is a recorder here, so the summary is read off the panel's own sr-only text.
     const text = container.textContent ?? '';
-    expect(text).toContain('2 not shown because the old revision did not record where they were');
+    expect(text).toContain(
+      '2 not shown because the two plans lay their activities out independently',
+    );
     expect(text).toContain('1 not shown because their swimlane or row can no longer be matched');
   });
 });

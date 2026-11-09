@@ -28,7 +28,6 @@ const TASK = {
 } as ActivitySummary;
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

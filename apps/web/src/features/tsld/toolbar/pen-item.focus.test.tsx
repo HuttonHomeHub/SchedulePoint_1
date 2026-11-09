@@ -39,17 +39,11 @@ import type { PlanPen } from '@/features/plan-lock/api/use-plan-edit-lock';
  * Asserted on the ELEMENT, never on "focus is not on `<body>`": the weaker assertion passes against
  * the defect, because the foot cluster is a perfectly good element to be focused on.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  PLAN_EDIT_LOCK_ENABLED: true,
-}));
-
 const ME = { id: 'u-me', name: 'Mo Hale' };
 const JANE = { id: 'u-jane', name: 'Jane Okonkwo' };
 
 function pen(over: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: undefined,
     holdsPen: false,
     isPending: false,

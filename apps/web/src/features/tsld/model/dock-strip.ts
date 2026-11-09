@@ -8,7 +8,6 @@ export type DockStrip =
   | 'layout-resolved'
   | 'empty'
   | 'arrange-offer'
-  | 'placement-migration'
   | 'touch-hint'
   | null;
 
@@ -22,14 +21,6 @@ export interface DockStripInput {
   readonly showDiagram: boolean;
   readonly activityCount: number;
   readonly mode: string;
-  /** `CANVAS_AUTHORING_FLOW_ENABLED` — passed in so the rule stays testable in both states. */
-  readonly authoringFlowEnabled: boolean;
-  /**
-   * Whether the one-time placement migration (one-planning-surface M-I) has something to say about
-   * this plan AND this reader has not already dismissed it. One boolean rather than a count and a
-   * flag, because this function decides precedence and has no business knowing how many.
-   */
-  readonly hasPlacementMigrationNotice: boolean;
   /**
    * Whether a finger has pressed this workspace and the reader has not dismissed the one-time
    * touch tip (`docs/specs/long-press-hint/`). Precedence only; the sentence is the host's.
@@ -37,8 +28,8 @@ export interface DockStripInput {
   readonly hasTouchGestureHint: boolean;
   /**
    * Whether a press of `Arrange` would move anything on this plan AND this reader could take the
-   * offer AND they have not dismissed it. One boolean for the same reason as its neighbour above:
-   * this function decides precedence, not content, and has no business knowing how many rows.
+   * offer AND they have not dismissed it. One boolean, because this function decides precedence, not content,
+   * and has no business knowing how many rows.
    *
    * **The "could take it" half is a precondition, not a shading.** The strip's entire content is an
    * offer to press a pen-gated command, so without the pen there is nothing left of it — ADR-0082's
@@ -116,58 +107,28 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
    * conflict (a write FAILED, which outranks one that succeeded) and to an armed tool (the planner
    * has already moved on to their next act, and the step stays one `Ctrl+Z` away). Everything below
    * it waits: the empty notice cannot co-occur (a plan with an overlap has activities), and the
-   * Arrange offer and the migration notice are both standing facts that do not expire.
+   * Arrange offer is a standing fact that does not expire.
    */
   if (input.hasLayoutResolvedNotice) return 'layout-resolved';
-  if (
-    input.authoringFlowEnabled &&
-    input.showDiagram &&
-    input.activityCount === 0 &&
-    input.mode === 'select'
-  ) {
+  if (input.showDiagram && input.activityCount === 0 && input.mode === 'select') {
     return 'empty';
   }
   /**
-   * **Above the migration notice and below the empty notice**, and both halves are decided rather
-   * than inherited.
+   * **Below the empty notice, above the touch tip.** A plan with no activities has nothing to
+   * arrange, so `hasArrangeOffer` is false there by construction and the two cannot genuinely
+   * compete. The ordering is written down anyway, because "they cannot co-occur" is a property of
+   * today's inputs and this function's job is to make the precedence a decision rather than an
+   * emergent one (its own docblock's rule).
    *
-   * Above `placement-migration`: that notice is about something that happened on a deploy, once,
-   * and this is a live fact about the plan under the reader's cursor — the same test that put the
-   * migration last in the first place.
-   *
-   * Below `empty`: a plan with no activities has nothing to arrange, so `hasArrangeOffer` is false
-   * there by construction and the two cannot genuinely compete. The ordering is written down
-   * anyway, because "they cannot co-occur" is a property of today's inputs and this function's job
-   * is to make the precedence a decision rather than an emergent one (its own docblock's rule).
-   *
-   * Like the migration notice it is **dismissible and does not return** within a session, which is
-   * what makes losing to a conflict or an armed tool affordable: it waits.
+   * It is a live fact about the plan under the reader's cursor, **dismissible and does not return**
+   * within a session, which is what makes losing to a conflict or an armed tool affordable: it waits.
    */
   if (input.hasArrangeOffer) return 'arrange-offer';
-  /**
-   * **Last, and the ordering is the decision.** Every strip above this one is about what the
-   * planner is doing *now* — a write that just failed, a tool they just armed, a plan with nothing
-   * in it yet. This one is about something that happened before they arrived, on a deploy, once.
-   * A historical notice that outranked a live one would cover the sentence explaining the thing
-   * under the reader's cursor.
-   *
-   * It also sits below `empty` rather than above it, on the same test: a migrated plan has
-   * activities by construction (the migration converted constraints that were on them), so the two
-   * can only co-occur if every activity was deleted afterwards — and for that reader "this plan is
-   * empty" is the more useful sentence.
-   *
-   * It is **dismissible and does not return**, which is why it can afford to lose every contest:
-   * it waits, and a planner who never arms a tool sees it at once. That property stopped being
-   * unique to it when `arrange-offer` landed above it, which is why the two are separated by the
-   * live/historical test above and not by which of them can be dismissed.
-   */
-  if (input.hasPlacementMigrationNotice) return 'placement-migration';
   /**
    * **The lowest rung of all.** It teaches a gesture and says nothing about the plan, so it can
    * wait behind every strip above at no cost to the reader: it is dismissible, never returns once
    * dismissed, and a finger busy with a conflict, a tool or an empty plan will see it as soon as
-   * the dock is quiet. Behind the migration notice because that one reports something
-   * irreversible and this one is a tip.
+   * the dock is quiet.
    */
   if (input.hasTouchGestureHint) return 'touch-hint';
   return null;

@@ -2,7 +2,7 @@ import type { DependencySummary } from '@repo/types';
 
 /**
  * The pure, renderer-agnostic **logic-path** computation behind the TSLD *Isolate logic path* command
- * (spec `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`). Like `lenses.ts` / `render-model.ts` it has
+ * (spec `docs/specs/canvas-nav/`). Like `lenses.ts` / `render-model.ts` it has
  * **no** canvas, DOM, React or data-fetching dependency and does **no** schedule arithmetic — it only
  * walks the client's already-shipped dependency edge list (`usePlanDependencies`), so it is exhaustively
  * unit-tested. `TsldPanel` memoises the chain into an `isolateDimmedIds` complement fed to the shipped

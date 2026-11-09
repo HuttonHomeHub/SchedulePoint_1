@@ -26,8 +26,7 @@ function tokenFromHash(): string {
 const UNUSABLE_LINK_CODES: ReadonlySet<string> = new Set(['INVALID_TOKEN', 'USER_NOT_FOUND']);
 
 /**
- * Set a new password from an emailed link (`/reset-password`, ADR-0074 M4) — behind
- * `VITE_PASSWORD_RESET`.
+ * Set a new password from an emailed link (`/reset-password`, ADR-0074 M4).
  *
  * **The emailed link is `/reset-password#token=…`, and the token is captured once into component
  * state and stripped from the URL immediately.** A fragment is never sent to any server, so no

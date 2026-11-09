@@ -123,7 +123,10 @@ const claimed = {
   // in the same run that proved the point. One optional lower-case word between the number and the
   // noun covers that and the next one.
   'Prisma models': [phrase('(\\d+) Prisma models'), phrase('(\\d+) (?:[a-z]+ )?models')],
-  migrations: [phrase('(\\d+) (?:[a-z]+ )?migrations')],
+  // `migrations?`: since the 1.1 baseline (ADR-0215) the figure is 1, and "1 migrations" is not a
+  // sentence anybody should be made to write. The singular also matches "the M5 data migration", so
+  // the number must start a word (`\b`).
+  migrations: [phrase('\\b(\\d+) (?:[a-z]+ )?migrations?')],
   'web source files': [phrase('(\\d+) web source files')],
   'Playwright suites': [phrase('(\\d+) Playwright suites')],
   ADRs: [phrase('(\\d+) ADRs')],

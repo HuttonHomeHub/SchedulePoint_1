@@ -22,6 +22,8 @@
   ADR-0172 (a soft-delete filter is stated at the query), ADR-0190 (what 1.0 promises) and ADR-0192 (the backup is the
   disaster-recovery copy; this is the owner's).
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** the 1.0 export file and the columns D6 lists for old data are removed; the format changes with 1.1.0.
+
 ## Context
 
 An organisation cannot take its data out of SchedulePoint in one piece. There are per-plan exports (P6 XER, MS Project

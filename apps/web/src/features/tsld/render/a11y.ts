@@ -170,10 +170,10 @@ export function describeActivity(
    * basis, which is the defect this fix removes.
    *
    * **And there is deliberately NO fallback to `earlyStart` when the placed date is null**, though
-   * that state is reachable: `visual_effective_start` was added with no backfill, so a plan whose
-   * last recalculation predates 2026-07-14 has early dates and no placed ones. Such a bar is **not
-   * drawn at all** — `to-render-model.ts` passes `barDatesFor`'s answer straight through and
-   * `activityRect` returns null for a null start — so "not yet scheduled" is what the picture
+   * that state is reachable: a plan that was never calculated has neither. (Before 1.1 a placed date
+   * could also be null where an early one was not, on rows written before the placed columns existed;
+   * a 1.1 database has no such rows, ADR-0215.) Such a bar is **not drawn at all** —
+   * `to-render-model.ts` passes `barDatesFor`'s answer straight through and `activityRect` returns null for a null start — so "not yet scheduled" is what the picture
    * shows. A fallback here would describe a bar that is not there, which is the disagreement this
    * whole fix removes, pointing the other way.
    *
@@ -375,23 +375,6 @@ export function compareOverlaySummary(
    */
   links: { readonly drawn: number; readonly undrawable: number } = { drawn: 0, undrawable: 0 },
   /**
-   * **Why a changed bar could not be drawn, and it is NOT the same reason in both comparisons.**
-   *
-   * Same-plan (`'NOT_RECORDED'`, the default) the old side genuinely did not record a position: a
-   * baseline captured before the snapshot extension has no lane, and no backfill is possible.
-   *
-   * Cross-plan (`'NOT_COMPARABLE'`) the other plan **did** record it — the position simply does not
-   * mean anything here, because two independently imported plans derive their lane order
-   * separately (one may be packed by time and the other still in source order), so the index names
-   * a different row in each. Reusing the same-plan sentence would state something FALSE about the
-   * other plan's data, and it is the likeliest defect in this milestone precisely because the
-   * mechanism is correct and reusing it feels like reuse.
-   *
-   * One function with one discriminator, never two call sites: two sentences maintained apart is
-   * how one comes to be edited and the other not.
-   */
-  undrawableReason: 'NOT_RECORDED' | 'NOT_COMPARABLE' = 'NOT_RECORDED',
-  /**
    * **Changed bars the SWIMLANES could not place**, counted apart from `undrawable` (ADR-0127). That
    * one is a fact about what the old revision recorded; this one is a fact about today's swimlanes,
    * and the three causes (a live activity with no bar today, a frozen lane outside the swimlane's
@@ -446,14 +429,15 @@ export function compareOverlaySummary(
   if (removed.length > 0) parts.push(`${String(removed.length)} removed`);
   if (undrawable > 0) {
     // Never "0 undrawable" and never silence: the reader is told the picture is incomplete AND why,
-    // because both reasons are facts about the data rather than faults they can act on. The
-    // cross-plan wording points at the change list, which carries the same work in words — where a
-    // lane index is irrelevant and nothing is lost.
+    // because the reason is a fact about the data rather than a fault they can act on. Only a
+    // cross-plan comparison reaches it: the other plan recorded a lane, but two independently
+    // imported plans derive their lane order separately (one may be packed by time and the other
+    // still in source order), so removed work has no matching row in this plan. The wording points
+    // at the change list, which carries the same work in words — where a lane index is irrelevant
+    // and nothing is lost. A plan's own revisions never reach it: every baseline records its lanes.
     parts.push(
-      undrawableReason === 'NOT_COMPARABLE'
-        ? `${String(undrawable)} not shown because the two plans lay their activities out ` +
-            `independently, so there is no matching row to draw them on — they are listed under Changes`
-        : `${String(undrawable)} not shown because the old revision did not record where they were`,
+      `${String(undrawable)} not shown because the two plans lay their activities out ` +
+        `independently, so there is no matching row to draw them on — they are listed under Changes`,
     );
   }
   if (links.drawn > 0) {
@@ -478,20 +462,24 @@ export function compareOverlaySummary(
     links.drawn > 0 || links.undrawable > 0
       ? ' Logic changes are listed in words under Changes.'
       : '';
-  const unrecorded = undrawable + links.undrawable;
-  const undrawn = unrecorded + unplaced;
+  const unanchored = undrawable + links.undrawable;
+  const undrawn = unanchored + unplaced;
   return {
     heading: `Comparison overlay: ${parts.join(', ')}.${logic}`,
     removed,
     undrawn,
     // One sentence for both kinds, because the reader's question is "is this picture complete?"
-    // and the answer is no for the same reason in both cases: the old side did not record enough
-    // to place the thing. Never rendered as "0 not shown" — see the caller's guard.
+    // and the answer is no for the same reason in both cases: there is nothing on this diagram to
+    // draw the thing against — a link whose activity has left the plan, or removed work in the
+    // other plan. It must not say the earlier revision failed to record something: it recorded
+    // everything, and what is missing is a place to draw it. Never rendered as "0 not shown" —
+    // see the caller's guard.
     undrawnLabel: [
-      unrecorded === 0
+      unanchored === 0
         ? ''
-        : `${String(unrecorded)} ${unrecorded === 1 ? 'change is' : 'changes are'} not shown — the ` +
-          `earlier revision did not record where they were.`,
+        : `${String(unanchored)} ${unanchored === 1 ? 'change is' : 'changes are'} not shown — ` +
+          `there is nothing on this diagram to draw ${unanchored === 1 ? 'it' : 'them'} ` +
+          `against. ${unanchored === 1 ? 'It is' : 'They are'} listed under Changes.`,
       unplaced === 0
         ? ''
         : `${String(unplaced)} ${unplaced === 1 ? 'change is' : 'changes are'} not shown — ` +

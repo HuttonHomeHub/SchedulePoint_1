@@ -3,16 +3,14 @@ import { useState } from 'react';
 import { ImportScheduleDialog } from './ImportScheduleDialog';
 
 import { Button } from '@/components/ui/button';
-import { SCHEDULE_INTERCHANGE_ENABLED } from '@/config/env';
 
 /**
  * The **Import from file…** entry on a project's plan-create surface (ADR-0050, Stage C2 M1). It opens
  * the {@link ImportScheduleDialog} for the current project (the target is pre-filled from context).
  *
  * Self-gating so the parent surface can render it unconditionally and stay simple: it renders **nothing**
- * unless BOTH the `VITE_SCHEDULE_INTERCHANGE` flag is on AND the caller holds `interchange:import`
- * (`canImport`, Planner + Org Admin) — so flag-off or an unauthorised role leaves the plan-create
- * surface byte-for-byte today's (no entry). The API still enforces the permission + org scope; this gate
+ * unless the caller holds `interchange:import` (`canImport`, Planner + Org Admin) — so an
+ * unauthorised role sees the plan-create surface with no entry. The API still enforces the permission + org scope; this gate
  * is UX only.
  */
 export function ImportScheduleButton({
@@ -32,7 +30,7 @@ export function ImportScheduleButton({
 }): React.ReactElement | null {
   const [open, setOpen] = useState(false);
 
-  if (!SCHEDULE_INTERCHANGE_ENABLED || !canImport) return null;
+  if (!canImport) return null;
 
   return (
     <>

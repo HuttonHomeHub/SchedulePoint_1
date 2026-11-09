@@ -232,6 +232,6 @@ export interface ActivityHistoryEntry {
 export interface ActivityHistoryPageMeta {
   nextCursor: string | null;
   hasMore: boolean;
-  /** The later of the activity's creation and the day the feature started recording. */
+  /** The activity's creation instant: history is recorded from the start (ADR-0215). */
   recordingSince: string;
 }

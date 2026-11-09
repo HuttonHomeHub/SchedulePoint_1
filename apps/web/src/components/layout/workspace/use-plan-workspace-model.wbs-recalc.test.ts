@@ -13,18 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * to a `parentId`-only change, mirroring the existing duration/constraint coverage.
  */
 
-const h = vi.hoisted(() => ({ authoring: true, notify: vi.fn() }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    get CANVAS_AUTHORING_ENABLED() {
-      return h.authoring;
-    },
-    NOTES_ENABLED: false,
-  };
-});
+const h = vi.hoisted(() => ({ notify: vi.fn() }));
 
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -48,7 +37,7 @@ vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
 vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'u1' } } }) }));
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ penManaged: false, holdsPen: true, onWriteRejected: vi.fn() }),
+  usePlanPen: () => ({ holdsPen: true, onWriteRejected: vi.fn() }),
 }));
 vi.mock('@/features/plans', () => ({
   usePlan: () => query({ id: 'p1', projectId: 'proj1', plannedStart: '2026-01-01' }),
@@ -128,7 +117,6 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h.authoring = true;
   h2.activities = [TASK, SUMMARY];
 });
 
@@ -179,13 +167,5 @@ describe('WBS reparent participates in auto-recalc (structureSignature)', () => 
     h2.activities = [{ ...TASK, parentId: null }];
     rerender();
     expect(h.notify).toHaveBeenCalledTimes(1);
-  });
-
-  it('is inert when authoring is off (auto-recalc gated at the hook level)', () => {
-    h.authoring = false;
-    const { rerender } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    h2.activities = [{ ...TASK, parentId: 'wbs1' }, SUMMARY];
-    rerender();
-    expect(h.notify).not.toHaveBeenCalled();
   });
 });

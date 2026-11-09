@@ -108,9 +108,7 @@ export function scheduleStateAttr(state: ScheduleState): string {
  * 3. `current` requires the summary to be present AND to show a computed finish.
  * 4. Everything else is `stale`, with the refusal derived from the same three terms
  *    `usePlanAutoRecalc`'s own `enabled` predicate uses, in the same order, so the sentence cannot
- *    disagree with the behaviour. `CANVAS_AUTHORING` is that predicate's fourth term and is
- *    deliberately absent: it is on in every published image (ADR-0088 D1), so a sentence about it
- *    could never reach a reader.
+ *    disagree with the behaviour.
  */
 export function deriveScheduleState({
   isRecalculating,

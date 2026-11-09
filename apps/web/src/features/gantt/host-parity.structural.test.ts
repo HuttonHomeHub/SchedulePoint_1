@@ -167,28 +167,16 @@ describe('the two plan hosts receive the same facts about the plan', () => {
     }
   });
   /**
-   * **The placement-migration notice reaches BOTH views** (one-planning-surface M-I).
+   * **The one-time touch tip reaches BOTH views** (`docs/specs/long-press-hint/`).
    *
    * It needs its own case because it is not a prop on either host: the canvas receives it as
-   * `placementMigrationNotice` and decides its dock precedence, while the Gantt renders it as a
-   * child of its own `CanvasDock`. So `propsPassedTo` above cannot see the Gantt half, and a
-   * `required` row would fail against correct code.
-   *
-   * **It exists because M-I shipped it to the canvas alone in its first version** — verbatim the
-   * one-host-and-not-its-neighbour shape this register records at ADR-0080 (`bulk` wired into one
-   * layout and not the one its flag selects), ADR-0064 §7 and ADR-0067 M4. A planner who works in
-   * the Gantt would never have been told that the constraints on their plan had been converted, and
-   * the Gantt is where the consequence is most visible, because its Float column shows the number
-   * that moves. Found by reading this file's subject rather than by anything failing.
-   *
-   * It is a fact about the PLAN — a one-time migration happened to it — so it belongs here by this
-   * file's own discriminator, even though its two mounts take different shapes.
+   * `touchGestureHint` and decides its dock precedence, while the Gantt renders it as a child of its
+   * own `CanvasDock`. So `propsPassedTo` above cannot see the Gantt half, and a `required` row would
+   * fail against correct code. A strip passed to the canvas alone is the one-host-and-not-its-
+   * neighbour shape this register records at ADR-0080, ADR-0064 §7 and ADR-0067 M4.
    */
-  it('renders the placement-migration notice in both the canvas and the Gantt', () => {
-    expect(
-      tsld.has('placementMigrationNotice'),
-      'TsldPanel no longer receives the placement-migration notice',
-    ).toBe(true);
+  it('renders the touch tip in both the canvas and the Gantt', () => {
+    expect(tsld.has('touchGestureHint'), 'TsldPanel no longer receives the touch tip').toBe(true);
 
     // The Gantt half: the node is rendered, as a child, inside the Gantt branch of the `surface`
     // ternary. Located by the branch rather than by counting occurrences, so moving the canvas
@@ -198,17 +186,13 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       source.indexOf('    ) : ('),
     );
     expect(ganttBranch.length, 'could not locate the Gantt branch').toBeGreaterThan(200);
-    // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1),
-    // or ahead of the touch tip, which is last of all.
+    // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1);
+    // it is last of all.
     expect(
-      /\bplacementMigrationNotice\s+\?\?\s+touchGestureHint\}/.test(ganttBranch),
-      'the Gantt view no longer renders the touch tip',
-    ).toBe(true);
-    expect(
-      /\{(?:historyResultNotice\?\.node\s+\?\?\s+)?(?:layoutResolvedNotice\s+\?\?\s+)?placementMigrationNotice(?:\s+\?\?\s+touchGestureHint)?\}/.test(
+      /\{(?:historyResultNotice\?\.node\s+\?\?\s+)?(?:layoutResolvedNotice\s+\?\?\s+)?touchGestureHint\}/.test(
         ganttBranch,
       ),
-      'the Gantt view no longer renders the placement-migration notice',
+      'the Gantt view no longer renders the touch tip',
     ).toBe(true);
   });
 

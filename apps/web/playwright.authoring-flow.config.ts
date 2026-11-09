@@ -60,21 +60,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // The epic's additive surface under test (ADR-0064 M1). The suite's diagnostic half
-              // deliberately does not depend on it — the defect fixes ship unflagged — but the
-              // journey half does, and a flag-on suite is the only place the flag is exercised in
-              // the state users will actually see.
-              VITE_CANVAS_AUTHORING_FLOW: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

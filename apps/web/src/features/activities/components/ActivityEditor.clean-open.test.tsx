@@ -24,20 +24,8 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  */
 
 // The journeys run with the flags on, and the Progress tab's panels exist only behind these.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_STEPS_ENABLED: true,
-  EARNED_VALUE_ENABLED: true,
-  COST_ACCRUAL_ENABLED: true,
-  ACTIVITY_CALENDAR_ENABLED: true,
-  SUB_DAY_DURATIONS_ENABLED: true,
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-  INTER_PROJECT_DATES_ENABLED: true,
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

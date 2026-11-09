@@ -12,15 +12,6 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 import { menuItemLabel } from '@/test/menu-item-label';
 
-// This is the BASE table suite — the M4/M5 flag surfaces (Conflict badge, per-activity calendar
-// column) are on by default, so pin both off here; their flag-on behaviour lives in the dedicated
-// `ActivitiesTable.constraint-violation.test.tsx` / `.calendar.test.tsx` suites.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_CONSTRAINTS_ENABLED: false,
-  ACTIVITY_CALENDAR_ENABLED: false,
-}));
-
 const ACTIVITY: ActivitySummary = anActivity({
   planId: 'pl1',
   status: 'IN_PROGRESS',
@@ -41,7 +32,6 @@ const ACTIVITY: ActivitySummary = anActivity({
  */
 const gatingFor = (canWrite: boolean, canProgress = false) =>
   deriveActivityEditorGating({
-    penManaged: true,
     holdsPen: canWrite,
     canWrite: true,
     canProgress,
@@ -229,13 +219,6 @@ describe('ActivitiesTable', () => {
     expect(cells[5]).toHaveTextContent('—');
   });
 
-  it('does not show the Conflict badge while VITE_ADVANCED_CONSTRAINTS is off, even when violated', () => {
-    // The engine flag is set on the row, but the badge is gated on the (default-off) feature flag —
-    // so the flag-off surface never surfaces it. (Flag-on behaviour is in the dedicated suite.)
-    renderTable(false, [{ ...ACTIVITY, constraintViolated: true }]);
-    expect(screen.queryByText('Conflict')).not.toBeInTheDocument();
-  });
-
   it('shows computed dates, float and a Critical badge for a calculated activity', () => {
     renderTable(false, [
       {
@@ -401,31 +384,19 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByText('−2 d float')).toBeInTheDocument();
   });
 
-  it('explains a float variance it could not compute, in the header and from the cell (#318)', async () => {
+  it('shows a float variance that was never calculated as a dash, with the header unannotated (#318)', async () => {
     const { container } = renderWithVariance(
       varianceRow({
-        currentTotalFloat: 5,
-        baselineTotalFloat: 2,
+        currentTotalFloat: null,
+        baselineTotalFloat: null,
         floatVarianceDays: null,
         floatVarianceMinutes: null,
       }),
     );
     expect((await axe(container)).violations).toEqual([]);
-    // The description is VISIBLE text in the header, never a tooltip.
-    const header = screen.getByRole('columnheader', { name: /Total float variance/ });
-    const note = within(header).getByText('1 not comparable');
-    // Visual only: the header's accessible name stays "Total float variance".
-    expect(note).toHaveAttribute('aria-hidden', 'true');
+    // Days and minutes are one fact since 1.1, so there is no "calculated but not comparable" state
+    // to explain: the header is its plain name and no cell carries a reason.
     expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
-    // The "—" cell carries its own reason in text a screen reader reads, so the dash is explained
-    // rather than read as "no change".
-    const reason = screen.getByText('could not be compared');
-    expect(reason).toHaveClass('sr-only');
-    expect(reason.parentElement?.textContent).toBe('— could not be compared');
-  });
-
-  it('adds no header note when every float variance could be computed', () => {
-    renderWithVariance(varianceRow());
     expect(screen.queryByText(/not comparable|could not be compared/)).not.toBeInTheDocument();
   });
 

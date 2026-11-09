@@ -179,8 +179,8 @@ describe('the organisation export census', () => {
     expect(censusProblems(models, EXPORT_FILES, EXCLUDED_MODELS, text)).toEqual([]);
   });
 
-  it('accounts for every model exactly once: 35 exported + 8 excluded', () => {
-    expect(EXPORT_FILES).toHaveLength(35);
+  it('accounts for every model exactly once: 32 exported + 8 excluded', () => {
+    expect(EXPORT_FILES).toHaveLength(32);
     expect(EXCLUDED_MODELS).toHaveLength(8);
     expect(EXPORT_FILES.length + EXCLUDED_MODELS.length).toBe(models.length);
   });
@@ -220,12 +220,8 @@ describe('the organisation export census', () => {
     ]);
   });
 
-  it('marks exactly the three migration records as informational', () => {
-    expect(EXPORT_FILES.filter((f) => f.stability === 'informational').map((f) => f.file)).toEqual([
-      'records-placement-migrations',
-      'records-finish-milestone-dates',
-      'records-cross-plan-lags',
-    ]);
+  it('has no migration-record files since 3.0', () => {
+    expect(EXPORT_FILES.filter((f) => f.file.startsWith('records-'))).toEqual([]);
   });
 
   describe('negative controls: it can fail', () => {

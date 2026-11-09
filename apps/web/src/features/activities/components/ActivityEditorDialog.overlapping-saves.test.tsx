@@ -29,13 +29,7 @@ vi.mock('@/components/ui/announcer', () => ({
   AnnouncerProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
-
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

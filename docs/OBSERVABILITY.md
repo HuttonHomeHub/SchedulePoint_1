@@ -41,6 +41,11 @@ reconstruct afterwards:
 - **`database.default_password`** (`docs/TECH_DEBT.md` #514): one WARN at start-up while the password in
   `DATABASE_URL` is the built-in `app`. Never carries the password or the URL; silent under
   `NODE_ENV=test`; non-fatal everywhere.
+- **Boot database check** (ADR-0215): the entrypoint's `schedulepoint-backup preflight` writes one JSON line
+  and nothing else to the database. `boot.database_accepted` carries `state` (`fresh` or `current`);
+  `boot.database_refused` (the API exits 1) carries `reason` (`pre_1_1_lineage`, `mixed_lineage`,
+  `failed_migration`, `cannot_read` or `unknown_database`), a redacted `detail` and the guide's path. Neither
+  carries the connection string. The five `*_rederive` boot events of 1.0 no longer exist.
 - **CPM recalculation** (ADR-0022): every recalculation emits
   `'schedule recalculated'` with `{ organizationId, planId, userId,
 activityCount, criticalCount, constraintViolationCount, constraintWarningCount,

@@ -5,22 +5,12 @@ import type { ReactNode } from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Entry-route win 1 (`VITE_ENTRY_ROUTES`): with the flag on, the plan Notes thread moves out of the
- * always-inline block and into a right-side drawer the toolbar **Comments** button opens
+ * Entry-route win 1: the plan Notes thread lives in a right-side drawer the toolbar **Comments** button opens
  * (`revealComments` → `model.setNotesOpen(true)`). Exercised through the REAL production path
  * (`PlanDetailScreen` → `ToolbarPlanWorkspace` → `useTsldToolbarContext` → the Comments registry item)
  * with the canvas/heavy children stubbed, so a broken ref/prop anywhere along the chain fails here.
  */
 const h = vi.hoisted(() => ({ role: 'PLANNER' }));
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: false,
-  NOTES_ENABLED: true,
-  TOOLBAR_QUICK_WINS_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: true,
-  PROGRAMME_SCHEDULING_ENABLED: false,
-}));
 
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
@@ -39,7 +29,7 @@ vi.mock('@/hooks/use-org-role', async (importOriginal) => ({
 vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'user-me' } } }) }));
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ penManaged: false }),
+  usePlanPen: () => ({ holdsPen: true }),
   CompactPenStatus: () => null,
 }));
 
@@ -131,7 +121,6 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
-  DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 vi.mock('@/features/tsld', () => ({
   TsldPanel: () => <div data-testid="tsld-panel" />,
@@ -150,6 +139,8 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // Mounted by `PlanChromeDialogs`; its own suite covers it, and these suites never open it.
   ApplyLevellingDialog: () => null,
+  // Mounts its own summary/recalc queries; it has its own suite (ProgrammeScheduleSection.test.tsx).
+  ProgrammeScheduleSection: () => null,
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({
     notify: vi.fn(),
@@ -194,8 +185,8 @@ beforeEach(() => {
 });
 
 describe('ToolbarPlanWorkspace — docked plan-notes panel (entry-route win 1, flag on)', () => {
-  // The dock is a named landmark ("Plan notes panel"). It renders `PlanNotesSection chromeless`, so it
-  // does NOT carry the section's own "Notes" heading — the panel's single header is the SheetHeader.
+  // The dock is a named landmark ("Plan notes panel"). It renders `PlanNotesSection`, which carries no
+  // heading of its own — the panel's single header is the SheetHeader.
   const dock = () => screen.queryByRole('region', { name: 'Plan notes panel' });
 
   it('does not render the docked notes panel until Comments is clicked', () => {

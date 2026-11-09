@@ -4,6 +4,8 @@
 - **Date:** 2026-07-10
 - **Deciders:** James Ewbank (with Claude Code)
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** amendments 2 to 7 are moot on a fresh database: no baseline from before 1.1.0 exists, so "NONE is permanent" has nothing to apply to.
+
 ## Context
 
 SchedulePoint computes a live CPM schedule (M6, ADR-0022/0023) over real working-day

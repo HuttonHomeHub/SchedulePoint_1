@@ -1,8 +1,7 @@
 /**
  * The plan edit-lock ("pen") feature public surface (ADR-0028, edit-lock M2). The
  * route consumes `usePlanPen` once and mounts `EditLockBanner`; everything else is
- * internal. Gated by `VITE_PLAN_EDIT_LOCK` — inert (no polling/heartbeat/banner)
- * when off.
+ * internal.
  */
 export { EditLockBanner } from './components/EditLockBanner';
 export { CompactPenStatus, HANDOFF_ACTIONS, PenStatusCluster } from './components/CompactPenStatus';

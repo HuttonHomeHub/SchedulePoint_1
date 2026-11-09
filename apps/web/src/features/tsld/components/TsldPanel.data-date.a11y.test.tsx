@@ -12,10 +12,6 @@ import { describe, expect, it, vi } from 'vitest';
  * fact. Flag forced ON (default-off until M6); the flag-off parity is
  * `TsldPanel.data-date-off.test.tsx`.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DATA_DATE_ENABLED: true,
-}));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
- * The pinned WBS band on the canvas (ADR-0063), with `VITE_WBS_IMPROVEMENTS` forced on.
+ * The pinned WBS band on the canvas (ADR-0063).
  *
  * Three things are pinned here, and only the first is about the band itself:
  *
@@ -15,10 +15,6 @@ import { describe, expect, it, vi } from 'vitest';
  *    by the band's height together; a layer left on the bare `RULER_HEIGHT` would sit a band's
  *    height out of place, which looks like nothing at all until a pointer lands in the wrong row.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
 

@@ -19,7 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * **Why the database and not the migration file.** Reading the SQL would prove the constraint was
  * once written this way and would pass happily after a later migration relaxed it — the assertion
  * would describe history rather than the running system. This asks the database what it currently
- * enforces (`revision-compare-imported-index.e2e-spec.ts`, `account-issuer-migration.e2e-spec.ts`).
+ * enforces (`revision-compare-imported-index.e2e-spec.ts`).
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 

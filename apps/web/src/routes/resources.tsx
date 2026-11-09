@@ -35,9 +35,7 @@ function parseResourceFilters(raw: Record<string, unknown>): ResourceLibraryFilt
 }
 
 /**
- * The organisation's resource library screen (`/orgs/$orgSlug/resources`), behind
- * `RESOURCES_ENABLED`. The route is only registered when the flag is on (see
- * `app/router.tsx`), so this screen never renders while the surface is dark. The org
+ * The organisation's resource library screen (`/orgs/$orgSlug/resources`). The org
  * calendars are composed here and threaded into the table's create/edit dialog so the
  * resources feature stays dependency-free of the calendars feature.
  */

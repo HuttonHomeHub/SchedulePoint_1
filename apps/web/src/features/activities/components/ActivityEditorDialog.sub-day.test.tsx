@@ -9,9 +9,8 @@ import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
 import { ActivityEditorDialog } from './ActivityEditorDialog';
 
 /**
- * The duration field with `VITE_SUB_DAY_DURATIONS` on (ADR-0070), ported from the deleted edit path
- * of `ActivityCreateDialog.sub-day.test.tsx` (activity-dialog-unification epic). Both flags default
- * on already; pinned explicitly for the same reason the deleted suite did — this file is ABOUT them.
+ * The duration field's sub-day grammar (ADR-0070), ported from the deleted edit path
+ * of `ActivityCreateDialog.sub-day.test.tsx` (activity-dialog-unification epic).
  *
  * The claims that matter here are the ones a pure parser test cannot make: that the field reads the
  * factor from the calendar the SCHEDULING scope currently selects (not the saved one — a planner can
@@ -19,12 +18,6 @@ import { ActivityEditorDialog } from './ActivityEditorDialog';
  * `durationDays`, and that the field degrades honestly to whole working days when the calendar list
  * has not resolved. `apps/web/e2e-sub-day/` depends on this same behaviour end to end.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-  ACTIVITY_CALENDAR_ENABLED: true,
-}));
-
 const PATCHES: { url: string; body: Record<string, unknown> }[] = [];
 
 function calendar(id: string, name: string, hoursPerDay: number): CalendarSummary {
@@ -72,7 +65,6 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

@@ -26,8 +26,7 @@ import {
 } from './support';
 
 /**
- * The flag-ON journey for **search that navigates** (`VITE_CANVAS_SEARCH_NAV`,
- * `docs/specs/canvas-search-navigation/` M5-T2).
+ * The flag-ON journey for **search that navigates** (`docs/specs/canvas-search-navigation/` M5-T2).
  *
  * Every assertion here is one a unit suite **structurally cannot make**. The component tests mock
  * `@/config/env`, mount the toolbar in isolation and hand it a fabricated context: they prove the

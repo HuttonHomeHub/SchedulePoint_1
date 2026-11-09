@@ -6,8 +6,7 @@ import { expect, test } from '../e2e-support/test';
 import { firstUrlIn, SmtpSink } from './smtp-sink';
 
 /**
- * Flag-ON **account recovery** journey (`VITE_ACCOUNT_SETTINGS` + `VITE_PASSWORD_RESET`,
- * ADR-0074 M5-T3).
+ * **Account recovery** journey (ADR-0074 M5-T3).
  *
  * Everything here needs a real API, a real database **and a real mail transport**, because the
  * claims are about things no mocked fetch can be wrong about:

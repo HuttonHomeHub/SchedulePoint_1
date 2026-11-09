@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test';
 import { GRID_END_GUTTER } from '../src/features/gantt/layout/pinned-geometry';
 
 /**
- * Journey helpers for the flag-ON **Gantt view** suite (`VITE_GANTT_VIEW`, ADR-0059,
+ * Journey helpers for the **Gantt view** suite (ADR-0059,
  * `docs/specs/gantt-view/`). The onboarding + client/project/plan helpers mirror
  * `e2e-library/support.ts` verbatim. The onboarding actor becomes the org's Org Admin, which
  * already satisfies everything this journey does.

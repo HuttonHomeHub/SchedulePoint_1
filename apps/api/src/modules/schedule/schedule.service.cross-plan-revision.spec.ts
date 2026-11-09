@@ -66,7 +66,8 @@ const planRow = (id: string, over: Partial<Plan> = {}): PlanWithProject =>
     scheduleTotalFloatMode: 'FINISH',
     scheduleMakeOpenEndsCritical: false,
     scheduleInputsChangedAt: new Date('2026-01-01T00:00:00Z'),
-    scheduleInstantsComputedAt: null,
+    // Held equal to the calculation stamp by the database (one statement writes both).
+    scheduleInstantsComputedAt: new Date('2026-02-01T00:00:00.000Z'),
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -89,6 +90,7 @@ const liveRow = (id: string, code: string | null, over: Record<string, unknown> 
   durationMinutes: 480,
   isCritical: false,
   totalFloat: 0,
+  totalFloatMinutes: 0,
   earlyStart: new Date('2026-01-05T00:00:00.000Z'),
   earlyFinish: new Date('2026-01-06T00:00:00.000Z'),
   laneIndex: 0,
@@ -98,7 +100,7 @@ const liveRow = (id: string, code: string | null, over: Record<string, unknown> 
   constraintDate: null,
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
-  percentComplete: null,
+  percentComplete: 0,
   actualStart: null,
   actualFinish: null,
   ...over,
@@ -359,10 +361,10 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
     ).toHaveLength(1);
   });
 
-  describe('the dates compared (#405 (a): placed spans, with a per-read fallback)', () => {
+  describe('the dates compared (#405 (a): placed spans)', () => {
     // A bar the network leaves at 5-6 Jan on both sides, and that the OLD side placed at 12-13 Jan
     // while the NEW side draws it at 5-6 Jan: only a comparison of PLACED spans sees it move.
-    const baselineOf = (placementSnapshotLevel: 'FULL' | 'NONE') => ({
+    const baselineOf = () => ({
       id: 'baseline-a',
       name: 'Rev A',
       capturedAt: new Date(),
@@ -370,7 +372,6 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
       hoursPerDayMinutes: 1440,
       capturedProjectFinish: new Date(),
       revisionSnapshotLevel: 'FULL',
-      placementSnapshotLevel,
       criticalPathDefinition: 'TOTAL_FLOAT',
       criticalFloatThresholdMinutes: 0,
       totalFloatMode: 'FINISH',
@@ -384,8 +385,7 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
       durationMinutes: 480,
       isCritical: false,
       totalFloat: 0,
-      baselineStart: new Date('2026-01-05T00:00:00.000Z'),
-      baselineFinish: new Date('2026-01-06T00:00:00.000Z'),
+      totalFloatMinutes: 0,
       placedStart: new Date('2026-01-12T00:00:00.000Z'),
       placedFinish: new Date('2026-01-13T00:00:00.000Z'),
       laneIndex: 0,
@@ -395,16 +395,16 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
       constraintDate: null,
       secondaryConstraintType: null,
       secondaryConstraintDate: null,
-      percentComplete: null,
+      percentComplete: 0,
       actualStart: null,
       actualFinish: null,
     };
     const redated = (result: Awaited<ReturnType<typeof compare>>) =>
       result.changes?.classes.find((c) => c.changeClass === 'REDATED');
 
-    const compareFromBaseline = (level: 'FULL' | 'NONE') => {
+    const compareFromBaseline = () => {
       baselines.findActiveByIdInPlan.mockImplementation((id: string) =>
-        Promise.resolve(id === 'baseline-a' ? baselineOf(level) : null),
+        Promise.resolve(id === 'baseline-a' ? baselineOf() : null),
       );
       baselines.loadSnapshotRowsForDelta.mockResolvedValue([snapshotRow]);
       baselines.loadActiveActivitiesForDelta.mockImplementation((_org: string, planId: string) =>
@@ -426,8 +426,8 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
       );
     };
 
-    it('reports a bar moved by placement alone when the baseline recorded its placement', async () => {
-      const result = await compareFromBaseline('FULL');
+    it('reports a bar moved by placement alone', async () => {
+      const result = await compareFromBaseline();
 
       expect(result.datesBasis).toBe('PLACED');
       expect(redated(result)?.rows).toEqual([
@@ -436,16 +436,6 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
       expect(result.ghosts).toEqual([
         expect.objectContaining({ fromStart: '2026-01-12', fromFinish: '2026-01-13' }),
       ]);
-    });
-
-    it('falls back to earliest-vs-earliest on a baseline captured before placement was recorded', async () => {
-      const result = await compareFromBaseline('NONE');
-
-      expect(result.datesBasis).toBe('NETWORK');
-      // The network did not move the bar, so nothing is reported - the pre-#405 answer, kept
-      // for exactly the baselines that cannot say where a bar was placed.
-      expect(redated(result)?.rows).toEqual([]);
-      expect(result.ghosts).toEqual([]);
     });
   });
 

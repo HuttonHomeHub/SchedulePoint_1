@@ -5,7 +5,6 @@ import { useSwimlanes } from '../api/use-swimlanes';
 
 import { manualSwimlaneInput } from './manual-membership';
 
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { SwimlaneAssignment, SwimlaneAssignOutcome } from '@/features/tsld';
 import { deriveDiagramSource } from '@/features/tsld/model/derive-diagram-source';
 import type { TsldBulkOperations } from '@/features/tsld/model/edit-types';
@@ -84,7 +83,7 @@ export function useSwimlaneAssignment(args: {
         return { applied: false, conflict: CANNOT_PLAN_REASON, refreshable: false };
       }
       const diagram = deriveDiagramSource(activities, {
-        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: wbsBandOn },
+        wbsBand: { toggleOn: wbsBandOn },
         swimlanes: input,
         source: barDateSource,
         dataDate,

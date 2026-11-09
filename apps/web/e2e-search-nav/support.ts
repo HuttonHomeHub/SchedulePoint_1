@@ -2,7 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Journey helpers for the flag-ON **search that navigates** suite
- * (`VITE_CANVAS_SEARCH_NAV`, `docs/specs/canvas-search-navigation/`).
+ * (`docs/specs/canvas-search-navigation/`).
  *
  * The helpers below read the product's **own account of what happened** rather than pixels: the
  * canvas's parallel listbox (ADR-0026 D7) for "which bar is selected", the single polite live

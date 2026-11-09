@@ -57,11 +57,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FormProblemCount } from '@/components/ui/form';
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
-import {
-  ACTIVITY_CALENDAR_ENABLED,
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  EARNED_VALUE_ENABLED,
-} from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 import {
@@ -192,7 +187,7 @@ interface ActivityCreateOptions {
    * excluded here, unlike the editor, which drops the row being edited — an activity that does not
    * exist yet cannot be its own parent. Route-composed like {@link calendars} (reusing the plan's
    * warm activities query), so the dialog stays a pure presentation component. Only consulted when
-   * the WBS surface (`VITE_ADVANCED_ACTIVITY_TYPES`) is on.
+   * the WBS surface is on.
    */
   planActivities?: ActivitySummary[];
   /** The plan activities are still loading (the parent options aren't complete yet). */
@@ -650,35 +645,31 @@ function ActivityCreateForm({
             false state while the plan activities are still resolving. The "no summaries yet"
             guidance is a distinct, appended clause shown only once the list has resolved empty —
             not conflated with loading or a load failure. */}
-            {ADVANCED_ACTIVITY_TYPES_ENABLED ? (
-              <ActivityBreakdownField
-                form={general.form}
-                parentOptions={parentOptions}
-                loading={planActivitiesLoading}
-                errored={planActivitiesError}
-              />
-            ) : null}
+            <ActivityBreakdownField
+              form={general.form}
+              parentOptions={parentOptions}
+              loading={planActivitiesLoading}
+              errored={planActivitiesError}
+            />
 
-            {ACTIVITY_CALENDAR_ENABLED ? (
-              <FormSection
-                title="Working time"
-                description="Which calendar's working days this activity's duration is measured in."
-              >
-                <ActivityCalendarField
-                  value={calendarId ?? ''}
-                  onChange={(value) =>
-                    scheduling.form.setValue('calendarId', value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                  calendars={calendars}
-                  loading={calendarsLoading}
-                  errored={calendarsError}
-                  activityType={type}
-                />
-              </FormSection>
-            ) : null}
+            <FormSection
+              title="Working time"
+              description="Which calendar's working days this activity's duration is measured in."
+            >
+              <ActivityCalendarField
+                value={calendarId ?? ''}
+                onChange={(value) =>
+                  scheduling.form.setValue('calendarId', value, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+                calendars={calendars}
+                loading={calendarsLoading}
+                errored={calendarsError}
+                activityType={type}
+              />
+            </FormSection>
 
             <ActivityConstraintFields form={scheduling.form} />
 
@@ -691,8 +682,7 @@ function ActivityCreateForm({
             <ActivityPlacementFields form={scheduling.form} activityType={type} />
 
             {/* External / inter-project dates (ADR-0043 / ADR-0035 §30). Shown for every type — a
-              milestone can carry an external late finish too (A12500). The group owns its own
-              `VITE_INTER_PROJECT_DATES` guard, so there is no outer one here. `externalDriven` is
+              milestone can carry an external late finish too (A12500). `externalDriven` is
               the engine's verdict on a scheduled activity, so a create never has one and the
               section's aside stays silent until the plan is recalculated. */}
             <ActivityExternalDatesFields form={scheduling.form} />
@@ -719,17 +709,14 @@ function ActivityCreateForm({
               The three of them sit AFTER every scheduling section since M7, so this form reads
               General → Scheduling → Cost — the grouping the editor's tabs already had. They used to
               interrupt scheduling in the middle. */}
-            {EARNED_VALUE_ENABLED ? (
-              <FormSection title={MEASURE_SECTION_TITLE} description={MEASURE_SECTION_DESCRIPTION}>
-                <ActivityMeasureFields form={measure.form} />
-              </FormSection>
-            ) : null}
+            <FormSection title={MEASURE_SECTION_TITLE} description={MEASURE_SECTION_DESCRIPTION}>
+              <ActivityMeasureFields form={measure.form} />
+            </FormSection>
 
             <ActivityExpenseFields form={cost.form} />
 
             {/* Cost accrual (M7 rung 5, ADR-0044 §32): WHEN the cost is recognised in the
-              Earned-Value Planned-Value curve, never a date. Its own flag, mirroring the
-              value-measure picker. */}
+              Earned-Value Planned-Value curve, never a date. */}
             <ActivityAccrualField form={cost.form} />
           </div>
 

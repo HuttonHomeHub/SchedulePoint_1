@@ -7,12 +7,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { PlanLockModule } from '../plan-lock/plan-lock.module';
 import { PlansModule } from '../plans/plans.module';
 
-import { CrossPlanInstantRederiveService } from './cross-plan-instant-rederive.service';
-import { CrossPlanRederiveService } from './cross-plan-rederive.service';
 import { CrossPlanRevisionCompareController } from './cross-plan-revision-compare.controller';
-import { FinishMilestoneRederiveService } from './finish-milestone-rederive.service';
-import { MilestoneRederiveService } from './milestone-rederive.service';
-import { ProgressedVisualRederiveService } from './progressed-visual-rederive.service';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleRepository } from './schedule.repository';
 import { ScheduleService } from './schedule.service';
@@ -39,27 +34,7 @@ import { ScheduleService } from './schedule.service';
   controllers: [ScheduleController, CrossPlanRevisionCompareController],
   // CalendarRepository: the recalculation persists float in DAYS, and the factor comes from
   // each activity's own calendar (ADR-0068 §3a).
-  // FinishMilestoneRederiveService: the one-shot boot recalculation of plans computed under the old
-  // finish-milestone rule (#381, ADR-0155 D5).
-  // CrossPlanRederiveService: the one-shot boot recalculation, upstream first, of linked plans computed
-  // under the old cross-plan rule (#385, spec D8).
-  // ProgressedVisualRederiveService: the one-shot boot recalculation of plans whose placed dates the old
-  // Pass 2 wrote, and of the plans downstream of them (#421, spec §4.4).
-  // MilestoneRederiveService: the one-shot boot recalculation of plans holding a zero-span activity (or
-  // linked to one) computed under the old calendar snap (#539, ADR-0207).
-  // CrossPlanInstantRederiveService: the one-shot boot recalculation, upstream first, of linked plans so
-  // the stored instants exist before a downstream reads them (ADR-0212 D5). Dormant until its marker
-  // migration lands (M4).
-  providers: [
-    ScheduleService,
-    ScheduleRepository,
-    CalendarRepository,
-    FinishMilestoneRederiveService,
-    CrossPlanRederiveService,
-    ProgressedVisualRederiveService,
-    MilestoneRederiveService,
-    CrossPlanInstantRederiveService,
-  ],
+  providers: [ScheduleService, ScheduleRepository, CalendarRepository],
   // ScheduleRepository is exported so the External-Guest read path (ADR-0051 F-M3) can read a
   // plan's persisted schedule summary (`summarise`) without a Principal — a pure persisted-column
   // read, no engine invocation.

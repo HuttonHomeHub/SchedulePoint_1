@@ -5,9 +5,7 @@ import {
   criticality,
   formatDayVariance,
   formatFinishVariance,
-  floatVarianceColumnNote,
   formatFloat,
-  isFloatNotComparable,
 } from './schedule-format';
 
 const base = { isCritical: false, isNearCritical: false, totalFloat: 5 };
@@ -118,44 +116,5 @@ describe('formatFinishVariance', () => {
       text: '4 d behind',
       tone: 'behind',
     });
-  });
-});
-
-describe('float that cannot be compared (#318, ADR-0214)', () => {
-  const varRow = (over: Partial<BaselineVarianceRow>): BaselineVarianceRow => ({
-    activityId: 'a1',
-    code: null,
-    name: 'A',
-    inBaseline: true,
-    removed: false,
-    currentStart: null,
-    currentFinish: null,
-    currentTotalFloat: 2,
-    baselineStart: null,
-    baselineFinish: null,
-    baselineTotalFloat: 2,
-    startVarianceDays: null,
-    finishVarianceDays: null,
-    floatVarianceDays: null,
-    floatVarianceMinutes: null,
-    ...over,
-  });
-
-  it('is a row with a float on both sides and no minutes between them', () => {
-    expect(isFloatNotComparable(varRow({}))).toBe(true);
-  });
-
-  it('is not a comparable row, a float never calculated, or an added or removed row', () => {
-    expect(isFloatNotComparable(varRow({ floatVarianceMinutes: 0, floatVarianceDays: 0 }))).toBe(
-      false,
-    );
-    expect(isFloatNotComparable(varRow({ baselineTotalFloat: null }))).toBe(false);
-    expect(isFloatNotComparable(varRow({ inBaseline: false }))).toBe(false);
-    expect(isFloatNotComparable(varRow({ removed: true, currentTotalFloat: null }))).toBe(false);
-  });
-
-  it('words the column note only when there is something to say', () => {
-    expect(floatVarianceColumnNote(0)).toBeNull();
-    expect(floatVarianceColumnNote(3)).toBe('3 not comparable');
   });
 });

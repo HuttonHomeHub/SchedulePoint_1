@@ -1,8 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **per-assignment join lag**
- * (`VITE_ASSIGNMENT_LAG`, ADR-0071 M4) — the "Joins after" control on the assign form and on each
+ * End-to-end configuration for the **per-assignment join lag** (ADR-0071 M4) — the "Joins after" control on the assign form and on each
  * assignment row.
  *
  * Everything this suite proves needs a **real API and a real database**. That `1d` on an eight-hour
@@ -62,29 +61,12 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              VITE_ASSIGNMENT_LAG: 'true',
-              // The resources surface the control lives on.
-              VITE_RESOURCES: 'true',
-              // The legacy stacked plan page and the flag-off Resources DIALOG, not the tabbed
-              // editor: this suite is about one field, and driving it through a canvas and a tab
-              // rail would add a dozen reasons to fail for something the epic is not about. The
-              // panel is the SAME component either way (ADR-0062), which is what makes that safe.
-              // The tabbed editor, which is what every shipped bundle contains. This suite pinned
-              // it OFF until the dialog-unification epic, proving the field on a surface no
-              // operator can produce (ADR-0088 D1). Converting it is cheap for exactly the reason
-              // the note above gives: `ActivityResourcesPanel` is the same component whether it is
-              // reached as a dialog or as the editor's Resources tab (ADR-0062), so only the route
-              // to it changes.
-              // The pen must be real: an assignment write is pen-gated (ADR-0028), and a lag that
-              // saves without the lock is not the thing being tested.
-              VITE_PLAN_EDIT_LOCK: 'true',
-              VITE_TSLD_EDITING: 'true',
-              // `VITE_LIBRARY_SCOPING` is deliberately NOT pinned. It is default-on, so the
-              // resource picker is the shared APG `Combobox` — leaving it at its default is what
-              // makes this journey drive the control a planner actually meets, and the shared
-              // `e2e/combobox.ts` driver already knows how.
-            },
+            // No flag is pinned: the journey drives the tabbed editor, which is what every shipped
+            // bundle contains, and `VITE_LIBRARY_SCOPING` is default-on, so the resource picker is
+            // the shared APG `Combobox` — leaving it at its default is what makes this journey drive
+            // the control a planner actually meets, and the shared `e2e/combobox.ts` driver already
+            // knows how. `ActivityResourcesPanel` is the same component however it is reached
+            // (ADR-0062), so only the route to it changes.
           },
         ],
       }),

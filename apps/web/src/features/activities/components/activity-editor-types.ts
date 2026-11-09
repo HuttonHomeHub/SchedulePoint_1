@@ -74,7 +74,7 @@ export interface ActivityEditorDialogProps {
    * plain panel, which is what a host without those flags wants.
    */
   logic?: {
-    /** `VITE_PROGRAMME_SCHEDULING`'s cross-plan links section (ADR-0045). */
+    /** The cross-plan links section (ADR-0045). */
     crossPlanSlot?: React.ReactNode;
     /** Undo recording for an added link (ADR-0048 M2). */
     onAdded?: (dependency: DependencySummary) => void;
@@ -85,9 +85,9 @@ export interface ActivityEditorDialogProps {
     onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   };
   /**
-   * The `VITE_NOTES` activity-notes section (ADR-0046), passed by the composition root for the same
+   * The activity-notes section (ADR-0046), passed by the composition root for the same
    * reason as the cross-plan slot: this feature must not import the notes data layer sideways.
-   * Absent ⇒ no Notes tab, which is what a host without the flag wants.
+   * Absent ⇒ no Notes tab.
    */
   notesSlot?: React.ReactNode;
   /**

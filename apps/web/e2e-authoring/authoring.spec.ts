@@ -5,7 +5,7 @@ import { expect, test } from '../e2e-support/test';
 import { drawActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
- * Flag-ON **canvas-first plan authoring** journey (`VITE_CANVAS_AUTHORING`, ADR-0032) — the layer
+ * **Canvas-first plan authoring** journey (ADR-0032) — the layer
  * above ADR-0031's toolbar workspace. Proves the whole authoring loop runs in a real browser:
  *
  * 1. A brand-new plan opens on a **draw-ready blank canvas** (anchored to today) — the diagram region
@@ -76,8 +76,7 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
  * here. Pressing the caret again must close the menu, leave it closed, and put focus on the main half
  * and never on the caret; pressing the main half instead closes it and still runs its command.
  *
- * Lives in this suite because `e2e-toolbar` pins `VITE_CANVAS_AUTHORING` off and renders no split
- * button. Outcomes are asserted after a settle, not event order.
+ * Lives in this suite because it needs the authoring split-button. Outcomes are asserted after a settle, not event order.
  *
  * **Verified red** against the pre-fix `Menu`: the second press left the menu open.
  */

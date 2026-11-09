@@ -7,12 +7,6 @@ import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import type { FilterAttr } from '@/features/tsld/render/lenses';
 import type { SearchableActivity } from '@/features/tsld/render/search-matches';
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_SEARCH_NAV_ENABLED: true,
-}));
-
 /**
  * The **two-step Escape inside the search field** (`docs/specs/canvas-search-navigation/` §4.5,
  * M1-T4).

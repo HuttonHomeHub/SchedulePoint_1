@@ -14,7 +14,7 @@ import { LoadingShape, Skeleton } from '@/components/ui/page';
 
 /**
  * The plan's **resource loading histogram** read view (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a
- * `GET …/schedule/resource-histogram` reader shown behind `VITE_RESOURCE_CURVES`. Each resource's
+ * `GET …/schedule/resource-histogram` reader. Each resource's
  * curve-shaped units-over-time are rendered BOTH as a compact bar chart (a decorative visual) AND as a
  * **keyboard-navigable data table** that carries the same numbers — so the chart is never the only
  * representation (WCAG 2.2 AA). A granularity control (Day / Week / Month) sets the shared time axis.

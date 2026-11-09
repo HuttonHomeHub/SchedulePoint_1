@@ -67,7 +67,7 @@ describe('the organisation export format document', () => {
         }
       }
 
-      expect(section.includes('Informational:')).toBe(file.stability === 'informational');
+      expect(section.includes('Informational:')).toBe(false);
 
       const withheld = /Not exported: (.+)\.$/m.exec(section)?.[1];
       const named = withheld ? [...withheld.matchAll(/`(\w+)`/g)].map((m) => m[1]) : [];

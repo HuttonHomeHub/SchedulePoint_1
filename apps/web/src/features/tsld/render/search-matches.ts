@@ -7,8 +7,7 @@ import {
 import { compareByTimeThenLane, type OrderableActivity } from './ordering';
 
 /**
- * The pure match model behind "search takes you there" (`docs/specs/canvas-search-navigation/`,
- * behind `VITE_CANVAS_SEARCH_NAV`).
+ * The pure match model behind "search takes you there" (`docs/specs/canvas-search-navigation/`).
  *
  * Built beside `conflicts.ts` and to the same shape — an ordered list plus a cursor step — because
  * the two are the same interaction with different predicates, and a planner cycling matches should

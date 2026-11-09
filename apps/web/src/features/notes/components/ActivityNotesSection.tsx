@@ -10,9 +10,8 @@ import { useSession } from '@/features/auth';
 
 /**
  * The **Notes** section of an activity's Logic panel (ADR-0046) — the activity's note thread plus, for
- * a writer, a composer. Passed into the {@link DependencyEditor}'s `notesSlot` by the composition root
- * only behind `VITE_NOTES`, so this feature stays free of a sideways feature → feature import and the
- * panel is byte-identical with the flag off. Heading is an `h3` to sit level with the panel's other
+ * a writer, a composer. Passed into the activity editor's `notesSlot` by the composition root, so this
+ * feature stays free of a sideways feature → feature import. Heading is an `h3` to sit level with the panel's other
  * sections (Predecessors / Successors / Cross-plan links). Not pen-gated (ADR-0046).
  */
 export function ActivityNotesSection({
@@ -32,10 +31,10 @@ export function ActivityNotesSection({
   /** Keep the thread query idle while the host dialog is closed (mirrors the dependency editor). */
   enabled: boolean;
   /**
-   * A ref to the section heading, so the Logic dialog can scroll it into view + move focus to it when
+   * A ref to the section heading, so the editor can scroll it into view + move focus to it when
    * opened via the toolbar **Add note** button (toolbar quick-wins U4/A4). When set, the heading is made
-   * programmatically focusable (`tabIndex={-1}`) without joining the tab order (WCAG 2.4.3), mirroring
-   * {@link PlanNotesSection}'s `headingRef`. Absent ⇒ unchanged (no ref, no tabindex).
+   * programmatically focusable (`tabIndex={-1}`) without joining the tab order (WCAG 2.4.3), as
+   * any heading ref does. Absent ⇒ unchanged (no ref, no tabindex).
    */
   headingRef?: Ref<HTMLHeadingElement>;
   /**

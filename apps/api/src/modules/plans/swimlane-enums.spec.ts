@@ -11,7 +11,9 @@ import { describe, expect, it } from 'vitest';
  * values themselves (the `PlacementSnapshotLevel` check in `baseline-response.dto.ts` is the
  * precedent).
  */
-type MutuallyAssignable<A, B> = A extends B ? (B extends A ? true : false) : false;
+// Tuple-wrapped so the conditional does not distribute over a union (the bare form yields
+// `boolean`, which accepts `true` whatever the other side holds).
+type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const sourceLockStep: MutuallyAssignable<
   (typeof PrismaSwimlaneSource)[keyof typeof PrismaSwimlaneSource],
   SwimlaneSource

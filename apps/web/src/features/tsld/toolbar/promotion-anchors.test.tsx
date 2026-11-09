@@ -1,5 +1,5 @@
 import { cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { readDeck } from './promotion-test-support';
 import { makeTsldToolbarContext } from './test-helpers';
@@ -8,18 +8,6 @@ import type { PromotionPointer, PromotionStage } from '@/components/ui/toolbar/t
 
 // The optional commands are all OFF here, which is the other end of the manifest suite's pinned-on
 // flags: an anchor that only rendered because a flag was on would not be an anchor.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_LENSES_ENABLED: true,
-  EXPORT_PRINT_ENABLED: true,
-  EARNED_VALUE_ENABLED: false,
-  RESOURCE_CURVES_ENABLED: false,
-  GUEST_SHARE_LINKS_ENABLED: false,
-  CANVAS_ACTIVITY_TYPES_ENABLED: false,
-  SCHEDULE_INTERCHANGE_ENABLED: false,
-  CANVAS_LIVE_FEEDBACK_ENABLED: false,
-}));
 
 afterEach(cleanup);
 

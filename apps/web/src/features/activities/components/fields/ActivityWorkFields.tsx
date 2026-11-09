@@ -6,7 +6,6 @@ import type { GroupProps } from './group-props';
 
 import { SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridFull, FormSection } from '@/components/ui/form-layout';
-import { ADVANCED_ACTIVITY_TYPES_ENABLED, DURATION_TYPES_ENABLED } from '@/config/env';
 import {
   durationHelp,
   durationInputProps,
@@ -111,7 +110,7 @@ export function ActivityWorkFields({
           hint={typeChangeHint}
           {...form.register('type')}
         >
-          {selectableActivityTypes(ADVANCED_ACTIVITY_TYPES_ENABLED, savedType).map((value) => (
+          {selectableActivityTypes(savedType).map((value) => (
             <option key={value} value={value}>
               {ACTIVITY_TYPE_LABELS[value]}
             </option>
@@ -177,7 +176,7 @@ export function ActivityWorkFields({
         {/* Duration type governs the resource-units triad (ADR-0040), so it is meaningless for a
           type with no entered duration/units (a milestone, LOE or WBS summary) — hidden for those,
           mirroring the Duration field. */}
-        {DURATION_TYPES_ENABLED && !derived ? (
+        {!derived ? (
           <FieldGridFull>
             <SelectField
               label="Duration type"

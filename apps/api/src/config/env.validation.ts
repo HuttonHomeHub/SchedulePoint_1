@@ -157,7 +157,7 @@ export const envSchema = z
       .transform((value) => value === 'true'),
     /**
      * How long a CSP violation report is kept after it was **last seen** — 30 days
-     * (`20260809160000_csp_reports/migration.sql`).
+     * (`20260809160000_csp_reports/migration.sql` at api-v1.0.0).
      *
      * **Shortening this is free; lengthening it recovers nothing.** Rows deleted under the old value
      * are gone, and no later edit brings them back — ADR-0085 D3's asymmetry, restated here because

@@ -16,10 +16,6 @@ import { anActivity } from '@/test/activity-fixture';
  * committing the span — the keyboard equivalent of the pointer two-pick (WCAG 2.1.1). The pointer pick
  * logic + mutual exclusion live in the gesture-machine suite; here we drive the listbox.
  */
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, CANVAS_AUTHORING_ENABLED: true, TSLD_EDITING_ENABLED: true };
-});
 
 const NO_DEPS: DependencySummary[] = [];
 

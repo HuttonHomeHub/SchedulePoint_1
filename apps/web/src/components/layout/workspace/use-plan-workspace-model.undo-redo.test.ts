@@ -23,18 +23,8 @@ const h = vi.hoisted(() => ({
   // inside the model and leaves these cases asserting a mutation nothing calls.
   setVisualStartMutateAsync: vi.fn(),
   relaneMutateAsync: vi.fn(),
-  recalcMutateAsync: vi.fn(),
   notify: vi.fn(),
 }));
-
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: false,
-    NOTES_ENABLED: false,
-  };
-});
 
 // Keep the real command builders (they're pure); swap only the history store for a record spy.
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
@@ -60,7 +50,6 @@ vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'u1
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanPen: () => ({
-    penManaged: false,
     holdsPen: true,
     onWriteRejected: () => ({ kind: 'none' }),
   }),
@@ -86,7 +75,6 @@ vi.mock('@/features/dependencies', () => ({
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@/features/schedule', () => ({
-  useRecalculate: () => ({ mutateAsync: h.recalcMutateAsync }),
   usePlanAutoRecalc: () => ({ notify: h.notify }),
 }));
 
@@ -168,7 +156,6 @@ beforeEach(() => {
   h.updateMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
   h.setVisualStartMutateAsync.mockResolvedValue({ ...ACTIVITY, version: 4 });
   h.relaneMutateAsync.mockResolvedValue({ ...ACTIVITY, laneIndex: 2, version: 4 });
-  h.recalcMutateAsync.mockResolvedValue(undefined);
 });
 
 describe('usePlanWorkspaceModel undo/redo recording seam', () => {
@@ -200,7 +187,7 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
 
     expect(h.relaneMutateAsync).toHaveBeenCalledTimes(1);
     expect(h.record).toHaveBeenCalledTimes(1);
-    expect(h.recalcMutateAsync).not.toHaveBeenCalled(); // a lane move never recalcs
+    expect(h.notify).not.toHaveBeenCalled(); // a lane move never recalcs
   });
 
   it('a create records exactly one command', async () => {

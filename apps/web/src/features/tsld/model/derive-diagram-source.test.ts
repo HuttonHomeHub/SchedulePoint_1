@@ -26,13 +26,13 @@ const ACTIVITIES = [
   task('c', 3, '2026-01-20', '2026-01-25'),
 ];
 
-const NO_BAND = { enabled: false, toggleOn: false };
+const NO_BAND = { toggleOn: false };
 
 describe('deriveDiagramSource, swimlanes off (SC-3)', () => {
   it.each([
     ['band off', NO_BAND],
-    ['band on', { enabled: true, toggleOn: true }],
-    ['flag on, toggle off', { enabled: true, toggleOn: false }],
+    ['band on', { toggleOn: true }],
+    ['flag on, toggle off', { toggleOn: false }],
   ])('is exactly the old two-step composition with the %s', (_name, wbsBand) => {
     const band = deriveWbsBandSource(ACTIVITIES, { ...wbsBand, source: 'early' });
     for (const swimlanes of [undefined, null]) {
@@ -120,7 +120,7 @@ describe('deriveDiagramSource, swimlanes on', () => {
 
   it('leaves a summary the band draws out of the swimlanes, so it holds no lane open', () => {
     const out = deriveDiagramSource(ACTIVITIES, {
-      wbsBand: { enabled: true, toggleOn: true },
+      wbsBand: { toggleOn: true },
       swimlanes,
       source: 'early',
       dataDate: DATA_DATE,
@@ -177,7 +177,7 @@ describe('deriveDiagramSource, swimlanes from the WBS (M3)', () => {
   ];
   const run = (bandOn: boolean) =>
     deriveDiagramSource(TREE, {
-      wbsBand: { enabled: bandOn, toggleOn: bandOn },
+      wbsBand: { toggleOn: bandOn },
       swimlanes: wbsSwimlaneInput(TREE, 2),
       source: 'early',
       dataDate: DATA_DATE,

@@ -80,7 +80,7 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   });
 });
 
-// ── Time-axis gridline tier palette entries (F5, `VITE_CANVAS_TIME_AXIS`) ────────────────
+// ── Time-axis gridline tier palette entries ────────────────
 describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
   it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
     const palette = resolveTsldPalette(document.documentElement);
@@ -149,7 +149,7 @@ describe('non-working wash ink (nonWorking)', () => {
   });
 });
 
-// ── Today pill ink palette entry (F6b, `VITE_CANVAS_TIME_AXIS`) ─────────────────────────
+// ── Today pill ink palette entry ─────────────────────────
 describe('today marker pill ink (todayInk)', () => {
   it('resolveTsldPalette pairs todayInk with today the same way labelInsideCritical pairs with critical', () => {
     const palette = resolveTsldPalette(document.documentElement);
@@ -162,7 +162,7 @@ describe('today marker pill ink (todayInk)', () => {
   });
 });
 
-// ── Data-date marker pair (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
+// ── Data-date marker pair (canvas status & feedback M1) ─────────
 describe('data-date marker pair (dataDate / dataDateInk)', () => {
   it('resolveTsldPalette resolves the pair (documented jsdom fallbacks), distinct from today/bar/selection', () => {
     const palette = resolveTsldPalette(document.documentElement);

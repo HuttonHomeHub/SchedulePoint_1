@@ -21,13 +21,6 @@ vi.mock('@/lib/api/client', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 
-// The pen layer is flag-gated; force it on so `usePlanPen` is exercised (only that
-// hook reads the flag — the mutation/heartbeat hooks take `enabled`/`holding` args).
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, PLAN_EDIT_LOCK_ENABLED: true };
-});
-
 const FREE: PlanEditLockStatus = {
   planId: 'p1',
   state: 'FREE',
@@ -189,10 +182,8 @@ describe('useLockHeartbeat', () => {
 });
 
 describe('planEditLockQueryOptions', () => {
-  it('polls at 15s only while enabled (no network when the pen layer is off)', () => {
-    expect(planEditLockQueryOptions('acme', 'p1', true).refetchInterval).toBe(15_000);
-    expect(planEditLockQueryOptions('acme', 'p1', false).refetchInterval).toBe(false);
-    expect(planEditLockQueryOptions('acme', 'p1', false).enabled).toBe(false);
+  it('polls at 15s', () => {
+    expect(planEditLockQueryOptions('acme', 'p1').refetchInterval).toBe(15_000);
   });
 });
 
@@ -219,10 +210,9 @@ describe('useRequestControl / useHandoff', () => {
 describe('usePlanPen', () => {
   beforeEach(() => vi.mocked(apiFetch).mockReset());
 
-  it('reports penManaged and derives holdsPen from a HELD_BY_ME status', async () => {
+  it('derives holdsPen from a HELD_BY_ME status', async () => {
     vi.mocked(apiFetch).mockResolvedValue(HELD_BY_ME);
     const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
-    expect(result.current.penManaged).toBe(true);
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
   });
 

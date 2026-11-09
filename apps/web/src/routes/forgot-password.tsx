@@ -11,7 +11,7 @@ import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
 /**
- * Ask for a password-reset link (`/forgot-password`, ADR-0074 M4) — behind `VITE_PASSWORD_RESET`.
+ * Ask for a password-reset link (`/forgot-password`, ADR-0074 M4).
  *
  * `noindex`, like its sibling: neither reset screen should ever be crawled, and this one is the
  * entry point somebody could otherwise find in a search result rather than in their own inbox.

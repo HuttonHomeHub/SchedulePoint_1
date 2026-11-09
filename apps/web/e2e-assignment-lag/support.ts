@@ -1,8 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **per-assignment join lag** suite (`VITE_ASSIGNMENT_LAG`,
- * ADR-0071 M4). The onboarding + hierarchy helpers mirror `e2e-sub-day/support.ts`; the plan surface
+ * Journey helpers for the **per-assignment join lag** suite (ADR-0071 M4). The onboarding + hierarchy helpers mirror `e2e-sub-day/support.ts`; the plan surface
  * is the legacy stacked page (canvas pinned off in the config), so activities are added inline from
  * the table and Resources opens from the row actions menu.
  */

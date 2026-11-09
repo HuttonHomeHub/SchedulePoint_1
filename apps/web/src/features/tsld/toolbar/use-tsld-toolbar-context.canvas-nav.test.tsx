@@ -13,15 +13,11 @@ import type {
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 
 /**
- * The canvas-nav (`VITE_CANVAS_NAV`) glue on the REAL builder: `goToNextConflict` must centre the hit,
+ * The canvas-nav glue on the REAL builder: `goToNextConflict` must centre the hit,
  * lift the selection, remember the cursor AND announce the exact "<i> of <n>: <name> — <reason>" string
  * (a11y-rec-4), and `currentConflict` must derive the visible-chip descriptor from the cursor + ordered
  * set (U2) — degrading to null while isolating / with no cursor.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_NAV_ENABLED: true,
-}));
 vi.mock('@/features/plans', () => ({
   PLAN_STATUS_LABELS: new Proxy({}, { get: () => 'Active' }),
 }));

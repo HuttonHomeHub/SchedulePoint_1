@@ -26,7 +26,6 @@ export const EV_UNPLACED_GOLDEN = {
     costBaselineMissing: true,
     costWarningCount: 0,
     costPhasingLaggedCount: 1,
-    costPhasingApproximatedCount: 0,
     stepWeightZeroCount: 0,
     activities: [
       {
@@ -212,7 +211,6 @@ export const EV_UNPLACED_GOLDEN = {
     costBaselineMissing: true,
     costWarningCount: 0,
     costPhasingLaggedCount: 1,
-    costPhasingApproximatedCount: 0,
     stepWeightZeroCount: 0,
     activities: [
       {
@@ -398,7 +396,6 @@ export const EV_UNPLACED_GOLDEN = {
     costBaselineMissing: true,
     costWarningCount: 0,
     costPhasingLaggedCount: 1,
-    costPhasingApproximatedCount: 0,
     stepWeightZeroCount: 0,
     activities: [
       {

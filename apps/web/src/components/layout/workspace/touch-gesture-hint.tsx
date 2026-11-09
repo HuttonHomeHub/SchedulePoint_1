@@ -8,8 +8,8 @@ export interface TouchGestureHintProps {
   onOpenGestures: () => void;
   onDismiss: () => void;
   /**
-   * Hand focus to the plan surface once the strip has unmounted itself — the contract
-   * `PlacementMigrationNotice` states: the Dismiss button is a child of what it removes.
+   * Hand focus to the plan surface once the strip has unmounted itself: the Dismiss button is a
+   * child of what it removes.
    */
   restoreFocus?: (() => void) | undefined;
 }

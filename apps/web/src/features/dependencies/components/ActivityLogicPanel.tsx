@@ -20,8 +20,7 @@ import { FieldGridContainer } from '@/components/ui/form-layout';
  * rejections come back from the API and surface inline (the server owns the
  * acyclic guarantee).
  *
- * This is the panel **body**, extracted from `DependencyEditor` so the Logic dialog and the
- * activity editor's Logic tab render the same surface rather than two that drift. It owns its own
+ * This is the panel **body**, rendered by the activity editor's Logic tab. It owns its own
  * add/edit/remove dialogs, so it is self-sufficient wherever it is mounted.
  *
  * `activity` is optional so a host may keep the panel mounted while it has no subject, and
@@ -119,14 +118,14 @@ export function ActivityLogicPanel({
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   /**
    * An optional extra panel rendered below Successors — the composition root passes the
-   * `VITE_PROGRAMME_SCHEDULING` cross-plan links section here (ADR-0045), keeping this feature free
-   * of a sideways feature → feature import. Absent (the default) leaves the panel byte-identical.
+   * cross-plan links section here (ADR-0045), keeping this feature free of a sideways
+   * feature → feature import. Absent leaves the panel without that section.
    */
   crossPlanSlot?: React.ReactNode;
   /**
    * An optional extra panel rendered below the cross-plan slot — the composition root passes the
-   * `VITE_NOTES` activity notes section here (ADR-0046), same slot pattern as `crossPlanSlot` so this
-   * feature stays free of a sideways feature → feature import. Absent (the default) is byte-identical.
+   * activity notes section here (ADR-0046), same slot pattern as `crossPlanSlot` so this
+   * feature stays free of a sideways feature → feature import.
    */
   notesSlot?: React.ReactNode;
   /**
@@ -326,11 +325,9 @@ export function ActivityLogicPanel({
               {...(onAdded ? { onAdded } : {})}
             />
           ) : null}
-          {/* Cross-plan links (ADR-0045) — passed by the composition root only when
-              VITE_PROGRAMME_SCHEDULING is on; absent (byte-identical) otherwise. */}
+          {/* Cross-plan links (ADR-0045) — passed by the composition root. */}
           {crossPlanSlot}
-          {/* Notes (ADR-0046) — passed by the composition root only when VITE_NOTES is on; absent
-              (byte-identical) otherwise. */}
+          {/* Notes (ADR-0046) — passed by the composition root. */}
           {notesSlot}
         </FieldGridContainer>
       </div>

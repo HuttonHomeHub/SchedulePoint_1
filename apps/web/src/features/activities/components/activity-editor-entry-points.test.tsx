@@ -25,11 +25,6 @@ import { expectInert } from '@/components/ui/scope-save-bar-assertions';
  * without `editorGating` and still see the legacy dialogs — that is the rollback contract, and it is
  * why this file forces the flag rather than the shipped default flipping under those tests.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EARNED_VALUE_ENABLED: true,
-  ACTIVITY_STEPS_ENABLED: true,
-}));
 
 const BASE = {
   id: 'a1',
@@ -47,7 +42,6 @@ const BASE = {
 } as ActivitySummary;
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -55,7 +49,6 @@ const PLANNER_WITH_PEN = deriveActivityEditorGating({
 });
 
 const CONTRIBUTOR = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: false,
   canProgress: true,

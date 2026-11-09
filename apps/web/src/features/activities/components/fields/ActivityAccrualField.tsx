@@ -4,7 +4,6 @@ import type { GroupProps } from './group-props';
 
 import { SelectField } from '@/components/ui/form';
 import { FieldGrid, FormSection } from '@/components/ui/form-layout';
-import { COST_ACCRUAL_ENABLED } from '@/config/env';
 import {
   ACCRUAL_TYPE_LABELS,
   ACCRUAL_TYPE_OPTIONS,
@@ -26,9 +25,7 @@ export const ACCRUAL_FIELDS = [
  * hint — and create had only the one field there to attach it to, which is how it ended up in a
  * hint on one host and a description on the other.
  */
-export function ActivityAccrualField({ form }: GroupProps<ActivityCostValues>): JSX.Element | null {
-  if (!COST_ACCRUAL_ENABLED) return null;
-
+export function ActivityAccrualField({ form }: GroupProps<ActivityCostValues>): JSX.Element {
   return (
     <FormSection
       title="Recognition"

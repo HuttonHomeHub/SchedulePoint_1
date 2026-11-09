@@ -16,7 +16,7 @@ import {
 } from './support';
 
 /**
- * **Flag-ON journey — the per-assignment join lag** (`VITE_ASSIGNMENT_LAG`, ADR-0071 M4).
+ * **The per-assignment join lag journey** (ADR-0071 M4).
  *
  * What only a real API and a real database can prove, and why each of these is here:
  *

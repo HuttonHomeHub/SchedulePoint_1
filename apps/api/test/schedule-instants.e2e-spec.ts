@@ -15,8 +15,8 @@ import { clearDomainData } from './audit-reset';
  *
  * `schedule.repository.day-factor.spec.ts` asserts the arguments handed to a MOCKED `$executeRaw`,
  * so it cannot see a missing `SET` entry, a wrong cast, or a session `TimeZone` shifting the value.
- * This is the half that can. It also owns the two CHECKs and the rollback simulation, because those
- * are statements about the database rather than about the repository.
+ * This is the half that can. It also owns the CHECKs on the stamp and the instants, because those are
+ * statements about the database rather than about the repository.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 const ORIGIN = 'http://localhost:5173';
@@ -218,7 +218,7 @@ describe.skipIf(!hasDatabase)('schedule instants (e2e)', () => {
     expect(viaPrismaB.lateStartInstant!.getTime() / 60000).toBe(midnight - 1440 + 1);
   });
 
-  describe('the two CHECK constraints', () => {
+  describe('the CHECK constraints', () => {
     const dateCols = `visual_effective_start = '2026-01-05', visual_effective_finish = '2026-01-07', late_start = '2026-01-05', late_finish = '2026-01-07'`;
 
     it('refuses three instants and one NULL (activities, 23514)', async () => {
@@ -252,30 +252,52 @@ describe.skipIf(!hasDatabase)('schedule instants (e2e)', () => {
           `UPDATE plans SET schedule_computed_at = NULL, schedule_instants_computed_at = now()
            WHERE id = '${planId}'::uuid`,
         ),
-      ).rejects.toThrow(/ck_plans_schedule_instants_requires_cursor|23514/);
+      ).rejects.toThrow(/ck_plans_schedule_instants_match_cursor/);
     });
 
-    it('accepts an older image’s write beside current instants, and the freshness rule reads false', async () => {
+    /**
+     * Tidy T5 (ADR-0215): the stamp is one fact. Before 1.1 both CHECKs were one-way so that an
+     * image older than the instants (or the criticality mirror) could still advance the cursor
+     * alone during a rollback; a fresh 1.1 database has no such image, so each write below, which
+     * is exactly what that older image did, is now refused.
+     */
+    it('refuses a cursor advanced without the instants stamp (plans, 23514)', async () => {
       const { agent, planId } = await planWithActivities();
       await recalculate(agent, planId);
-
-      // What an image that predates the columns does: dates and the cursor, in its own transaction,
-      // naming neither the instants nor the marker. Both CHECKs must let it through.
-      await prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `UPDATE activities SET late_start = '2026-02-02', late_finish = '2026-02-03'
-           WHERE plan_id = '${planId}'::uuid`,
-        );
-        await tx.$executeRawUnsafe(
+      await expect(
+        prisma.$executeRawUnsafe(
           `UPDATE plans SET schedule_computed_at = now() + interval '1 second'
            WHERE id = '${planId}'::uuid`,
-        );
-      });
+        ),
+      ).rejects.toThrow(/ck_plans_schedule_instants_match_cursor/);
+      await expect(
+        prisma.$executeRawUnsafe(
+          `UPDATE plans SET schedule_instants_computed_at = NULL WHERE id = '${planId}'::uuid`,
+        ),
+      ).rejects.toThrow(/ck_plans_schedule_instants_match_cursor/);
+    });
 
-      const [row] = await prisma.$queryRaw<{ fresh: boolean }[]>`
-        SELECT (schedule_instants_computed_at = schedule_computed_at) AS fresh
-        FROM plans WHERE id = ${planId}::uuid`;
-      expect(row!.fresh).toBe(false);
+    it('refuses a cursor without the criticality rule, and a rule without the cursor (plans, 23514)', async () => {
+      const { agent, planId } = await planWithActivities();
+      // Never calculated: the cursor and both stamps are stamped together or not at all.
+      await expect(
+        prisma.$executeRawUnsafe(
+          `UPDATE plans SET schedule_computed_at = now(), schedule_instants_computed_at = now()
+           WHERE id = '${planId}'::uuid`,
+        ),
+      ).rejects.toThrow(/ck_plans_schedule_criticality_matches_cursor/);
+      await recalculate(agent, planId);
+      await expect(
+        prisma.$executeRawUnsafe(
+          `UPDATE plans SET schedule_critical_path_definition = NULL,
+             schedule_critical_float_threshold_minutes = NULL, schedule_total_float_mode = NULL,
+             schedule_make_open_ends_critical = NULL
+           WHERE id = '${planId}'::uuid`,
+        ),
+      ).rejects.toThrow(/ck_plans_schedule_criticality_matches_cursor/);
+      const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+      expect(plan.scheduleCriticalPathDefinition).not.toBeNull();
+      expect(plan.scheduleInstantsComputedAt?.getTime()).toBe(plan.scheduleComputedAt?.getTime());
     });
   });
 });

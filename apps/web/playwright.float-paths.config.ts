@@ -1,8 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for the **Float paths** surface (`VITE_FLOAT_PATHS`, audit
- * F4) — the toolbar item, the docked panel, and the path emphasis in the Diagram and the Gantt.
+ * End-to-end configuration for the **Float paths** surface (audit F4) — the toolbar item, the docked panel, and the path emphasis in the Diagram and the Gantt.
  *
  * Everything this suite proves needs a **real API and a real database**. That a branch carrying one
  * working day of float reads `+1d` on an eight-hour calendar — and not `0d` — is the defect the
@@ -10,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Nor can a mock tell you that the toolbar item is live in the Gantt (the seam that was broken and
  * fixed in M1), or that the panel survives a view switch.
  *
- * Like the sibling flag-on configs the flags bake at `webServer` start, so this is its own config on
+ * Like the sibling configs the flags bake at `webServer` start, so this is its own config on
  * the same ports, run as its own CI step. Chromium only (TECH_DEBT #25a), serial (one org's plan is
  * read throughout).
  */
@@ -70,15 +69,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              VITE_FLOAT_PATHS: 'true',
-              // The Gantt is half the claim — the item must be live there, not shaded.
-              VITE_GANTT_VIEW: 'true',
-              // The toolbar item lives in the TSLD registry, which the canvas workspace hosts.
-              // No pen: this analysis is read-only and is NOT pen-gated. Leaving the lock off keeps
-              // the journey about what it is about — a planner reading, not authoring.
-              VITE_PLAN_EDIT_LOCK: 'false',
-            },
           },
         ],
       }),

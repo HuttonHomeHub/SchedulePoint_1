@@ -5,7 +5,9 @@
  * The diagram column is `inert` while a dock has taken the row or the canvas row is too short to
  * show a bar. `focus()` on a node in an inert subtree does nothing, so a restore that aimed at the
  * diagram or the Gantt grid would leave focus on <body> after the dialog that asked for it closed
- * (WCAG 2.4.3). The fallback is the first control of an open right dock, since that is what has the
+ * (WCAG 2.4.3). The same holds for a `hidden` ancestor: when the activities panel takes the body the
+ * diagram stays mounted under a `display: none` wrapper, so its listbox is in the document and
+ * cannot take focus. The fallback is the first control of an open right dock, since that is what has the
  * row, and then the activities panel's own toggle in the foot row, which is never inert. The toggle
  * is named by `data-activities-toggle` rather than found as the bar's first button: the bar also
  * hosts the dock's notice strips (the touch tip, the migration notice), whose own buttons unmount
@@ -16,7 +18,7 @@
  * focusing it.
  */
 export function reachableTarget(target: HTMLElement | null | undefined): HTMLElement | null {
-  if (target && target.closest('[inert]') === null) return target;
+  if (target && target.closest('[inert], [hidden]') === null) return target;
   return (
     document.querySelector<HTMLElement>('[data-right-dock] button') ??
     document.querySelector<HTMLElement>('[data-activities-toggle]') ??

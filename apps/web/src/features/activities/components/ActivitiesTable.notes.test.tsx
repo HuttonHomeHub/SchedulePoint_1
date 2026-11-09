@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -10,15 +10,11 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activities table's per-row **note count badge** (ADR-0046) with `VITE_NOTES` forced ON. The
+ * The activities table's per-row **note count badge** (ADR-0046). The
  * count comes from a route-composed map (fed by ONE batch `activity-counts` query, never per-row); a
  * row with ≥1 note shows the badge, and a row at zero shows none. The companion `.notes-off` suite
  * proves the flag-off invisibility.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  NOTES_ENABLED: true,
-}));
 
 const BASE: ActivitySummary = anActivity({
   planId: 'pl1',

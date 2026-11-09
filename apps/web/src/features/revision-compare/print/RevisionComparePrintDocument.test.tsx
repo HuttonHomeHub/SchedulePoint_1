@@ -45,7 +45,6 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
       dataDate: '2026-01-01',
     },
     dayFactorMinutes: 1440,
-    floatNotComparableCount: 0,
     settingsVerdict: 'MATCH',
     completion: {
       assessable: true,
@@ -238,11 +237,10 @@ describe('the printed revision comparison', () => {
     expect(cells).toContain('0 d');
   });
 
-  it('prints the float movement as the screen words it, and the not-comparable note once', () => {
+  it('prints the float movement as the screen words it', () => {
     const { container } = render(
       <RevisionComparePrintDocument
         compare={comparison({
-          floatNotComparableCount: 2,
           criticalPath: {
             ...comparison().criticalPath,
             entered: [
@@ -263,15 +261,6 @@ describe('the printed revision comparison', () => {
     const cells = [...container.querySelectorAll('tbody td')].map((c) => c.textContent);
     expect(cells).toContain('Float down 2 days (16 h)');
     expect(cells).toContain('Float change unknown');
-    const text = container.textContent ?? '';
-    expect(text.match(/Float could not be compared for 2 activities/g)).toHaveLength(1);
-  });
-
-  it('prints no float note when every float could be compared', () => {
-    const { container } = render(
-      <RevisionComparePrintDocument compare={comparison()} printedAt={PRINTED_AT} />,
-    );
-    expect(container.textContent).not.toMatch(/could not be compared/);
   });
 
   it('marks a row that is not in the live plan', () => {
@@ -309,8 +298,6 @@ describe('the printed change list', () => {
     comparison({
       changes: {
         cap: 2,
-        // See the panel fixture: null keeps these cases about the printed change list.
-        placementNotAssessableReason: null,
         classes: [
           {
             changeClass: 'RENAMED',
@@ -341,7 +328,12 @@ describe('the printed change list', () => {
             ],
             total: 9,
           },
-          { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+          {
+            changeClass: 'RELOGICKED',
+            notAssessableReason: 'SIDE_NOT_SCHEDULED',
+            rows: [],
+            total: 0,
+          },
         ],
       },
     });

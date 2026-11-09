@@ -9,22 +9,15 @@ import { apiFetch } from '@/lib/api/client';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activity **Cost accrual** select (M7 rung 5, ADR-0044 §32 / ADR-0035 §32) with `VITE_COST_ACCRUAL`
- * forced ON (and `VITE_EARNED_VALUE` left OFF, to prove the picker renders on its own flag). The surface
- * ships dark by default, so this suite pins the flag to prove: the select renders inside the "Cost &
- * earned value" fieldset with Start / Uniform / End, always sends `accrualType`, and hides for a type
- * with no cost meaning (a milestone). Flag-off (hidden) is asserted at the end.
+ * The activity **Cost accrual** select (M7 rung 5, ADR-0044 §32 / ADR-0035 §32). This suite proves: the select renders inside the
+ * "Cost & earned value" fieldset with Start / Uniform / End, always sends `accrualType`, and hides for
+ * a type with no cost meaning (a milestone).
  *
  * **The seed+round-trip case moved.** `ActivityCreateDialog` lost its edit path in the
  * activity-dialog-unification epic (create-only now, no `activity` prop), so "seeds accrualType from
  * the row and round-trips it on save" ported to `ActivityEditorDialog.round-trips.test.tsx` — "seeds
  * accrualType from the row and round-trips it on a Cost save".
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  COST_ACCRUAL_ENABLED: true,
-  EARNED_VALUE_ENABLED: false,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 
@@ -48,7 +41,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ActivityCreateD
   );
 }
 
-describe('ActivityCreateDialog — Cost accrual (flag on)', () => {
+describe('ActivityCreateDialog — Cost accrual', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(ACTIVITY);
   });

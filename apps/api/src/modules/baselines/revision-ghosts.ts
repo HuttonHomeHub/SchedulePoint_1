@@ -84,12 +84,12 @@ function isSummary(row: RevisionRow): boolean {
 export type GhostLaneSpace = 'SAME_PLAN' | 'CROSS_PLAN';
 
 /**
- * **The swimlane facts a `FULL` baseline froze**, keyed by source activity id (swimlanes M1-T1b,
- * schema-design §13.6). Passed ONLY when the from side's `swimlaneSnapshotLevel` is `FULL`: the
- * absence of this argument is the `NONE` case, and it is what makes a removed ghost carry no frozen
- * fact — which the client reads as "count, do not draw". An activity missing from the map froze no
- * lane row at all, and gets an empty `frozenLanes` rather than none, so "recorded nothing for this
- * activity" stays distinguishable from "the baseline recorded no swimlanes".
+ * **The swimlane facts a baseline froze**, keyed by source activity id (swimlanes M1-T1b,
+ * schema-design §13.6). Passed only for a same-plan comparison: its absence (cross-plan, where
+ * swimlane ids are incomparable) is what makes a removed ghost carry no frozen fact — which the
+ * client reads as "count, do not draw". An activity missing from the map froze no lane row at all,
+ * and gets an empty `frozenLanes` rather than none, so "recorded nothing for this activity" stays
+ * distinguishable from "the baseline recorded no swimlanes".
  *
  * Carried, not interpreted: which lane applies depends on the plan's source TODAY, which the
  * client already derives for live bars. This module places nothing.
@@ -183,13 +183,6 @@ export function buildRevisionGhosts(
     // completion half already reports as non-assessable. Not counted as undrawable: nothing was
     // lost by a missing COLUMN, the plan was never calculated.
     if (from.earlyStart === null || from.earlyFinish === null) continue;
-
-    // The lane, on the other hand, IS a missing column on a pre-ADR-0126 baseline — and it is the
-    // one field a guess would falsify. Counted and dropped.
-    if (from.laneIndex === null) {
-      undrawable += 1;
-      continue;
-    }
 
     // **Cross-plan, a MATCHED row draws at the ANCHOR's lane**, which is honest by construction: it
     // is literally where that bar sits in the plan being drawn on. Time is a shared coordinate

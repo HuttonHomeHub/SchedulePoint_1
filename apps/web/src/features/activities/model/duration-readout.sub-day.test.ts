@@ -1,17 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
- * The Duration column's read-out with `VITE_SUB_DAY_DURATIONS` **on** (ADR-0070 M4).
+ * The Duration column's read-out when the day factor is known (ADR-0070 M4).
  *
  * The defect it closes: a four-hour lift typed into the M1 field read back as `0 d`, which is what
  * the table also prints for a milestone — so the one screen that lists a plan's work showed a real
  * activity as having none.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-}));
-
 const { formatDurationCell, formatDurationRead } = await import('./duration-field');
 
 /** An eight-hour working day — so a day is 480 minutes and not 1440 (ADR-0068). */

@@ -29,12 +29,6 @@ import { CodeColumnsUnavailableError, type CodeColumn } from '@/lib/code-columns
  * a real print dialog.
  */
 
-// Flag ON so the wired `printDiagram` command runs (it is gated on `EXPORT_PRINT_ENABLED`).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EXPORT_PRINT_ENABLED: true,
-}));
-
 const announce = vi.fn();
 // The shared zoom-preset setter (`useTsldCanvasUiState`'s own state). The Gantt reads the preset,
 // so the toolbar must reach this even when the canvas handle is null.

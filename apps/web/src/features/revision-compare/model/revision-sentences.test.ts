@@ -8,8 +8,6 @@ import {
   comparisonAnnouncement,
   floatDaysText,
   floatMovementPhrase,
-  floatNotComparableClause,
-  floatNotComparableNote,
   floatPairTexts,
   settingsCaveat,
   sideLabel,
@@ -50,7 +48,6 @@ const compare = (over: Partial<RevisionCompare> = {}): RevisionCompare => ({
     dataDate: '2026-01-01',
   },
   dayFactorMinutes: 1440,
-  floatNotComparableCount: 0,
   settingsVerdict: 'MATCH',
   completion: completion(),
   criticalPath: {
@@ -209,33 +206,5 @@ describe('floatPairTexts', () => {
   it('adds the hours to both sides when the days read the same but the minutes moved', () => {
     expect(pair(5, 5, 2400, 2160)).toEqual({ from: '5 d (40 h)', to: '5 d (36 h)' });
     expect(pair(0, 0, -30, -90)).toEqual({ from: '0 d (−0.5 h)', to: '0 d (−1.5 h)' });
-  });
-});
-
-describe('floatNotComparableClause and the announcement', () => {
-  it('is null at zero and speaks a short clause otherwise', () => {
-    expect(floatNotComparableClause(0)).toBeNull();
-    expect(floatNotComparableClause(1)).toBe('Float could not be compared for 1 activity.');
-    expect(floatNotComparableClause(3)).toBe('Float could not be compared for 3 activities.');
-  });
-
-  it('appends the clause to the settled-comparison announcement only when there is a count', () => {
-    expect(comparisonAnnouncement(compare())).not.toMatch(/Float could not be compared/);
-    expect(comparisonAnnouncement({ ...compare(), floatNotComparableCount: 2 })).toMatch(
-      /Float could not be compared for 2 activities\.$/,
-    );
-  });
-});
-
-describe('floatNotComparableNote', () => {
-  it('is null at zero — silence is right when every float could be compared', () => {
-    expect(floatNotComparableNote(0)).toBeNull();
-  });
-
-  it('says how many and why, singular and plural', () => {
-    expect(floatNotComparableNote(1)).toMatch(/^Float could not be compared for 1 activity\./);
-    expect(floatNotComparableNote(3)).toMatch(/for 3 activities\./);
-    expect(floatNotComparableNote(3)).toMatch(/Recalculating the plan/);
-    expect(floatNotComparableNote(3)).not.toMatch(/minutes were stored/);
   });
 });

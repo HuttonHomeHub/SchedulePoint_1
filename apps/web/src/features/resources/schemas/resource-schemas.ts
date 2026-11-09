@@ -167,7 +167,7 @@ export const resourceFormSchema = z.object({
   // the form ×100 → minor units on submit and ÷100 to seed on edit. Optional (blank = no rate); `>= 0`
   // with at most 2 major decimal places (the 2-decimal money assumption, `lib/format-money`).
   // Registered with a `setValueAs` that maps a blank field to `undefined`, so an empty rate is
-  // "absent", not `NaN`. Only editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a
+  // "absent", not `NaN`. Always seeded from the row so a
   // stored value round-trips even with the field hidden.
   costPerUnit: moneyMajorAmount.optional(),
 });
@@ -205,14 +205,12 @@ export const assignmentFormSchema = z.object({
   isDriving: z.boolean(),
   // Resource loading curve (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — the named P6 profile the histogram
   // read distributes budgeted units by. Optional; blank/absent = UNIFORM (a flat load, the parity path).
-  // Only editable behind `VITE_RESOURCE_CURVES`, but always seeded from the row so a stored value
-  // round-trips when the picker is hidden.
+  // Always seeded from the row so a stored value round-trips when the picker is hidden (a milestone).
   curveType: z.enum(RESOURCE_CURVE_TYPES).optional(),
   // Assignment cost & actuals (EV4b, ADR-0042). `budgetedCost` is an optional override (blank = derive
   // from budgetedUnits × the resource's costPerUnit at EV read time); `actualCost` is the booked cost.
   // Both entered in MAJOR units (×100 → minor on submit, ÷100 to seed). `actualUnits` is the quantity of
-  // work done (a plain quantity like budgetedUnits, `>= 0`, at most 4 dp). All optional, `>= 0`. Only
-  // editable behind `VITE_EARNED_VALUE`.
+  // work done (a plain quantity like budgetedUnits, `>= 0`, at most 4 dp). All optional, `>= 0`.
   budgetedCost: moneyMajorAmount.optional(),
   actualCost: moneyMajorAmount.optional(),
   actualUnits: z

@@ -7,16 +7,9 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// Flag-ON: the Export ▾ menu is real (EXPORT_PRINT_ENABLED) AND schedule interchange is on
-// (SCHEDULE_INTERCHANGE_ENABLED), so the menu's "Interchange" group renders when the caller also holds
-// the permission (`canInterchangeExport`). The permission-off / flag-off "hidden" case is proven by
-// toggling `canInterchangeExport` below (in production it is `flag && interchange:export`).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EXPORT_PRINT_ENABLED: true,
-  SCHEDULE_INTERCHANGE_ENABLED: true,
-}));
-
+// The Export ▾ menu's "Interchange" group renders when the caller holds the permission
+// (`canInterchangeExport`). The "hidden" case is proven by toggling `canInterchangeExport` below
+// (in production it is `interchange:export`).
 const exportInterchange = vi.fn();
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {

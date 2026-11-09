@@ -1,6 +1,5 @@
 /**
- * The canvas selection, as a **set with a primary** (spec `docs/specs/canvas-multi-select/` M0-T2,
- * behind `VITE_CANVAS_MULTI_SELECT`).
+ * The canvas selection, as a **set with a primary** (spec `docs/specs/canvas-multi-select/` M0-T2).
  *
  * Pure: no React, no DOM, no canvas, no network — a sibling of `render-model` and `gesture-machine`,
  * and testable the same way. Every selection path in the canvas calls one of these reducers, so

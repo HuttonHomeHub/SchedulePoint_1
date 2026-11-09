@@ -40,11 +40,8 @@ const BASELINES: BaselineSummary[] = [
     dataDate: '2026-01-05',
     capturedProjectFinish: '2026-03-10',
     activityCount: 12,
-    // Captured before placements were recorded (placement-baseline-variance) — the
-    // "Compares" column reads "Earliest dates" for this row and "Placed dates" for the
-    // FULL row above.
-    placementSnapshotLevel: 'NONE',
-    swimlaneSnapshotLevel: 'NONE',
+    placementSnapshotLevel: 'FULL',
+    swimlaneSnapshotLevel: 'FULL',
     version: 1,
     createdAt: '2026-02-01T09:00:00Z',
     updatedAt: '2026-02-01T09:00:00Z',
@@ -86,12 +83,10 @@ describe('BaselinesPanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  // T6 (placement-baseline-variance): the "Compares" column reports what a variance read
-  // against each row will use, from its frozen placementSnapshotLevel.
-  it('shows which dates each baseline compares (placement-baseline-variance)', () => {
+  it('has no "Compares" column: every baseline compares placed dates, so it would say one thing', () => {
     renderPanel(true);
-    expect(screen.getByText('Placed dates')).toBeInTheDocument();
-    expect(screen.getByText('Earliest dates')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Compares' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Placed dates')).not.toBeInTheDocument();
   });
 
   it('hides all write actions from a non-manager', () => {

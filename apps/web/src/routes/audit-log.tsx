@@ -3,7 +3,6 @@ import { useParams } from '@tanstack/react-router';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { PageContainer, PageHeader, SectionCard } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
-import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
 import { AuditEventList } from '@/features/audit/components/AuditEventList';
 import { AuditFilterBar } from '@/features/audit/components/AuditFilterBar';
@@ -132,15 +131,10 @@ export function AuditLogScreen(): React.ReactElement {
  */
 function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
   // The filter lives in the URL so a narrowed view survives a reload and can be pasted to a
-  // colleague — the rule the library screens already follow. Flag-off the hook is still called (a
-  // hook cannot be conditional) but nothing writes to it and nothing is sent, so the request is
-  // byte-for-byte the one this screen made before the filter existed.
+  // colleague — the rule the library screens already follow.
   const [filter, setFilter] = useUrlFilterState(EMPTY_AUDIT_FILTER, parseAuditFilter);
-  const narrowed = AUDIT_FILTERS_ENABLED && !isAuditFilterEmpty(filter);
-  const query = useOrganizationAuditEvents(
-    orgSlug,
-    AUDIT_FILTERS_ENABLED ? toAuditQuery(filter, 'organization') : undefined,
-  );
+  const narrowed = !isAuditFilterEmpty(filter);
+  const query = useOrganizationAuditEvents(orgSlug, toAuditQuery(filter, 'organization'));
 
   return (
     /**
@@ -158,11 +152,9 @@ function AuditLogTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
      */
     <SectionCard title="Events" flush>
       <div className="flex flex-col gap-4">
-        {AUDIT_FILTERS_ENABLED ? (
-          <div>
-            <AuditFilterBar surface="organization" value={filter} onChange={setFilter} />
-          </div>
-        ) : null}
+        <div>
+          <AuditFilterBar surface="organization" value={filter} onChange={setFilter} />
+        </div>
         <AuditEventList
           query={query}
           caption="Organisation audit log"

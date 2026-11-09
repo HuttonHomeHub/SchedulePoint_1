@@ -13,7 +13,7 @@ export interface VarianceBaselineRow {
   baselineStart: string | null;
   baselineFinish: string | null;
   totalFloat: number | null;
-  /** Unrounded working minutes (#318); NULL beside a set `totalFloat` is not comparable. */
+  /** Unrounded working minutes (#318); null exactly when `totalFloat` is. */
   totalFloatMinutes: number | null;
 }
 
@@ -21,9 +21,9 @@ export interface VarianceBaselineRow {
  * A live activity projected to the fields variance needs (dates as `YYYY-MM-DD`).
  *
  * `start`/`finish` rather than `earlyStart`/`earlyFinish` (`placement-baseline-variance`):
- * this function is basis-blind, and the caller projects the live row onto whichever basis
- * `meta.basis` names before calling it — a field named "early" that sometimes holds a
- * PLACED date is the silent redefinition ADR-0148 refused elsewhere.
+ * this function is basis-blind, and the caller projects the live row onto the basis
+ * `meta.basis` names before calling it — a field named "early" that holds a PLACED date is
+ * the silent redefinition ADR-0148 refused elsewhere.
  */
 export interface VarianceLiveRow {
   id: string;
@@ -32,7 +32,7 @@ export interface VarianceLiveRow {
   start: string | null;
   finish: string | null;
   totalFloat: number | null;
-  /** Unrounded working minutes (#318); NULL beside a set `totalFloat` is not comparable. */
+  /** Unrounded working minutes (#318); null exactly when `totalFloat` is. */
   totalFloatMinutes: number | null;
 }
 
@@ -42,11 +42,6 @@ export interface VarianceRollup {
   behindCount: number;
   addedCount: number;
   removedCount: number;
-  /**
-   * Activities in the baseline and live whose float was calculated on both sides but has no minutes
-   * on one (ADR-0214): their `floatVarianceDays` is null and they are counted here, never read as 0.
-   */
-  floatNotComparableCount: number;
 }
 
 export interface VarianceResult {
@@ -85,7 +80,7 @@ function workingDiff(
  *
  * **Basis-blind** (`placement-baseline-variance`, amending ADR-0025): this function has no
  * idea whether `baselineStart`/`start` are placed or network dates — the caller projects
- * both inputs onto whichever basis the active baseline's `placementSnapshotLevel` selects
+ * both inputs onto the basis the active baseline's `placementSnapshotLevel` selects
  * (`meta.basis`) before calling it. Keeping the maths blind is the same property that let
  * baseline-vs-baseline come free for the revision delta (`schedule.service.ts`): one join,
  * two possible projections of its inputs, chosen once by the caller.
@@ -104,7 +99,6 @@ export function computeVariance(
   let worstFinishSlipDays: number | null = null;
   let behindCount = 0;
   let addedCount = 0;
-  let floatNotComparableCount = 0;
 
   for (const live of liveRows) {
     const base = baselineById.get(live.id) ?? null;
@@ -126,7 +120,6 @@ export function computeVariance(
     const floatVarianceMinutes =
       floatComparison?.kind === 'COMPARABLE' ? floatComparison.movementMinutes : null;
     const floatVarianceDays = floatDaysOnFrame(floatVarianceMinutes, dayFactorMinutes);
-    if (floatComparison?.kind === 'NOT_COMPARABLE') floatNotComparableCount += 1;
 
     if (base === null) addedCount += 1;
     if (finishVarianceDays !== null && finishVarianceDays > 0) {
@@ -180,6 +173,6 @@ export function computeVariance(
 
   return {
     rows,
-    rollup: { worstFinishSlipDays, behindCount, addedCount, removedCount, floatNotComparableCount },
+    rollup: { worstFinishSlipDays, behindCount, addedCount, removedCount },
   };
 }

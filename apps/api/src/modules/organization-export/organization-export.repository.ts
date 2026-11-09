@@ -109,9 +109,6 @@ export const EXPORT_STRATEGY: Readonly<Record<string, { read: ExportRead; parent
     BaselineDependency: { read: 'org' },
     BaselineActivitySwimlaneLane: { read: 'org' },
     PlanShare: { read: 'org' },
-    PlacementMigration: { read: 'per-plan' },
-    FmDateMigration: { read: 'per-plan' },
-    CrossPlanLagMigration: { read: 'per-plan' },
     Resource: { read: 'org' },
     ResourceAssignment: { read: 'org' },
     ActivityStep: { read: 'org' },
@@ -189,12 +186,6 @@ function readPage(db: Db, model: string, q: PageQuery, select: Select): Promise<
       return db.baselineActivitySwimlaneLane.findMany({ where: org, ...page });
     case 'PlanShare':
       return db.planShare.findMany({ where: org, ...page });
-    case 'PlacementMigration':
-      return db.placementMigration.findMany({ where: { ...org, planId: plan(q) }, ...page });
-    case 'FmDateMigration':
-      return db.fmDateMigration.findMany({ where: { ...org, planId: plan(q) }, ...page });
-    case 'CrossPlanLagMigration':
-      return db.crossPlanLagMigration.findMany({ where: { ...org, planId: plan(q) }, ...page });
     case 'Resource':
       return db.resource.findMany({ where: org, ...page });
     case 'ResourceAssignment':

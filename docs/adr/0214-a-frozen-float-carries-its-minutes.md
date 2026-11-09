@@ -16,6 +16,8 @@
   ADR-0126 (the change list), ADR-0127 (an overlay counts what it does not know), ADR-0132 (a standing
   condition is text, not an announcement), ADR-0088 D1 (no flag).
 
+> **Amended 2026-11-09 by [ADR-0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md):** "until the 1.0 wipe" now reads "until the 1.1.0 fresh start"; no baseline from before it exists.
+
 ## Context
 
 `total_float` is `Math.round(minutes / factor)` on the activity's own calendar, and the minutes were thrown

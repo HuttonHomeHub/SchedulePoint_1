@@ -9,16 +9,9 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
  * On-canvas advanced activity types (Stage D, `docs/specs/canvas-activity-types/`) — the Add
- * split-button's "Span between activities" section. This suite pins the flag ON (the flag-off parity
- * — today's disabled Level-of-effort + Hammock "Soon" placeholders — is covered by
- * `tsld-toolbar-authoring.test.tsx`). The Add split-button itself needs `CANVAS_AUTHORING` on, so both
- * flags are pinned here.
+ * split-button's "Span between activities" section. The authoring cluster itself is covered by
+ * `tsld-toolbar-authoring.test.tsx`.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_ACTIVITY_TYPES_ENABLED: true,
-}));
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
   return makeTsldToolbarContext({

@@ -10,7 +10,7 @@ import {
 } from './render-model';
 
 /**
- * The **cursor date readout** (ADR-0054 §2, `VITE_CANVAS_LIVE_FEEDBACK`) — the pure half. Given
+ * The **cursor date readout** (ADR-0054 §2) — the pure half. Given
  * the in-flight gesture (or none) and the pointer, it decides *which day* the planner is actually
  * choosing and what sentence describes it.
  *

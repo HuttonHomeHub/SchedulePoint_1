@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -10,15 +10,10 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activities table's read-only **WBS** column (ADR-0038, entry-route gap #7) with
- * `VITE_ADVANCED_ACTIVITY_TYPES` forced ON. It resolves each activity's `parentId` to the parent
+ * The activities table's read-only **WBS** column (ADR-0038, entry-route gap #7). It resolves each activity's `parentId` to the parent
  * WBS-summary's display string (code, else name) from the loaded activities — no extra fetch — and
- * shows an em dash for a top-level activity. Flag-off (no column) is the default the base suite covers.
+ * shows an em dash for a top-level activity.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ADVANCED_ACTIVITY_TYPES_ENABLED: true,
-}));
 
 const BASE: ActivitySummary = anActivity({
   planId: 'pl1',

@@ -30,15 +30,6 @@ import { anActivity } from '@/test/activity-fixture';
  */
 const announceSpy = vi.fn();
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => announceSpy }));
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: true,
-    TSLD_EDITING_ENABLED: true,
-    CANVAS_AUTHORING_FLOW_ENABLED: true,
-  };
-});
 
 let capturedPickStep: ((predecessorId: string | null) => void) | undefined;
 vi.mock('./TsldCanvas', () => ({

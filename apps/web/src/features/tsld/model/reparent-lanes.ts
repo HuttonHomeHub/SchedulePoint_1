@@ -58,7 +58,7 @@ export function planReparentLanes(args: {
   if (changedGroup.length === 0) return [];
 
   const diagram = deriveDiagramSource(after, {
-    wbsBand: { enabled: false, toggleOn: false },
+    wbsBand: { toggleOn: false },
     swimlanes: input,
     source: 'visual',
     dataDate,

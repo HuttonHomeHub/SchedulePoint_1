@@ -73,12 +73,6 @@ export default defineConfig({
             // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
             // times, each citing its neighbours as precedent. The flag now takes its default, which is
             // what every shipped bundle carries (ADR-0088 D1).
-            env: {
-              VITE_RESOURCES: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-            },
           },
         ],
       }),

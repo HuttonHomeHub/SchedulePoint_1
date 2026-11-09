@@ -1,7 +1,6 @@
 import type { LagCalendarSource } from '@repo/types';
 import { z } from 'zod';
 
-import { SUB_DAY_DURATIONS_ENABLED } from '@/config/env';
 import {
   DURATION_PARSE_MESSAGE,
   checkSignedDurationText,
@@ -14,8 +13,8 @@ import {
  *
  * This is `duration-field.ts` one field along, and deliberately the same shape: one field, whose
  * grammar is decided by the single question *do we know how many hours this lag's day is worth?* —
- * with the same three ways of answering no (flag off, calendar list unresolved, bound calendar
- * absent) landing on the same degraded whole-days control that flag-off produces.
+ * with the same two ways of answering no (calendar list unresolved, bound calendar absent)
+ * landing on the same degraded whole-days control.
  *
  * The one difference from a duration is the **sign**: a lead is negative, which is the existing
  * convention and unchanged.
@@ -26,7 +25,7 @@ const MAX_WHOLE_DAYS = 3650;
 
 /** Can this field read hours and minutes right now? Narrows `hoursPerDay` for the caller. */
 export function canAuthorSubDayLag(hoursPerDay: number | undefined): hoursPerDay is number {
-  return SUB_DAY_DURATIONS_ENABLED && hoursPerDay !== undefined;
+  return hoursPerDay !== undefined;
 }
 
 /**
@@ -34,8 +33,8 @@ export function canAuthorSubDayLag(hoursPerDay: number | undefined): hoursPerDay
  * elapsed, everything else is working time — so the label keeps saying which, and stops naming
  * *days* only when days are no longer the only thing the field takes.
  *
- * The degraded wording is the sentence that shipped, character for character: it is what a rollback
- * restores, so changing it here would make the flag-off path differ from the one it is meant to be.
+ * The degraded wording is the sentence that shipped, character for character: changing it would
+ * change what a planner sees whenever the calendar factor is unknown.
  */
 export function lagFieldLabel(
   lagCalendar: LagCalendarSource,
@@ -49,8 +48,8 @@ export function lagFieldLabel(
 }
 
 /**
- * The help line under the field — present only when there is something to say, so flag-off the
- * degraded control is byte-identical to the one that shipped.
+ * The help line under the field — present only when there is something to say, so the degraded
+ * control stays as it always was.
  */
 export function lagFieldHelp(
   lagCalendar: LagCalendarSource,
@@ -69,7 +68,7 @@ export function lagFieldHelp(
 
 /**
  * The input's own props, bundled for the same reason `durationInputProps` is: a label that reads the
- * flag beside a `type` that does not is how flag-off ends up rendering a free-text box under a label
+ * factor beside a `type` that does not is how the degraded path ends up rendering a free-text box under a label
  * promising whole days.
  */
 export function lagInputProps(

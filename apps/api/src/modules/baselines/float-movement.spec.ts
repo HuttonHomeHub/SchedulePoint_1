@@ -17,17 +17,14 @@ describe('compareFloat', () => {
     });
   });
 
-  it('is not comparable when a side has days but no minutes', () => {
-    expect(compareFloat({ days: 5, minutes: null }, { days: 5, minutes: 2400 }).kind).toBe(
-      'NOT_COMPARABLE',
+  it('is not calculated when a side was never calculated (both columns null), whatever the other holds', () => {
+    expect(compareFloat({ days: null, minutes: null }, { days: 5, minutes: 2400 }).kind).toBe(
+      'NOT_CALCULATED',
     );
-    expect(compareFloat({ days: 5, minutes: 2400 }, { days: 5, minutes: null }).kind).toBe(
-      'NOT_COMPARABLE',
+    expect(compareFloat({ days: 5, minutes: 2400 }, { days: null, minutes: null }).kind).toBe(
+      'NOT_CALCULATED',
     );
-  });
-
-  it('is not calculated when a side has no days, whatever the other holds', () => {
-    expect(compareFloat({ days: null, minutes: null }, { days: 5, minutes: null }).kind).toBe(
+    expect(compareFloat({ days: null, minutes: null }, { days: null, minutes: null }).kind).toBe(
       'NOT_CALCULATED',
     );
   });

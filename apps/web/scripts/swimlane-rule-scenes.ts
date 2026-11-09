@@ -52,7 +52,6 @@ export function swimlaneScene(): {
     visualRefresh: true,
     timeTrueLinks: true,
     linkRouting: true,
-    gridTiers: true,
     monthBands: true,
   };
 

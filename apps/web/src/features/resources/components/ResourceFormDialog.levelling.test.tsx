@@ -8,16 +8,10 @@ import { ResourceFormDialog } from './ResourceFormDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The resource levelling-capacity field (`maxUnitsPerHour`, ADR-0041) with `VITE_RESOURCE_LEVELLING`
- * forced ON — the surface ships dark by default, so this suite pins the flag to prove the field renders,
- * persists on create (omitted when blank), and seeds + round-trips a stored value on edit (blank clears
- * it to null). The flag-off behaviour (field hidden, seeded value still round-trips) is covered by
- * `ResourceFormDialog.test.tsx`.
+ * The resource levelling-capacity field (`maxUnitsPerHour`, ADR-0041): proves the field renders,
+ * persists on create (omitted when blank), and seeds + round-trips a stored value on edit (blank
+ * clears it to null).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

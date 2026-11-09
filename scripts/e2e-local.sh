@@ -136,7 +136,11 @@ as_super "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='app'\"" | grep -q 1 
 as_super "psql -qc \"ALTER ROLE app SUPERUSER;\"" >/dev/null
 as_super "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='app_test'\"" | grep -q 1 \
   || as_super "psql -qc \"CREATE DATABASE app_test OWNER app;\""
-echo "ready: ${DATABASE_URL}"
+# One redaction for every line that echoes a connection string. Greedy to the LAST `@`, because a
+# password may itself contain `@` or `/`; over-masking is the safe direction. A `password=` query
+# parameter is masked too.
+redact_url() { printf '%s' "$1" | sed -e 's#://.*@#://[redacted]@#' -e 's#\([?&;]password=\)[^&; ]*#\1[redacted]#g'; }
+echo "ready: $(redact_url "$DATABASE_URL")"
 
 # --- 2. One run per database ------------------------------------------------
 #
@@ -166,6 +170,13 @@ DB_LOCK_KEY=349
 db_conninfo="${DATABASE_URL%%\?*}" # libpq rejects Prisma's `?schema=public`
 lock_db_name="${db_conninfo##*/}"
 lock_conninfo="${db_conninfo%/*}/postgres"
+# The name is interpolated into SQL below (the lock key, the lineage reset), so it is checked first.
+case "$lock_db_name" in
+  '' | *[!A-Za-z0-9_]*)
+    echo "DATABASE_URL names a database whose name is not letters, digits and underscores; refusing to run." >&2
+    exit 1
+    ;;
+esac
 lock_objid="hashtext('${lock_db_name}')"
 coproc DBLOCK { PGAPPNAME="e2e-local[$$]" psql -qtA "$lock_conninfo"; }
 trap 'kill "${DBLOCK_PID:-}" 2>/dev/null || true' EXIT
@@ -190,13 +201,84 @@ product, not with an error that names the contention. Wait for it to finish, or 
 at a database of your own, then re-run.
 EOF
   else
-    echo "Could not take the run lock for ${lock_db_name} (via ${lock_conninfo}; no answer from psql); refusing to run unguarded." >&2
+    echo "Could not take the run lock for ${lock_db_name} (via $(redact_url "$lock_conninfo"); no answer from psql); refusing to run unguarded." >&2
   fi
   exit 1
 fi
 echo "run lock held (advisory key ${DB_LOCK_KEY}/${lock_db_name})"
 
 # --- 3. Schema --------------------------------------------------------------
+#
+# **A database from before the 1.1 baseline is thrown away and rebuilt, and only that** (ADR-0215).
+# 1.1 replaced 84 migrations with one baseline, so `migrate deploy` against a long-lived `app_test`
+# built from the old chain cannot apply it (the first `CREATE TYPE` collides) and every suite after it
+# fails on the schema rather than on the change under test. Two states are stale and neither can be
+# repaired by migrating: a row named before the baseline, and a baseline row whose checksum is not that
+# of the file in this checkout (the baseline is unreleased and may still be edited; Prisma would refuse
+# the drift). A database already on the current baseline is never touched, and the one reset here is of
+# the database in DATABASE_URL, which this run holds the lock on and is about to migrate: `app_test`
+# unless somebody pointed it elsewhere.
+log "Schema lineage"
+baseline_dir="$(ls -1 apps/api/prisma/migrations | grep -E '^[0-9]+_' | LC_ALL=C sort | head -1)"
+baseline_sum="$(sha256sum "apps/api/prisma/migrations/${baseline_dir}/migration.sql" | cut -d ' ' -f 1)"
+lineage="$(psql -qtA "$db_conninfo" -c "SELECT CASE
+    WHEN to_regclass('public._prisma_migrations') IS NULL THEN 'unmigrated'
+    WHEN EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name COLLATE \"C\" < '${baseline_dir}' AND rolled_back_at IS NULL) THEN 'pre-1.1'
+    WHEN EXISTS (SELECT 1 FROM public._prisma_migrations WHERE migration_name = '${baseline_dir}' AND checksum <> '${baseline_sum}') THEN 'baseline-changed'
+    ELSE 'current' END" 2>/dev/null || true)"
+case "$lineage" in
+  pre-1.1 | baseline-changed)
+    # The reset DROPs a database, so it is limited to one that is plainly a throwaway: named app_test or
+    # *_test, on this machine. Anything else is described and left for its owner to reset by hand;
+    # E2E_ALLOW_RESET=1 is the explicit override.
+    db_authority="${db_conninfo#*://}"
+    db_authority="${db_authority%%/*}"
+    db_host="${db_authority##*@}"
+    case "$db_host" in
+      \[*) db_host="${db_host#\[}"; db_host="${db_host%%\]*}" ;;
+      *) db_host="${db_host%%:*}" ;;
+    esac
+    # A comma makes the authority a multi-host list, which libpq tries in turn and may fail over to a
+    # non-local host, so the host test below would be answering for only the first of them.
+    case "$db_authority" in
+      *,*)
+        echo "DATABASE_URL lists more than one host; refusing to run, because the reset guard cannot say where it would connect." >&2
+        exit 1
+        ;;
+    esac
+    # An empty host means the socket, unless the environment points libpq at somewhere else.
+    # (A localhost SSH tunnel to a remote database still passes this guard; that is accepted.)
+    env_host_local=1
+    for env_host in "${PGHOST:-}" "${PGHOSTADDR:-}"; do
+      case "$env_host" in '' | localhost | 127.0.0.1 | ::1 | /*) ;; *) env_host_local=0 ;; esac
+    done
+    reset_ok=0
+    case "$lock_db_name" in app_test | *_test) case "$db_host" in '') [ "$env_host_local" = 1 ] && reset_ok=1 ;; localhost | 127.0.0.1 | ::1 | /* | %2[Ff]*) reset_ok=1 ;; esac ;; esac
+    if [ "$reset_ok" != 1 ] && [ "${E2E_ALLOW_RESET:-}" != 1 ]; then
+      echo "${lock_db_name} (host '${db_host:-local socket}') has lineage ${lineage}, and the run will not drop it:" >&2
+      echo "only app_test or *_test on localhost is reset automatically. Reset it by hand, or set E2E_ALLOW_RESET=1." >&2
+      exit 1
+    fi
+    if [ "$lineage" = pre-1.1 ]; then
+      echo "${lock_db_name} was built from migrations before the 1.1 baseline (${baseline_dir}); dropping and recreating it."
+    else
+      echo "${lock_db_name}'s ${baseline_dir} row does not match this checkout's migration.sql (sha256 ${baseline_sum%"${baseline_sum#????????????}"}...); dropping and recreating it."
+    fi
+    db_owner="$(psql -qtA "$lock_conninfo" -c "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = '${lock_db_name}'")"
+    case "$db_owner" in
+      *[!A-Za-z0-9_]*)
+        echo "Refusing to reset ${lock_db_name}: its owner '${db_owner}' is not letters, digits and underscores." >&2
+        exit 1
+        ;;
+    esac
+    psql -q -v ON_ERROR_STOP=1 "$lock_conninfo" \
+      -c "DROP DATABASE \"${lock_db_name}\" WITH (FORCE)" \
+      -c "CREATE DATABASE \"${lock_db_name}\" OWNER \"${db_owner:-app}\""
+    echo "${lock_db_name} reset."
+    ;;
+  *) echo "${lock_db_name}: lineage ${lineage:-unknown}; left as it is." ;;
+esac
+
 log "Migrations"
 pnpm --filter @repo/api exec prisma migrate deploy
 
@@ -209,9 +291,8 @@ for t in "${targets[@]}"; do [ "$t" = "--db-only" ] && exit 0; done
 #
 # **A dev server you already started is a silent, wrong pass or a silent, wrong FAIL.**
 # Every `playwright.*.config.ts` here sets `reuseExistingServer: !process.env.CI`, and the whole
-# point of these configs is the environment they hand their servers: the base journey pins
-# `VITE_PLAN_EDIT_LOCK=false`, thirteen flag-on configs set `PLAN_EDIT_LOCK_ENFORCED=true`, and
-# each suite pins its own `VITE_` flags. Reuse takes a server that carries somebody else's
+# point of these configs is the environment they hand their servers: several configs set
+# `PLAN_EDIT_LOCK_ENFORCED=true`, and each suite hands its servers its own environment. Reuse takes a server that carries somebody else's
 # environment and runs the suite against it anyway, reporting nothing.
 #
 # On 2026-08-19 that produced three consecutive false diagnoses in one session — 7 base-journey

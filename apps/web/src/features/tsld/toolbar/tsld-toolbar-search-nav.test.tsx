@@ -7,14 +7,7 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// Flag-ON search navigation. `VITE_CANVAS_SEARCH_NAV` is derived from `VITE_CANVAS_LENSES`, so both
-// are mocked on — a build with search nav on and lenses off cannot exist, and mocking only the
-// derived flag would test a state the product never reaches.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_SEARCH_NAV_ENABLED: true,
-}));
+// Search navigation on the real registry.
 
 const goToMatch = vi.fn();
 const escapeSearchField = vi.fn();

@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * **Flag-ON** end-to-end configuration for **search that navigates**
- * (`VITE_CANVAS_SEARCH_NAV`, `docs/specs/canvas-search-navigation/` M5-T2) — Enter and Shift+Enter
+ * (`docs/specs/canvas-search-navigation/` M5-T2) — Enter and Shift+Enter
  * walking the match set, the n-of-m read-out, the announcement, Zoom to selection, and the Gantt's
  * half of the same match set.
  *
@@ -66,28 +66,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // The epic's surface under test. `VITE_CANVAS_SEARCH_NAV` is DERIVED from
-              // `VITE_CANVAS_LENSES`, so both are set: a build with navigation on and lenses off
-              // cannot exist, and pinning only the derived flag would boot a state the product
-              // never reaches.
-              VITE_CANVAS_SEARCH_NAV: 'true',
-              VITE_CANVAS_LENSES: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              // The Link tool, and the pen it is gated on — the Escape-precedence assertion is
-              // about an ARMED tool surviving a keystroke in the field, so both are required.
-              VITE_CANVAS_AUTHORING_FLOW: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              // The Gantt, for M4's half of the match set. Default-on since ADR-0059 M6; pinned
-              // here so this suite does not silently lose an assertion to a future flag change.
-              VITE_GANTT_VIEW: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

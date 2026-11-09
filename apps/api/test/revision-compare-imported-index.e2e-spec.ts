@@ -10,8 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * it: `uq_activities_plan_code` must keep existing, keep being UNIQUE, keep covering
  * `(plan_id, code)`, and keep its partial predicate.
  *
- * **Why `pg_indexes` and not the migration file.** Reading
- * `20260710092048_add_activities/migration.sql` would prove the index was once created and would
+ * **Why `pg_indexes` and not the migration file.** Reading the SQL that creates it (the 1.1 baseline;
+ * `20260710092048_add_activities` at api-v1.0.0 before it) would prove the index was once created and would
  * pass happily after a later migration dropped or relaxed it — the assertion would describe history
  * rather than the running system. This asks the database what it currently enforces.
  *

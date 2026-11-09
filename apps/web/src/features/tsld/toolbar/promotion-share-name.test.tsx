@@ -1,15 +1,9 @@
 import { cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { readDeck } from './promotion-test-support';
 import { makeTsldToolbarContext } from './test-helpers';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EXPORT_PRINT_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
-}));
 
 afterEach(cleanup);
 

@@ -49,18 +49,12 @@ import type { PlanPen } from '@/features/plan-lock/api/use-plan-edit-lock';
  * toggle-shaped, never of its current value. It was conditional in the first version, so the same
  * element was exposed as a toggle button in one state and a plain button in the others.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  PLAN_EDIT_LOCK_ENABLED: true,
-}));
-
 const ME = { id: 'u-me', name: 'Mo Hale' };
 const JANE = { id: 'u-jane', name: 'Jane Okonkwo' };
 
 /** A `PlanPen` whose only interesting fields are the status and the lost-control reason. */
 function pen(over: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: undefined,
     holdsPen: false,
     isPending: false,

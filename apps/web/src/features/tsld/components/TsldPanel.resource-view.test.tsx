@@ -4,15 +4,6 @@ import { useEffect, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Stage E M2 (over-allocation highlight) ON; editing/authoring OFF to keep the read surface simple.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_RESOURCE_VIEW_ENABLED: true,
-    TSLD_EDITING_ENABLED: false,
-    CANVAS_AUTHORING_ENABLED: false,
-  };
-});
 
 // Capture live-region announcements.
 const announceSpy = vi.fn();

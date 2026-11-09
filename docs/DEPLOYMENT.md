@@ -485,6 +485,16 @@ secret manager — never baked into images or committed. See
   before the new API version serves traffic. Where backups are switched on, the entrypoint
   first takes a copy when a migration is pending, and a failed copy holds the update (see
   [Backups](#backups)).
+- The entrypoint's first step is `schedulepoint-backup preflight` (ADR-0215): it refuses, before any copy
+  or migration, a database made before the 1.1 baseline, one it cannot read and one that is not
+  SchedulePoint's, logging `boot.database_refused` and pointing at
+  [`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md). A 1.1 database that a later 1.1.x
+  has migrated still passes, so rolling back by image tag works inside 1.1.
+  The refusal states are `pre_1_1_lineage`, `mixed_lineage` (a 1.0 image was started on a 1.1 database),
+  `failed_migration`, `cannot_read` (the database is down or `DATABASE_URL` is wrong; the container retries)
+  and `unknown_database`; an empty database (`fresh`) and a 1.1 one (`current`) are accepted. Each refusal
+  prints three plain lines and writes nothing. The one-time move to 1.1.0 is the guide's procedure, and
+  going back to 1.0 is the old volume with `API_IMAGE_TAG` and `WEB_IMAGE_TAG` pinned to `1.0.0`, never a tag alone.
 - Migrations are backward-compatible where feasible (expand/contract) so a
   rollout can proceed without downtime and a rollback stays safe.
 
@@ -499,503 +509,48 @@ secret manager — never baked into images or committed. See
 
 ### Rolling back past the finish-milestone date release
 
-That release (`docs/specs/finish-milestone-date/`) makes the engine read a finish milestone's date as
-the **end** of that day, and its migration
-`20260923120000_finish_milestone_end_of_day_placements` moves every stored finish-milestone
-placement one day earlier so no diamond moves. A previous API image reads those placements as the
-**start** of the day, so **redeploying the previous images alone draws every placed finish milestone
-one working day early** and can move its successors. Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Run the reverse below as **one transaction**, e.g.
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -1 -f - < reverse.sql`.
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the plans people are working in: the stored display dates were computed under the
-   new rule and stay that way until each plan's next recalculation.
-
-```sql
--- 0. Guard: fails if the reverse already ran (the table is gone), so step 1 cannot apply twice.
---    To keep the record, \copy "finish_milestone_date_migrations" out before running this.
-LOCK TABLE "finish_milestone_date_migrations" IN ACCESS EXCLUSIVE MODE;
-
--- 1. The rule inverse on EVERY finish-milestone placement, including ones placed after the
---    release: they are all in the new encoding, and +1 keeps each diamond where it was.
-UPDATE "activities"
-   SET "visual_start" = "visual_start" + 1,
-       "version"      = "version" + 1
- WHERE "type" = 'FINISH_MILESTONE' AND "visual_start" IS NOT NULL;
-
--- 2. Check against the record. 0 means every migrated row is back at its original date; a
---    non-zero count is milestones a planner re-placed after the release (kept, shifted +1).
-SELECT count(*) FROM "finish_milestone_date_migrations" m
-  JOIN "activities" a ON a."id" = m."activity_id"
- WHERE a."type" = 'FINISH_MILESTONE' AND a."visual_start" <> m."prior_visual_start";
-
--- 3. Remove the record and the migration's entry so a later roll-forward applies it afresh.
-DROP TABLE "finish_milestone_date_migrations";
-DELETE FROM "_prisma_migrations"
- WHERE "migration_name" = '20260923120000_finish_milestone_end_of_day_placements';
-```
-
-Measured on a populated copy (102,000 activities, 2,266 placed finish milestones): step 1 updated
-2,266 rows, step 2 returned 0, every `visual_start` matched its pre-migration value, and a second
-run failed at step 0. The previous API image does not know the dropped table, so nothing reads it.
+**History; it does not apply to a 1.1 database.** Until 1.0 this section held the reverse of
+`20260923120000_finish_milestone_end_of_day_placements` (ADR-0155): shift every placed finish milestone
+back one day, check against `finish_milestone_date_migrations`, then drop that table and the
+migration's `_prisma_migrations` row. The 1.1 baseline (ADR-0215) contains no such migration, and a
+1.1 database has no row the reverse could act on: the table `finish_milestone_date_migrations` no
+longer exists (ADR-0215 D6). Rolling 1.1 back to 1.0 is the old volume, not a reverse script
+(ADR-0215 D3, [`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md)). The procedure, with
+its measurement on a populated copy, is at git tag `api-v1.0.0` (this file).
 
 ### Rolling back past the cross-plan lag release
 
-That release (`docs/specs/cross-plan-day-boundary/`, `docs/TECH_DEBT.md` #385) stores a cross-plan
-link's lag as **working minutes on its resolved lag calendar**, the unit an in-plan lag has always
-used. Its migration `20260926120000_cross_plan_lag_working_minutes` rewrote every stored
-`cross_plan_dependencies.lag_minutes` from the old `days × 1440` into that unit and recorded each
-link in `cross_plan_lag_migrations`. A previous API image reads the column as `days × 1440` and
-writes new links that way, so **redeploying the previous images alone mixes two encodings in one
-column**: every re-encoded lag on a calendar shorter than 24 hours reads as fewer days (a one-day
-lag on an eight-hour calendar is 480 minutes, which the old image shows as `0` days), and nothing
-afterwards can tell which rows are in which unit. Roll back with the procedure below instead.
+**History; it does not apply to a 1.1 database.** Until 1.0 this section held the reverse of
+`20260926120000_cross_plan_lag_working_minutes` (ADR-0161, `docs/TECH_DEBT.md` #385): re-encode every
+cross-plan lag from working minutes back to `days × 1440`, checked against `cross_plan_lag_migrations`,
+then drop that table and the migration's `_prisma_migrations` row. Its e2e proof
+(`cross-plan-lag-migration.e2e-spec.ts`) went with the migration (ADR-0215 amending ADR-0107 D2). On a
+1.1 database every lag has been written in working minutes from the first row, so there is nothing to
+re-encode, and the table `cross_plan_lag_migrations` no longer exists (ADR-0215 D6). Rolling 1.1 back to
+1.0 is the old volume (ADR-0215 D3). The procedure, its three caveats and the migration's `resolved`
+CTE are at git tag `api-v1.0.0` (this file).
 
-**Before starting: find factor drift.** The reverse converts each link created **after** the release
-back to days using the factor it resolves to **today**. If what a link resolves to has changed since
-the release, today's factor may not be the one its lag was written with, and the reverse turns its
-minutes into the wrong number of days. Run this finder first. It lists every link with no record
-(created after the release) where:
+### Re-derivation markers (history)
 
-1. the calendar it resolves to was edited after the migration finished (an hours-per-day change is
-   one kind of edit; the column moves on any edit, so this over-reports on purpose);
-2. its `lag_minutes` is not a whole multiple of today's factor; or
-3. **one of its endpoint activities, their plans, or any of their resource assignments or those
-   assignments' resources was edited after the migration finished.** Any assignment, not only a
-   driving one: un-flagging a driver writes only the assignment row, and a join on
-   `is_driving` would no longer see it. This limb was added in M2-T2 and is not in the spec's
-   reversal section: the first two cannot see a change of **resolution path**. A plan switched to a
-   different, unedited calendar, or an activity given its own calendar, changes the factor with no
-   calendar edit, and when the stored minutes happen to be a multiple of the new factor the second
-   limb is silent too. The migration test pins exactly that case.
-
-It must never under-report, and it over-reports freely. Check each row it returns by hand and either
-correct its lag or note the day count the planner expects, before running the reverse.
-
-```sql
--- cross-plan lag: factor-drift finder
-WITH resolved AS (
-  SELECT
-    d."id" AS "cross_plan_dependency_id",
-    d."organization_id" AS "organization_id",
-    s."plan_id" AS "plan_id",
-    d."lag_calendar" AS "lag_calendar",
-    k."calendar_id" AS "lag_calendar_id",
-    COALESCE(c."hours_per_day_minutes", 1440) AS "day_factor_minutes",
-    d."lag_minutes" AS "prior_lag_minutes",
-    round(d."lag_minutes"::numeric * COALESCE(c."hours_per_day_minutes", 1440) / 1440)::integer AS "new_lag_minutes"
-  FROM "cross_plan_dependencies" d
-  JOIN "activities" p ON p."id" = d."predecessor_id"
-  JOIN "plans" pp ON pp."id" = p."plan_id"
-  JOIN "activities" s ON s."id" = d."successor_id"
-  JOIN "plans" sp ON sp."id" = s."plan_id"
-  LEFT JOIN "resource_assignments" pa
-    ON pa."activity_id" = p."id" AND pa."is_driving" AND pa."deleted_at" IS NULL
-    AND p."type" = 'RESOURCE_DEPENDENT' AND p."deleted_at" IS NULL
-  LEFT JOIN "resources" pr ON pr."id" = pa."resource_id" AND pr."deleted_at" IS NULL
-  LEFT JOIN "resource_assignments" sa
-    ON sa."activity_id" = s."id" AND sa."is_driving" AND sa."deleted_at" IS NULL
-    AND s."type" = 'RESOURCE_DEPENDENT' AND s."deleted_at" IS NULL
-  LEFT JOIN "resources" sr ON sr."id" = sa."resource_id" AND sr."deleted_at" IS NULL
-  CROSS JOIN LATERAL (
-    SELECT CASE d."lag_calendar"
-      WHEN 'TWENTY_FOUR_HOUR' THEN NULL::uuid
-      WHEN 'PROJECT_DEFAULT' THEN sp."calendar_id"
-      WHEN 'PREDECESSOR' THEN COALESCE(pr."calendar_id", p."calendar_id", pp."calendar_id")
-      WHEN 'SUCCESSOR' THEN COALESCE(sr."calendar_id", s."calendar_id", sp."calendar_id")
-    END AS "calendar_id"
-  ) k
-  LEFT JOIN "calendars" c ON c."id" = k."calendar_id"
-),
-released AS (
-  -- Always one row. With no applied marker every edit counts as "after", so the finder lists
-  -- every unrecorded link rather than none: over-reporting, never silence.
-  SELECT COALESCE(
-    (SELECT "finished_at" FROM "_prisma_migrations"
-      WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes'
-        AND "rolled_back_at" IS NULL),
-    '-infinity'::timestamptz
-  ) AS "finished_at"
-)
-SELECT r."cross_plan_dependency_id", d."lag_minutes", r."lag_calendar", r."lag_calendar_id",
-       r."day_factor_minutes"
-  FROM resolved r
-  JOIN "cross_plan_dependencies" d ON d."id" = r."cross_plan_dependency_id"
-  CROSS JOIN released rel
- WHERE NOT EXISTS (
-         SELECT 1 FROM "cross_plan_lag_migrations" m
-          WHERE m."cross_plan_dependency_id" = r."cross_plan_dependency_id"
-       )
-   AND (
-         EXISTS (
-           SELECT 1 FROM "calendars" cal
-            WHERE cal."id" = r."lag_calendar_id" AND cal."updated_at" > rel."finished_at"
-         )
-      OR d."lag_minutes" % r."day_factor_minutes" <> 0
-      OR EXISTS (
-           SELECT 1
-             FROM "activities" a
-             JOIN "plans" ap ON ap."id" = a."plan_id"
-             LEFT JOIN "resource_assignments" ra ON ra."activity_id" = a."id"
-             LEFT JOIN "resources" rs ON rs."id" = ra."resource_id"
-            WHERE a."id" IN (d."predecessor_id", d."successor_id")
-              AND (a."updated_at" > rel."finished_at" OR ap."updated_at" > rel."finished_at"
-                   OR ra."updated_at" > rel."finished_at" OR rs."updated_at" > rel."finished_at")
-         )
-       )
- ORDER BY r."cross_plan_dependency_id";
-```
-
-**The procedure:**
-
-1. Stop the API container (leave the database running). The reverse runs with nothing writing.
-2. Run the reverse below as **one transaction**, e.g.
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -1 -f - < reverse.sql`.
-   Any failed statement or check rolls the whole reverse back.
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. **Recalculate the linked plans** (Recalculate programme on each most-downstream plan). Their
-   stored dates were computed under the new rule and stay that way until recalculated, and the
-   previous image has no boot re-derivation to do it.
-
-```sql
--- cross-plan lag: reverse
--- 1. One-shot guard, not concurrency protection (the API is already stopped): if the reverse has
---    already run, the table is gone, this fails, and nothing applies twice. To keep the record,
---    \copy "cross_plan_lag_migrations" out before running this.
-LOCK TABLE "cross_plan_lag_migrations" IN ACCESS EXCLUSIVE MODE;
-
--- 2. Restore every recorded link the migration changed, and bump its version again: an
---    optimistic-lock version never goes backwards.
-UPDATE "cross_plan_dependencies" d
-   SET "lag_minutes" = m."prior_lag_minutes",
-       "version"     = d."version" + 1
-  FROM "cross_plan_lag_migrations" m
- WHERE d."id" = m."cross_plan_dependency_id"
-   AND m."new_lag_minutes" <> m."prior_lag_minutes";
-
--- 3. Convert every link created after the release (no record) back to days x 1440, on the factor
---    the migration's own resolution gives today. `resolved` is the migration's CTE copied
---    verbatim. floor(x + 0.5) rather than round() matches the API's Math.round on negative
---    halves: round(-2.5) is -3 in Postgres and Math.round(-2.5) is -2.
-WITH resolved AS (
-  SELECT
-    d."id" AS "cross_plan_dependency_id",
-    d."organization_id" AS "organization_id",
-    s."plan_id" AS "plan_id",
-    d."lag_calendar" AS "lag_calendar",
-    k."calendar_id" AS "lag_calendar_id",
-    COALESCE(c."hours_per_day_minutes", 1440) AS "day_factor_minutes",
-    d."lag_minutes" AS "prior_lag_minutes",
-    round(d."lag_minutes"::numeric * COALESCE(c."hours_per_day_minutes", 1440) / 1440)::integer AS "new_lag_minutes"
-  FROM "cross_plan_dependencies" d
-  JOIN "activities" p ON p."id" = d."predecessor_id"
-  JOIN "plans" pp ON pp."id" = p."plan_id"
-  JOIN "activities" s ON s."id" = d."successor_id"
-  JOIN "plans" sp ON sp."id" = s."plan_id"
-  LEFT JOIN "resource_assignments" pa
-    ON pa."activity_id" = p."id" AND pa."is_driving" AND pa."deleted_at" IS NULL
-    AND p."type" = 'RESOURCE_DEPENDENT' AND p."deleted_at" IS NULL
-  LEFT JOIN "resources" pr ON pr."id" = pa."resource_id" AND pr."deleted_at" IS NULL
-  LEFT JOIN "resource_assignments" sa
-    ON sa."activity_id" = s."id" AND sa."is_driving" AND sa."deleted_at" IS NULL
-    AND s."type" = 'RESOURCE_DEPENDENT' AND s."deleted_at" IS NULL
-  LEFT JOIN "resources" sr ON sr."id" = sa."resource_id" AND sr."deleted_at" IS NULL
-  CROSS JOIN LATERAL (
-    SELECT CASE d."lag_calendar"
-      WHEN 'TWENTY_FOUR_HOUR' THEN NULL::uuid
-      WHEN 'PROJECT_DEFAULT' THEN sp."calendar_id"
-      WHEN 'PREDECESSOR' THEN COALESCE(pr."calendar_id", p."calendar_id", pp."calendar_id")
-      WHEN 'SUCCESSOR' THEN COALESCE(sr."calendar_id", s."calendar_id", sp."calendar_id")
-    END AS "calendar_id"
-  ) k
-  LEFT JOIN "calendars" c ON c."id" = k."calendar_id"
-)
-UPDATE "cross_plan_dependencies" d
-   SET "lag_minutes" = (floor(d."lag_minutes"::numeric / r."day_factor_minutes" + 0.5) * 1440)::integer,
-       "version"     = d."version" + 1
-  FROM resolved r
- WHERE d."id" = r."cross_plan_dependency_id"
-   AND NOT EXISTS (
-         SELECT 1 FROM "cross_plan_lag_migrations" m
-          WHERE m."cross_plan_dependency_id" = d."id"
-       );
-
--- 4. Check, recorded links: every one is back at its value before the migration.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM "cross_plan_lag_migrations" m
-      JOIN "cross_plan_dependencies" d ON d."id" = m."cross_plan_dependency_id"
-     WHERE d."lag_minutes" <> m."prior_lag_minutes"
-  ) THEN
-    RAISE EXCEPTION 'cross-plan lag reverse: a recorded link is not back at its prior lag_minutes';
-  END IF;
-END $$;
-
--- 5. Check, unrecorded links: every one is back in the old unit, a whole number of days x 1440.
---    (A recorded link may legitimately not be: a stored value that was never a multiple of 1440 is
---    restored to exactly what it was.)
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM "cross_plan_dependencies" d
-     WHERE d."lag_minutes" % 1440 <> 0
-       AND NOT EXISTS (
-             SELECT 1 FROM "cross_plan_lag_migrations" m
-              WHERE m."cross_plan_dependency_id" = d."id"
-           )
-  ) THEN
-    RAISE EXCEPTION 'cross-plan lag reverse: an unrecorded link is not a whole number of days';
-  END IF;
-END $$;
-
--- 6. Drop the record and forget the migration, so a later roll-forward applies it afresh.
-DROP TABLE "cross_plan_lag_migrations";
-DELETE FROM "_prisma_migrations"
- WHERE "migration_name" = '20260926120000_cross_plan_lag_working_minutes';
-```
-
-Three consequences worth knowing before running it:
-
-- **The value a post-release link comes back as is the day count the release was showing for it**
-  (minutes over today's factor, rounded as the API rounds), which is why a factor that moved since
-  the release has to be found first. A post-release lag whose day count exceeds ±3,650 on today's
-  factor is refused by the lag-range CHECK and rolls the whole reverse back, which is the right way
-  round.
-- **Step 3 bumps `version` on every unrecorded link, changed or not.** There is no update route for
-  a cross-plan link, so a bump invalidates no edit anybody holds.
-- The previous API image does not know the dropped table, so nothing reads it.
-
-The migration test (`apps/api/test/cross-plan-lag-migration.e2e-spec.ts`) runs both blocks above
-**as written in this file**, asserts that each carries the migration's `resolved` CTE verbatim, and
-proves each check can fail.
-
-### Rolling back past the milestone cross-calendar release
-
-That release (`docs/specs/milestone-cross-calendar/`, `docs/TECH_DEBT.md` #539, ADR-0207) changes what
-the engine writes for a milestone or zero-duration task that sits between calendars. Its migration
-`20261026120000_milestone_cross_calendar_marker` has **no statement and changes no stored input**: its
-only product is its `_prisma_migrations` row, and at the first boot a service recalculates every
-affected plan once. There is nothing to reverse in the schema. **Redeploying the previous images alone
-is still wrong**, and the reason is the row:
-
-- the previous image does not remove it, and its pre-migrate check ignores it (whether `prisma migrate
-deploy` tolerates an applied migration with no local directory has not been verified, which is why this
-  procedure deletes the row first and does not depend on it);
-- every plan the previous image then recalculates is stamped **after** the row's `finished_at`, with
-  old-rule dates;
-- when the release is rolled forward again the row already exists and is not re-applied, so those plans
-  are **never re-derived** and nothing flags them.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row, as the finish-milestone reverse does at its step 3:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261026120000_milestone_cross_calendar_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
-   stay that way until each plan's next recalculation; the previous image has no boot service to revert
-   them.
-
-A later roll-forward then re-applies the file with a fresh `finished_at` and every affected plan is
-re-derived again, which is correct. **What the first boot after the release costs:** it recalculates nearly
-every plan that holds a milestone or zero-duration task (or is linked across plans to one), one plan at a
-time, in the background and never awaited. A planner who opens such a plan before its turn waits at most
-one recalculation. Each API replica runs the same pass, so a plan can be recalculated once per replica; that
-is harmless (idempotent, serialised by the plan lock) and the second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset": the next
-deploy would repeat the whole re-derivation unasked.
-
-### Rolling back past the cross-plan instants release
-
-That release (`docs/specs/cross-plan-instants/`, `docs/TECH_DEBT.md` #565, ADR-0212) stores four exact
-working instants per activity and a freshness stamp per plan, and makes a cross-plan link read them
-instead of the remote date. The columns arrive in `20261107120000_schedule_instants`; the read arrives
-with `20261107120100_cross_plan_instants_marker`, which has **no statement**: its only product is its
-`_prisma_migrations` row, and at the first boot `CrossPlanInstantRederiveService` recalculates once every
-live linked plan whose `schedule_computed_at` is earlier than that row's `finished_at`, upstream first.
-Both migrations are forward-only; there is nothing to reverse in the schema.
-
-**Stale instants need no step.** A previous image's recalculation moves `schedule_computed_at` and leaves
-the instants and `schedule_instants_computed_at` behind, so the pair stops matching and the instant-reading
-image falls back to the date for that plan (`trustedInstantMinutes`, ADR-0212 D4). **The marker row does
-need one**, for the reason every marker in this file does: the previous image does not remove it, every
-plan it recalculates is stamped after `finished_at` with old-read dates, and a roll-forward finds the row
-applied and skips them. If the step is forgotten the plans keep today's behaviour, the date read, until their
-next recalculation. They never get a wrong instant.
-
-**The marker row is never deleted outside a rollback.** It is the boot service's only record of when the
-instant-reading image took over, and deleting it as a "reset" lets the next start re-apply the migration with a new
-`finished_at`, which makes every linked plan pending again. Skipping step 2 of the procedure below is safe, at the cost stated above: linked plans keep the
-date read until each is recalculated.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20261107120100_cross_plan_instants_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the linked plans people are working in: their stored dates were computed under the new read
-   and stay so until each plan's next recalculation.
-
-**What the first boot after the release costs and does.** It recalculates every live plan that is an
-endpoint of a cross-plan link, one plan at a time, upstream first within each organisation, in the
-background and never awaited. Some linked dates move **earlier** and some upstream work **regains float**:
-the dates now equal what the same logic gives in one plan. The log line `schedule.xplan_instants_rederived`
-carries `pending` and `recalculated`, which is the first measurement of how many linked plans a host has.
-Each API replica runs the same pass; that is harmless (idempotent, serialised by the plan lock) and the
-second boot finds nothing pending. Outside a rollback, do **not** delete the row as a "reset".
-
-### Rolling back past the progressed-predecessor release
-
-That release (`docs/specs/progressed-predecessor-visual/`, `docs/TECH_DEBT.md` #421) changes how the
-engine propagates a progressed predecessor's planned duration into the engine-owned `visual_effective_*`
-columns. Its migration `20260930120000_progressed_predecessor_visual_marker` is a file of comments with
-**no statement and no change to any stored input**: its only product is its `_prisma_migrations` row, and
-at the first boot `ProgressedVisualRederiveService` recalculates once every plan with progress (or an
-applied Expected Finish) whose `schedule_computed_at` is earlier than that row's `finished_at`. There is
-nothing to reverse in the schema, and the reason redeploying the previous images alone is still wrong is
-the same as for the milestone release above: the row stays, every plan the previous image recalculates is
-stamped after its `finished_at` with the old Pass 2's dates, and a roll-forward finds the row applied and
-never re-derives them.
-
-Roll back in this order:
-
-1. Stop the API container (leave the database running).
-2. Delete the marker row:
-   `docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "DELETE FROM \"_prisma_migrations\" WHERE \"migration_name\" = '20260930120000_progressed_predecessor_visual_marker';"`
-3. Pin the previous `API_IMAGE_TAG` **and** `WEB_IMAGE_TAG`, then `docker compose up -d`.
-4. Recalculate the plans people are working in: their stored dates were computed under the new rule and
-   stay that way until each plan's next recalculation; the previous image has no boot service to revert
-   them.
-
-Run the delete after the images are rolled back past that release and before the roll-forward; the
-sequence above does it first so the previous image never boots beside a row it ignores. A later
-roll-forward re-applies the file with a fresh `finished_at` and every affected progressed plan is
-re-derived again, which is correct. Outside a rollback, do **not** delete the row as a "reset": the next
-deploy would recalculate every progressed plan computed before that moment, a full re-derivation nobody
-asked for. The cost of that first boot is read in `docs/DATABASE.md` "Re-derivation markers".
+Until 1.0 a release that changed what the engine writes into engine-owned columns shipped a marker
+migration, and a boot service recalculated the affected plans once, keyed on that row's `finished_at`.
+Rolling an image back past such a release meant deleting the marker row first. The 1.1 baseline
+(ADR-0215) removed every marker row, and the five boot services with them: a fresh database has
+nothing to re-derive and no row to delete. The procedures, and the measured cost of each first boot,
+are at git tag `api-v1.0.0` (this file and `docs/DATABASE.md`). A future release that needs the
+technique again defines it afresh, with its own rollback step.
 
 ### Rolling back past the P6 activity codes release
 
-The P6 activity codes schema (`docs/specs/p6-activity-codes/database-design.md` §13) lands in two
-migrations: `20261027120000_swimlane_source_activity_code` adds the value `ACTIVITY_CODE` to the
-`SwimlaneSource` enum and nothing else, and `20261027120100_p6_activity_codes` adds the four code
-tables (`code_types`, `code_values`, `code_value_assignments`, `code_swimlane_lanes`), the plan's
-swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, three on
-`baseline_activities` and one index on `activities`. Both are forward-only (`docs/DATABASE.md`
-"Migrations"). What running the **previous** images after both have applied does:
-
-- **During a rolling deploy** the second migration holds a `SHARE` lock on `activities` (readers proceed,
-  writers wait) and an `ACCESS EXCLUSIVE` lock on `baseline_activities` (everything on it waits), for
-  under a second at 500,000 activities and 2,000,000 `baseline_activities` rows
-  (`docs/specs/p6-activity-codes/m2-record.md` §1). Containers still running the previous image queue
-  behind them for that long and then carry on.
-
-- **Before anybody uses a code as the swimlane source, it works with no database step.** The previous
-  image's Prisma client selects named columns and never sees the new tables or columns; the new
-  `activities` index costs it nothing; and its swimlane lane upsert is untouched, which is why code lanes
-  have a table of their own.
-- **Expiry and import rollback in the previous image fail on plans that hold codes.** Its expiry does not
-  know the new tables, so expiring such a plan fails with a foreign-key error (23503), which it logs and
-  retries every hour; nothing is lost, and the clear-out ships switched off. Its own imports never write
-  codes, so its import rollback is unaffected.
-- **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), what breaks
-  depends on how far back you go.** Run every command from the stack folder (the one holding
-  `docker-compose.yml`, `/apps/schedulepoint` on the reference host). On the reference stack `<user>`
-  and `<db>` are both `app`. Work through these steps in order and stop at the first one that does not
-  say what it should.
-
-  1. **Back up and check the copy first** (ADR-0192). A restore never overwrites the live database;
-     if you ever need the copy, follow the steps in `docs/guides/back-up-and-restore.md` to switch to
-     the restored database.
-
-     ```sh
-     docker compose run --rm backup now
-     docker compose run --rm backup check
-     ```
-
-     The second command must end with `CHECK PASSED`. If it does not, stop here.
-
-  2. **Find out whether anything is affected.** If this prints 0, nothing below applies and you can
-     roll back as usual:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM plans WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     Deleted plans are counted on purpose: they come back if someone restores them, and they would
-     break in the same way. Write the number down; call it N.
-
-  3. **Check baselines, and decide how far back you can go.** Deleted baselines are counted on
-     purpose, because they come back on restore:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     - **Going back to api 0.103.1, 0.103.0 or 0.102.2** (the images that already know the value): such a plan
-       still opens, but it draws no swimlanes. Those images fail with a server error when you change
-       that plan's swimlane source and when you capture a baseline of it. A baseline that froze the
-       code source is harmless to them, so a non-zero count here does not stop you.
-     - **Going back to api 0.102.1 or earlier** (inferred from the schema design, not run): those
-       images cannot read such a plan at all, which breaks it and any list that loads it, and they
-       cannot read such a baseline either. **If this count is not 0, stop.** Rewriting a baseline would
-       falsify a snapshot (ADR-0025), so there is no clean route back that far: roll forward instead
-       or, as a last resort, restore the pre-update copy the backup service made before migrating
-       (ADR-0192, the same guide), which loses everything written since.
-
-  4. **Stop the API and the web containers, and only those.** Never a bare `docker compose stop`: the
-     database must stay up. Roll both images back together, because a newer web sends lane writes that
-     an older API answers with a server error.
-
-     ```sh
-     docker compose stop api web
-     ```
-
-     Run the count from step 2 again. It must still be N.
-
-  5. **Save the list of affected plans, and check the file** before changing anything. The file lands
-     in the folder you are in:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 \
-       -c "COPY (SELECT id, swimlane_code_type_id FROM plans WHERE swimlane_source = 'ACTIVITY_CODE') TO STDOUT WITH CSV HEADER" \
-       > p6-code-swimlanes.csv && wc -l p6-code-swimlanes.csv
-     ```
-
-     The line count must be N plus 1 (the header). If it is not, or the command printed an error, stop:
-     nothing has been changed yet.
-
-  6. **Reset the plans.** This writes no audit row (a swimlane source is not a governance setting), so
-     note it where the host's changes are recorded:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL, version = version + 1, updated_at = now() WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     It prints `UPDATE n`; n must equal N and the CSV's line count minus 1. The version goes up so
-     that anyone still holding the old plan in a browser is asked to reload before saving.
-
-  7. **Pin the previous images and start again.** Set the previous `API_IMAGE_TAG` and
-     `WEB_IMAGE_TAG` in the stack's `.env`, then `docker compose up -d`. With auto-update on, the pin
-     is what stops the newer image coming straight back.
-
-  What is kept: every code, value and assignment, and every code swimlane lane
-  (`code_swimlane_lanes` is not touched). After rolling forward, a planner chooses **Swimlanes… ▸ One per
-  value of <code>** again for each plan in the saved file and the bars return to the lanes they had. What is
-  lost: only the choice itself, until it is made again.
-
-- **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
-  both migrations already recorded in `_prisma_migrations` and does not re-create anything, the trap the
-  milestone cross-calendar section above records for a marker row. PostgreSQL cannot drop an enum value
-  anyway, and an unused one costs nothing.
-
-Measured on a shared container (migration B's header): the second migration takes about 0.1 s at 50,000
-activities and 0.7–0.8 s at 500,000 activities with 2,000,000 baseline rows, almost all of it building
-the `activities` index and checking `baseline_activities`. The API migrates before it serves, so that
-is added to one boot.
+**History; it does not apply to a 1.1 database.** Until 1.0 this section described running the images
+before the P6 activity codes release (two forward-only migrations, `20261027120000` and
+`20261027120100`) against a database that had applied them: the lock cost during a rolling deploy, the
+expiry failures on plans holding codes, and a seven-step reset of every plan whose swimlanes came from a
+code, with a per-version table of how far back a baseline allowed. The 1.1 baseline (ADR-0215) contains
+the code tables from the first row and a 1.1 database is never run by a pre-1.1 image: rolling 1.1 back
+to 1.0 is the old volume, not a reverse script (ADR-0215 D3,
+[`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md)). The procedure and its
+measurements are at git tag `api-v1.0.0` (this file).
 
 ### Which switches actually work on a running container, and which do not
 
@@ -1009,12 +564,11 @@ container start). Edit the stack's `.env`, `docker compose up -d`, done — no r
 image. That is the property worth having: a rollback that needs a release is slower than the
 incident.
 
-**`VITE_` feature flags are not.** Vite inlines `import.meta.env.VITE_*` as a literal when the
-bundle is built, so there is no runtime lookup left to override. Nor is there a build path that
-sets them: `apps/web/Dockerfile` declares one `VITE_` build arg (`VITE_API_URL`),
-`docker-publish.yml` passes none at all, and `.dockerignore` strips `**/.env` from the build
-context. **Every image you pull has every feature flag at its in-source default, which is on.**
-Setting one in your compose stack changes nothing.
+**There are no web feature flags.** All 48 `VITE_` flags were retired in 1.1 (ADR-0215 D8), so
+every capability the client has is always on. Vite inlines `import.meta.env.VITE_*` as a literal
+when the bundle is built, and the one build arg `apps/web/Dockerfile` declares is `VITE_API_URL`
+(`docker-publish.yml` passes none; `.dockerignore` strips `**/.env`), so nothing in a compose
+stack could switch a client behaviour at runtime in any case.
 
 So **your per-feature rollback is image-tag pinning**, described under
 "[Deploying a release](#deploying-a-release-to-a-self-hosted-host-docker-compose--dockge)".
@@ -1022,13 +576,6 @@ So **your per-feature rollback is image-tag pinning**, described under
 the client back **without touching the API or the schema** — which matters, because migrations
 are forward-only (ADR-0018). And it holds: Watchtower only updates a container whose `:latest`
 digest has moved (ADR-0047), so a pinned semver tag is never silently re-pulled.
-
-> The per-flag "Set to `false` to fall back to…" notes in `.env.example` are **development and
-> CI instructions**. They work under `pnpm dev`, a local `pnpm build`, and the flag-off
-> Playwright configs. They have never worked against a published image, and they read as
-> operator guidance because nobody had checked — found while deciding ADR-0084's retirement
-> schedule, which had been arguing about these flags as _your_ rollback contract when they have
-> only ever been the developers'.
 
 ## Deploying a release to a self-hosted host (Docker Compose / Dockge)
 
@@ -1440,6 +987,7 @@ None needs an outside service. A ping to an external monitor after each good cop
 | `check [file] [--keep]`  | Load a copy into a scratch database, print counts beside the live ones, drop it. Ends `CHECK PASSED` |
 | `restore <file> [--yes]` | Replace the live database with a copy; needs the API stopped. Ends `RESTORE FINISHED`                |
 | `health`                 | Exit 0 when a nightly copy is under 26 hours old (the healthcheck)                                   |
+| `preflight`              | What the API's entrypoint calls first: refuses a pre-1.1 database; not for hand use                  |
 | `pre-migrate`            | What the API's entrypoint calls; not for hand use                                                    |
 
 File arguments must be `schedulepoint-*.dump` names inside the backups folder.

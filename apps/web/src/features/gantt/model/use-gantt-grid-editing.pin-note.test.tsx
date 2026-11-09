@@ -45,7 +45,6 @@ const ACTIVITY = {
  */
 const ACTIVITIES = [ACTIVITY];
 const GATING = deriveActivityEditorGating({
-  penManaged: false,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

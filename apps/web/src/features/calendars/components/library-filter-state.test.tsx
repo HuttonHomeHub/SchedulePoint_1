@@ -33,7 +33,6 @@ import { apiFetchAllPages } from '@/lib/api/client';
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   LIBRARY_SCOPING_ENABLED: true,
-  RESOURCES_ENABLED: true,
 }));
 
 vi.mock('@/lib/api/client', async (importOriginal) => ({

@@ -12,10 +12,6 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
  * Row 2 · Do authoring cluster is present). Asserts: real controls render, disable from `canUndo`/`canRedo` and pen-gating,
  * invoke the store, and carry the dynamic accessible name.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-}));
 
 const undo = vi.fn();
 const redo = vi.fn();

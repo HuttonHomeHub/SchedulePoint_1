@@ -6,11 +6,6 @@ import { useSearchNavigation } from './use-search-navigation';
 import type { FilterAttr } from '@/features/tsld/render/lenses';
 import { orderedMatches, type SearchableActivity } from '@/features/tsld/render/search-matches';
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_SEARCH_NAV_ENABLED: true,
-}));
-
 /**
  * The M4 view-parity gate.
  *

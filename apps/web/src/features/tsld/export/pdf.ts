@@ -1,6 +1,6 @@
 /**
  * The lazy **PDF export** shim for the TSLD Diagram-PDF deliverable (spec `docs/specs/export-print/`
- * §Milestone 3, feature-spec §4 **CQ-2**, behind `VITE_EXPORT_PRINT`). It embeds the already-produced
+ * §Milestone 3, feature-spec §4 **CQ-2**). It embeds the already-produced
  * Diagram-PNG blob (the M2 `renderExportImage` output) on a single landscape page — so the PDF is a
  * faithful, portable copy of the same off-screen render, with no second paint.
  *

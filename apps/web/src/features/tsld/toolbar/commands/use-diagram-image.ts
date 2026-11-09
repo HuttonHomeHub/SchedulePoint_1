@@ -29,7 +29,6 @@ import { barDateSourceFor, toRenderEdges } from '../../render/to-render-model';
 import { wbsBandBars } from '../../render/wbs-band';
 
 import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspace-model';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import {
   RESOURCE_STRIP_HEIGHT,
   type TsldCanvasHandle,
@@ -46,7 +45,7 @@ export interface BuildDiagramImageOptions {
 }
 
 /**
- * The shared off-screen Diagram-image build (ADR-0078 S11, `VITE_EXPORT_PRINT`).
+ * The shared off-screen Diagram-image build (ADR-0078 S11).
  *
  * Extracted from `use-tsld-toolbar-context.tsx` verbatim — the body below is the code that used to
  * sit at the top of that file's ~500-line memo, comments and all. This was the **second and last**
@@ -96,9 +95,8 @@ export function useDiagramImage(args: {
    * The model derives it from the SAME `new Date()` as `todayIso` (`use-plan-workspace-model.ts`),
    * so the integer offset and the fraction cannot disagree; deriving it from a fresh `Date.now()`
    * against a `useNow`-ticked `todayIso` puts the line a full day out across local midnight. And
-   * the model gates it on `CANVAS_TIME_AXIS_ENABLED`, so a hand-rolled call draws a fractional
-   * line and a Today pill in the deliverable while the screen draws a plain integer marker —
-   * which is this milestone's own defect, inverted.
+   * a hand-rolled call could draw a Today line at a different time of day in the deliverable than
+   * the screen does — which is this milestone's own defect, inverted.
    */
   todayFraction: number | undefined;
   lateOverlayActive: boolean;
@@ -190,7 +188,7 @@ export function useDiagramImage(args: {
       // scene still paints. With the band on, summaries live in the band and not in the diagram —
       // exactly as they do on screen.
       const diagram = deriveDiagramSource(activities, {
-        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        wbsBand: { toggleOn: viewToggles.wbsBand ?? false },
         swimlanes,
         source,
         dataDate,
@@ -232,7 +230,6 @@ export function useDiagramImage(args: {
         // gate would go quietly blind on exactly the composition it exists to watch. It refuses on
         // an unresolvable spread for that reason, and this shape keeps it honest.
         monthBands: layers.monthBands,
-        gridTiers: layers.gridTiers,
         timeTrueLinks: layers.timeTrueLinks,
         visualRefresh: layers.visualRefresh,
         linkRouting: layers.linkRouting,

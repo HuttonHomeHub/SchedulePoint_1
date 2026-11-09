@@ -38,15 +38,12 @@ import type { RevisionEdge, RevisionRow } from './revision-delta';
  *
  * ## Eight classes free, six paid — and the price is a snapshot, not a computation
  *
- * A baseline freezes the engine's **output** and, until ADR-0126, almost none of its **input**. The
- * eight free classes fall out of columns `BaselineActivity` has always held. The six paid ones —
- * logic, constraints, calendar, WBS parent, lane and progress — need the shape the snapshot
- * extension freezes, and a pair of revisions captured before it will **never** have it: writing
- * today's logic into a historic snapshot would state as history a graph that baseline never saw.
- * So such a pair reports each paid class as **not assessable with a reason**, never as "no change"
- * — see {@link ClassifyOptions.bothSnapshotted}, which is the ONLY thing entitled to answer that
- * question. The row fields themselves cannot: every one of them has a legitimate null on a fully
- * recorded side.
+ * A baseline freezes the engine's **output** and the **shape** that produced it (ADR-0126). The
+ * eight free classes fall out of the output columns; the six paid ones — logic, constraints,
+ * calendar, WBS parent, lane and progress — need the shape the snapshot extension freezes. Every
+ * baseline a 1.1 database holds carries both (`revision_snapshot_level` is single-valued and
+ * columns it fills are NOT NULL, ADR-0215 D6), so every paid class is assessable on every pair.
+ * The names stay: they say what a class costs to freeze, which is still true of the capture.
  */
 
 /**
@@ -158,7 +155,7 @@ function constraintLabel(row: RevisionRow): string {
 }
 
 function progressLabel(row: RevisionRow): string {
-  const parts = [`${String(row.percentComplete ?? 0)}%`];
+  const parts = [`${String(row.percentComplete)}%`];
   if (row.actualStart !== null) parts.push(`started ${row.actualStart}`);
   if (row.actualFinish !== null) parts.push(`finished ${row.actualFinish}`);
   return parts.join(' · ');
@@ -211,7 +208,7 @@ function labelOf(
     case 'RELANED':
       // Rows are one-based on every surface a planner sees; `laneIndex` is a zero-based internal
       // layout index and appears nowhere else in the product's copy.
-      return `Row ${String((row.laneIndex ?? 0) + 1)}`;
+      return `Row ${String(row.laneIndex + 1)}`;
     case 'PROGRESSED':
       return progressLabel(row);
     case 'ADDED':
@@ -256,8 +253,7 @@ function changed(
       // The float half compares MINUTES, as whole days on the frame (ADR-0214): raw minutes would
       // list an activity whose float moved by an hour and print two identical labels (the
       // `edgeChanged` lesson), and the old day columns listed a calendar edit as a change of
-      // criticality. A side with no minutes cannot show a float difference and is not listed for
-      // one; the delta counts it in `floatNotComparableCount`.
+      // criticality. A side that was never calculated has no float to differ.
       return from.isCritical !== to.isCritical || floatDiffers(from, to, frameMinutes);
     case 'RECONSTRAINED':
       // All four together — a secondary constraint is a constraint, and reporting a change to it
@@ -338,34 +334,6 @@ export interface ClassifyOptions {
   readonly fromScheduled: boolean;
   readonly toScheduled: boolean;
   /**
-   * Whether both sides recorded the paid classes — `baselines.revision_snapshot_level === 'FULL'`
-   * on every frozen side (the live side always has its own shape). False for any baseline captured
-   * before the snapshot extension, and **permanently** so for those rows: a backfill would state as
-   * history a graph that baseline never saw.
-   *
-   * This is the ONLY thing entitled to decide whether the shape fields mean anything. Do not
-   * replace it with a test of the fields themselves — every one of them has a legitimate null on a
-   * fully recorded side, so such a test reads "no constraint" as "never recorded" and back again.
-   */
-  readonly bothSnapshotted: boolean;
-  /**
-   * Whether both sides recorded the PLACEMENT — `baselines.placement_snapshot_level === 'FULL'` on
-   * every frozen side (the live side always has its own). False for any baseline captured before
-   * one-planning-surface M-C, and **permanently** so for those rows, for the same reason its
-   * sibling above is: a backfill would state as history a placement that baseline never saw.
-   *
-   * A SECOND flag rather than a widening of `bothSnapshotted`, because the two levels are written
-   * by different milestones and a baseline can carry either without the other. Folding them would
-   * make a shape-complete baseline report its logic as unrecorded, or a placement-complete one
-   * report its placement as recorded when it is not — one wrong in each direction, both silent.
-   *
-   * Like its sibling, this is the ONLY thing entitled to decide whether the placement columns mean
-   * anything. Do not replace it with a test of the columns themselves: all three have a legitimate
-   * null on a fully recorded side (nothing hand-placed, nothing yet calculated), so such a test
-   * reads "unplaced" as "never recorded" and back again.
-   */
-  readonly bothPlacementSnapshotted: boolean;
-  /**
    * Whether the two sides were matched ON the activity code — true for a cross-plan comparison and
    * false for a plan's own revisions, which are matched on id.
    *
@@ -407,8 +375,6 @@ export function classifyRevisionChanges(
   const {
     fromScheduled,
     toScheduled,
-    bothSnapshotted,
-    bothPlacementSnapshotted,
     codeIsTheCorrelationKey,
     includeProgress,
     calendarName,
@@ -419,22 +385,14 @@ export function classifyRevisionChanges(
   const toById = new Map(to.rows.map((r) => [r.activityId, r]));
 
   /**
-   * The row-subject classes actually decided on this comparison.
-   *
-   * Skipping the paid ones when the shape was not recorded is a **saving, not the guarantee** — and
-   * that distinction was established by removing each in turn and running the suite, not by reading
-   * the code. `assess` below is what refuses to report them (six cases go red without it); this
-   * filter only avoids comparing NULL against NULL for every activity, five times, on a pair whose
-   * answer is already fixed. Do not read it as the safety net: if it is ever the only thing left,
-   * the report is one `if` away from confidently claiming the logic did not change.
+   * The row-subject classes actually decided on this comparison: every free class bar the two
+   * presence classes, and the paid ones (progress only when asked for).
    */
   const rowClasses: RowChangeClass[] = [
     ...FREE_CHANGE_CLASSES.filter(
       (c): c is Exclude<FreeChangeClass, 'ADDED' | 'REMOVED'> => c !== 'ADDED' && c !== 'REMOVED',
     ),
-    ...(bothSnapshotted
-      ? PAID_ROW_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress)
-      : []),
+    ...PAID_ROW_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress),
   ];
 
   const bucket = new Map<ChangeClass, ChangeRow[]>();
@@ -484,9 +442,7 @@ export function classifyRevisionChanges(
     });
   }
 
-  if (bothSnapshotted) {
-    collectLogicChanges(from, to, fromById, toById, bucket);
-  }
+  collectLogicChanges(from, to, fromById, toById, bucket);
 
   // **A date-bearing class is not assessable when either side has no computed schedule.** Reporting
   // it as "nothing changed" would be a lie whose shape a reader cannot detect: an unscheduled side
@@ -508,11 +464,6 @@ export function classifyRevisionChanges(
         total: 0,
       };
     }
-    if (!bothSnapshotted && PAID_CHANGE_CLASSES.includes(changeClass as PaidChangeClass)) {
-      // Reported, never omitted, and never as zero. `bothSnapshotted` false is permanent for the
-      // rows involved, which is what the reader is told.
-      return { changeClass, notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 };
-    }
     const rows = (bucket.get(changeClass) ?? []).sort(byTime);
     return { changeClass, notAssessableReason: null, rows: rows.slice(0, cap), total: rows.length };
   };
@@ -522,14 +473,7 @@ export function classifyRevisionChanges(
     ...PAID_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress).map(assess),
   ];
 
-  return {
-    classes,
-    cap,
-    // Reported, never omitted, and never coalesced. Unconditional on whether either side holds a
-    // placement — see the field's docblock: a reason that appears only when there is something to
-    // compare cannot distinguish "nobody looked" from "we looked and there was nothing".
-    placementNotAssessableReason: bothPlacementSnapshotted ? null : 'NOT_SNAPSHOTTED',
-  };
+  return { classes, cap };
 }
 
 /**

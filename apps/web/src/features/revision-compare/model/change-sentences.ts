@@ -42,10 +42,7 @@ export function classTitle(changeClass: RevisionChangeClass): string {
  *
  * **Never "no changes".** That is the whole reason this function exists: an empty list and an
  * un-looked-at list are indistinguishable on screen unless the product says which it is, and the
- * one that reads as reassuring is the one that is a lie. The snapshot case is stated as
- * **permanent for these revisions** rather than as a wait, because no backfill is possible —
- * writing today's logic into a historic snapshot would state as history a graph that baseline
- * never saw.
+ * one that reads as reassuring is the one that is a lie.
  */
 /**
  * The class as the SUBJECT of a sentence, which is a different word from its heading.
@@ -78,11 +75,6 @@ export function notAssessableSentence(
 ): string {
   const subject = CLASS_SUBJECTS[changeClass];
   switch (reason) {
-    case 'NOT_SNAPSHOTTED':
-      return (
-        `Not recorded for these two revisions, so ${subject} cannot be compared. ` +
-        `Snapshots taken from now on will carry it; these two never will.`
-      );
     case 'SIDE_NOT_SCHEDULED':
       return (
         `One of these revisions has no calculated schedule, so ${subject} cannot be compared. ` +

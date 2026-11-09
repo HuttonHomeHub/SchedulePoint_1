@@ -8,7 +8,7 @@ import { ActivityMembersPanel } from './ActivityMembersPanel';
 import { ApiFetchError } from '@/lib/api/client';
 
 /**
- * The Members panel — a WBS summary's contents, managed from the summary (`VITE_WBS_IMPROVEMENTS`).
+ * The Members panel — a WBS summary's contents, managed from the summary.
  *
  * The mutation is mocked at the feature barrel so these tests assert what the panel *sends*, which
  * is the part that can silently go wrong: a diff built from the visible rows rather than from state

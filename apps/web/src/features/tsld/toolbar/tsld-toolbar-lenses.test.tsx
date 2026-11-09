@@ -7,13 +7,8 @@ import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// The flag-ON insight-lenses registry: the search field goes live and filter / colour-by /
-// baseline-overlay swap their placeholders for real controls. The flag-off stubs are covered by
-// `tsld-toolbar.test.tsx` (which pins CANVAS_LENSES_ENABLED off).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_LENSES_ENABLED: true,
-}));
+// The insight-lenses registry: the search field, filter, colour-by and baseline-overlay are real
+// controls (`tsld-toolbar.test.tsx` covers the rest of the registry).
 
 const spies = {
   setFilterQuery: vi.fn(),

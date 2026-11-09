@@ -27,6 +27,14 @@ describe('focusOutsideInert', () => {
     expect(document.activeElement?.id).toBe('close');
   });
 
+  it('skips a target under a hidden wrapper, as when the panel takes the body', () => {
+    // **Red** against an inert-only check: the diagram stays mounted under a `display: none`
+    // wrapper, so the listbox resolved as reachable and a browser's `focus()` on it left <body>.
+    mount(`<div hidden><ul role="listbox" tabindex="0" id="lb"></ul></div>
+      <div data-activities-bar><button id="toggle" data-activities-toggle>Collapse</button></div>`);
+    expect(reachableTarget(document.getElementById('lb'))?.id).toBe('toggle');
+  });
+
   it('falls back to the foot row when no dock is open', () => {
     mount(`<div inert><ul role="listbox" tabindex="0" id="lb"></ul></div>
       <div data-activities-bar><button id="expand">Expand</button></div>`);

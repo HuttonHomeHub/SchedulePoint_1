@@ -10,14 +10,8 @@ import { ActivityResourcesPanel } from './ActivityResourcesPanel';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 /**
- * The join-lag control, flag ON (ADR-0071 M4). The sibling `.flag-off.` suite is the rollback
- * contract and is deliberately NOT weakened to share this file's mock.
+ * The join-lag control (ADR-0071 M4).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ASSIGNMENT_LAG_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 
 const CREW: ResourceSummary = {

@@ -9,7 +9,7 @@ import { CONFLICT_FLAGS, type ConflictFlagFields } from './conflicts';
 
 /**
  * The pure, renderer-agnostic logic behind the TSLD **insight lenses** (spec
- * `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`): the client-side **filter matcher**, the
+ * `docs/specs/canvas-lenses/`): the client-side **filter matcher**, the
  * **Colour-by** key/bucket/palette machinery, and the **baseline ghost** geometry builder. Like
  * `render-model.ts` it has **no** canvas, DOM, React or data-fetching dependency and does **no**
  * schedule arithmetic — it only reads fields the engine already computed and shipped on
@@ -98,7 +98,7 @@ export function isFilterActive(query: string, attrs: ReadonlySet<FilterAttr>): b
 
 /**
  * The Colour-by modes (a closed client enum; ADR-0031 lens taxonomy, `docs/DECISIONS.md`). Driving-
- * resource is a deferred fast-follow (needs `VITE_RESOURCES` + the assignments query) — the machinery
+ * resource is a deferred fast-follow (needs the assignments query) — the machinery
  * is mode-generic so a `'resource'` member drops in additively without changing this contract.
  */
 export type ColourMode = 'criticality' | 'totalFloat' | 'wbs';

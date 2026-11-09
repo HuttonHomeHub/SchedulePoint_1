@@ -1,9 +1,4 @@
 import { Dialog } from '@/components/ui/dialog';
-import {
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-} from '@/config/env';
 import { isApplePlatform } from '@/features/undo-redo';
 import type { PlanViewMode } from '@/lib/plan-view-mode';
 
@@ -16,14 +11,6 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: '↑ / ↓', action: 'Previous / next activity' },
   { keys: 'Home / End', action: 'First / last activity' },
   { keys: '[ / ]', action: 'Jump to the driving predecessor / successor (then trace the path)' },
-  ...(CANVAS_MULTI_SELECT_ENABLED
-    ? []
-    : [
-        {
-          keys: 'Space',
-          action: 'Announce logic ties and driving detail for the focused activity',
-        },
-      ]),
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
   { keys: '?', action: 'Show this help' },
   { keys: 'Esc', action: 'Disarm the current tool, cancel a gesture, or close a popover' },
@@ -82,8 +69,7 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
 ];
 
 /**
- * Direct-manipulation accelerators (ADR-0052 M2) — appended to the Edit list only when
- * `VITE_CANVAS_DIRECT_MANIPULATION` is on, so the sheet stays byte-for-byte identical flag-off.
+ * Direct-manipulation accelerators (ADR-0052 M2) — appended to the Edit list.
  * No collision: plain `←/→` are unused in the listbox and the start-day nudge is `Alt`-chorded.
  */
 const DIRECT_MANIPULATION_SHORTCUTS: readonly Shortcut[] = [
@@ -91,8 +77,7 @@ const DIRECT_MANIPULATION_SHORTCUTS: readonly Shortcut[] = [
 ];
 
 /**
- * Search-navigation accelerators (`docs/specs/canvas-search-navigation/` M2-T3) — appended only when
- * `VITE_CANVAS_SEARCH_NAV` is on, so the sheet stays byte-for-byte identical with the flag off.
+ * Search-navigation accelerators (`docs/specs/canvas-search-navigation/` M2-T3).
  * These are the only shortcuts in the sheet that act on a **focused field** rather than the canvas,
  * which is why they say so: a planner reading the list needs to know where to press them.
  */
@@ -333,8 +318,8 @@ export function PlanShortcutsHelp({
   }
   const editShortcuts = [
     ...EDIT_SHORTCUTS,
-    ...(CANVAS_DIRECT_MANIPULATION_ENABLED ? DIRECT_MANIPULATION_SHORTCUTS : []),
-    ...(CANVAS_SEARCH_NAV_ENABLED ? SEARCH_NAV_SHORTCUTS : []),
+    ...DIRECT_MANIPULATION_SHORTCUTS,
+    ...SEARCH_NAV_SHORTCUTS,
     ...undoRedoShortcuts(isApplePlatform()),
   ];
   return (
@@ -351,35 +336,33 @@ export function PlanShortcutsHelp({
         <SheetSection title="Minimap (Diagram viewport ▸ Minimap)">
           <ShortcutList items={MINIMAP_SHORTCUTS} />
         </SheetSection>
-        {CANVAS_MULTI_SELECT_ENABLED ? (
-          <SheetSection title="Select">
-            <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
-            {/*
-              **What a selection unlocks** (ADR-0090 M5, discharging the M2-T1 obligation).
+        <SheetSection title="Select">
+          <ShortcutList items={MULTI_SELECT_SHORTCUTS} />
+          {/*
+            **What a selection unlocks** (ADR-0090 M5, discharging the M2-T1 obligation).
 
-              M2-T1 moved `Zoom to selection` and `Isolate logic path` from Row 1 to the selection
-              bar, and the plan recorded the cost in its own words: *"Afterwards they are absent
-              until a bar is selected, and nothing announces that they exist… M3 must check that
-              discoverability is not what got optimised away."* M3 did not check it; the M5 ux gate
-              found the obligation still open.
+            M2-T1 moved `Zoom to selection` and `Isolate logic path` from Row 1 to the selection
+            bar, and the plan recorded the cost in its own words: *"Afterwards they are absent
+            until a bar is selected, and nothing announces that they exist… M3 must check that
+            discoverability is not what got optimised away."* M3 did not check it; the M5 ux gate
+            found the obligation still open.
 
-              **Omitting them is right** — ADR-0082's discriminator says omit when the action does
-              not apply to the object, and "zoom to the selection" does not apply with nothing
-              selected. What was lost is not the control but the **teaching**: the shaded state used
-              to state the precondition. So the teaching moves here, to the sheet a planner opens to
-              learn the canvas, instead of buying it back with pinned width on every plan.
+            **Omitting them is right** — ADR-0082's discriminator says omit when the action does
+            not apply to the object, and "zoom to the selection" does not apply with nothing
+            selected. What was lost is not the control but the **teaching**: the shaded state used
+            to state the precondition. So the teaching moves here, to the sheet a planner opens to
+            learn the canvas, instead of buying it back with pinned width on every plan.
 
-              A sentence rather than `ShortcutList` rows, because these have no keystroke and a
-              key column with nothing in it reads as a binding nobody can remember.
-            */}
-            <p className="text-muted-foreground text-sm">
-              Selecting an activity reveals its own action bar on the canvas — including{' '}
-              <strong className="text-foreground font-medium">Zoom to selection</strong> and{' '}
-              <strong className="text-foreground font-medium">Isolate logic path</strong>, which act
-              on what you have selected.
-            </p>
-          </SheetSection>
-        ) : null}
+            A sentence rather than `ShortcutList` rows, because these have no keystroke and a
+            key column with nothing in it reads as a binding nobody can remember.
+          */}
+          <p className="text-muted-foreground text-sm">
+            Selecting an activity reveals its own action bar on the canvas — including{' '}
+            <strong className="text-foreground font-medium">Zoom to selection</strong> and{' '}
+            <strong className="text-foreground font-medium">Isolate logic path</strong>, which act
+            on what you have selected.
+          </p>
+        </SheetSection>
         {editingEnabled ? (
           <SheetSection title="Edit">
             <ShortcutList items={editShortcuts} />

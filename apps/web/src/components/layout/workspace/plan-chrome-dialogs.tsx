@@ -1,16 +1,6 @@
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Dialog } from '@/components/ui/dialog';
-import {
-  ADVANCED_CONSTRAINTS_ENABLED,
-  EARNED_VALUE_ENABLED,
-  FLOAT_CRITICAL_SETTINGS_ENABLED,
-  GUEST_SHARE_LINKS_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  PROGRESS_INGESTION_ENABLED,
-  RESOURCE_CURVES_ENABLED,
-  RESOURCE_LEVELLING_ENABLED,
-} from '@/config/env';
 import { BaselinesPanel } from '@/features/baselines';
 import { EarnedValuePanel } from '@/features/earned-value';
 import {
@@ -139,95 +129,72 @@ export function PlanChromeDialogs({
               canEdit={model.canWrite}
             />
           </SettingsSection>
-          {FLOAT_CRITICAL_SETTINGS_ENABLED ? (
-            <SettingsSection title="Critical path & float">
-              <PlanScheduleSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                calendars={model.calendars.data ?? []}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
-          {PROGRESS_INGESTION_ENABLED ? (
-            <SettingsSection title="Progress & recalculation">
-              <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
-            </SettingsSection>
-          ) : null}
-          {ADVANCED_CONSTRAINTS_ENABLED ? (
-            <SettingsSection title="Expected finish">
-              <PlanExpectedFinishToggle
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
-          {RESOURCE_LEVELLING_ENABLED ? (
-            <SettingsSection title="Resource levelling">
-              <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
-            </SettingsSection>
-          ) : null}
-          {INTER_PROJECT_DATES_ENABLED ? (
-            <SettingsSection title="External relationships">
-              <PlanExternalRelationshipsSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
-          {EARNED_VALUE_ENABLED ? (
-            <SettingsSection title="Earned value">
-              <PlanEarnedValueSettings
-                orgSlug={model.orgSlug}
-                plan={plan}
-                canEdit={model.canWrite}
-              />
-            </SettingsSection>
-          ) : null}
+          <SettingsSection title="Critical path & float">
+            <PlanScheduleSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              calendars={model.calendars.data ?? []}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
+          <SettingsSection title="Progress & recalculation">
+            <PlanRecalcModePicker orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
+          <SettingsSection title="Expected finish">
+            <PlanExpectedFinishToggle
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
+          <SettingsSection title="Resource levelling">
+            <PlanLevellingSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
+          <SettingsSection title="External relationships">
+            <PlanExternalRelationshipsSettings
+              orgSlug={model.orgSlug}
+              plan={plan}
+              canEdit={model.canWrite}
+            />
+          </SettingsSection>
+          <SettingsSection title="Earned value">
+            <PlanEarnedValueSettings orgSlug={model.orgSlug} plan={plan} canEdit={model.canWrite} />
+          </SettingsSection>
         </div>
       </Dialog>
 
-      {EARNED_VALUE_ENABLED ? (
-        <Dialog
-          open={dialog === 'earned-value'}
-          onClose={onClose}
-          title="Earned value"
-          description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
-          size="lg"
-        >
-          <EarnedValuePanel
-            orgSlug={model.orgSlug}
-            planId={model.planId}
-            activities={model.activities.data ?? []}
-          />
-        </Dialog>
-      ) : null}
-
-      {RESOURCE_CURVES_ENABLED ? (
-        <Dialog
-          open={dialog === 'resource-histogram'}
-          onClose={onClose}
-          title="Resource histogram"
-          description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
-          size="lg"
-        >
-          <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
-        </Dialog>
-      ) : null}
-
-      {/* External-Guest share links (ADR-0051 F-M4). Unlike the panels above, `ShareLinksDialog` owns its
-          own `Dialog` chrome, so it is rendered directly (not wrapped). Gated behind the flag so it (and
-          the whole share feature) is never pulled into a flag-off build's behaviour. */}
-      {GUEST_SHARE_LINKS_ENABLED ? (
-        <ShareLinksDialog
+      <Dialog
+        open={dialog === 'earned-value'}
+        onClose={onClose}
+        title="Earned value"
+        description="Cost and schedule performance measured against the active baseline when one exists — SPI, CPI and the forecast at completion, per activity and for the plan."
+        size="lg"
+      >
+        <EarnedValuePanel
           orgSlug={model.orgSlug}
           planId={model.planId}
-          open={dialog === 'share'}
-          onClose={onClose}
+          activities={model.activities.data ?? []}
         />
-      ) : null}
+      </Dialog>
+
+      <Dialog
+        open={dialog === 'resource-histogram'}
+        onClose={onClose}
+        title="Resource histogram"
+        description="Each resource's curve-shaped units over time across this plan — a bar chart with a keyboard-navigable data table carrying the same numbers."
+        size="lg"
+      >
+        <ResourceHistogram orgSlug={model.orgSlug} planId={model.planId} />
+      </Dialog>
+
+      {/* External-Guest share links (ADR-0051 F-M4). Unlike the panels above, `ShareLinksDialog` owns its
+          own `Dialog` chrome, so it is rendered directly (not wrapped). */}
+      <ShareLinksDialog
+        orgSlug={model.orgSlug}
+        planId={model.planId}
+        open={dialog === 'share'}
+        onClose={onClose}
+      />
     </>
   );
 }

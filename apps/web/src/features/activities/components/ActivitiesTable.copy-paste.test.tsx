@@ -7,21 +7,8 @@ import { activityKeys } from '../api/use-activities';
 
 import { ActivitiesTable } from './ActivitiesTable';
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_COPY_PASTE_ENABLED: true,
-}));
-
 /**
- * The **Duplicate row action** and its rollback contract
- * (`docs/specs/activity-copy-paste/` M1-T3).
- *
- * This is the **flag-on** half; `ActivitiesTable.copy-paste-off.test.tsx` is the rollback contract.
- * Two files rather than one, because the flag is a module-level const resolved at import and a
- * module mock is file-scoped — `vi.stubEnv` cannot reach it, which was checked rather than assumed.
- * Each half pins its flag explicitly rather than relying on the current default, so the day
- * `VITE_ACTIVITY_COPY_PASTE` flips default-on the other file still describes the flag-off surface
- * (`ActivitiesTable.wbs-improvements-off.test.tsx` precedent).
+ * The **Duplicate row action** (`docs/specs/activity-copy-paste/` M1-T3).
  *
  * The assertion worth reading is **absent on a summary**. Duplicating one leaf of a band would
  * create a grouping with nothing in it, and copying the band with its subtree is M2 — so the action

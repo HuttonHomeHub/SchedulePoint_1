@@ -74,13 +74,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Both recovery flags on. They are default-on in `config/env.ts` already; naming them
-            // means this suite keeps sweeping `/forgot-password` and `/reset-password` even if a
-            // future rollback flips the default, which is exactly when a layout gate matters.
-            env: {
-              VITE_ACCOUNT_SETTINGS: 'true',
-              VITE_PASSWORD_RESET: 'true',
-            },
           },
         ],
       }),

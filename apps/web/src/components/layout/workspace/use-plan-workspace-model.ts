@@ -14,12 +14,6 @@ import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_TIME_AXIS_ENABLED,
-  NOTES_ENABLED,
-} from '@/config/env';
-import {
   useActivities,
   useCreatePlacedActivity,
   useUpdateActivity,
@@ -101,7 +95,6 @@ import {
   applyLevellingLabel,
   levellingApplicationSnapshots,
   scheduleKeys,
-  useRecalculate,
   usePlanAutoRecalc,
 } from '@/features/schedule';
 import {
@@ -254,8 +247,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const role = useOrgRole(orgSlug);
   const session = useSession();
   const currentUserId = session.data?.user.id;
-  // The edit-lock "pen" (ADR-0028). When the pen layer is off (`VITE_PLAN_EDIT_LOCK`
-  // unset) `penManaged` is false and gating falls back to role only — today's behaviour.
+  // The edit-lock "pen" (ADR-0028): schedule editing needs the role AND holding the pen.
   const pen = usePlanPen(orgSlug, planId);
   const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
   // Notes (ADR-0046) are collaborative annotations: Contributor upward may write, and unlike schedule
@@ -264,7 +256,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // The on-canvas schedule model (activities/dependencies/positions/recalculate) is
   // additionally pen-gated: a Planner must hold the pen to edit it (spec §3.1 / ADR-0028).
   const { canEditSchedule, canRecalc, canProgress, penReadOnly } = derivePlanGating({
-    penManaged: pen.penManaged,
     holdsPen: pen.holdsPen,
     canWrite,
     canProgress: canReportProgress(role),
@@ -276,29 +267,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [canEditSchedule, penReadOnly, penHolder],
   );
   const [editing, setEditing] = useState(false);
-  // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049, behind `VITE_CANVAS_RESOURCE_VIEW`):
+  // The canvas-axis-aligned **resource-view** lens (Stage E, ADR-0049):
   // an ephemeral, session-local open flag toggled from the `resource-view` toolbar item, exactly like the
-  // other Look-row lenses. Inert when nothing reads it (flag off / the ADR-0030 fallback), so it is
-  // byte-for-byte today's behaviour by default.
+  // other Look-row lenses.
   const [resourceViewOpen, setResourceViewOpen] = useState(false);
   const toggleResourceView = useCallback(() => setResourceViewOpen((open) => !open), []);
-  // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`,
-  // behind `VITE_CANVAS_RESOURCE_VIEW`): an ephemeral, session-local flag toggled from the
+  // The on-canvas **over-allocation highlight** mode (Stage E M2, spec `docs/specs/canvas-resource-view/`):
+  // an ephemeral, session-local flag toggled from the
   // `over-allocation` toolbar item that flags bars carrying the engine-owned levelling over-allocation
-  // flags (ADR-0041) — its own mode, independent of whether the demand strip is open. Inert when nothing
-  // reads it (flag off / the ADR-0030 fallback), so it is byte-for-byte today's behaviour by default.
+  // flags (ADR-0041) — its own mode, independent of whether the demand strip is open.
   const [overAllocationHighlight, setOverAllocationHighlight] = useState(false);
   const toggleOverAllocation = useCallback(() => setOverAllocationHighlight((on) => !on), []);
-  const [logicActivity, setLogicActivityState] = useState<ActivitySummary | undefined>(undefined);
-  // Whether the Logic panel, when open, should reveal + focus its Notes section (toolbar quick-wins
-  // U4/A4): only the toolbar **Add note** path sets it, so a canvas "Open logic" / table open lands on
-  // Predecessors as before. `setLogicActivity` clears it on any plain open/close; `revealActivityNotes`
-  // sets it. Inert (never read) when `VITE_NOTES`/quick-wins are off.
-  const [logicRevealNotes, setLogicRevealNotes] = useState(false);
-  const setLogicActivity = useCallback((activity: ActivitySummary | undefined) => {
-    setLogicRevealNotes(false);
-    setLogicActivityState(activity);
-  }, []);
+  const [logicActivity, setLogicActivity] = useState<ActivitySummary | undefined>(undefined);
   // The activity targeted by the floating selection bar's Edit / Delete actions (ADR-0031). Held as
   // ids (not the row) so a 409 retry re-derives the current version from the live query — the shared
   // `ActivityCrudDialogs` renders the edit/delete dialogs from these, so the canvas and the table
@@ -372,81 +352,32 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [setEditorIntent],
   );
   // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
-  // focused bar), the row menu and the bottom panel. Flag-on it opens the editor's Logic tab
-  // instead of a dialog of its own (the convergence epic); flag-off it is `setLogicActivity`, which
-  // is what every host called directly before — the same conditional shape `onEditActivity` uses.
+  // focused bar), the row menu and the bottom panel. It opens the editor's Logic tab.
   const onOpenLogic = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'logic'))
-        : setLogicActivity(a),
-    [setLogicActivity, setEditorIntent],
-  );
-  // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
-  // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
-  // Flag-on there is nothing to reveal: **Add note** opens the editor's Notes tab, which IS the
-  // notes surface. Flag-off it keeps the scroll-and-focus plumbing, which is still the only way to
-  // reach a section buried three panels down the Logic dialog.
-  const revealActivityNotes = useCallback(
-    (activity: ActivitySummary) => {
-      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
-        setEditorIntent(openActivityEditor(activity, 'notes'));
-        return;
-      }
-      setLogicRevealNotes(true);
-      setLogicActivityState(activity);
-    },
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'logic')),
     [setEditorIntent],
   );
-  // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
-  // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
-  // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
+  // Toolbar **Add note** (quick-wins F4/U4): opens the editor's Notes tab, which IS the notes surface.
+  const revealActivityNotes = useCallback(
+    (activity: ActivitySummary) => setEditorIntent(openActivityEditor(activity, 'notes')),
+    [setEditorIntent],
+  );
+  // Plan notes right-side drawer (entry-route win 1): the open flag the toolbar **Comments** button
+  // toggles (`revealComments`) and the drawer's Close button clears.
   const [notesOpen, setNotesOpen] = useState(false);
-  // The activity targeted by the canvas selection bar's **Resources** action (entry-route win 2,
-  // `VITE_ENTRY_ROUTES`) — held as an id (mirroring `editActivityId`) so a refetch re-derives the
-  // current row and the dialog closes the moment its target vanishes. Drives the workspace-hosted
-  // `ActivityResourcesDialog` (beside the crud dialogs). Inert when nothing reads it (flag off).
-  const [resourcesActivityId, setResourcesActivityId] = useState<string | null>(null);
-  // Flag-on, **Resources** is a tab of the one editor rather than a dialog of its own — the same
-  // shape as `onEditActivity` / `onOpenLogic`. Flag-off it still drives the workspace-hosted
-  // `ActivityResourcesDialog` below.
+  // **Resources** is a tab of the one editor rather than a dialog of its own.
   const onResourcesActivity = useCallback(
-    (a: ActivitySummary) =>
-      ACTIVITY_EDITOR_CONVERGENCE_ENABLED
-        ? setEditorIntent(openActivityEditor(a, 'resources'))
-        : setResourcesActivityId(a.id),
+    (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'resources')),
     [setEditorIntent],
   );
   /**
    * Open the editor **where a conflict actually lives** (ADR-0094 M4) — the route behind the
-   * selection bar's conflict remedy.
-   *
-   * Composed from the two openers above rather than setting `editorIntent` directly, because those
-   * openers already carry the flag-off fallback each surface needs: with the convergence flag off
-   * there are no tabs to land on, so `resources` must still reach the standalone dialog. A third
-   * copy of that branch is exactly the drift this epic exists to remove.
-   *
-   * `constraint` has no flag-off dialog of its own — a constraint has only ever been editable in the
-   * activity form — so it degrades to the ordinary Edit opener. That is a worse landing, not a dead
-   * end: the field is on the form either way.
+   * selection bar's conflict remedy: the tab that holds the offending field.
    */
   const onOpenActivityEditorAt = useCallback(
-    (a: ActivitySummary, at: 'constraint' | 'resources') => {
-      if (at === 'resources') {
-        onResourcesActivity(a);
-        return;
-      }
-      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
-        setEditorIntent(openActivityEditor(a, 'constraint'));
-        return;
-      }
-      onEditActivity(a);
-    },
-    [onResourcesActivity, onEditActivity, setEditorIntent],
-  );
-  const setResourcesActivity = useCallback(
-    (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
-    [],
+    (a: ActivitySummary, at: 'constraint' | 'resources') =>
+      setEditorIntent(openActivityEditor(a, at)),
+    [setEditorIntent],
   );
   // **Steps** is not a dialog of its own: it opens the editor's Progress tab with focus on the
   // Weighted-steps panel, beside the physical % it overrides (ADR-0060 §7). It held its own id and
@@ -460,7 +391,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
   // selection-aware items (Update progress / Add note / Clear visual start) can read it — mirroring
   // the `editActivityId`/`deleteActivityId` precedent. Held as an id; the resolved row is derived below
-  // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
+  // from the live query so it clears when the row is deleted. Nothing else reads it until a row is selected.
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const onSelectionChange = useCallback((id: string | null) => setSelectedActivityId(id), []);
   // The canvas's PLURAL selection, lifted for `Ctrl+C` (`docs/specs/activity-copy-paste/` M3). Held
@@ -541,18 +472,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     return { workingWeekdays: mask, exceptions };
   }, [calendars.data, calendarDetail.data, planCalendarId]);
   // Today as a local calendar day (`YYYY-MM-DD`), for the TSLD's "today" marker — resolved here so
-  // the diagram does no wall-clock math. `useNow` (F6c, `VITE_CANVAS_TIME_AXIS`) bumps a counter
+  // the diagram does no wall-clock math. `useNow` bumps a counter
   // every 60s (paused while the tab is hidden) so this — and `todayFraction` below — re-derive
   // instead of freezing at whatever instant the plan happened to mount, which is what made the
   // pre-existing integer marker go stale across a session left open past midnight.
   useNow(60_000);
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  // The viewer-local time-of-day fraction (F6a) — undefined when the flag is off, which is what
-  // keeps the Today marker at its plain integer offset (byte-for-byte parity) downstream.
-  const todayFraction = CANVAS_TIME_AXIS_ENABLED
-    ? todayDayFraction(now.getTime(), now.getTimezoneOffset())
-    : undefined;
+  // The viewer-local time-of-day fraction (F6a), so the Today marker sits at its time of day.
+  const todayFraction = todayDayFraction(now.getTime(), now.getTimezoneOffset());
   // Variance vs the plan's active baseline (M7). The route composes it and passes a
   // per-activity map into the activities table, so that feature imports no baseline code.
   const variance = useBaselineVariance(orgSlug, planId);
@@ -575,7 +503,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const activityEditorGating = useMemo(
     () =>
       deriveActivityEditorGating({
-        penManaged: pen.penManaged,
         holdsPen: pen.holdsPen,
         canWrite,
         canProgress,
@@ -590,23 +517,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // (`lock-view.ts` reads the same `status.holder`), so this is threading, not new data.
         holder: pen.status?.holder ?? null,
       }),
-    [
-      pen.penManaged,
-      pen.holdsPen,
-      canWrite,
-      canProgress,
-      plan.data?.canReadCost,
-      pen.status?.holder,
-    ],
+    [pen.holdsPen, canWrite, canProgress, plan.data?.canReadCost, pen.status?.holder],
   );
 
   // Per-activity note counts for the activities-table row badge (ADR-0046), route-composed like
-  // `varianceByActivityId` — ONE batch query for the whole table (never per-row). Gated on `VITE_NOTES`
-  // via `enabled`, so with the flag off the query never fires and the map stays undefined (the
-  // activities table then renders no badge column) — byte-identical to today.
-  const noteCounts = useActivityNoteCounts(orgSlug, planId, NOTES_ENABLED);
+  // `varianceByActivityId` — ONE batch query for the whole table (never per-row).
+  const noteCounts = useActivityNoteCounts(orgSlug, planId, true);
   const noteCountByActivityId = useMemo(() => {
-    if (!NOTES_ENABLED || !noteCounts.data) return undefined;
+    if (!noteCounts.data) return undefined;
     return new Map<string, number>(noteCounts.data.map((entry) => [entry.activityId, entry.count]));
   }, [noteCounts.data]);
 
@@ -620,7 +538,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         : undefined,
     [selectedActivityId, activities.data],
   );
-  // **Float paths** (audit F4, `VITE_FLOAT_PATHS`) — the ranked driving chains into one activity.
+  // **Float paths** (audit F4) — the ranked driving chains into one activity.
   // Hosted here rather than in either view because the emphasis id-set it derives is handed to BOTH
   // the canvas and the Gantt: two derivations of "which activities are on the path" would differ
   // eventually, and only in a screenshot or a printed programme (the ADR-0063 `wbs-band-source`
@@ -635,24 +553,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     selectedActivityId,
   });
 
-  // The resolved Resources-dialog target (entry-route win 2), derived from the live query like the
-  // progress/edit targets above — so it carries the current row and becomes undefined the moment its
-  // activity is deleted, closing the dialog with no extra effect.
-  const resourcesActivity = useMemo(
-    () =>
-      resourcesActivityId
-        ? (activities.data ?? []).find((a) => a.id === resourcesActivityId)
-        : undefined,
-    [resourcesActivityId, activities.data],
-  );
   // The resolved Steps-dialog target (entry-route), derived from the live query like the resources/
   // progress targets — closes the dialog the moment its activity is deleted.
 
-  // Unified auto-recalc (ADR-0032 M3): behind `VITE_CANVAS_AUTHORING`, any structural edit — from
+  // Unified auto-recalc (ADR-0032 M3): any structural edit — from
   // the canvas *or* the activities table — triggers a coalesced recalculation, so the canvas plots
   // new/changed rows without a manual Recalculate. Enabled only when a recalc could succeed (role +
   // pen + a start date); guarded live at fire time. Recalc failures announce (rare). The manual
-  // button becomes `flush()`. Flag-off: this stays inert and the callbacks keep their inline recalc.
+  // button becomes `flush()`.
   const announce = useAnnounce();
   // Undo/redo command stack (ADR-0048). Records the inverse of each structural edit. The store is
   // keyed on `planId` so switching plans resets history.
@@ -685,7 +593,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const [dropLinkPickSignal, setDropLinkPickSignal] = useState(0);
   const autoRecalc = usePlanAutoRecalc(orgSlug, planId, {
-    enabled: CANVAS_AUTHORING_ENABLED && canRecalc && plan.data?.plannedStart != null,
+    enabled: canRecalc && plan.data?.plannedStart != null,
     onMessage: announce,
     onHoldExpired: () => {
       setDropLinkPickSignal((n) => n + 1);
@@ -749,7 +657,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * has not caught up yet would hand it the dates the recalculation replaced.
    */
   const autoResolve = useAutoResolveOverlaps({
-    enabled: CANVAS_AUTHORING_ENABLED && canEditSchedule,
+    enabled: canEditSchedule,
     settled: autoRecalc.settled,
     pendingEdits: autoRecalc.pendingEdits,
     readActivities: () =>
@@ -840,7 +748,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   }, [activities.data, dependencies.data]);
   const structureSizeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!CANVAS_AUTHORING_ENABLED) return;
     if (activities.isPending || dependencies.isPending) return; // wait for a real loaded baseline
     if (structureSizeRef.current === null) {
       structureSizeRef.current = structureSignature;
@@ -876,7 +783,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const deleteAssignment = useDeleteAssignment(orgSlug, planId);
   const createCrossPlanLink = useCreateCrossPlanLink(orgSlug);
   const deleteCrossPlanLink = useDeleteCrossPlanLink(orgSlug);
-  const recalculate = useRecalculate(orgSlug, planId);
   const onTsldCreate = async (input: TsldCreateInput): Promise<TsldCreateOutcome> => {
     // Post-M1 every saved plan has a mandatory start (ADR-0033 M1), so the ADR-0032 "first draw pins
     // the start to today" special-case is gone — a plan can't exist start-less. This guard is now
@@ -957,21 +863,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
     }
     // Canvas-first authoring (ADR-0032 M3): hand the recalc to the coalescer and return — the new
-    // bar plots a beat later (the optimistic pending bar covers the gap). Flag-off keeps the inline
-    // await + recalc-conflict semantics byte-for-byte.
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { recalcConflict: laneConflict };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { recalcConflict: laneConflict };
-    } catch {
-      return {
-        recalcConflict:
-          'Activity added, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    // bar plots a beat later (the optimistic pending bar covers the gap).
+    autoRecalc.notify();
+    return { recalcConflict: laneConflict };
   };
 
   // TSLD free-2D reposition (M4): a body drag moves a bar in time and/or lane at once, reported
@@ -1534,7 +1428,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, restoreBatch, deleteActivity.mutateAsync, beginLayoutEdit],
   );
-  // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the `DependencyEditor` after
+  // Record a dependency REMOVE on the undo stack (ADR-0048 M2). Called by the Logic panel after
   // a successful remove, with the pre-remove edge. The inverse re-creates the link (a new id) from its
   // endpoints/type/lag; redo removes it again.
   const recordDependencyRemove = useCallback(
@@ -2002,26 +1896,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The move landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return landed !== undefined && landed !== laneIndex
-        ? { applied: true, conflict: null, laneIndex: landed }
-        : { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Moved, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return landed !== undefined && landed !== laneIndex
+      ? { applied: true, conflict: null, laneIndex: landed }
+      : { applied: true, conflict: null };
   };
 
-  // TSLD bar-end resize (ADR-0052 M2 finish edge, M3 start edge, behind
-  // `VITE_CANVAS_DIRECT_MANIPULATION`). **Finish edge** (`startDay` absent): the drag / `Shift+←/→`
+  // TSLD bar-end resize (ADR-0052 M2 finish edge, M3 start edge).
+  // **Finish edge** (`startDay` absent): the drag / `Shift+←/→`
   // nudge becomes a `PATCH durationDays` through the SAME single-activity update the reposition
   // path uses — carried as the FULL definition round-trip (`activityDefinitionInput`) so
   // durationType / EV / accrual / constraints are resent verbatim, never silently cleared; it does
@@ -2118,23 +2000,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The resize landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Resized, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
-  // TSLD lag-anchor drag (ADR-0052 M3, behind `VITE_CANVAS_DIRECT_MANIPULATION`): the dragged (or
+  // TSLD lag-anchor drag (ADR-0052 M3): the dragged (or
   // Logic-panel-nudged) lag becomes a `PATCH /dependencies/:id` echoing the row's unchanged type +
   // lag calendar at the live version — exactly `useUpdateDependency`'s input, the same endpoint the
   // Edit-link dialog writes through. Optimistic-lock 409 and pen-loss 423 reuse the reposition
@@ -2209,26 +2079,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The change landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Lag changed, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
   // The keyboard lag nudge (ADR-0052 M3) composed once, here, rather than in whichever component
-  // happens to host the Logic panel: it is rendered by the Logic *dialog* flag-off and by the
-  // editor's Logic *tab* flag-on, and two call sites of the same hook is how the two surfaces
-  // would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
+  // happens to host the Logic panel: it is rendered by the editor's Logic tab, and a second
+  // call site of the same hook is how two surfaces would drift. The coalescing is what makes `Shift+←/→` held down one PATCH rather than ten.
   const nudgeDependencyLag = useCoalescedLagNudge({
     onLag: onTsldLag,
     dependencies: dependencies.data ?? [],
@@ -2297,20 +2154,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       throw err;
     }
     // The link landed; a recalc failure is non-fatal (dates stay stale until the next recalc).
-    if (CANVAS_AUTHORING_ENABLED) {
-      autoRecalc.notify();
-      return { applied: true, conflict: null };
-    }
-    try {
-      await recalculate.mutateAsync();
-      return { applied: true, conflict: null };
-    } catch {
-      return {
-        applied: true,
-        conflict:
-          'Linked, but the schedule couldn’t recalculate just now. The dates will update after the next recalculation.',
-      };
-    }
+    autoRecalc.notify();
+    return { applied: true, conflict: null };
   };
 
   // TSLD auto-arrange (M4 4.3): persist the packed lane changes through the batch positions
@@ -2581,7 +2426,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
 
   // Compose a **Level of Effort span** from two driver activities (Stage D, spec
-  // `docs/specs/canvas-activity-types/`, behind `VITE_CANVAS_ACTIVITY_TYPES`) — the canvas endpoint-pick
+  // `docs/specs/canvas-activity-types/`) — the canvas endpoint-pick
   // tool's commit. It reuses the *shipped* LOE type + API (M5-epic, ADR-0035 §21): create a
   // `LEVEL_OF_EFFORT` activity (duration is engine-derived, so `durationDays: 0`) → SS (start → LOE) →
   // FF (LOE → finish), recorded as ONE undoable `createLoeSpanCommand` (undo deletes the LOE, cascading
@@ -2680,16 +2525,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     );
     // Fire the coalesced auto-recalc so the LOE redraws at its engine-derived span (ADR-0032). A recalc
     // failure is non-fatal — the span persisted; the dates land on the next recalc. This is unconditional
-    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button, hence
-    // CANVAS_AUTHORING_ENABLED); `autoRecalc.enabled` is likewise gated on it, so `notifyRecalc` is a
-    // no-op otherwise — do NOT "fix" it by flag-guarding here.
+    // because `createLoeSpan` is only reachable when the LOE tool is armed (the Add split-button);
+    // `notifyRecalc` is itself a no-op when `autoRecalc` is not enabled (no role, pen or start date).
     notifyRecalc();
     return { applied: true, conflict: null };
   };
 
   /**
-   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2, behind
-   * `VITE_ACTIVITY_COPY_PASTE`).
+   * **Duplicate one or more activities** (`docs/specs/activity-copy-paste/` M1-T2).
    *
    * Pre-checks come from `planClone`'s refusal union rather than from ad-hoc tests here, so a case
    * cannot be handled in one call site and forgotten in the next. Everything else follows
@@ -3115,7 +2958,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     todayIso,
     todayFraction,
     varianceByActivityId,
-    // Per-activity note counts for the row badge (ADR-0046) — undefined when `VITE_NOTES` is off.
+    // Per-activity note counts for the row badge (ADR-0046)
     noteCountByActivityId,
     // Gating / identity
     pen,
@@ -3136,42 +2979,36 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     scheduleRefusal: refuseSchedule,
     // Schedule interchange export (ADR-0050 M4d) — every member may export (Viewer upward, a read-egress
     // of on-screen schedule data), so this is role-only (NOT pen-gated). Gates the Export menu's
-    // "Interchange" group alongside `VITE_SCHEDULE_INTERCHANGE`. Named to match the `canExportSchedule`
+    // "Interchange" group. Named to match the `canExportSchedule`
     // rbac fn end-to-end. False for a signed-out / unknown role.
     canExportSchedule: canExportSchedule(role),
     // External-Guest share links (ADR-0051 F-M4): who may create/list/revoke a plan's share links —
     // Planner + Org Admin (`plan:share`, a governance act that mints a bearer credential), NOT pen-gated
-    // (it grants read access, it doesn't edit the plan). Gates the toolbar Share affordance alongside
-    // `VITE_GUEST_SHARE_LINKS`. Named to match the `canSharePlan` rbac fn; false for a signed-out role.
+    // (it grants read access, it doesn't edit the plan). Gates the toolbar Share affordance. Named to match the `canSharePlan` rbac fn; false for a signed-out role.
     canShare: canSharePlan(role),
     canManageLogic,
     penReadOnly,
-    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it; inert flag-off.
+    // Unified auto-recalc (ADR-0032 M3): the manual Recalculate button flushes it.
     autoRecalc,
     // Local UI state
     editing,
     setEditing,
     // Resource-view lens (Stage E, ADR-0049): the ephemeral open flag + toggle the `resource-view`
-    // toolbar item drives; the workspace mounts the `ResourceStripPanel` + strip band when open. Inert
-    // unless `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    // toolbar item drives; the workspace mounts the `ResourceStripPanel` + strip band when open.
     resourceViewOpen,
     toggleResourceView,
     // Over-allocation highlight (Stage E M2): the ephemeral mode flag + toggle the `over-allocation`
-    // toolbar item drives; TsldPanel flags the over-allocated bars when on. Inert unless
-    // `VITE_CANVAS_RESOURCE_VIEW` is on (the item is its placeholder otherwise).
+    // toolbar item drives; TsldPanel flags the over-allocated bars when on.
     overAllocationHighlight,
     toggleOverAllocation,
     logicActivity,
     setLogicActivity,
-    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter). Flag-on it
-    // builds the editor intent; flag-off it opens the dialog, exactly as before.
+    // The Logic entry point every host calls (canvas bar, row menu, keyboard Enter): it builds the
+    // editor intent for the Logic tab.
     onOpenLogic,
-    // The coalesced keyboard lag nudge, composed once here so the Logic dialog and the Logic tab
-    // cannot end up with two different implementations of the same chord.
+    // The coalesced keyboard lag nudge, composed once here.
     nudgeDependencyLag,
-    // Whether the open Logic panel should reveal its Notes section (toolbar quick-wins U4/A4) + the
-    // toolbar **Add note** opener that sets it. Inert unless `VITE_NOTES`/quick-wins are on.
-    logicRevealNotes,
+    // The toolbar **Add note** opener (toolbar quick-wins U4/A4): opens the editor's Notes tab.
     revealActivityNotes,
     // Activity edit/delete targeted from the floating selection bar (rendered by ActivityCrudDialogs).
     editActivityId,
@@ -3184,7 +3021,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onOpenActivityEditorAt,
     onDeleteActivity,
     // Dissolve target (WBS improvements M2) — set by the canvas selection bar, rendered by
-    // ActivityCrudDialogs. Inert when `VITE_WBS_IMPROVEMENTS` is off: nothing sets it.
+    // ActivityCrudDialogs.
     dissolveActivityId,
     setDissolveActivityId,
     onDissolveSummary,
@@ -3194,31 +3031,27 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     setEditorIntent,
     activityEditorGating,
     // Canvas selection lifted to the workspace (toolbar quick-wins F0) + the toolbar's Update-progress
-    // target (F3). Inert when nothing reads them (flag off). `selectedActivity`/`progressActivity`
+    // target (F3). `selectedActivity`/`progressActivity`
     // resolve from the live query, so they clear when their row is deleted.
     selectedActivityId,
     onSelectionChange,
     selectedActivity,
-    // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag +
-    // setter the toolbar Comments button and the drawer's Close control drive. Inert flag-off.
+    // Plan notes right-side drawer (entry-route win 1): the open flag +
+    // setter the toolbar Comments button and the drawer's Close control drive.
     notesOpen,
     setNotesOpen,
     // The Float paths panel's whole state, actions and derived emphasis set, as ONE bundle rather
     // than eight loose fields — `PlanWorkspaceModel` is consumed by ~30 files and widening it a
-    // field at a time is how it got to this length. Inert when `VITE_FLOAT_PATHS` is off: nothing
-    // opens it and the query's `enabled` is false by construction.
+    // field at a time is how it got to this length.
     floatPaths,
-    // Resources dialog target from the canvas selection bar (entry-route win 2, `VITE_ENTRY_ROUTES`):
-    // the opener + the resolved row + the close setter. `resourcesActivity` re-derives from the live
-    // query, so it closes the dialog when the row is deleted. Inert flag-off.
+    // Resources opener from the canvas selection bar (entry-route win 2): opens the editor's
+    // Resources tab.
     onResourcesActivity,
-    resourcesActivity,
-    setResourcesActivity,
     // Report-progress opener from the canvas selection bar (entry-route) — reuses `progressActivityId`
-    // so it opens the ONE workspace-hosted `ActivityProgressDialog`. Inert flag-off.
+    // so it opens the ONE workspace-hosted `ActivityProgressDialog`.
     onProgressActivity,
     // Steps dialog target from the canvas selection bar (entry-route + earned-value/steps flags): the
-    // opener + resolved row + close setter, mirroring the resources trio. Inert flag-off.
+    // opener + resolved row + close setter, mirroring the resources trio.
     onStepsActivity,
     // Make milestone… (ADR-0162 decision 4): the opener every surface calls, the resolved target the
     // one workspace-mounted dialog reads, and its confirm/close.
@@ -3238,7 +3071,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
     // `recordActivityDelete` after a successful delete, with the batch it returned — an id-stable
     // restore, a WBS phase and its subtree included (`docs/TECH_DEBT.md` #230); the
-    // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal.
+    // Logic panel calls `recordDependencyRemove` after a successful link removal.
     recordActivityDelete,
     // A dissolve is one undo step (undo-redo M6) — see `recordActivityDissolve`.
     recordActivityDissolve,
@@ -3282,7 +3115,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // TSLD edit callbacks
     onTsldCreate,
     onTsldReposition,
-    // Bar-end resize (ADR-0052 M2 finish, M3 start — `VITE_CANVAS_DIRECT_MANIPULATION`): the
+    // Bar-end resize (ADR-0052 M2 finish, M3 start): the
     // full-definition durationDays PATCH (+ a hand-placed `visualStart` for a start drag) +
     // coalesced recalc + coalesced undo. The `mode-aware SNET` half of this sentence described
     // ADR-0052 §3's `EARLY` branch, which M-F deleted along with the mode.
@@ -3294,7 +3127,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     onTsldLink,
     onTsldAutoArrange,
     onTsldRefresh,
-    // Compose a Level of Effort span from two driver activities (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`)
+    // Compose a Level of Effort span from two driver activities (Stage D)
     // — reuses the shipped LOE type/API; one undoable action with rollback-on-partial-failure.
     createLoeSpan,
   };

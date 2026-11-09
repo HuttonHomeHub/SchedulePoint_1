@@ -10,8 +10,6 @@ const base: DockStripInput = {
   showDiagram: true,
   activityCount: 3,
   mode: 'select',
-  authoringFlowEnabled: true,
-  hasPlacementMigrationNotice: false,
   hasTouchGestureHint: false,
   hasArrangeOffer: false,
   hasLayoutResolvedNotice: false,

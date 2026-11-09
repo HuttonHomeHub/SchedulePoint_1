@@ -619,10 +619,9 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e
 
-      # Flag-ON editing journeys: a second Playwright run (playwright.edit.config.ts)
-      # serving the app with VITE_TSLD_EDITING + VITE_PLAN_EDIT_LOCK on and the API
+      # Editing journeys: a second Playwright run (playwright.edit.config.ts) with the API
       # enforcing the lock (PLAN_EDIT_LOCK_ENFORCED=true), so on-canvas editing and the
-      # pen are really exercised (TECH_DEBT #25b/#27b). It runs after the flag-off run
+      # pen are really exercised (TECH_DEBT #25b/#27b). It runs after the base run
       # tears down its servers, reusing the same ports.
       - name: Web end-to-end tests (editing flags on)
         if: ${{ matrix.shard == 2 }}
@@ -651,8 +650,8 @@ jobs:
       # click" — is now structural: every deck item is laid out by flex line-breaking, which
       # cannot place a child outside its container.
 
-      # Flag-ON canvas-first authoring journey (playwright.authoring.config.ts) serving the app with
-      # VITE_CANVAS_AUTHORING on (layered on the editing/pen flags), so building a
+      # Canvas-first authoring journey (playwright.authoring.config.ts) serving the app as shipped
+      # (the flag it once pinned, VITE_CANVAS_AUTHORING, is retired), so building a
       # plan directly on the canvas — blank-canvas first draw, inline start date, auto-recalc,
       # on-canvas milestones, two-click linking — is exercised end to end (ADR-0032). Runs last,
       # after the prior runs tear down their servers, reusing the ports.
@@ -661,16 +660,16 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:authoring
 
       # Flag-ON live cross-plan / programme scheduling journey (playwright.programme.config.ts) serving
-      # the app with VITE_PROGRAMME_SCHEDULING on (plus VITE_INTER_PROJECT_DATES, on the legacy stacked
-      # plan-detail page with the pen off), so drawing a live cross-plan link and running a programme
+      # the app (the programme-scheduling and inter-project-date flags it once pinned are retired,
+      # ADR-0215 D8), so drawing a live cross-plan link and running a programme
       # recalculate — the result panel, the driven "External" badge, and the staleness cycle — is
       # exercised end to end (ADR-0045 F8). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (programme scheduling flag on)
         if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:programme
 
-      # Flag-ON Notes journey (playwright.notes.config.ts) serving the app with VITE_NOTES on (on the
-      # legacy stacked plan-detail page with the pen off — notes are not pen-gated), so adding, editing
+      # Notes journey (playwright.notes.config.ts) serving the app as shipped (the VITE_NOTES flag is
+      # retired; the pen is off — notes are not pen-gated), so adding, editing
       # and deleting an activity note, the per-row count badge tracking it, and an axe pass are
       # exercised end to end (ADR-0046). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (notes flag on)
@@ -686,9 +685,8 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:undo
 
-      # Flag-ON on-canvas activity types journey (playwright.loe.config.ts) serving the app with
-      # VITE_CANVAS_ACTIVITY_TYPES on (layered on the canvas authoring + editing/pen
-      # flags, with the pen enforced), so the Level-of-Effort endpoint-pick tool — the Add-menu item,
+      # On-canvas activity types journey (playwright.loe.config.ts) layered on the canvas
+      # authoring flag, with the pen enforced, so the Level-of-Effort endpoint-pick tool — the Add-menu item,
       # the two-click keyboard pick, and the announcements — is exercised end to end (Stage D). Runs
       # last, after the prior runs tear down their servers, reusing the ports.
       - name: Web end-to-end tests (on-canvas activity types flag on)
@@ -696,8 +694,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:loe
 
       # Flag-ON canvas resource view journey (playwright.resource-view.config.ts) serving the app with
-      # VITE_CANVAS_RESOURCE_VIEW on (plus VITE_RESOURCES + VITE_RESOURCE_CURVES for the data source,
-      # layered on the canvas authoring + editing/pen flags), so the axis-aligned demand
+      # the resource view always on (its flags are retired, ADR-0215 D8), so the axis-aligned demand
       # strip — reveal, resource/bucket pickers, the accessible data table, and the on-bar
       # over-allocation highlight — is exercised end to end (Stage E). Runs last, after the prior runs
       # tear down their servers, reusing the ports.
@@ -705,9 +702,8 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:resource-view
 
-      # Flag-ON schedule interchange (XER import) journey (playwright.interchange.config.ts) serving
-      # the app with VITE_SCHEDULE_INTERCHANGE on (layered on the canvas authoring + editing/pen
-      # flags), so the whole import loop — "Import from file…", the dry-run review dialog
+      # Schedule interchange (XER import) journey (playwright.interchange.config.ts) serving the app
+      # as shipped (VITE_SCHEDULE_INTERCHANGE is retired), so the whole import loop — "Import from file…", the dry-run review dialog
       # + report table, and Confirm import committing and opening the new plan — is exercised end to
       # end (Stage C2 M1, ADR-0050). Runs last, after the prior runs tear down their servers, reusing
       # the ports.
@@ -716,7 +712,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:interchange
 
       # Flag-ON External-Guest share links journey (playwright.share.config.ts) serving the app with
-      # VITE_GUEST_SHARE_LINKS on (layered on the canvas authoring + editing/pen flags),
+      # share links always on (the flag is retired, ADR-0215 D8),
       # so the whole share loop — the member Share… toolbar item opening ShareLinksDialog (create/list/
       # revoke), the one-time guest URL, and the public session-less `/share#<token>` read-only view
       # across a second, cookie-free browser context (with immediate revocation) — is exercised end to
@@ -761,8 +757,8 @@ jobs:
         if: ${{ matrix.shard == 3 }}
         run: pnpm --filter @repo/web test:e2e:calendar-shifts
 
-      # Flag-ON sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app with
-      # VITE_SUB_DAY_DURATIONS on. It proves what a mocked fetch structurally cannot (ADR-0070): that
+      # Sub-day durations/lags journey (playwright.sub-day.config.ts) serving the app as shipped
+      # (VITE_SUB_DAY_DURATIONS is retired). It proves what a mocked fetch structurally cannot (ADR-0070): that
       # `4h` is stored as 240 minutes on a calendar whose day is 480 and not 1440 — a wrong factor
       # errors nowhere, it just stores three times the work — that a bare number still converts on
       # the plan's own day, that an unrelated rename does not flatten a sub-day value through the
@@ -820,7 +816,7 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:revision-compare
 
-      # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
+      # Search that navigates (flag retired, ADR-0215 D8) against a real API with the pen enforced.
       # What a mocked fetch and a mounted-in-isolation toolbar structurally cannot prove: that Enter
       # reaches the handler through the PORTALLED chrome band (React events follow the React tree,
       # the canvas's key listener is a native `window` one); that a full cycle leaves focus in the
@@ -832,7 +828,7 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:search-nav
 
-      # The canvas plural selection (`VITE_CANVAS_MULTI_SELECT`) against a real API with the pen
+      # The canvas plural selection (flag retired, ADR-0215 D8) against a real API with the pen
       # enforced. What no mocked test can reach: the optimistic-`version` trap (a mocked fetch
       # accepts any version, so a bulk batch's version threading is only testable here); and that a
       # bulk delete's undo brings the LINKS back, which is the CQ-4 answer — a re-create would
@@ -842,7 +838,7 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:multi-select
 
-      # Activity copy / paste / duplicate (`VITE_ACTIVITY_COPY_PASTE`) against a real API with the
+      # Activity copy / paste / duplicate (flag retired, ADR-0215 D8) against a real API with the
       # pen enforced. What no mocked test can reach: that a copy carries what the census says, read
       # back from the API rather than from the DOM under test (ADR-0070 M6); that the internal-edge
       # rule holds against a real graph, with zero links from a clone to an original; that one
@@ -871,17 +867,16 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:designed-ui
 
-      # The chrome band with VITE_DESIGNED_CHROME on (ADR-0055 S2) — the header and a plan's two
+      # The chrome band (ADR-0055 S2; its flag is retired, ADR-0215 D8) — the header and a plan's two
       # toolbar rows rendered as ONE surface, the tab order that follows from the new DOM order,
-      # and axe over the band itself. Since the S5-T4 flip this is the SHIPPED DEFAULT; the
-      # sibling step above pins the flags off and is now the rollback-parity side. Both are kept:
-      # dropping either would leave one half of the rollback contract unproven.
+      # and axe over the band itself. This is the shipped chrome; the sibling step above no
+      # longer pins a flag either.
       - name: Web end-to-end tests (designed chrome band, flag on — the shipped default)
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:designed-chrome
 
-      # Flag-ON Gantt view journey (playwright.gantt.config.ts) serving the app with VITE_GANTT_VIEW
-      # on (layered on the canvas authoring + editing/pen flags), proving ADR-0059's
+      # Gantt view journey (playwright.gantt.config.ts) serving the app as shipped (VITE_GANTT_VIEW is
+      # retired), proving ADR-0059's
       # claims end to end: an activity authored on the diagram is the same row in the Gantt with the
       # dates the engine computed, `?view=gantt` survives a reload, and the grid is arrow-navigable
       # and axe-clean. Runs after the prior suites tear down their servers, reusing the ports.
@@ -955,8 +950,8 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:netpoint-grammar
 
-      # Flag-ON WBS improvements journey (playwright.wbs.config.ts) with VITE_WBS_IMPROVEMENTS on
-      # AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
+      # WBS improvements journey (playwright.wbs.config.ts) as shipped (VITE_WBS_IMPROVEMENTS is
+      # retired) AND the pen enforced at the API, proving ADR-0063's claims against a real server: the batch
       # membership write is per-row optimistic-locked (a mocked fetch accepts any version, so the
       # versions the multi-select sends are only really checked here), dissolving a summary loses no
       # activity (counted at the API, not read off the screen), the cascade-delete warning states
@@ -1003,22 +998,10 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:authoring-flow
 
-      # Canvas authoring flow with the flag OFF (playwright.authoring-flow-off.config.ts,
-      # docs/specs/flag-off-link-pick/, TECH_DEBT #76). The Link tool's two-click pick runs through
-      # echo plumbing the authoring-flow epic wired unconditionally, so a build that sets
-      # VITE_CANVAS_AUTHORING_FLOW=false still depends on it; no other config runs with the flag
-      # off and a unit test cannot hit-test a canvas. Three short steps: the pick links in the right
-      # direction, no mode band shows, and Escape drops an open pick. Placed on shard 4 because it
-      # was the lightest before this suite was added (935 s against 936 s, scripts/e2e-durations.json).
-      # Runs after the prior suites tear down their servers.
-      - name: Web end-to-end tests (canvas authoring flow, flag off)
-        if: ${{ matrix.shard == 4 }}
-        run: pnpm --filter @repo/web test:e2e:authoring-flow-off
-
       # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
       # enforced at the API. **The first journey in this repository to run in Visual mode at all** —
-      # the other fourteen canvas configs pin VITE_SCHEDULING_MODES off, each for a good local
-      # reason, and the unrecorded consequence was that the one placement rule a planner exercises
+      # the other fourteen canvas configs once pinned VITE_SCHEDULING_MODES off (the flag is retired,
+      # so none pins it now), each for a good local reason, and the unrecorded consequence was that the one placement rule a planner exercises
       # by dragging a bar had no end-to-end coverage. That is exactly where a defect had been
       # sitting: a `Snap to grid` toggle that appeared to do the snapping while the engine did it
       # unconditionally, and whose own contribution was to write a Saturday drop back as Friday —
@@ -1144,7 +1127,7 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:export
 
-      # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
+      # Audit log journey (playwright.audit.config.ts), the app as shipped (VITE_AUDIT_LOG is retired, ADR-0072).
       # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
       # be wrong about a row it invented. Against a real API and database this proves the producers
       # fire inside the transactions that succeeded (six real actions, six findable rows), that a
@@ -1176,9 +1159,8 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:account-verify
 
-      # ADR-0086, staff-console M3. **Not a flag-on suite** — every sibling pins a `VITE_` constant
-      # and this one pins a SERVER variable, `STAFF_EMAILS`, because staff-ness is a server fact the
-      # bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
+      # ADR-0086, staff-console M3. It pins a SERVER variable, `STAFF_EMAILS`, because staff-ness
+      # is a server fact the bundle cannot see. It lands with M3 because M3 is the first milestone with a user-facing
       # entry point (ADR-0081 §2), and this epic had already paid for that rule: M2 passed 1,589
       # unit tests and could not serve one request. This suite earned its keep on its first green
       # run too — it caught `apiFetch('/api/v1/staff/me')` against an `API_BASE_URL` that is already
@@ -1739,6 +1721,50 @@ jobs:
           log=$($c logs --no-color --since "$since" api)
           grep 'backup.pre_migrate_taken' <<<"$log"
           curl -fsS --retry 5 --retry-all-errors --retry-delay 3 http://localhost:3000/api/v1/health/ready
+
+      # ADR-0215: the shipped image, started on a database made before the 1.1 baseline, REFUSES it before
+      # anything is changed. `preflight` runs first in docker-entrypoint.sh, ahead of the copy before an
+      # update (which would otherwise take a copy of the refused database on every restart) and of
+      # `prisma migrate deploy`. The database is a second one in the stack's own Postgres, built from
+      # scripts/ci-fixtures/pre-1-1-database.sql (a 1.0 migration name and one table, never a folder under
+      # apps/api/prisma/migrations/), so the running stack is not disturbed. It runs after "Copy before an
+      # update" because that step leaves the stack with an extra migration applied.
+      #
+      # The refusal is the case that can fail (ADR-0110): delete the `preflight` line from
+      # docker-entrypoint.sh and this container takes a copy of the old database into the backups folder
+      # and lets `prisma migrate deploy` write a failed baseline row into it, so the event is missing and
+      # the folder and `_prisma_migrations` have both changed, each reported by name below.
+      - name: Refuse a pre-1.1 database
+        run: |
+          set -euo pipefail
+          c='docker compose -f docker-compose.yml -f docker-compose.ci.yml'
+          fail() { echo "FAIL: $*"; exit 1; }
+          sql() { $c exec -T db psql -U app -d "$2" -Atc "$1"; }
+          history() { sql "SELECT coalesce(string_agg(migration_name || '/' || coalesce(finished_at::text, '-') || '/' || coalesce(rolled_back_at::text, '-'), ',' ORDER BY migration_name), 'none') FROM _prisma_migrations" legacy; }
+          tables() { sql "SELECT string_agg(relname, ',' ORDER BY relname) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind = 'r'" legacy; }
+
+          sql 'DROP DATABASE IF EXISTS legacy' postgres
+          sql 'CREATE DATABASE legacy' postgres
+          $c exec -T db psql -U app -d legacy -v ON_ERROR_STOP=1 -q < scripts/ci-fixtures/pre-1-1-database.sql
+          history_before=$(history); tables_before=$(tables)
+          [ "$history_before" != none ] || fail 'the fixture holds no migration history'
+          files_before=$(sudo ls -1A "$BACKUP_DIR" | sort)
+
+          rc=0
+          out=$($c run --rm --no-deps -T \
+            -e 'DATABASE_URL=postgresql://app:app@db:5432/legacy?schema=public' api 2>&1) || rc=$?
+          echo "$out"
+          [ "$rc" -ne 0 ] || fail 'the API container started on a pre-1.1 database'
+          grep -q '"event":"boot.database_refused"' <<<"$out" || fail 'no boot.database_refused event'
+          grep -q '"reason":"pre_1_1_lineage"' <<<"$out" || fail 'the refusal does not say the database is from before 1.1'
+          grep -q 'docs/guides/start-fresh-on-1-1.md' <<<"$out" || fail 'the refusal does not point at the guide'
+          ! grep -qE 'postgresql://|app:app' <<<"$out" || fail 'the refusal printed the connection string'
+          ! grep -qE 'applying database migrations|starting API|backup\.pre_migrate' <<<"$out" \
+            || fail 'the container went on past the refusal'
+          [ "$(history)" = "$history_before" ] || fail '_prisma_migrations changed'
+          [ "$(tables)" = "$tables_before" ] || fail 'the old database was changed'
+          [ "$(sudo ls -1A "$BACKUP_DIR" | sort)" = "$files_before" ] || fail 'a file was written to the backups folder'
+          # The `legacy` database is not dropped here: "Tear down" below runs always and removes the volume.
 
       - name: Dump container logs on failure
         if: failure()

@@ -1,6 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
  * The derived **Unassigned** bucket in the printed programme (WBS improvements M5-T2).
@@ -13,10 +13,6 @@ import { describe, expect, it, vi } from 'vitest';
  * Two suites, one for each flag state, because the print surface passes the flag through to
  * `buildRows` and a rollback must take the bucket out of the paper as well as the screen.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 import { GANTT_COLUMNS } from '../layout/grid-columns';
 import { DEFAULT_HIDDEN_COLUMNS } from '../model/gantt-view-state';

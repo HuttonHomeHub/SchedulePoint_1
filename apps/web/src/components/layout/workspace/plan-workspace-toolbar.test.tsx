@@ -20,10 +20,6 @@ const h = vi.hoisted<{
   plannedStart: string | null;
   // The last props the (stubbed) TsldPanel received, so the strip forwarding can be asserted (B7).
   tsldProps: { current: Record<string, unknown> | null };
-  // How many constraints the one-time placement migration converted on this plan (M-I). The hook
-  // is mocked rather than the fetch, because the subject here is the HOST's wiring and not the
-  // query's.
-  migrationCount: number;
   // The `?view=` search the route mock answers, so a case can open the Gantt (ADR-0059).
   search: Record<string, string>;
   // The canvas handle the stubbed panel publishes, so a viewport command's effect is observable.
@@ -44,7 +40,6 @@ const h = vi.hoisted<{
   role: 'PLANNER',
   plannedStart: '2026-01-01',
   tsldProps: { current: null },
-  migrationCount: 0,
   search: {},
   canvasControl: { goToDate: vi.fn() },
   swimlanes: { source: 'NONE', list: { data: undefined, isPending: true } },
@@ -54,52 +49,6 @@ const h = vi.hoisted<{
 vi.mock('@/features/swimlanes/api/use-swimlanes', () => ({
   useSwimlanes: () => h.swimlanes.list,
   swimlanesQueryOptions: () => ({}),
-}));
-
-vi.mock('@/features/placement-migration/api/use-placement-migration', () => ({
-  usePlacementMigration: () => ({
-    data:
-      h.migrationCount === 0
-        ? { planId: 'plan-1', count: 0, rows: [] }
-        : {
-            planId: 'plan-1',
-            count: h.migrationCount,
-            rows: [
-              {
-                id: 'row-1',
-                activityId: 'act-1',
-                activityCode: 'A100',
-                activityName: 'Pour slab',
-                priorConstraintType: 'SNET',
-                priorConstraintDate: '2026-03-04',
-                priorVisualStart: null,
-                migratedAt: '2026-09-21T09:00:00.000Z',
-              },
-            ],
-          },
-    isPending: false,
-    isError: false,
-  }),
-}));
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  // This suite asserts the ADR-0031 toolbar *layout*, not authoring; pin the (now default-on)
-  // authoring flag off so the plain Add toggle + inert empty canvas are the subject. Authoring is
-  // covered by the tsld-toolbar-authoring / TsldPanel.authoring suites + the flag-on e2e journey.
-  CANVAS_AUTHORING_ENABLED: false,
-  // Stage E (ADR-0049): force the (dark-by-default) resource-view flag on so the `resource-view` toggle
-  // is real + the `ResourceStripPanel` can mount when toggled (B7). The build stays dark — this is a
-  // test-only mock, and `env.test.ts` still asserts the derived constant is false at the build default.
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
-  // This suite asserts the ADR-0031 toolbar *layout*. The programme section (now default-on) mounts
-  // its own summary/recalc queries into the same region; pin it off here so the layout is the subject
-  // — it has its own suite (ProgrammeScheduleSection).
-  PROGRAMME_SCHEDULING_ENABLED: false,
-  // Entry-route (now default-on) turns the inline notes into a drawer and mounts the resources/steps
-  // dialogs in PlanDialogs; pin it off here so the toolbar layout is the subject — the drawer + new
-  // selection-bar items have their own suites (plan-workspace-entry-routes / selection-actions.*).
-  ENTRY_ROUTES_ENABLED: false,
 }));
 
 // Stub the DOM strip chrome so it doesn't fetch: on mount it publishes a snapshot into the canvas (via
@@ -141,7 +90,7 @@ vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'us
 
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ penManaged: false }),
+  usePlanPen: () => ({ holdsPen: true }),
   CompactPenStatus: () => null,
 }));
 
@@ -239,7 +188,6 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
   useUpdateDependency: () => ({ mutateAsync: vi.fn() }),
-  DependencyEditor: () => <div data-testid="dependency-editor" />,
 }));
 
 // The TSLD panel needs Canvas 2D; stub it so the layout renders in jsdom. Record its props so the
@@ -281,6 +229,8 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // Mounted by `PlanChromeDialogs`; its own suite covers it, and these suites never open it.
   ApplyLevellingDialog: () => null,
+  // Mounts its own summary/recalc queries; it has its own suite (ProgrammeScheduleSection.test.tsx).
+  ProgrammeScheduleSection: () => null,
   // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({
@@ -338,7 +288,6 @@ beforeEach(() => {
   h.role = 'PLANNER';
   h.plannedStart = '2026-01-01';
   h.tsldProps.current = null;
-  h.migrationCount = 0;
   h.search = {};
   h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
 });
@@ -380,7 +329,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
         name: 'Fit to plan',
       }),
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument();
   });
 
   /**
@@ -614,47 +563,9 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
 });
 
 /**
- * **The placement-migration notice reaches the canvas, or it reaches nobody** (M-I-T2).
- *
- * This is the ADR-0081 seam, asserted at the only place it can be: the host builds the strip and
- * `TsldPanel` decides whether the dock shows it, so a notice wired into one and not the other is
- * invisible to both files' own suites. That exact shape has shipped here three times — ADR-0080's
- * `bulk` into one layout and not the one its flag selects, Graphite M6's drawer with no entry
- * point, ADR-0062 M6's hidden form — and each time the unit tests were green.
- *
- * What this pair cannot see is whether the strip is VISIBLE, because jsdom has no layout. The
- * precedence half — that the notice yields to a conflict, an armed tool and the empty-plan
- * notice — is asserted as a value in `features/tsld/model/dock-strip.test.ts`, which is where the
- * decision lives.
- */
-describe('the placement-migration notice (one-planning-surface M-I)', () => {
-  it('passes the notice to the canvas when the migration changed something here', async () => {
-    h.migrationCount = 3;
-    renderScreen();
-
-    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
-    expect(h.tsldProps.current?.placementMigrationNotice).not.toBeNull();
-  });
-
-  /**
-   * Nothing converted means nothing to say. Asserted as its own case rather than trusted, because
-   * a host that passed a truthy node unconditionally would make the dock's lowest rung permanent —
-   * and `resolveDockStrip` keys on the node's presence, so the strip would render empty rather
-   * than fail loudly.
-   */
-  it('passes nothing when the migration changed nothing here', async () => {
-    h.migrationCount = 0;
-    renderScreen();
-
-    await waitFor(() => expect(h.tsldProps.current).not.toBeNull());
-    expect(h.tsldProps.current?.placementMigrationNotice).toBeNull();
-  });
-});
-
-/**
  * **The touch tip reaches the dock in both views, or it reaches nobody** (`docs/specs/long-press-hint/`
  * M2). The host builds the strip, `TsldPanel` decides whether the diagram's dock shows it, and the
- * Gantt's own chain places it — the same three-party seam as the migration notice above.
+ * Gantt's own chain places it — the same three-party seam as every dock strip.
  */
 describe('the touch-gesture tip', () => {
   /** A whole touch (down, up) of the given type, then long enough for the hook's frame. */
@@ -1060,7 +971,7 @@ describe('the short-body swap', () => {
       renderScreen();
       resizeBody(365);
       expand();
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
       expect(canvasUi()?.mode).toBe('select');
       nextFrame();
@@ -1079,7 +990,7 @@ describe('the short-body swap', () => {
     it('puts an armed tool away on entering the swap, and says so for that opening only', () => {
       renderScreen();
       resizeBody(365);
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expect(canvasUi()?.mode).toBe('add-activity');
 
       expand();
@@ -1105,7 +1016,7 @@ describe('the short-body swap', () => {
     it('does not disarm a tool when the body is not short', () => {
       renderScreen();
       resizeBody(800);
-      fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
       expand();
       expect(canvasUi()?.mode).toBe('add-activity');
     });
@@ -1280,7 +1191,7 @@ describe('a dock that has taken the row', () => {
   it('puts an armed drawing tool away when a dock takes the row and the diagram goes out of reach', () => {
     renderScreen();
     measure(640);
-    fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
     const mode = () => (h.tsldProps.current?.['canvasUi'] as { mode: string } | undefined)?.mode;
     expect(mode()).toBe('add-activity');
 

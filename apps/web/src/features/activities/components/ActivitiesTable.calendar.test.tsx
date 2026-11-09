@@ -2,7 +2,7 @@ import { WorkingWeekdays } from '@repo/types';
 import type { ActivitySummary, CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -11,17 +11,10 @@ import { ActivitiesTable } from './ActivitiesTable';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
- * The activities table's per-activity calendar column (ADR-0037, M5) with `VITE_ACTIVITY_CALENDAR`
- * forced ON. The column names an activity's own calendar, stays quiet (em dash) when it inherits the
+ * The activities table's per-activity calendar column (ADR-0037, M5). The column names an activity's own calendar, stays quiet (em dash) when it inherits the
  * plan's, and — crucially — never renders that same em dash for a calendar that simply isn't nameable
  * yet: "Loading…" while the (route-composed) list loads, "Unnamed" once settled without a match.
- * Flag-off (no column) is the default the other table suite exercises.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_CALENDAR_ENABLED: true,
-}));
-
 const CALENDARS: CalendarSummary[] = [
   {
     id: 'cal-247',

@@ -1,7 +1,6 @@
 /**
  * Live cross-plan / programme scheduling — the inter-project M2 web feature (ADR-0045, F8). Public
- * surface: the activity-panel {@link CrossPlanLinksSection}. Everything here is exposed only behind
- * `VITE_PROGRAMME_SCHEDULING` (see `@/config/env`) by its hosts.
+ * surface: the activity-panel {@link CrossPlanLinksSection}.
  */
 export { CrossPlanLinksSection } from './components/CrossPlanLinksSection';
 export { AddCrossPlanLinkDialog } from './components/AddCrossPlanLinkDialog';

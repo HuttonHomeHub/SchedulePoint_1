@@ -6,7 +6,6 @@ import {
   daysBetween,
   MAX_PX_PER_DAY,
   screenXOfDay,
-  ZOOM_STOPS,
   ZOOM_TARGET_DAYS,
   zoomAt,
   type Size,
@@ -31,9 +30,8 @@ export const MONTH_ROW_MIN_PX_PER_DAY = 1.3;
 
 /**
  * The px-per-day scale that frames a preset's **nominal** target visible range (feature-spec.md
- * §4.3, `VITE_CANVAS_TIME_AXIS`) at the given canvas width, clamped to the legal scale bounds. Only
- * ever reached through the `rangeAnchored=true` path (already flag-gated by its callers), so it
- * clamps against {@link MAX_PX_PER_DAY} directly rather than taking a ceiling parameter. A preset
+ * §4.3) at the given canvas width, clamped to the legal scale bounds. It clamps against
+ * {@link MAX_PX_PER_DAY} directly rather than taking a ceiling parameter. A preset
  * therefore frames its target range wherever the bounds allow, and clamps to the nearest legal scale
  * otherwise (documented residual: below ~440px, Year frames less than 3 years).
  */
@@ -42,19 +40,17 @@ export function pxPerDayForPreset(level: ZoomLevel, width: number): number {
 }
 
 /**
- * The zoom preset whose scale is closest to the current `pxPerDay` (log-distance). `width` and
- * `rangeAnchored` are **required** (not defaulted/optional) so the compiler — not a reviewer —
- * catches every call site: a defaulted width would let a forgotten site silently report the wrong
- * preset once the target scale became width-dependent (feature-spec.md §3.3). `rangeAnchored`
- * selects which target table distance is measured against: `pxPerDayForPreset` (this width) when
- * true, the fixed `ZOOM_STOPS` (width-independent, today's behaviour) when false — so flag-off
- * reporting stays byte-for-byte regardless of what width is passed in.
+ * The zoom preset whose scale is closest to the current `pxPerDay` (log-distance) among the
+ * range-anchored targets (`pxPerDayForPreset`). `width` is **required** (not defaulted/optional)
+ * so the compiler — not a reviewer — catches every call site: a defaulted width would let a
+ * forgotten site silently report the wrong preset, because the target scale is width-dependent
+ * (feature-spec.md §3.3).
  */
-export function presetOf(pxPerDay: number, width: number, rangeAnchored: boolean): ZoomLevel {
+export function presetOf(pxPerDay: number, width: number): ZoomLevel {
   let best: ZoomLevel = 'day';
   let bestDist = Infinity;
   for (const level of ZOOM_LEVELS) {
-    const target = rangeAnchored ? pxPerDayForPreset(level, width) : ZOOM_STOPS[level];
+    const target = pxPerDayForPreset(level, width);
     const dist = Math.abs(Math.log(pxPerDay) - Math.log(target));
     if (dist < bestDist) {
       bestDist = dist;
@@ -73,19 +69,16 @@ export function presetOf(pxPerDay: number, width: number, rangeAnchored: boolean
  * Re-deriving the scale on every resize was rejected: it would rescale a planner's diagram under
  * them while they dragged a window edge.
  *
- * `maxPxPerDay` is required so the caller resolves the flag-aware zoom ceiling (`MAX_PX_PER_DAY`
- * vs `LEGACY_MAX_PX_PER_DAY`) rather than this function reading either off the module — a
- * component-review finding caught the ceiling itself leaking into the flag-off path when it
- * wasn't threaded explicitly.
+ * `maxPxPerDay` is required so the caller states the zoom ceiling rather than this function
+ * reading it off the module.
  */
 export function zoomToPreset(
   view: Viewport,
   size: Size,
   level: ZoomLevel,
-  rangeAnchored: boolean,
   maxPxPerDay: number,
 ): Viewport {
-  const target = rangeAnchored ? pxPerDayForPreset(level, size.width) : ZOOM_STOPS[level];
+  const target = pxPerDayForPreset(level, size.width);
   return zoomAt(view, size.width / 2, target / view.pxPerDay, maxPxPerDay);
 }
 
@@ -103,13 +96,8 @@ export function stepZoom(
 }
 
 /** True when the viewport is already at (or clamped to) the given preset — for `aria-pressed`. */
-export function isAtPreset(
-  pxPerDay: number,
-  level: ZoomLevel,
-  width: number,
-  rangeAnchored: boolean,
-): boolean {
-  return presetOf(pxPerDay, width, rangeAnchored) === level;
+export function isAtPreset(pxPerDay: number, level: ZoomLevel, width: number): boolean {
+  return presetOf(pxPerDay, width) === level;
 }
 
 /**
@@ -467,7 +455,7 @@ const DAY_MS = 24 * 60 * 60_000;
 
 /**
  * The viewer-**local** time-of-day fraction (0…1) for `nowMs` (a UTC epoch ms), for the Today
- * marker's fractional x (F6a, `VITE_CANVAS_TIME_AXIS`). `tzOffsetMin` follows
+ * marker's fractional x. `tzOffsetMin` follows
  * `Date.prototype.getTimezoneOffset()`'s convention (UTC = local + offset), so pass the live
  * value at call time — it already reflects any DST transition. Quantised to a 60s step (so the
  * result is stable across unrelated re-renders within the same minute); a non-finite input or an

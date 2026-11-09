@@ -7,14 +7,7 @@ import { buildTsldToolbarItems, LENS_TOGGLES } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
-// The flag-ON export & print registry: the `export` placeholder becomes the real Export ▾ menu-button.
-// The flag-off stubs (both `export` and `print` "Coming soon") are covered by `tsld-toolbar.test.tsx`
-// (which pins EXPORT_PRINT_ENABLED off).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  EXPORT_PRINT_ENABLED: true,
-}));
-
+// The export & print registry: the Export ▾ menu-button.
 const spies = {
   exportScheduleCsv: vi.fn(),
   exportDiagramPng: vi.fn(),

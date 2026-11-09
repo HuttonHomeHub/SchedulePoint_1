@@ -3,12 +3,6 @@ import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
-// Exercise the editing surface too (toolbar, shortcuts button) by forcing the flag on.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: true };
-});
-
 import { TsldPanel } from './TsldPanel';
 
 import { anActivity } from '@/test/activity-fixture';

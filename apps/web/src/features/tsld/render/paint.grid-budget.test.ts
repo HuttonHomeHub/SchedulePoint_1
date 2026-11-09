@@ -4,7 +4,7 @@ import { paintScene, type TsldPalette, type TsldScene } from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 /**
- * **The F5 gate** (tsld-toolbar-canvas-refinements, `VITE_CANVAS_TIME_AXIS`). Splitting the single
+ * **The F5 gate**. Splitting the single
  * batched grid stroke into three tiered passes must not change the total line count — only how many
  * `beginPath`/`stroke`/`strokeStyle` sets it takes to draw them. The counting-stub method mirrors
  * `paint.band-budget.test.ts` / `paint.dates-budget.test.ts`: the assertion is about the **shape**
@@ -34,7 +34,7 @@ const PALETTE: TsldPalette = {
   nonWorking: '#222',
   today: '#f00',
   todayInk: '#fff',
-  // The data-date pair (VITE_CANVAS_DATA_DATE) — distinct fixture values so assertions can pin them.
+  // The data-date pair — distinct fixture values so assertions can pin them.
   dataDate: '#dd1',
   dataDateInk: '#dd2',
   conflict: '#fa0',
@@ -145,14 +145,13 @@ const TOGGLES = {
   lateOverlay: false,
 } as const;
 
-function paint(gridTiers: boolean, view: Viewport) {
+function paint(view: Viewport) {
   const ctx = countingCtx();
   const scene: TsldScene = {
     activities: smallPlan(),
     edges: [],
     dataDate: DATA_DATE,
     view: TOGGLES,
-    ...(gridTiers ? { gridTiers: true } : {}),
   };
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);
   return { ...ctx.calls, passes: gridPasses(ctx.passes) };
@@ -180,49 +179,29 @@ function gridPasses(passes: readonly PassSnapshot[]): PassSnapshot[] {
 const VIEW: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
 
 describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F5)', () => {
-  it('flag-off strokes the grid in exactly one batched pass', () => {
-    // **Two passes, not one, and the second is not the grid's** (workspace redesign M4-T2). The lane
-    // hairlines are a layer of their own, drawn in one batch immediately after this one, and these
-    // counters are scene-wide rather than layer-scoped. The figure is re-baselined UPWARD here with
-    // the reason recorded rather than the assertion loosened to `toBeLessThanOrEqual`, which would
-    // stop this gate noticing the next layer that arrives — and noticing is its whole job.
-    //
-    // What it still pins exactly is the grid's own shape: ONE batch for the flag-off single tier,
-    // and the +2 the three tiers cost, both asserted as differences below.
-    const off = paint(false, VIEW);
-    expect(off.beginPath).toBe(2);
-    expect(off.stroke).toBe(2);
-    expect(off.strokeStyleSets).toBe(2);
+  it('strokes the grid in exactly three batched passes — one per tier', () => {
+    // **Four batches, and the fourth is not the grid's** (workspace redesign M4-T2). The lane
+    // hairlines are a layer of their own, drawn in one batch immediately after the tiers, and these
+    // counters are scene-wide rather than layer-scoped. Asserted exactly rather than as
+    // `toBeLessThanOrEqual`, which would stop this gate noticing the next layer that arrives —
+    // and noticing is its whole job.
+    const drawn = paint(VIEW);
+    expect(drawn.passes).toHaveLength(3);
+    expect(drawn.beginPath).toBe(4);
+    expect(drawn.stroke).toBe(4);
+    expect(drawn.strokeStyleSets).toBe(4);
+    // Every line is one moveTo + one lineTo, whatever the batching.
+    expect(drawn.moveTo).toBe(drawn.lineTo);
+    expect(drawn.moveTo).toBeGreaterThan(0);
   });
 
-  it('flag-on adds exactly two extra beginPath/stroke/strokeStyle sets (three tiers, not one)', () => {
-    const off = paint(false, VIEW);
-    const on = paint(true, VIEW);
-    expect(on.beginPath - off.beginPath).toBe(2);
-    expect(on.stroke - off.stroke).toBe(2);
-    expect(on.strokeStyleSets - off.strokeStyleSets).toBe(2);
-  });
-
-  it('keeps the same total moveTo/lineTo count — the same lines, just batched differently', () => {
-    const off = paint(false, VIEW);
-    const on = paint(true, VIEW);
-    expect(on.moveTo).toBe(off.moveTo);
-    expect(on.lineTo).toBe(off.lineTo);
-    // Sanity: every line is one moveTo + one lineTo. Since M4-T2 this total includes the lane
-    // hairlines, which is why the assertion is a DIFFERENCE between two paints of the same scene:
-    // both carry the same lane count, so it cancels and the tiers are still what is measured.
-    expect(off.moveTo).toBe(off.lineTo);
-    expect(off.moveTo).toBeGreaterThan(0);
-  });
-
-  it('draws no tier when its own toggle is off, flag-on', () => {
+  it('draws no tier when its own toggle is off', () => {
     const ctx = countingCtx();
     const scene: TsldScene = {
       activities: smallPlan(),
       edges: [],
       dataDate: DATA_DATE,
       view: { ...TOGGLES, dayGrid: false, monthGrid: false, yearGrid: false },
-      gridTiers: true,
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE, 1);
     // **Asserted by stroke style, not by a count** (M4-T2). Every gridline toggle is off, so the
@@ -233,7 +212,7 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
   });
 
   it('draws day → month → year in that order, every tier 1 px on a HALF-pixel x', () => {
-    const { passes } = paint(true, VIEW);
+    const { passes } = paint(VIEW);
     expect(passes).toHaveLength(3);
     const [day, month, year] = passes;
 
@@ -249,7 +228,7 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
   });
 
   it('dashes the day and month tiers 3 on / 3 off and leaves the year tier solid (G1)', () => {
-    const { passes } = paint(true, VIEW);
+    const { passes } = paint(VIEW);
     const [day, month, year] = passes;
     expect(day!.dash).toEqual([3, 3]);
     expect(month!.dash).toEqual([3, 3]);
@@ -261,8 +240,8 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
     // Scene-wide, like the other counters here, so the figure is compared across two zooms rather
     // than pinned: at 10 px/day the viewport holds ~160 days and at 40 px/day ~40. A per-line
     // `setLineDash` would scale with the visible days; the tier batches do not.
-    const near = paint(true, VIEW).setLineDash;
-    const far = paint(true, { ...VIEW, pxPerDay: 40 }).setLineDash;
+    const near = paint(VIEW).setLineDash;
+    const far = paint({ ...VIEW, pxPerDay: 40 }).setLineDash;
     expect(near).toBe(far);
     // Three tiers plus the reset, and no layer of a line-free scene adds one.
     expect(near).toBeLessThanOrEqual(4);

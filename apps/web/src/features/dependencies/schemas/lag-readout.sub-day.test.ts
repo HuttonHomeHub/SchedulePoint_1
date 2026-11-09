@@ -1,17 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 /**
- * The Lag column's read-out with `VITE_SUB_DAY_DURATIONS` **on** (ADR-0070 M4).
+ * The Lag column's read-out when the day factor is known (ADR-0070 M4).
  *
- * Its own file because the flag is a build-time constant. What it pins is the reason M4 exists: a
+ * What it pins is the reason M4 exists: a
  * two-hour cure lag typed into the M3 field previously read back as `0d` — indistinguishable from
  * no lag at all, in the one place a planner would look to check what they had just saved.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  SUB_DAY_DURATIONS_ENABLED: true,
-}));
-
 const { formatLag } = await import('./dependency-schemas');
 
 /** An eight-hour working day — so a day is 480 minutes and not 1440 (ADR-0068). */

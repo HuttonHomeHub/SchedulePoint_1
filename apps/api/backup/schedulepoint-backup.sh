@@ -18,6 +18,17 @@
 #                 replace the live database with a copy. Loads into a NEW database, checks it, then swaps
 #                 by rename; the old database is kept as <db>_before_restore_<stamp>. Needs the API stopped.
 #   health        exit 0 when the newest nightly copy is under 26 hours old (the container healthcheck).
+#   preflight     called FIRST by the API's entrypoint (ADR-0215). Classifies the database at DATABASE_URL by its
+#                 migration history and refuses (exit 1, event boot.database_refused) one made before the 1.1
+#                 baseline, one it cannot read and one that is not SchedulePoint's. Fresh and 1.1 databases
+#                 proceed, including a 1.1 database a later 1.1.x has migrated (a rollback by image tag). It
+#                 runs whether or not /backups is mounted, reads the database in a read-only session and
+#                 writes no file: it must precede pre-migrate, which would otherwise copy the refused
+#                 database on every restart of the container. It inspects the `public` schema only, and
+#                 the `options` startup parameter that makes its session read-only and bounded may be
+#                 refused by PgBouncer, which reads as cannot_read: a refusal, safe, and the reason to point
+#                 DATABASE_URL at the database itself. The `backup` service is deliberately NOT preflighted:
+#                 it keeps protecting a 1.0 database until the operator switches it.
 #   pre-migrate   called by the API's entrypoint before `prisma migrate deploy` (spec §4.12). Takes a copy
 #                 only when backups are switched on AND a migration is pending. Exit non-zero HOLDS the
 #                 update: the entrypoint's `set -e` then stops before the database is touched. It fails
@@ -40,6 +51,10 @@
 # command line; Prisma-only query parameters such as `?schema=public` are dropped, libpq ones such as
 # `sslmode` are kept.
 #
+# LINEAGE  The first (and, since 1.1, only) migration is BASELINE_MIGRATION below. It is a constant, not
+# derived from MIGRATIONS_DIR, because the refusal must not depend on the folder it guards against; a test
+# (scripts/check-baseline-name.test.mjs) asserts it is the oldest directory under apps/api/prisma/migrations.
+#
 # SETTINGS  BACKUP_KEEP_DAYS (1-3650, default 30) is the only operator setting. Test-only: BACKUP_ROOT
 # (the folder, default /backups), MIGRATIONS_DIR (default /app/prisma/migrations),
 # BACKUP_MIN_FREE_KB (free-space floor when no earlier copy exists, default 204800),
@@ -54,6 +69,8 @@ umask 077
 ROOT="${BACKUP_ROOT:-/backups}"
 MIGRATIONS_DIR="${MIGRATIONS_DIR:-/app/prisma/migrations}"
 KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BASELINE_MIGRATION="20261109000000_baseline_1_1"
+GUIDE="docs/guides/start-fresh-on-1-1.md"
 MIN_FREE_KB="${BACKUP_MIN_FREE_KB:-204800}"
 # Fail a hung connection in seconds rather than sitting on the entrypoint (or the nightly loop).
 export PGCONNECT_TIMEOUT="${PGCONNECT_TIMEOUT:-10}"
@@ -122,7 +139,7 @@ emit_at() {
 # emit <event> [key value]... — the level follows the event's name.
 emit() {
   case $1 in
-    *failed) emit_at error "$@" ;;
+    *failed | *refused) emit_at error "$@" ;;
     *permissions) emit_at warn "$@" ;;
     *) emit_at info "$@" ;;
   esac
@@ -235,9 +252,9 @@ init_conn() {
   # Database names reach SQL as identifiers and a rename must fit Postgres's 63 bytes
   # (<name>_before_restore_YYYYMMDDHHMM adds 28).
   case $DBNAME in
-    *[!A-Za-z0-9_]*) die "The database name '$DBNAME' may only use letters, digits and underscores." ;;
+    *[!A-Za-z0-9_]*) die "The database name may only use letters, digits and underscores." ;;
   esac
-  [ "${#DBNAME}" -le 35 ] || die "The database name '$DBNAME' is longer than 35 characters."
+  [ "${#DBNAME}" -le 35 ] || die "The database name is longer than 35 characters."
 }
 
 # target <database> — the database argument every libpq tool accepts. The connection itself is the PG*
@@ -588,8 +605,128 @@ known_migrations() {
   done
 }
 
-# verify_loaded <database> — what must be true of a loaded copy. Sets VERIFY_ERR.
+# sql_ro <database> <statement> — `sql` in a read-only session, so a classification can never write, and
+# bounded in time, so a stuck query or lock cannot hold the boot.
+sql_ro() (
+  PGOPTIONS="${PGOPTIONS:-} -c default_transaction_read_only=on -c statement_timeout=15000 -c lock_timeout=15000"
+  export PGOPTIONS
+  sql "$@"
+)
+
+# classify_database <database> — which generation made it, read only. Sets LINEAGE to one of
+#   fresh              nothing in it, a migrations table with no rows, or only rolled-back rows
+#   current            the 1.1 baseline is applied (with or without later migrations)
+#   pre_1_1_lineage    migrations from before the baseline and no baseline
+#   mixed_lineage      the baseline AND migrations from before it (a 1.0 image was started on a 1.1 database)
+#   failed_migration   a row that started and neither finished nor was rolled back (Prisma's P3009)
+#   unknown_database   tables but no migrations table, or rows that are neither
+#   cannot_read        the database could not be asked (LINEAGE_ERR holds the first line of the error)
+# Compared in the C collation, as Prisma orders migrations (bytewise), so a database's locale cannot move
+# the line between old and new. A rolled-back row is not applied and counts for nothing: that is the state
+# `prisma migrate resolve --rolled-back` leaves, and it must be allowed to finish a failed first boot.
+# OLDER is how many live pre-baseline rows there are and OLDER_UNFINISHED how many of those never finished;
+# UNFINISHED_ROWS names the rows behind a mixed_lineage (the pre-baseline ones) or failed_migration (all).
+LINEAGE=""
+LINEAGE_ERR=""
+OLDER=0
+OLDER_UNFINISHED=0
+UNFINISHED_ROWS=""
+
+# is_count <value> — a non-empty string of digits.
+is_count() {
+  case $1 in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  return 0
+}
+
+classify_database() {
+  LINEAGE_ERR=""
+  OLDER=0
+  OLDER_UNFINISHED=0
+  UNFINISHED_ROWS=""
+  if ! shape=$(sql_ro "$1" "SELECT CASE
+      WHEN to_regclass('public._prisma_migrations') IS NOT NULL THEN 'managed'
+      WHEN EXISTS (SELECT 1 FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')) THEN 'unmanaged'
+      ELSE 'empty' END" 2>&1); then
+    LINEAGE=cannot_read
+    LINEAGE_ERR=$(first_line "$shape")
+    return 0
+  fi
+  case $shape in
+    empty)
+      LINEAGE=fresh
+      return 0
+      ;;
+    unmanaged)
+      LINEAGE=unknown_database
+      return 0
+      ;;
+    managed) ;;
+    *)
+      LINEAGE=cannot_read
+      LINEAGE_ERR="unexpected answer: $(first_line "$shape")"
+      return 0
+      ;;
+  esac
+  if ! counts=$(sql_ro "$1" "SELECT
+      count(*) FILTER (WHERE migration_name COLLATE \"C\" < '$BASELINE_MIGRATION' AND rolled_back_at IS NULL),
+      count(*) FILTER (WHERE migration_name COLLATE \"C\" < '$BASELINE_MIGRATION' AND finished_at IS NULL AND rolled_back_at IS NULL),
+      count(*) FILTER (WHERE migration_name = '$BASELINE_MIGRATION' AND finished_at IS NOT NULL AND rolled_back_at IS NULL),
+      count(*) FILTER (WHERE migration_name = '$BASELINE_MIGRATION' AND rolled_back_at IS NULL),
+      count(*) FILTER (WHERE finished_at IS NULL AND rolled_back_at IS NULL),
+      count(*) FILTER (WHERE rolled_back_at IS NULL)
+    FROM public._prisma_migrations" 2>&1); then
+    LINEAGE=cannot_read
+    LINEAGE_ERR=$(first_line "$counts")
+    return 0
+  fi
+  older="" older_unfinished="" baseline_done="" baseline_any="" unfinished="" live="" extra=""
+  IFS='|' read -r older older_unfinished baseline_done baseline_any unfinished live extra <<COUNTS
+$counts
+COUNTS
+  # Each field on its own: a concatenation of digits would pass a malformed answer such as `||1`.
+  for field in "$older" "$older_unfinished" "$baseline_done" "$baseline_any" "$unfinished" "$live"; do
+    if ! is_count "$field" || [ -n "$extra" ]; then
+      LINEAGE=cannot_read
+      LINEAGE_ERR="unexpected answer: $(first_line "$counts")"
+      return 0
+    fi
+  done
+  OLDER=$older
+  OLDER_UNFINISHED=$older_unfinished
+  if [ "$live" -eq 0 ]; then
+    LINEAGE=fresh
+  elif [ "$older" -gt 0 ] && [ "$baseline_done" -gt 0 ]; then
+    LINEAGE=mixed_lineage
+  elif [ "$older" -gt 0 ] && [ "$baseline_any" -eq 0 ]; then
+    LINEAGE=pre_1_1_lineage
+  elif [ "$unfinished" -gt 0 ]; then
+    LINEAGE=failed_migration
+  elif [ "$baseline_done" -gt 0 ]; then
+    LINEAGE=current
+  else
+    LINEAGE=unknown_database
+  fi
+  case $LINEAGE in
+    mixed_lineage) where="migration_name COLLATE \"C\" < '$BASELINE_MIGRATION' AND" ;;
+    failed_migration) where="" ;;
+    *) return 0 ;;
+  esac
+  if ! UNFINISHED_ROWS=$(sql_ro "$1" "SELECT migration_name FROM public._prisma_migrations
+      WHERE $where finished_at IS NULL AND rolled_back_at IS NULL ORDER BY migration_name COLLATE \"C\"" 2>&1); then
+    LINEAGE=cannot_read
+    LINEAGE_ERR=$(first_line "$UNFINISHED_ROWS")
+    UNFINISHED_ROWS=""
+  fi
+}
+
+# The lineage of the copy last passed to verify_loaded: pre_1_1 when it was made before the baseline.
+COPY_LINEAGE=""
+
+# verify_loaded <database> — what must be true of a loaded copy. Sets VERIFY_ERR, and COPY_LINEAGE.
 verify_loaded() {
+  COPY_LINEAGE=""
   prot=$(sql "$1" "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
     WHERE c.relname = 'audit_events' AND NOT t.tgisinternal AND t.tgenabled = 'A'" 2>/dev/null) || prot=""
   case $prot in
@@ -600,6 +737,19 @@ verify_loaded() {
   esac
   has=$(sql "$1" "SELECT to_regclass('public._prisma_migrations') IS NOT NULL" 2>/dev/null) || has=f
   if [ "$has" = t ]; then
+    # A 1.0 copy holds names this image does not ship, which is not "newer": it loads and is counted
+    # (check says so), but only a 1.0 image can run it, so restore refuses it on COPY_LINEAGE.
+    classify_database "$1"
+    case $LINEAGE in
+      pre_1_1_lineage)
+        COPY_LINEAGE=pre_1_1
+        return 0
+        ;;
+      mixed_lineage)
+        VERIFY_ERR="this copy holds migrations from before 1.1 beside the 1.1 baseline, so no version can run it as it is"
+        return 1
+        ;;
+    esac
     applied=$(sql "$1" "SELECT migration_name FROM _prisma_migrations" 2>&1) \
       || {
         VERIFY_ERR="the copy's list of applied migrations could not be read"
@@ -648,6 +798,9 @@ cmd_check() {
   done
   printf '\nSmall differences are normal if people have worked since the copy was made.\n'
   printf 'The audit log protection is present in the copy.\n'
+  if [ "$COPY_LINEAGE" = pre_1_1 ]; then
+    printf 'NOTE: this copy was made by SchedulePoint 1.0 or earlier. It loads and is counted above, but it can only be restored with a 1.0 image (see %s).\n' "$GUIDE"
+  fi
   if [ "$keep" = 1 ]; then
     printf 'Scratch database kept: %s\n' "$scratch"
     SCRATCH_DB=""
@@ -689,6 +842,9 @@ cmd_restore() {
   echo "Loading $f into a new database ..."
   load_scratch "$restoring" "$f" || fail "$VERIFY_ERR"
   verify_loaded "$restoring" || fail "$VERIFY_ERR"
+  if [ "$COPY_LINEAGE" = pre_1_1 ]; then
+    fail "this copy was made by SchedulePoint 1.0 or earlier — it is restorable only with a 1.0 image, into an empty database (see $GUIDE)"
+  fi
   # Only now, with a copy that has loaded and checked, is the live database worth saving aside.
   echo "Taking a safety copy of the current database ..."
   if ! take_copy schedulepoint-pre-restore-; then
@@ -764,6 +920,67 @@ cmd_pre_migrate() {
   hold "$COPY_ERR"
 }
 
+# --- the refusal at boot (ADR-0215) -------------------------------------------
+
+# Prints one copy-paste resolve command per unfinished migration row. A name goes into a command a
+# person pastes into a shell, so only the shape Prisma's own directories have is printed; anything
+# else is reported for inspection by hand, with no command.
+print_resolve_commands() {
+  printf '%s\n' "$UNFINISHED_ROWS" | while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    case "$n" in
+      *[!A-Za-z0-9_]*) printf '  A migration row with an unexpected name exists and must be inspected by hand; no command is offered for it.\n' ;;
+      *) printf '  prisma migrate resolve --rolled-back %s\n' "$n" ;;
+    esac
+  done
+}
+
+# cmd_preflight — exit 0 for a database 1.1 may start on, else say so in three lines and one event and
+# exit 1. Nothing here writes: the session is read-only and no file is created.
+cmd_preflight() {
+  classify_database "$DBNAME"
+  case $LINEAGE in
+    fresh | current)
+      emit boot.database_accepted state "$LINEAGE"
+      return 0
+      ;;
+    pre_1_1_lineage) why="was made by SchedulePoint 1.0 or earlier" ;;
+    mixed_lineage) why="holds 1.0 migrations beside the 1.1 baseline, so a 1.0 image was started on it" ;;
+    failed_migration) why="has a migration that started and did not finish: $(printf '%s' "$UNFINISHED_ROWS" | tr '\n' ' ')" ;;
+    cannot_read) why="could not be read: $LINEAGE_ERR" ;;
+    *) why="was not made by SchedulePoint 1.1 or its migration history is not one this version knows" ;;
+  esac
+  why=$(printf '%s' "$why" | redact)
+  printf 'DATABASE REFUSED — SchedulePoint has not started and has not changed the database, which %s.\n' "$why"
+  case $LINEAGE in
+    cannot_read)
+      printf 'Check that the database is running and DATABASE_URL is right; SchedulePoint tries again by itself.\n'
+      ;;
+    mixed_lineage)
+      finished_older=$((OLDER - OLDER_UNFINISHED))
+      if [ "$finished_older" -eq 0 ]; then
+        printf 'Every 1.0 row is one that never finished. Once you have a copy of the database, mark each as rolled back and restart:\n'
+        print_resolve_commands
+      else
+        printf '%s of the 1.0 migrations finished beside the baseline, so this database is damaged: keep a copy of it and restore a 1.1 backup into an empty database.\n' "$finished_older"
+      fi
+      ;;
+    failed_migration)
+      printf 'Keep a copy of the database, then mark each as rolled back and restart (Prisma runs it again):\n'
+      print_resolve_commands
+      ;;
+    unknown_database)
+      printf 'This database was not made by SchedulePoint, so it is left alone. Point SchedulePoint at a new, empty database.\n'
+      ;;
+    *)
+      printf 'Keep a copy of it and point SchedulePoint at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the release compose) to go back to 1.0.\n'
+      ;;
+  esac
+  printf 'See %s.\n' "$GUIDE"
+  emit boot.database_refused reason "$LINEAGE" detail "$why" guide "$GUIDE"
+  exit 1
+}
+
 usage() {
   cat >&2 <<'EOF'
 Usage: schedulepoint-backup <command>
@@ -773,6 +990,7 @@ Usage: schedulepoint-backup <command>
   check [file] [--keep] load a copy into a scratch database and report; changes nothing live
   restore <file> [--yes] replace the live database with a copy (stop the API first)
   health                exit 0 when a copy was made in the last 26 hours
+  preflight             refuse a database from before 1.1 (called first by the API's entrypoint)
   pre-migrate           the copy before an update (called by the API's entrypoint)
 EOF
 }
@@ -783,7 +1001,7 @@ if [ $# -gt 0 ]; then
   shift
 fi
 case $cmd in
-  schedule | now | list | check | restore | health | pre-migrate) ;;
+  schedule | now | list | check | restore | health | preflight | pre-migrate) ;;
   help | -h | --help)
     usage
     exit 0
@@ -796,6 +1014,12 @@ esac
 
 case $cmd in
   list | health) ;;
+  preflight)
+    # Before the /backups test below and never skipped by it: the refusal does not depend on backups
+    # being switched on. Only psql is needed, and its absence is a refusal too.
+    command -v psql >/dev/null 2>&1 || die "psql is not installed in this image."
+    init_conn
+    ;;
   pre-migrate)
     # Decided before anything else is validated: a server that has not mounted the folder must update
     # exactly as it always has, even if something below (a database name this script refuses, a
@@ -822,5 +1046,6 @@ case $cmd in
   check) cmd_check "$@" ;;
   restore) cmd_restore "$@" ;;
   health) cmd_health ;;
+  preflight) cmd_preflight ;;
   pre-migrate) cmd_pre_migrate ;;
 esac

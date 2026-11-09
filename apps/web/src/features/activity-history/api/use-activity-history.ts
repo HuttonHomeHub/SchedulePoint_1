@@ -11,7 +11,7 @@ export interface ActivityHistoryPage {
   entries: ActivityHistoryEntry[];
   nextCursor: string | null;
   hasMore: boolean;
-  /** The later of the activity's creation and the day the database began recording. */
+  /** The activity's creation instant: history is recorded from the start (ADR-0215). */
   recordingSince: string;
 }
 

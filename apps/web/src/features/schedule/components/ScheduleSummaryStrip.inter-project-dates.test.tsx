@@ -8,15 +8,9 @@ import { ScheduleSummaryStrip } from './ScheduleSummaryStrip';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The externally-driven count chip (`externalDrivenCount`, ADR-0043) with `VITE_INTER_PROJECT_DATES`
- * forced ON — the surface ships dark by default, so this suite pins the flag to prove the chip shows
- * once a recalc had external bounds drive activities, and stays hidden when the count is zero. The
- * flag-off behaviour is covered by `ScheduleSummaryStrip.test.tsx`.
+ * The externally-driven count chip (`externalDrivenCount`, ADR-0043): proves the chip shows once a
+ * recalc had external bounds drive activities, and stays hidden when the count is zero.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  INTER_PROJECT_DATES_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

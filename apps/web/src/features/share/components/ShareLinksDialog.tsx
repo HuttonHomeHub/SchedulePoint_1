@@ -105,8 +105,7 @@ function CreatedLinkPanel({ created }: { created: CreatedShare }): React.ReactEl
 /**
  * The member-facing **Share links** dialog (ADR-0051 F-M4 Task 1). Lists a plan's External-Guest share
  * links (label / created / expiry / state / last accessed), creates one (optional label + optional,
- * bounded expiry) and shows its one-time guest URL to copy, and revokes any link. Mounted behind
- * `GUEST_SHARE_LINKS_ENABLED` and only opened for a caller holding `plan:share` — but the API is the
+ * bounded expiry) and shows its one-time guest URL to copy, and revokes any link. Only opened for a caller holding `plan:share` — but the API is the
  * sole trust boundary (it re-checks the permission + org-scopes the plan). States/a11y mirror the
  * `CreateBaselineDialog` / `BaselinesPanel` precedent (shared `Dialog`, `DataTable`, `ConfirmDialog`).
  */

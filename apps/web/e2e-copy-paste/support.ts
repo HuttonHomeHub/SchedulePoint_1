@@ -1,8 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **activity copy / paste / duplicate** suite
- * (`VITE_ACTIVITY_COPY_PASTE`, `docs/specs/activity-copy-paste/` M5-T2).
+ * Journey helpers for the **activity copy / paste / duplicate** suite
+ * (`docs/specs/activity-copy-paste/` M5-T2).
  *
  * The rule these follow, and the reason several of them exist at all: **assert the server's row,
  * not the DOM under test** (the ADR-0070 M6 rule). A screen that renders a duplicated activity's

@@ -321,7 +321,11 @@ what is in it, and deletes the temporary database. **It never changes the live d
    ```
 
 4. Write down the date, the name of the copy and the words `CHECK PASSED`. Tell the maintainers. (2 minutes)
-5. If it says `CHECK FAILED`, run step 3 again with the previous copy's name from step 2, for example
+5. **A copy made by SchedulePoint 1.0 or earlier** is still loaded and counted by `check`, which prints
+   a line starting `NOTE: this copy was made by SchedulePoint 1.0 or earlier` and then `CHECK PASSED`.
+   That note means the copy is good but **only a 1.0 image can restore it**, into an empty database; see
+   [`start-fresh-on-1-1.md`](./start-fresh-on-1-1.md), Part 4.
+6. If it says `CHECK FAILED`, run step 3 again with the previous copy's name from step 2, for example
    `docker compose run --rm backup check schedulepoint-2026-10-14T0200Z.dump`. Then report both
    results. (5 minutes)
 
@@ -366,6 +370,14 @@ database you had is **kept**, not deleted.
    **If you see `RESTORE REFUSED`:** the live database has not been changed. The message says why. Two
    common reasons are that something is still connected (do step 2 again) and that the copy was made by a
    newer version of SchedulePoint than the one installed (update SchedulePoint first).
+
+   **If it says the copy "was made by SchedulePoint 1.0 or earlier":** SchedulePoint 1.1 and later cannot
+   restore it, and nothing has been changed. It can only be restored with a 1.0 image into an empty
+   database; the steps are in [`start-fresh-on-1-1.md`](./start-fresh-on-1-1.md), Part 4. A restore under
+   1.1 needs a copy made by 1.1.
+
+   The `backup` service is not refused at boot the way the API is: on a database from before 1.1 it keeps taking
+   copies, which is the protection you want until you have switched to the new database.
 
 5. **If the recycle bin's clear-out is on, and you are restoring to get back something it removed,
    switch it off first.** Skip this step if you never switched the clear-out on. If you came from Part 4 of the clear-out guide, you have already done this: check the line says `false`, then go on. In Dockge, open the

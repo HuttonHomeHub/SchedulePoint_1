@@ -28,15 +28,6 @@ vi.mock(
   () => import('../render/test-support/in-process-optimise'),
 );
 vi.mock('@/components/ui/announcer', () => ({ useAnnounce: () => vi.fn() }));
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: true,
-    TSLD_EDITING_ENABLED: true,
-    CANVAS_AUTHORING_FLOW_ENABLED: true,
-  };
-});
 
 const NO_DEPS: DependencySummary[] = [];
 
@@ -151,7 +142,7 @@ describe('TsldPanel — the Arrange offer', () => {
   it('hands focus to the diagram before Dismiss unmounts the button being pressed', () => {
     /**
      * Dismissing destroys the strip holding the pressed button, and the rung below it
-     * (`placement-migration`) often does not render at all — so with no destination focus reverts
+     * (`touch-hint`) often does not render at all — so with no destination focus reverts
      * to `<body>`. That is WCAG 2.4.3, and on THIS surface it is also silent: the workspace's
      * keyboard accelerators are a React `onKeyDown` on a root of which `<body>` is an ancestor, so
      * a planner who dismisses the offer loses Undo, Escape and the arrow keys with nothing saying

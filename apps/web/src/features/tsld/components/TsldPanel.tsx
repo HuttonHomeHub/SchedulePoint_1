@@ -8,18 +8,6 @@ import {
 } from '@repo/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
-import {
-  CANVAS_AUTHORING_ENABLED,
-  CANVAS_DATA_DATE_ENABLED,
-  CANVAS_DIRECT_MANIPULATION_ENABLED,
-  CANVAS_LENSES_ENABLED,
-  CANVAS_MULTI_SELECT_ENABLED,
-  CANVAS_NAV_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
-  CANVAS_SEARCH_NAV_ENABLED,
-  CANVAS_RESOURCE_VIEW_ENABLED,
-  TSLD_EDITING_ENABLED,
-} from '../../../config/env';
 import type { EditIntent, EditMode, LoeSpanStep } from '../interaction/gesture-machine';
 import { useCoalescedDurationNudge } from '../interaction/use-coalesced-duration-nudge';
 import { useCoalescedNudge } from '../interaction/use-coalesced-nudge';
@@ -142,7 +130,6 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
-import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import {
   SelectionActionsBar,
@@ -285,15 +272,6 @@ export interface TsldPanelProps {
   levelResources?: boolean | undefined;
   /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
   compareLinksUndrawable?: number | undefined;
-  /**
-   * **Why a changed bar could not be drawn** — passed through to the overlay's spoken summary
-   * because the two comparisons have DIFFERENT true answers, and one is not the other's default.
-   *
-   * Same-plan the old side did not record a position. Cross-plan it did, and the position is not
-   * comparable: two independently imported plans derive their lane order separately. Reusing the
-   * same-plan wording would state something false about the other plan's data.
-   */
-  compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
   /**
    * Whether the legend lists the constraint pin. Default `true`; the share view passes `false`
@@ -318,7 +296,7 @@ export interface TsldPanelProps {
    * hosts the lens there. Absent offers none.
    */
   swimlanesToggle?: { checked: boolean; onChange: () => void };
-  /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
+  /** Whether the viewer may edit (Planner/Org Admin). Gates editing. */
   canEdit?: boolean;
   /**
    * Why a pen-gated selection action is shut, given a phrase naming what it does — `null` when it
@@ -327,8 +305,8 @@ export interface TsldPanelProps {
    * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
    */
   scheduleRefusal?: (action: string) => string | null;
-  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence + the
-   * flag + `canEdit` enable on-canvas editing. Resolves once the activity persists (see
+  /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence +
+   * `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
   onCreate?: (input: TsldCreateInput) => Promise<TsldCreateOutcome>;
   /** Route-composed reposition handler (the minimal `visualStart` PATCH + recalc). Resolves with a
@@ -337,13 +315,12 @@ export interface TsldPanelProps {
   onReposition?: (input: TsldRepositionInput) => Promise<TsldRepositionOutcome>;
   /** Route-composed bar-end resize handler (ADR-0052 M2 finish edge, M3 start edge): the
    * full-definition `PATCH durationDays` (+ `visualStart` for a start drag) +
-   * recalc. Only reachable under `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the bar-end
+   * recalc. Its presence arms the bar-end
    * resize handles + the `Shift+←/→` duration nudge. Resolves with a conflict message when
    * refused (stale version); rejects on real error. */
   onResize?: (input: TsldResizeInput) => Promise<TsldResizeOutcome>;
   /** Route-composed lag-drag handler (ADR-0052 M3): `PATCH /dependencies/:id` echoing the
-   * unchanged type + lag calendar + recalc. Only reachable under
-   * `VITE_CANVAS_DIRECT_MANIPULATION`; its presence arms the drawn lag-anchor grab zones.
+   * unchanged type + lag calendar + recalc. Its presence arms the drawn lag-anchor grab zones.
    * Resolves with a conflict message when refused (stale version); rejects on real error. */
   onLag?: (input: TsldLagInput) => Promise<TsldLagOutcome>;
   /** Route-composed dependency-draw handler (`POST /dependencies` + recalc). Resolves with a
@@ -371,24 +348,9 @@ export interface TsldPanelProps {
    */
   onUndoLastEdit?: (() => void) | undefined;
   /**
-   * The one-time placement migration's notice for this plan (one-planning-surface M-I), already
-   * rendered by the host — `null`/absent when the migration changed nothing here or the reader has
-   * dismissed it.
-   *
-   * **A node rather than data, and the host owns the query, the dismissal and the account it is
-   * keyed to.** This panel has no org slug and no session, so it could not fetch the report even
-   * if it wanted to; taking the rendered strip is the same shape as {@link onEditActivity}'s
-   * host-owned dialog. The panel's only job is **precedence** — it decides whether this strip is
-   * the one the dock shows, which is a question only it can answer because only it knows what else
-   * is competing for the row.
-   *
-   * It is the dock's LOWEST rung — see `resolveDockStrip`, the one place the ordering is decided.
-   */
-  placementMigrationNotice?: React.ReactNode | null | undefined;
-  /**
    * The one-time touch-gesture tip (`docs/specs/long-press-hint/`), already rendered by the host —
    * `null`/absent until a finger has pressed the workspace, and again once the reader dismisses it.
-   * A node for the migration notice's reason: the host owns the storage and the focus hand-back.
+   * A node because the host owns the storage and the focus hand-back.
    * It is the dock's lowest rung of all — see `resolveDockStrip`.
    */
   touchGestureHint?: React.ReactNode | null | undefined;
@@ -431,7 +393,7 @@ export interface TsldPanelProps {
   /** Route-composed **LOE span** handler (Stage D): composes a `LEVEL_OF_EFFORT` activity + SS/FF edges
    * as one undoable action (`model.createLoeSpan`). Resolves with a conflict message on a
    * cycle/duplicate/stale/pen-loss (rolled back, no orphan); rejects on real error. Its presence + the
-   * LOE tool-mode (armed from the flag-gated Add-menu item) enables the on-canvas endpoint-pick. */
+   * LOE tool-mode (armed from the Add-menu item) enables the on-canvas endpoint-pick. */
   onLoeSpan?: (input: TsldLoeSpanInput) => Promise<TsldLoeSpanOutcome>;
   /** Route-composed auto-arrange handler (M4 4.3): persists the packed lanes via the batch
    * positions endpoint (all-or-nothing, no recalc). Resolves with a conflict message when a stale
@@ -456,11 +418,10 @@ export interface TsldPanelProps {
   /** Delete an activity (host-owned confirm) — the docked selection bar's Delete action (ADR-0031). */
   onDeleteActivity?: (activity: ActivitySummary) => void;
   /**
-   * Dissolve the selected WBS summary — remove the grouping and keep the work
-   * (`VITE_WBS_IMPROVEMENTS`). The host owns the confirm dialog and the mutation (ADR-0026 §8).
-   * Optional: absent ⇒ the action is inert, and the `dissolve` item is itself flag-gated in
-   * {@link selectionActionItems} and hidden for a non-summary selection, so flag-off is
-   * byte-for-byte.
+   * Dissolve the selected WBS summary — remove the grouping and keep the work.
+   * The host owns the confirm dialog and the mutation (ADR-0026 §8).
+   * Optional: absent ⇒ the action is inert; the `dissolve` item in {@link selectionActionItems} is
+   * hidden for a non-summary selection.
    */
   onDissolveSummary?: (activity: ActivitySummary) => void;
   /**
@@ -472,12 +433,12 @@ export interface TsldPanelProps {
   /** Duplicate the selected summary and its whole subtree (M2, US-2) — a confirmed action. */
   onDuplicateBand?: (activity: ActivitySummary) => void;
   /** Open the per-activity resource-assignment editor — the docked selection bar's **Resources**
-   * action (entry-route win 2, `VITE_ENTRY_ROUTES`). The host owns the dialog (ADR-0026 §8). Optional:
+   * action (entry-route win 2). The host owns the dialog (ADR-0026 §8). Optional:
    * absent ⇒ the selection bar isn't wired (like the edit/delete pair). The `resources` toolbar item
-   * that surfaces it is itself flag-gated in {@link selectionActionItems}, so flag-off is byte-for-byte. */
+   * that surfaces it is gated in {@link selectionActionItems}. */
   onResources?: (activity: ActivitySummary) => void;
-  /** Open the progress editor — the selection bar's **Report progress** action (entry-route,
-   * `VITE_ENTRY_ROUTES`). Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
+  /** Open the progress editor — the selection bar's **Report progress** action (entry-route).
+   * Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
   onProgress?: (activity: ActivitySummary) => void;
   /** Whether the viewer may report progress (Contributor upward) — gates the selection bar's Progress
    * action (role only, not pen-gated), mirroring the toolbar's Update-progress command. Default false. */
@@ -509,9 +470,8 @@ export interface TsldPanelProps {
   /** Today as a calendar day (`YYYY-MM-DD`), for the TODAY marker. The route passes it (floored
    * to the local day) so the component does no wall-clock math. */
   todayIso?: string;
-  /** The viewer-local time-of-day fraction (0…1) for a fractional Today line + pill (F6a/F6b,
-   * `VITE_CANVAS_TIME_AXIS`) — undefined/null when the flag is off, keeping the plain integer
-   * marker byte-for-byte. The route derives it (`todayDayFraction` off its own `useNow` tick). */
+  /** The viewer-local time-of-day fraction (0…1) for a fractional Today line + pill (F6a/F6b) —
+   * undefined/null keeps the plain integer marker. The route derives it (`todayDayFraction` off its own `useNow` tick). */
   todayFraction?: number | null | undefined;
   /** Fill the available height instead of the default fixed 480px box. When set, the canvas
    * container is `h-full` (with a min-height floor) so the diagram fills the workspace region —
@@ -572,12 +532,11 @@ export interface TsldPanelProps {
   /** Open the Make milestone dialog for the activity (ADR-0162 decision 4). Absent ⇒ omitted. */
   onMakeMilestone?: ((activity: ActivitySummary) => void) | undefined;
   /** The plan's baseline-variance rows (`useBaselineVariance`), for the **Baseline overlay** lens
-   * (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`). The host passes the shipped
+   * (spec `docs/specs/canvas-lenses/`). The host passes the shipped
    * variance data (already route-composed for the activities table) so no new fetch is added; the
    * ghost geometry joins these captured dates to the live lanes. Absent/empty ⇒ no ghost layer. */
   varianceRows?: readonly BaselineVarianceRow[] | undefined;
-  /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049, behind
-   * `VITE_CANVAS_RESOURCE_VIEW`) — reserves the strip band at the canvas bottom and paints the demand
+  /** Whether the canvas-axis-aligned resource strip is active (Stage E, ADR-0049) — reserves the strip band at the canvas bottom and paints the demand
    * bars. Absent/false ⇒ no band, byte-for-byte today's canvas. Forwarded straight to `TsldCanvas`.
    *
    * NB this lens intentionally takes a SEPARATE boolean + data prop ({@link resourceStrip}), unlike the
@@ -632,13 +591,13 @@ export interface TsldPanelProps {
    * the strip on a change. `null`/absent ⇒ the band (if {@link resourceStripActive}) draws just its
    * axis rule — the loading/empty state where the band is reserved but there's nothing to plot yet. */
   resourceStrip?: ResourceStripSnapshot | null;
-  /** Whether the **over-allocation highlight** mode is on (Stage E M2, behind `VITE_CANVAS_RESOURCE_VIEW`)
+  /** Whether the **over-allocation highlight** mode is on (Stage E M2)
    * — flags bars carrying the engine-owned levelling over-allocation flags (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041) with a non-colour-only badge + a parallel listbox mark + a count
    * announcement. Absent/false ⇒ no `flaggedIds` scene field ⇒ byte-for-byte today's canvas + a11y tree. */
   overAllocationHighlight?: boolean;
   /**
-   * The activities on the **selected float path** (audit F4, behind `VITE_FLOAT_PATHS`) — everything
+   * The activities on the **selected float path** (audit F4) — everything
    * else recedes, through the same `dimmedIds` seam the filter and isolate lenses use.
    *
    * The set is derived ONCE by the plan workspace and handed to both this view and the Gantt, so
@@ -680,7 +639,7 @@ interface PendingCreate {
  * `aria-hidden`; keyboard/AT users navigate the listbox, and selecting rings the bar). The
  * activities table remains the fuller conforming alternative.
  *
- * **M2 (flagged):** when editing is enabled (`canEdit` + `onCreate` + `VITE_TSLD_EDITING`),
+ * **M2:** when editing is enabled (`canEdit` + `onCreate`),
  * a toolbar adds an **Add activity** tool — drag on the timeline to draw a task, then name it
  * in an inline popover — and in **Select** mode a writer drags a bar's body sideways to move it
  * in time (a hand-placement) or drags from a bar's **edge handle** to another bar to draw a
@@ -695,7 +654,6 @@ export function TsldPanel({
   compareGhostsUndrawable = 0,
   levelResources,
   compareLinksUndrawable = 0,
-  compareUndrawableReason = 'NOT_RECORDED',
   hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
@@ -710,7 +668,6 @@ export function TsldPanel({
   onLag,
   onLink,
   onUndoLastEdit,
-  placementMigrationNotice,
   touchGestureHint,
   layoutResolvedNotice,
   historyResultNotice,
@@ -768,10 +725,9 @@ export function TsldPanel({
 }: TsldPanelProps): React.ReactElement {
   // Canvas-first authoring (ADR-0032): the timeline needs an origin to draw against, so when the
   // plan has no `plannedStart` yet the canvas anchors to **today** — letting a planner draw the
-  // first activity on a blank plan. Flag-off (or once a start is set) this is exactly the prop, so
-  // the legacy path is byte-for-byte unchanged. The first structural write pins `plannedStart` to
+  // first activity on a blank plan. Once a start is set this is exactly the prop. The first structural write pins `plannedStart` to
   // this anchor (the workspace's `onTsldCreate`), keeping the persisted dates coherent.
-  const dataDate = dataDateProp ?? (CANVAS_AUTHORING_ENABLED ? (todayIso ?? null) : null);
+  const dataDate = dataDateProp ?? todayIso ?? null;
   const announce = useAnnounce();
   // What a recalculation SETTLED, as opposed to what an edit promised. The edit paths below note the
   // activity they wrote; this speaks the result once the schedule stops moving. Keyed by the host's
@@ -993,7 +949,7 @@ export function TsldPanel({
   // Arm/disarm side effects: announce the first prompt when the LOE tool is armed (its canvas is
   // aria-hidden, so the prompt must be spoken), and — on disarm — drop any half-finished pick and
   // announce the disarm (WCAG 4.1.3), UNLESS a successful commit already announced its success. Runs
-  // only on a `mode` transition. Inert while the flag is off — `mode` is never `'loe'` then.
+  // only on a `mode` transition.
   useEffect(() => {
     if (mode === 'loe') {
       loeArmedRef.current = true;
@@ -1074,7 +1030,7 @@ export function TsldPanel({
   useEffect(() => {
     recalcHoldRef.current = recalcHold;
   });
-  const pickIsOpen = CANVAS_AUTHORING_FLOW_ENABLED && linkPickedId !== null;
+  const pickIsOpen = linkPickedId !== null;
   useEffect(() => {
     if (!pickIsOpen) return;
     const seam = recalcHoldRef.current;
@@ -1087,9 +1043,8 @@ export function TsldPanel({
    * stored: every input already exists, and a second copy of "which tool is armed" is exactly the
    * kind of state that drifts from the one the canvas actually obeys.
    */
-  const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
-    ? null
-    : mode === 'marquee'
+  const modeStatement: CanvasModeStatement | null =
+    mode === 'marquee'
       ? // **`marquee` is KEPT.** `marquee-select` is a plain `ToolbarButton` whose label stays
         // `Select` when armed (the `marquee-select` registration in `tsld-toolbar-items.tsx`, whose
         // `label` is the literal `'Select'`) — only the pressed wash changes.
@@ -1158,8 +1113,7 @@ export function TsldPanel({
    * swept by an effect that can run a frame late and let a bulk action name a row that is gone.
    */
   const selectedActivities = useMemo(
-    () =>
-      CANVAS_MULTI_SELECT_ENABLED ? activities.filter((a) => selection.ids.includes(a.id)) : [],
+    () => activities.filter((a) => selection.ids.includes(a.id)),
     [activities, selection.ids],
   );
 
@@ -1258,7 +1212,7 @@ export function TsldPanel({
   const diagramSource = useMemo(
     () =>
       deriveDiagramSource(activities, {
-        wbsBand: { enabled: WBS_IMPROVEMENTS_ENABLED, toggleOn: viewToggles.wbsBand ?? false },
+        wbsBand: { toggleOn: viewToggles.wbsBand ?? false },
         swimlanes,
         source: barDateSource,
         dataDate,
@@ -1328,7 +1282,7 @@ export function TsldPanel({
       ]),
     );
   }, [activities, renderActivities, viewToggles.activityCodes, barDateSource, swimlaneScene]);
-  // ── Insight lenses (spec `docs/specs/canvas-lenses/`, behind `VITE_CANVAS_LENSES`) ──────────
+  // ── Insight lenses (spec `docs/specs/canvas-lenses/`) ──────────
   // Precomputed, memoised maps handed to the painter via the `TsldScene`, so the culled rAF loop draws
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
@@ -1345,7 +1299,7 @@ export function TsldPanel({
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
-  const filterActive = CANVAS_LENSES_ENABLED && isFilterActive(filterQuery, filterAttrs);
+  const filterActive = isFilterActive(filterQuery, filterAttrs);
   // The ids of the NON-matching activities (dimmed on the canvas + marked in the listbox). Absent when
   // no filter is active, so an empty/cleared filter dims nothing (parity).
   const filterDimmedIds = useMemo<Set<string> | undefined>(() => {
@@ -1356,12 +1310,12 @@ export function TsldPanel({
     }
     return set;
   }, [filterActive, activities, filterQuery, filterAttrs]);
-  // ── Isolate logic path (canvas nav, `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`) ──────
+  // ── Isolate logic path (canvas nav, `docs/specs/canvas-nav/`) ──────────────────
   // The selected activity's transitive logic chain (full or driving-only), memoised on the selection +
   // edges + mode only — never per frame (perf; O(V+E)). Absent unless isolate is active AND something
-  // is selected, so flag-off / no-selection contributes NO dim (byte-for-byte parity).
+  // is selected, so no-selection contributes NO dim.
   const isolateChain = useMemo<Set<string> | undefined>(() => {
-    if (!CANVAS_NAV_ENABLED || !navState.isolateActive || selectedId === null) return undefined;
+    if (!navState.isolateActive || selectedId === null) return undefined;
     return computeLogicPath(selectedId, dependencies, { mode: navState.isolateMode });
   }, [navState.isolateActive, navState.isolateMode, selectedId, dependencies]);
   // The complement of the chain within the plan — the ids isolate dims. Reuses the Stage A dim seam.
@@ -1412,22 +1366,22 @@ export function TsldPanel({
   // `barInk[id]` must be the ink chosen for `barFill[id]`, which is only guaranteed while both come
   // from the same resolve (`docs/TECH_DEBT.md` #160).
   const lensPalette = useMemo(
-    () => (CANVAS_LENSES_ENABLED ? resolveLensPalette(canvasSurface) : null),
+    () => resolveLensPalette(canvasSurface),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
     [themeVersion, canvasSurface],
   );
   const barFill = useMemo<Map<string, string> | undefined>(() => {
-    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    if (colourMode === 'criticality') return undefined;
     return buildColourMap(activities, colourMode, lensPalette);
   }, [colourMode, activities, lensPalette]);
   const barInk = useMemo<Map<string, string> | undefined>(() => {
-    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    if (colourMode === 'criticality') return undefined;
     return buildColourInkMap(activities, colourMode, lensPalette);
   }, [colourMode, activities, lensPalette]);
   // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
   // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
   const baselineGhosts = useMemo(() => {
-    if (!CANVAS_LENSES_ENABLED || !baselineOverlay || !varianceRows || varianceRows.length === 0) {
+    if (!baselineOverlay || !varianceRows || varianceRows.length === 0) {
       return undefined;
     }
     // The lane a ghost sits at is its bar's DISPLAY lane while swimlanes are shown, so the two share
@@ -1455,7 +1409,7 @@ export function TsldPanel({
    * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens keeps.
    */
   const levelledGhosts = useMemo(() => {
-    if (!CANVAS_LENSES_ENABLED || !levelledOverlay) return undefined;
+    if (!levelledOverlay) return undefined;
     const ghosts = buildLevelledGhosts(
       activities.flatMap((a) => {
         const laneIndex = ghostLaneOf(ghostLaneScene, a.id, a.laneIndex);
@@ -1485,7 +1439,7 @@ export function TsldPanel({
    */
   const levelledSummary = useMemo(
     () =>
-      CANVAS_LENSES_ENABLED && levelledOverlay && levelResources !== undefined
+      levelledOverlay && levelResources !== undefined
         ? levelledOverlaySummary(levelledGhosts?.length ?? 0, { levelResources })
         : null,
     [levelledOverlay, levelledGhosts, levelResources],
@@ -1562,7 +1516,6 @@ export function TsldPanel({
           drawn: compareLinkLines?.length ?? 0,
           undrawable: compareLinkLines ? compareLinksUndrawable : 0,
         },
-        compareUndrawableReason,
         compareGhostBars ? compareGhostsUnplaced : 0,
         swimlanes?.source === 'ACTIVITY_CODE' ? 'CODE' : 'SWIMLANE',
       ),
@@ -1572,7 +1525,6 @@ export function TsldPanel({
       compareGhostsUnplaced,
       compareLinkLines,
       compareLinksUndrawable,
-      compareUndrawableReason,
       swimlanes?.source,
     ],
   );
@@ -1597,7 +1549,7 @@ export function TsldPanel({
   // was carried by hue alone). Only while WBS is the ACTIVE colour mode: the clause describes what is
   // drawn, so on any other mode there is nothing to describe and the row text is byte-for-byte today's.
   const wbsGroupClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED || colourMode !== 'wbs') return undefined;
+    if (colourMode !== 'wbs') return undefined;
     const labelById = wbsGroupLabelById(activities);
     return new Map(activities.map((a) => [a.id, wbsGroupClause(a, labelById)]));
   }, [colourMode, activities]);
@@ -1605,10 +1557,10 @@ export function TsldPanel({
   // The ids of the engine-flagged over-allocated activities (`levelingWindowExceeded ||
   // selfOverAllocated`, ADR-0041) — marked on the canvas with a badge + in the parallel listbox, and
   // announced. Read ENGINE-OWNED flags only (never re-derive over-allocation client-side). Absent when
-  // the mode is off, the flag is off, or nothing is over-allocated (`overAllocatedIds` returns
+  // the mode is off or nothing is over-allocated (`overAllocatedIds` returns
   // undefined on an empty set) — so no `flaggedIds` scene field ⇒ byte-for-byte today's paint.
   const flaggedIds = useMemo<Set<string> | undefined>(() => {
-    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) return undefined;
+    if (!overAllocationHighlight) return undefined;
     return overAllocatedIds(activities);
   }, [overAllocationHighlight, activities]);
   // A **value-stable** signature of the flagged set (sorted ids), so the announce effect below fires only
@@ -1687,11 +1639,9 @@ export function TsldPanel({
   // Announce the filter match count for AT (WCAG 4.1.3) — the canvas dimming is otherwise invisible.
   // Debounced (announce, not paint): a burst of keystrokes speaks once the query settles. When the
   // filter clears (active → inactive), announce a neutral empty message so the polite live region drops
-  // the stale "N of M activities match" text rather than leaving it to be re-read. Off when the flag is
-  // off (the effect early-returns, so it is inert then).
+  // the stale "N of M activities match" text rather than leaving it to be re-read.
   const filterWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_LENSES_ENABLED) return;
     // Once the planner has pressed Enter, the JUMP owns the live region
     // (`docs/specs/canvas-search-navigation/` M1-T2 step 3). Returning early here is the "cancel the
     // pending count timer" seam: the effect's own cleanup clears whatever was armed, and nothing new
@@ -1705,10 +1655,10 @@ export function TsldPanel({
     //
     // Typing again clears the cursor (`setFilterQuery`/`toggleFilterAttr` reset it), so the count
     // returns for the phase it is actually for: refining the query, before any jump.
-    if (CANVAS_SEARCH_NAV_ENABLED && searchCursorId !== null) return;
+    if (searchCursorId !== null) return;
     if (!filterActive) {
       // On the active → inactive transition, replace the stale "N of M activities match" rather than
-      // leaving it to be re-read. Flag-on it says **what happened** instead of saying nothing: the
+      // leaving it to be re-read. It says **what happened** instead of saying nothing: the
       // clear is otherwise silent to a screen-reader user on both routes that reach it (the Clear
       // button and the field's first Escape), and a blank live region is indistinguishable from one
       // that was never updated.
@@ -1717,7 +1667,7 @@ export function TsldPanel({
       // this effect runs after the commit, so it would have overwritten the handler's announcement
       // with the blank — one control, two announcements, and the useful one loses. The journey
       // caught exactly that. Owning it here also covers the Clear button for free.
-      if (filterWasActiveRef.current) announce(CANVAS_SEARCH_NAV_ENABLED ? 'Search cleared.' : '');
+      if (filterWasActiveRef.current) announce('Search cleared.');
       filterWasActiveRef.current = false;
       return;
     }
@@ -1733,10 +1683,9 @@ export function TsldPanel({
   }, [filterActive, activities.length, filterDimmedIds, searchCursorId, announce]);
   // Announce isolate for AT (WCAG 4.1.3 / 1.4.1) — the canvas dimming + listbox marking are otherwise
   // colour/emphasis-only. Fires on activate, selection change, or mode change; clears on exit. Isolate
-  // changes only on those (not per keystroke), so no debounce is needed. Inert when the flag is off.
+  // changes only on those (not per keystroke), so no debounce is needed.
   const isolateWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_NAV_ENABLED) return;
     if (!isolateChain || selectedId === null) {
       if (isolateWasActiveRef.current) announce('');
       isolateWasActiveRef.current = false;
@@ -1755,10 +1704,10 @@ export function TsldPanel({
   // Announce the over-allocation count for AT (WCAG 4.1.3 / 1.4.1) — the canvas badges + listbox marking
   // are otherwise shape/emphasis-only. Fires when the highlight turns on or the flagged set changes;
   // clears on exit. Changes only on those (not per keystroke), so no debounce is needed. Inert when the
-  // flag/mode is off (the effect early-returns), keeping the a11y tree byte-for-byte then.
+  // mode is off (the effect early-returns).
   const overAllocWasActiveRef = useRef(false);
   useEffect(() => {
-    if (!CANVAS_RESOURCE_VIEW_ENABLED || !overAllocationHighlight) {
+    if (!overAllocationHighlight) {
       if (overAllocWasActiveRef.current) announce('');
       overAllocWasActiveRef.current = false;
       return;
@@ -1788,17 +1737,9 @@ export function TsldPanel({
   // effect below), so the direct setState is intentional.
   const selectSignalSeenRef = useRef<number | null>(navState.selectSignal?.nonce ?? null);
   useEffect(() => {
-    // Widened from `CANVAS_NAV_ENABLED` for the search cycle (`docs/specs/canvas-search-navigation/`
-    // M1-T2): Enter-to-jump lifts a selection through this same one-shot signal, so gating it on the
-    // nav flag alone would leave the search's jump silently selecting nothing in a build with lenses
-    // on and nav off. Either flag arms the subscription; neither leaves it exactly as it was.
-    // Widened again for copy/paste (`docs/specs/activity-copy-paste/` M1 risk (c)): a completed
-    // duplicate or paste reveals its clone through this same one-shot signal, and without this
-    // clause the reveal is silently inert in any build with both nav flags off — the clone lands
-    // below the plan's lowest lane and nothing moves. Found by the flag-on journey, whose config
-    // deliberately does not set the nav flags: a seam that is itself flag-gated is a dependency, and
-    // this one was invisible until a build existed that did not have it.
-    if (!CANVAS_NAV_ENABLED && !CANVAS_SEARCH_NAV_ENABLED && !ACTIVITY_COPY_PASTE_ENABLED) return;
+    // Always subscribed: Enter-to-jump from the search and the reveal of a completed duplicate or
+    // paste both lift a selection through this one-shot signal, so it cannot sit behind the nav
+    // flag alone.
     const signal = navState.selectSignal;
     if (!signal || signal.nonce === selectSignalSeenRef.current) return;
     selectSignalSeenRef.current = signal.nonce;
@@ -1818,7 +1759,7 @@ export function TsldPanel({
       // CURSOR, not the selection, so selecting alone left it on whichever row the planner had last
       // walked to — a reveal (undo, a duplicate, a search hit) that selected the right bar and told a
       // screen reader about the wrong one (WCAG 4.1.2).
-      if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(signal.id);
+      setActiveIdRaw(signal.id);
       // Move DOM focus into the parallel listbox so `aria-activedescendant` is actually conveyed and an
       // SR user who pressed the toolbar's Next-conflict button LANDS on the conflict (a11y-rec-1) — not
       // just hears the announcement. Guarded to this conflict-cycle path so ordinary canvas selection
@@ -1834,17 +1775,15 @@ export function TsldPanel({
   }, [navState.selectSignal, activities, setSelectedId, setActiveIdRaw]);
 
   const isCalculated = activities.some((a) => a.earlyStart !== null);
-  // The interactive canvas mounts once there's a timeline origin. Normally that also needs a
-  // computed schedule (`isCalculated`), but canvas-first authoring (ADR-0032) mounts a **blank,
-  // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
-  // bars simply don't paint (`paint.ts` skips `drawnStart === null`).
-  const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
+  // The interactive canvas mounts once there's a timeline origin. Canvas-first authoring
+  // (ADR-0032) mounts a **blank, draw-ready** canvas before any recalc so the first activity can be
+  // placed on it; uncalculated bars simply don't paint (`paint.ts` skips `drawnStart === null`).
+  const showDiagram = dataDate !== null;
 
-  const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
+  const editingEnabled = showDiagram && canEdit && onCreate !== undefined;
   // The plural-move capability exists only where the keymap will honour it: the hint is a claim
   // about what Alt+arrow does, so it needs the same conditions the keydown branch needs.
   const canMovePlural =
-    CANVAS_MULTI_SELECT_ENABLED &&
     editingEnabled &&
     onReposition !== undefined &&
     bulk?.moveMany !== undefined &&
@@ -1919,8 +1858,6 @@ export function TsldPanel({
     showDiagram,
     activityCount: activities.length,
     mode,
-    authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
-    hasPlacementMigrationNotice: placementMigrationNotice != null,
     hasTouchGestureHint: touchGestureHint != null,
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
@@ -2059,20 +1996,15 @@ export function TsldPanel({
    * because the canvas paints no separate cursor ring — the ring and the Enter target agreed by
    * construction, which is what let it past a visual read.
    */
-  const activeId: string | null = !CANVAS_MULTI_SELECT_ENABLED
-    ? selectedId
-    : activeIdRaw && activities.some((a) => a.id === activeIdRaw)
-      ? activeIdRaw
-      : selectedId;
+  const activeId: string | null =
+    activeIdRaw && activities.some((a) => a.id === activeIdRaw) ? activeIdRaw : selectedId;
 
   const select = (id: string | null, modifier?: SelectModifier): void => {
     // Pointing at a row — by click or by arrow — moves the cursor there. Only Space, Ctrl/Cmd+A and
     // the marquee change the selection without moving it, which is exactly the distinction the
     // separate cursor exists to hold.
-    if (CANVAS_MULTI_SELECT_ENABLED) setActiveIdRaw(id);
-    // Flag-off the canvas never passes a modifier, so this is the single-selection handler it has
-    // always been, statement for statement.
-    if (CANVAS_MULTI_SELECT_ENABLED && modifier && id) {
+    setActiveIdRaw(id);
+    if (modifier && id) {
       setSelection((current) => {
         const next =
           modifier === 'toggle'
@@ -2105,7 +2037,6 @@ export function TsldPanel({
    * is information.
    */
   const selectRegion = (ids: readonly string[], additive: boolean): void => {
-    if (!CANVAS_MULTI_SELECT_ENABLED) return;
     setSelection((current) => {
       const next = additive ? addAll(current, ids) : replaceAll(ids);
       announceSelectionCount(next, current.ids.length);
@@ -2355,9 +2286,7 @@ export function TsldPanel({
       // Flag-on this reflects the SET, not the cursor: `aria-selected` is what a
       // screen-reader user hears as "selected", and pointing it at the active option
       // would report exactly one member of a selection of twelve.
-      aria-selected={
-        CANVAS_MULTI_SELECT_ENABLED ? isSelected(selection, a.id) : a.id === selectedId
-      }
+      aria-selected={isSelected(selection, a.id)}
     >
       {rowTextById.get(a.id)}
     </li>
@@ -2398,13 +2327,7 @@ export function TsldPanel({
      * on the toolbar did nothing for them. Gated on `mode === 'link'`, so Enter outside the tool
      * still opens the Logic tab exactly as it did — tested both ways.
      */
-    if (
-      CANVAS_AUTHORING_FLOW_ENABLED &&
-      editingEnabled &&
-      mode === 'link' &&
-      onLink &&
-      event.key === 'Enter'
-    ) {
+    if (editingEnabled && mode === 'link' && onLink && event.key === 'Enter') {
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       if (!current) return;
@@ -2481,26 +2404,20 @@ export function TsldPanel({
      */
     if (event.key === ' ') {
       event.preventDefault();
-      if (CANVAS_MULTI_SELECT_ENABLED) {
-        if (activeId) {
-          // Computed from the render's own `selection` and announced beside the write, rather than
-          // announcing inside the updater: a `setState` updater must be pure, and React may invoke
-          // it more than once. `select()` uses the updater form because the canvas can call it from
-          // a stale closure; a key handler is re-created every render and has no such problem.
-          const next = toggle(selection, activeId);
-          setSelection(next);
-          announceSelectionCount(next, selection.ids.length);
-        }
-        return;
+      if (activeId) {
+        // Computed from the render's own `selection` and announced beside the write, rather than
+        // announcing inside the updater: a `setState` updater must be pure, and React may invoke
+        // it more than once. `select()` uses the updater form because the canvas can call it from
+        // a stale closure; a key handler is re-created every render and has no such problem.
+        const next = toggle(selection, activeId);
+        setSelection(next);
+        announceSelectionCount(next, selection.ids.length);
       }
-      const current = activities.find((a) => a.id === activeId);
-      if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
       return;
     }
     // `i` — the logic summary Space used to give. Verified free against the current keymap before
     // it was taken (`Enter`, `?`, `[`, `]`, `Space`, `n`, `Alt+*`, `Shift+←/→`, arrows, Home/End).
-    // Flag-off this branch never runs, so `i` stays unbound and the keymap is byte-for-byte today's.
-    if (CANVAS_MULTI_SELECT_ENABLED && (event.key === 'i' || event.key === 'I')) {
+    if (event.key === 'i' || event.key === 'I') {
       event.preventDefault();
       const current = activities.find((a) => a.id === activeId);
       if (current) announce(summarizeLogic(current.id, dependencies, linkSlack));
@@ -2515,7 +2432,7 @@ export function TsldPanel({
      * kept in step (the ADR-0079 Escape guard exists precisely because a `window` listener cannot
      * make that promise).
      */
-    if (CANVAS_MULTI_SELECT_ENABLED && (event.ctrlKey || event.metaKey) && event.key === 'a') {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
       event.preventDefault();
       const next = replaceAll(activities.map((a) => a.id));
       setSelection(next);
@@ -2532,7 +2449,6 @@ export function TsldPanel({
      * ADR-0064 defect class, arriving through a door that decision did not have.
      */
     if (
-      CANVAS_MULTI_SELECT_ENABLED &&
       event.key === 'Escape' &&
       mode === 'select' &&
       linkPickedId === null &&
@@ -2546,10 +2462,8 @@ export function TsldPanel({
     // Shift+←/→ nudges the focused activity's DURATION one day (ADR-0052 M2) — the keyboard
     // equivalent of the finish-edge resize drag (WCAG 2.5.7), coalesced like the Alt+arrow moves.
     // Same eligibility as the pointer path: the flag, a wired handler, editing, and a bar whose
-    // duration is a real user input (milestones / LOE / WBS summaries no-op). Flag-off this branch
-    // is unreachable, so the listbox keymap is byte-for-byte today's.
+    // duration is a real user input (milestones / LOE / WBS summaries no-op).
     if (
-      CANVAS_DIRECT_MANIPULATION_ENABLED &&
       editingEnabled &&
       onResize &&
       event.shiftKey &&
@@ -2583,12 +2497,7 @@ export function TsldPanel({
       // The cursor decides, as the grab does for the drag: the whole selection moves only when it
       // holds more than one activity AND includes the cursor row. A cursor outside the set moves
       // that one bar, as it always has.
-      if (
-        CANVAS_MULTI_SELECT_ENABLED &&
-        bulk?.moveMany &&
-        selection.ids.length > 1 &&
-        selection.ids.includes(current.id)
-      ) {
+      if (bulk?.moveMany && selection.ids.length > 1 && selection.ids.includes(current.id)) {
         pluralNudge(selection.ids, current, axis, delta);
       } else {
         nudge(current, axis, delta);
@@ -2633,7 +2542,7 @@ export function TsldPanel({
      * is both taken and meaningless here. Taking it would have silently removed a shipped edit
      * accelerator to add a navigation one nobody asked for.
      */
-    if (CANVAS_MULTI_SELECT_ENABLED && event.shiftKey && !event.altKey) {
+    if (event.shiftKey && !event.altKey) {
       setActiveIdRaw(target.id);
       const grown = addAll(selection, [target.id]);
       setSelection(grown);
@@ -2844,10 +2753,9 @@ export function TsldPanel({
         return;
       }
       if (intent.sidewaysRefused) {
-        const selected =
-          CANVAS_MULTI_SELECT_ENABLED && selection.ids.includes(intent.activityId)
-            ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
-            : [];
+        const selected = selection.ids.includes(intent.activityId)
+          ? activities.filter((a) => selection.ids.includes(a.id) && isStartEdgeFrozen(a))
+          : [];
         showConflict(
           selected.length > 1 ? startFrozenPluralReason(selected.length) : START_EDGE_FROZEN_REASON,
           false,
@@ -2863,8 +2771,7 @@ export function TsldPanel({
       //
       // Falls through to the single-bar path whenever the selection is one, does not contain the
       // dragged bar, or the host supplied no `moveMany` — so every existing caller is unchanged.
-      const pluralIds =
-        CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : [];
+      const pluralIds = selection.ids.length > 1 ? selection.ids : [];
       if (moveMany && pluralIds.includes(intent.activityId)) {
         const rows = laneActivities.filter((a) => pluralIds.includes(a.id));
         // A WBS summary can be in the selection (Ctrl+A takes every row), and the server refuses a
@@ -2968,10 +2875,7 @@ export function TsldPanel({
       // Preview only. `previewStartDay` is NOT what gets written — see `rollForwardToWorkingDay`
       // for why a client-computed day must not be persisted.
       const previewStartDay =
-        CANVAS_NAV_ENABLED &&
-        barDateSource === 'visual' &&
-        intent.startDay !== undefined &&
-        workingDayPredicate
+        barDateSource === 'visual' && intent.startDay !== undefined && workingDayPredicate
           ? rollForwardToWorkingDay(intent.startDay, workingDayPredicate)
           : intent.startDay;
       // Free-2D: the intent carries only the axes that changed. Fill the unchanged axis from the
@@ -3263,8 +3167,8 @@ export function TsldPanel({
 
   // Canvas-first authoring (ADR-0032) mounts a blank, draw-ready canvas on an empty plan (there's a
   // timeline anchor via `dataDate`), so skip the empty-state note in that case and fall through to
-  // the interactive canvas below. Flag-off — or with no anchor — keep today's empty-state note.
-  if (activities.length === 0 && !(CANVAS_AUTHORING_ENABLED && showDiagram)) {
+  // the interactive canvas below. With no anchor the empty-state note stays.
+  if (activities.length === 0 && !showDiagram) {
     return (
       // **Converged on the same file's own answer** (`docs/specs/empty-state-consolidation/` M6):
       // `:2700` below already renders its empty canvas through `NoticeStrip emphasis="dashed"`,
@@ -3297,9 +3201,7 @@ export function TsldPanel({
               ? 'Recalculate the schedule to plot the activities on the timeline.'
               : editingEnabled && mode === 'add-activity'
                 ? 'Drag on the timeline to add an activity. Esc cancels.'
-                : editingEnabled
-                  ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
-                  : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
+                : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
           </p>
           {editingEnabled ? (
             <TsldToolbar
@@ -3447,7 +3349,7 @@ export function TsldPanel({
           and nothing at all when the host wired no operations, so a partially-wired host cannot ship
           a button that does nothing.
         */}
-        {CANVAS_MULTI_SELECT_ENABLED && bulk ? (
+        {bulk ? (
           <BulkSelectionBar
             count={selection.ids.length}
             primaryName={activities.find((a) => a.id === selectedId)?.name ?? null}
@@ -3626,7 +3528,7 @@ export function TsldPanel({
               size="sm"
               onClick={() => {
                 // Dismissing UNMOUNTS the strip holding the button being pressed, and the rung
-                // below it (`placement-migration`) may not render at all — so without a
+                // below it (`touch-hint`) may not render at all — so without a
                 // destination focus reverts to <body>. That is WCAG 2.4.3, and on THIS surface it
                 // is also silent: every keyboard accelerator is a React `onKeyDown` on the
                 // workspace root, and <body> is that root's ancestor, so a planner who dismisses
@@ -3645,14 +3547,7 @@ export function TsldPanel({
           </NoticeStrip>
         ) : null}
 
-        {/* What the one-time placement migration changed on this plan (one-planning-surface M-I).
-            The dock's LOWEST rung — see `resolveDockStrip` for why a notice about something that
-            happened on a deploy yields to every strip about what the planner is doing now. It is
-            the only dock strip that is DISMISSIBLE and does not return, which is what makes losing
-            every contest affordable: it waits. */}
-        {dockStrip === 'placement-migration' ? placementMigrationNotice : null}
-
-        {/* The one-time touch tip: the dock's lowest rung, below the migration notice. */}
+        {/* The one-time touch tip: the dock's lowest rung. */}
         {dockStrip === 'touch-hint' ? touchGestureHint : null}
       </CanvasDock>
 
@@ -3695,9 +3590,7 @@ export function TsldPanel({
               onSelectRegion={selectRegion}
               // The plural set only when it IS plural: at one selected the canvas
               // receives `undefined` and builds the scene it always built.
-              selectedIds={
-                CANVAS_MULTI_SELECT_ENABLED && selection.ids.length > 1 ? selection.ids : undefined
-              }
+              selectedIds={selection.ids.length > 1 ? selection.ids : undefined}
               fitSignal={fitSignal}
               editing={editingEnabled}
               mode={mode}
@@ -3706,7 +3599,6 @@ export function TsldPanel({
               canReposition={onReposition !== undefined}
               canResize={onResize !== undefined}
               canLag={onLag !== undefined}
-              canLink={onLink !== undefined}
               onIntent={onIntent}
               onLoeSpanStep={handleLoeSpanStep}
               loePickStartId={loeStartId}
@@ -3831,14 +3723,12 @@ export function TsldPanel({
                 ))}
               </ul>
             ) : null}
-            {CANVAS_DATA_DATE_ENABLED ? (
-              <p id={`${listboxId}-data-date`} className="sr-only">
-                {`Data date ${formatCalendarDate(dataDate)}.`}
-                {todayIso && todayIso !== dataDate
-                  ? ` Today is ${formatCalendarDate(todayIso)}.`
-                  : ''}
-              </p>
-            ) : null}
+            <p id={`${listboxId}-data-date`} className="sr-only">
+              {`Data date ${formatCalendarDate(dataDate)}.`}
+              {todayIso && todayIso !== dataDate
+                ? ` Today is ${formatCalendarDate(todayIso)}.`
+                : ''}
+            </p>
             {levelledSummary !== null && levelledSummary.undrawnLabel !== '' ? (
               /*
                 **The lens is on and drew nothing, said visibly** (M-E-T6). Its neighbour below
@@ -3947,12 +3837,10 @@ export function TsldPanel({
               // absent while idle (the existing `[aria-busy="true"]` assertions).
               aria-busy={pendingReposition !== null || undefined}
               className="sr-only"
-              {...(CANVAS_DATA_DATE_ENABLED
-                ? { 'aria-describedby': `${listboxId}-data-date` }
-                : {})}
-              // Advertised only flag-on: an `aria-multiselectable` listbox whose Space does
-              // nothing plural is a promise the surface does not keep.
-              aria-multiselectable={CANVAS_MULTI_SELECT_ENABLED || undefined}
+              aria-describedby={`${listboxId}-data-date`}
+              // An `aria-multiselectable` listbox whose Space does nothing plural would be a
+              // promise the surface does not keep; here Space toggles the cursor row.
+              aria-multiselectable
               aria-activedescendant={activeId ? optionId(activeId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {

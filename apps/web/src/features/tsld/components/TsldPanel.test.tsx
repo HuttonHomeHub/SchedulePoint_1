@@ -6,16 +6,10 @@ import { TsldPanel } from './TsldPanel';
 
 import { anActivity } from '@/test/activity-fixture';
 
-// This file exercises the M1 read-only surface, so it pins the editing flag OFF
-// (it now defaults ON in the shipped bundle — config/env.ts). The flags-ON editing
-// surface is covered by TsldPanel.editing.test.tsx, which mocks this flag true.
-// Canvas-first authoring also defaults ON now (it mounts a drawable canvas in place of
-// the empty/recalc-prompt states), so pin it OFF too; its behaviour is covered by
-// TsldPanel.authoring.test.tsx.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, TSLD_EDITING_ENABLED: false, CANVAS_AUTHORING_ENABLED: false };
-});
+// This file exercises the M1 read-only surface; the editing surface is covered by
+// TsldPanel.editing.test.tsx. The empty / recalc-prompt states below are the ones with no timeline
+// anchor (`dataDate` null): with an anchor the canvas mounts blank and drawable instead
+// (TsldPanel.authoring.test.tsx).
 
 function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
   return anActivity({
@@ -48,8 +42,8 @@ function activity(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 const NO_DEPS: DependencySummary[] = [];
 
 describe('TsldPanel', () => {
-  it('shows an empty state when the plan has no activities', () => {
-    render(<TsldPanel activities={[]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
+  it('shows an empty state when the plan has no activities and no timeline anchor', () => {
+    render(<TsldPanel activities={[]} dependencies={NO_DEPS} dataDate={null} />);
     expect(screen.getByText(/No activities to diagram yet/)).toBeInTheDocument();
   });
 
@@ -70,9 +64,9 @@ describe('TsldPanel', () => {
     );
   });
 
-  it('prompts to recalculate when the schedule is not yet computed', () => {
+  it('prompts to recalculate when the schedule is not yet computed and there is no timeline anchor', () => {
     const uncomputed = activity({ earlyStart: null, earlyFinish: null });
-    render(<TsldPanel activities={[uncomputed]} dependencies={NO_DEPS} dataDate="2026-01-01" />);
+    render(<TsldPanel activities={[uncomputed]} dependencies={NO_DEPS} dataDate={null} />);
     expect(screen.getByText(/Recalculate the schedule to plot/)).toBeInTheDocument();
     expect(screen.getByText(/appears once the schedule has been calculated/)).toBeInTheDocument();
   });
@@ -104,24 +98,9 @@ describe('TsldPanel', () => {
     expect(legend).toHaveTextContent('Constraint');
   });
 
-  it('stays read-only (no editing toolbar) when the M2 flag is off, even for a writer', () => {
-    render(
-      <TsldPanel
-        activities={[activity()]}
-        dependencies={NO_DEPS}
-        dataDate="2026-01-01"
-        canEdit
-        onCreate={() => Promise.resolve({ recalcConflict: null })}
-      />,
-    );
-    // VITE_TSLD_EDITING is unset in tests → editing gated off → M1 surface (plain Fit only).
-    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
-  });
-
   it('round-trips a zoom-preset click through the canvas back to the control (aria-pressed)', () => {
     // jsdom reports every element's `getBoundingClientRect` as all-zero, and range-anchored preset
-    // scales (VITE_CANVAS_TIME_AXIS, on by default — F3) are WIDTH-derived: at the container's
+    // scales (on by default — F3) are WIDTH-derived: at the container's
     // otherwise-clamped 1px floor every preset's target scale coincides at MIN_PX_PER_DAY, so the
     // canvas can no longer tell Week from Year apart. Give the container a realistic width so this
     // exercises the same math a real layout would.

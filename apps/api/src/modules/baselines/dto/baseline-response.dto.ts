@@ -48,41 +48,39 @@ export class BaselineResponseDto implements BaselineSummary {
 
   @ApiProperty({
     format: 'date',
-    nullable: true,
     type: String,
-    description: "The plan's start (YYYY-MM-DD) at capture, or null.",
+    description: "The plan's start (YYYY-MM-DD) at capture.",
   })
-  dataDate!: string | null;
+  dataDate!: string;
 
   @ApiProperty({
     format: 'date',
-    nullable: true,
     type: String,
-    description: "The plan's latest inclusive finish (YYYY-MM-DD) at capture, or null.",
+    description: "The plan's latest inclusive finish (YYYY-MM-DD) at capture.",
   })
-  capturedProjectFinish!: string | null;
+  capturedProjectFinish!: string;
 
   @ApiProperty({ description: 'How many activity snapshots the baseline froze.' })
   activityCount!: number;
 
   @ApiProperty({
-    enum: ['NONE', 'FULL'],
+    enum: ['FULL'],
     description:
       'What this capture froze of the placement (placement-baseline-variance, amending ' +
-      "ADR-0025). 'NONE' for every baseline captured before api-v0.70.0 — the pure-network " +
-      "dates only. 'FULL' after — plus placedStart/placedFinish/visualStart on each snapshot " +
-      'row. Decides which dates GET …/baselines/variance compares against this baseline; see ' +
+      "ADR-0025): 'FULL' — the pure-network dates plus placedStart/placedFinish/visualStart on " +
+      "each snapshot row. It is the only value since 1.1.0 ('NONE' was removed, ADR-0215 D6). " +
+      'Decides which dates GET …/baselines/variance compares against this baseline; see ' +
       'that route’s `meta.basis`.',
   })
   placementSnapshotLevel!: PlacementSnapshotLevel;
 
   @ApiProperty({
-    enum: ['NONE', 'FULL'],
+    enum: ['FULL'],
     description:
-      'What this capture froze of the swimlanes (swimlanes M1-T1b, amending ADR-0025). ' +
-      "'NONE' for every baseline captured before swimlanes shipped — its removed work is counted, " +
-      "not drawn, when swimlanes are on. 'FULL' after: the plan's swimlane source and level, each " +
-      "activity's own swimlane, and a copy of its lane rows for every basis.",
+      'What this capture froze of the swimlanes (swimlanes M1-T1b, amending ADR-0025): ' +
+      "'FULL' — the plan's swimlane source and level, each activity's own swimlane, and a copy " +
+      "of its lane rows for every basis. It is the only value since 1.1.0 ('NONE' was removed, " +
+      'ADR-0215 D6).',
   })
   swimlaneSnapshotLevel!: SwimlaneSnapshotLevel;
 
@@ -102,10 +100,8 @@ export class BaselineResponseDto implements BaselineSummary {
       name: entity.name,
       isActive: entity.isActive,
       capturedAt: entity.capturedAt.toISOString(),
-      dataDate: entity.dataDate ? formatCalendarDate(entity.dataDate) : null,
-      capturedProjectFinish: entity.capturedProjectFinish
-        ? formatCalendarDate(entity.capturedProjectFinish)
-        : null,
+      dataDate: formatCalendarDate(entity.dataDate),
+      capturedProjectFinish: formatCalendarDate(entity.capturedProjectFinish),
       activityCount,
       placementSnapshotLevel: entity.placementSnapshotLevel,
       swimlaneSnapshotLevel: entity.swimlaneSnapshotLevel,
@@ -157,9 +153,7 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
     type: String,
     description:
       'The frozen placed span — where the bar actually sat at capture (placement-baseline-' +
-      "variance). Meaningful only when the parent baseline's placementSnapshotLevel is FULL; " +
-      'a null there means the plan had not been calculated at capture. On a NONE baseline ' +
-      'this is null because nothing was recorded. Read the level; never infer it from the null.',
+      'variance). A null means the activity had not been calculated at capture.',
   })
   placedStart!: string | null;
 
@@ -173,8 +167,7 @@ export class BaselineActivitySnapshotResponseDto implements BaselineActivitySnap
     description:
       "The planner's own frozen hand-placement, distinct from placedStart/placedFinish: this " +
       'is the input the planner gave, those are the engine’s output from it plus the ' +
-      'network. Null on a FULL baseline means the activity was never hand-placed at capture ' +
-      '— the common case. Null on a NONE baseline means “not recorded”.',
+      'network. Null means the activity was never hand-placed at capture — the common case.',
   })
   visualStart!: string | null;
 
@@ -230,11 +223,13 @@ export class BaselineDetailResponseDto extends BaselineResponseDto implements Ba
  * generated enum and `@repo/types`'s union must describe exactly the same set of values.
  * `MutuallyAssignable` evaluates to `false` the moment either side gains a member the other
  * lacks, and assigning `true` to a `false`-typed const then fails to compile — never
- * silently, and never only at runtime. Exported (rather than a bare unread local) so
+ * silently, and never only at runtime. Both checks wrap the operands in a tuple so the
+ * conditional does not distribute over a union: the bare form maps each member of `A` separately
+ * and yields `boolean`, which accepts `true` whatever the other side holds. Exported (rather than a bare unread local) so
  * `noUnusedLocals` does not itself have to be told to look away from the one line whose job
  * is to be looked at.
  */
-type MutuallyAssignable<A, B> = A extends B ? (B extends A ? true : false) : false;
+type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 export const _placementSnapshotLevelLockStep: MutuallyAssignable<
   PrismaPlacementSnapshotLevel,
   PlacementSnapshotLevel

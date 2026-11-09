@@ -517,11 +517,11 @@ export const ZOOM_STOPS = {
 export type ZoomLevel = keyof typeof ZOOM_STOPS;
 
 /**
- * Range-anchored zoom presets (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F3): the
+ * Range-anchored zoom presets (tsld-toolbar-canvas-refinements F3): the
  * **nominal** visible-range target each preset frames, independent of canvas width. "Nominal"
  * because the viewport is a continuous px-per-day scale — "one month visible" is a duration, not
  * a calendar-exact span (a real month is 28–31 days; this uses 30 for all twelve). Consumed by
- * `time-scale.ts#pxPerDayForPreset`; flag-off keeps the fixed `ZOOM_STOPS` table above.
+ * `time-scale.ts#pxPerDayForPreset`.
  */
 export const ZOOM_TARGET_DAYS = {
   day: 14,
@@ -548,25 +548,14 @@ export const ZOOM_RANGE_LABELS = {
 /** Inclusive px-per-day bounds (a day column never narrower/wider than this). */
 export const MIN_PX_PER_DAY = 0.4;
 /**
- * Today's ceiling, kept as its own named constant (not just "the old `MAX_PX_PER_DAY`") so the
- * flag-off callers below can pass it explicitly — `clampPxPerDay`/`zoomAt`/`stepZoom`/
- * `fitToContent` all take the ceiling as a **required** parameter rather than reading
- * `MAX_PX_PER_DAY` off the module directly, precisely so that raising it for
- * `VITE_CANVAS_TIME_AXIS` (below) can't silently widen the flag-off zoom range too — an earlier
- * draft of this feature did exactly that (a component-review finding), leaving wheel/pinch/button
- * zoom reachable at 200 px/day even with the flag off, contradicting the flag's own
- * byte-for-byte-parity contract.
- */
-export const LEGACY_MAX_PX_PER_DAY = 60;
-/**
- * Raised 60 → 200 for `VITE_CANVAS_TIME_AXIS`'s Day preset (2 weeks visible): a 1 600 px canvas
+ * The zoom ceiling, raised 60 → 200 for the time-axis epic's Day preset (2 weeks visible): a 1 600 px canvas
  * needs 114 px/day, a 2 560 px canvas needs 183 — both above the old bound, which would make the
  * headline preset silently miss its own contract at ordinary desktop widths. 200 covers 2 560 px
  * with headroom. Safe to raise: every LOD threshold gated on `pxPerDay` (`DAY_GRID_MIN_PX`,
  * `NON_WORKING_MIN_PX`, `DAY_ROW_MIN_PX_PER_DAY`, …) is a **lower** bound, so widening the top of
- * the range destabilises nothing below it. Only reaches a viewport when the caller resolves the
- * flag-aware ceiling (`TsldCanvas`) and passes it as `maxPxPerDay` — flag-off call sites pass
- * {@link LEGACY_MAX_PX_PER_DAY} instead, so this constant alone never widens flag-off behaviour.
+ * the range destabilises nothing below it. `clampPxPerDay`/`zoomAt`/`stepZoom`/`fitToContent` take
+ * the ceiling as a **required** parameter rather than reading it off the module, and `TsldCanvas`
+ * passes this one.
  */
 export const MAX_PX_PER_DAY = 200;
 

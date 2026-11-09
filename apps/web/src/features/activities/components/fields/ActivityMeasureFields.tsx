@@ -6,7 +6,6 @@ import type { GroupProps } from './group-props';
 import type { FieldGate } from '@/components/ui/field-gate';
 import { SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
-import { EARNED_VALUE_ENABLED } from '@/config/env';
 import {
   PERCENT_COMPLETE_TYPE_LABELS,
   PERCENT_COMPLETE_TYPE_OPTIONS,
@@ -61,10 +60,8 @@ export function ActivityMeasureFields({
 }: GroupProps<ActivityMeasureValues> & {
   /** A more specific reason than the enclosing scope's, when one applies (ADR-0083 D4). */
   physicalGate?: FieldGate;
-}): JSX.Element | null {
+}): JSX.Element {
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
-
-  if (!EARNED_VALUE_ENABLED) return null;
 
   return (
     <FieldGrid columns="lead">

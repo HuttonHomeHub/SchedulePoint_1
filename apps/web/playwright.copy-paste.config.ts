@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **Flag-ON** end-to-end configuration for **activity copy / paste / duplicate**
- * (`VITE_ACTIVITY_COPY_PASTE`, `docs/specs/activity-copy-paste/` M5-T2).
+ * End-to-end configuration for **activity copy / paste / duplicate**
+ * (`docs/specs/activity-copy-paste/` M5-T2).
  *
  * What a unit suite structurally cannot prove, and this exists for:
  *
@@ -80,24 +80,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // The epic's surface under test.
-              VITE_ACTIVITY_COPY_PASTE: 'true',
-              // `Ctrl+C` sources the canvas's PLURAL selection, which is itself derived from
-              // direct manipulation — so both are set. A build with the plural selection on and
-              // direct manipulation off cannot exist (ADR-0080), and setting only the derived flag
-              // would test a state the product never reaches.
-              VITE_CANVAS_MULTI_SELECT: 'true',
-              VITE_CANVAS_DIRECT_MANIPULATION: 'true',
-              VITE_CANVAS_AUTHORING: 'true',
-              VITE_TSLD_EDITING: 'true',
-              VITE_PLAN_EDIT_LOCK: 'true',
-              // **`VITE_SCHEDULING_MODES` is no longer pinned off** (one-planning-surface M-B-T1). The
-              // justification removed with it was a variant of "mirroring the LOE / Gantt / WBS suites" —
-              // which is how the coverage inversion happened: not thirteen decisions, but one copied twelve
-              // times, each citing its neighbours as precedent. The flag now takes its default, which is
-              // what every shipped bundle carries (ADR-0088 D1).
-            },
           },
         ],
       }),

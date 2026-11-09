@@ -155,8 +155,8 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
     planId: 'plan',
     name: 'B',
     isActive: true,
-    dataDate: null,
-    capturedProjectFinish: null,
+    dataDate: new Date('2026-01-05'),
+    capturedProjectFinish: new Date('2026-03-20'),
     hoursPerDayMinutes: 1440,
     criticalityRule: null,
     actorId: 'user',
@@ -245,14 +245,14 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
     expect(rows[0]).toEqual(lane);
   });
 
-  it('copies the unrounded float minutes verbatim, and NULL as NULL (#318)', async () => {
+  it('copies the unrounded float minutes verbatim, and an uncalculated float as NULL (#318)', async () => {
     const db = tx();
     const repository = new BaselineRepository({} as PrismaService);
     await repository.createWithSnapshot(
       input({
         activities: [
           { ...activity, totalFloat: 5, totalFloatMinutes: 2400 },
-          { ...activity, id: 'act-2', totalFloat: 3, totalFloatMinutes: null },
+          { ...activity, id: 'act-2', totalFloat: null, totalFloatMinutes: null },
         ],
         lanes: [],
       }),
@@ -265,10 +265,11 @@ describe('BaselineRepository swimlane freeze (M1-T1b)', () => {
           totalFloat: 5,
           totalFloatMinutes: 2400,
         }),
-        // Never defaulted to 0 or derived from the day figure: NULL means "not comparable".
+        // Never defaulted to 0: NULL means the activity was not calculated (days and minutes are
+        // null together, `ck_baseline_activities_total_float_minutes_with_days`).
         expect.objectContaining({
           sourceActivityId: 'act-2',
-          totalFloat: 3,
+          totalFloat: null,
           totalFloatMinutes: null,
         }),
       ],

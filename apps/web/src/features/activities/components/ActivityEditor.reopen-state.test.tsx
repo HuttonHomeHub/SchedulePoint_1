@@ -30,7 +30,6 @@ import type { ActivityEditorIntent } from '@/features/activities/lib/activity-ed
  */
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -50,11 +49,6 @@ const ROW = {
   percentComplete: 10,
   version: 1,
 } as ActivitySummary;
-
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  RESOURCE_LEVELLING_ENABLED: true,
-}));
 
 beforeEach(() => {
   vi.stubGlobal(

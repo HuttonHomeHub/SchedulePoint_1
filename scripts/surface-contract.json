@@ -225,22 +225,22 @@
     "surface": "features/wbs/components/ActivityMembersPanel.tsx"
   },
   "activities/update-placements.constraintDate": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-placements.constraintType": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-placements.id": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-placements.laneIndex": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-placements.placements": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-placements.visualStart": {
-    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4 behind VITE_CANVAS_MULTI_SELECT. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so the flag flip has to close it."
+    "gap": "Batch placement write (docs/specs/canvas-multi-select/ M1). No client yet: the canvas gesture that sends it lands in M4. The same field IS authorable today through the single-activity PATCH, so this is an unreachable SECOND door rather than an unreachable field — recorded as a gap so that landing has to close it."
   },
   "activities/update-positions.id": {
     "surface": "components/ui/spinner.tsx"
@@ -468,7 +468,7 @@
     "exempt": "a join key, not a value a planner types"
   },
   "engine/EngineAssignment.lagMinutes": {
-    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4)"
   },
   "engine/EngineAssignment.resourceId": {
     "exempt": "a join key, not a value a planner types"
@@ -603,7 +603,7 @@
     "surface": "config/env.ts"
   },
   "resources/create-assignment.lagMinutes": {
-    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4)"
   },
   "resources/create-assignment.resourceId": {
     "surface": "components/layout/workspace/resource-strip-panel.tsx"
@@ -654,7 +654,7 @@
     "surface": "config/env.ts"
   },
   "resources/update-assignment.lagMinutes": {
-    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4, VITE_ASSIGNMENT_LAG)"
+    "surface": "features/resources/components/ActivityResourcesPanel.tsx — the “Joins after” control (ADR-0071 M4)"
   },
   "resources/update-assignment.unitsPerHour": {
     "surface": "config/env.ts"

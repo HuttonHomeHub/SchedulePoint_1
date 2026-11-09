@@ -83,10 +83,10 @@ export function makeTsldToolbarContext(
     canShare: true,
     openShare: vi.fn(),
     editPlan: vi.fn(),
-    // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, ADR-0049)
+    // Resource-view lens (ADR-0049)
     resourceViewOpen: false,
     toggleResourceView: vi.fn(),
-    // Over-allocation highlight (VITE_CANVAS_RESOURCE_VIEW, Stage E M2)
+    // Over-allocation highlight (Stage E M2)
     overAllocationHighlight: false,
     toggleOverAllocation: vi.fn(),
     hasOverAllocation: true,
@@ -168,7 +168,7 @@ export function makeTsldToolbarContext(
     matchingCount: 0,
     exportError: null,
     dismissExportError: vi.fn(),
-    // Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export) — off by default so
+    // Schedule interchange export (interchange:export) — off by default so
     // the "Interchange" Export-menu group doesn't leak into the other suites' assertions; the interchange
     // suite opts in via `canInterchangeExport: true`.
     canInterchangeExport: false,

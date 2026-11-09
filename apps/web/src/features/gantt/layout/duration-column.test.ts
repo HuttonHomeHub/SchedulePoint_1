@@ -17,9 +17,8 @@ import { GANTT_COLUMNS } from './grid-columns';
  * - a **milestone** must read an em dash, because `0 d` made real sub-day work and a genuinely
  *   duration-less activity look identical on the one screen listing a plan's work.
  *
- * And the degraded branch: with no `hoursPerDay` the cell falls back to whole working days, the
- * same code path as `VITE_SUB_DAY_DURATIONS` off — so the rollback contract and the
- * calendar-not-yet-loaded state cannot rot separately.
+ * And the degraded branch: with no `hoursPerDay` the cell falls back to whole working days,
+ * which is also the calendar-not-yet-loaded state.
  */
 
 const EIGHT_HOUR = 8;
@@ -83,7 +82,7 @@ describe('the Duration column', () => {
   });
 
   it('degrades to whole working days when the calendar factor is unavailable', () => {
-    // Not a guess and not a blank: the same rendering the flag-off build produces.
+    // Not a guess and not a blank: the same whole-day rendering a host with no calendar factor has always produced.
     const half = activity({ durationDays: 0, durationMinutes: 240 });
     expect(durationColumn?.value(half, 'early', undefined)).toBe('0 d');
   });

@@ -53,11 +53,6 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  PASSWORD_RESET_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, apiFetch: vi.fn() };

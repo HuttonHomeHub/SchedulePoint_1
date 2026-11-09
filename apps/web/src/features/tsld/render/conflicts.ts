@@ -1,6 +1,6 @@
 /**
  * The pure, renderer-agnostic **conflict-ordering** behind the TSLD *Next conflict* command (spec
- * `docs/specs/canvas-nav/`, behind `VITE_CANVAS_NAV`). Like `lenses.ts` it has **no** canvas, DOM, React
+ * `docs/specs/canvas-nav/`). Like `lenses.ts` it has **no** canvas, DOM, React
  * or data-fetching dependency and does **no** schedule arithmetic — it only reads engine-owned flags the
  * client already has on `ActivitySummary`, so it is exhaustively unit-tested. `useTsldToolbarContext`
  * memoises the ordered list; the toolbar command advances a cursor, centres + selects each hit, and

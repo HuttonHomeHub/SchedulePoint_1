@@ -130,7 +130,7 @@ export const BASE_ACTIVITY_TYPES: readonly ActivityType[] = [
 ];
 
 /**
- * Advanced activity types offered only when `VITE_ADVANCED_ACTIVITY_TYPES` is on (M5-epic, ADR-0035).
+ * Advanced activity types, offered after the base ones (M5-epic, ADR-0035).
  * **Level of Effort** (span-derived, §21), **WBS summary** (branch roll-up, §24) and
  * **Resource-dependent** (§23 — schedules on its driving resource's calendar, ADR-0039) — all three
  * with live engine/API/conformance support. `HAMMOCK` is intentionally NOT offered (no engine
@@ -150,16 +150,13 @@ export const ADVANCED_ACTIVITY_TYPES: readonly ActivityType[] = [
 
 /**
  * The activity types the Type picker should offer: the always-supported {@link BASE_ACTIVITY_TYPES},
- * plus {@link ADVANCED_ACTIVITY_TYPES} when the flag is on, plus the activity's `current` value if it
- * isn't already in that set — so editing an activity of a not-offered type (a legacy `HAMMOCK`, or an
- * LOE while the flag is off) keeps its own value visible and selected rather than silently coercing it
- * (the honest-selector pattern, cf. the constraint editor). Order-stable and de-duplicated.
+ * plus {@link ADVANCED_ACTIVITY_TYPES}, plus the activity's `current` value if it isn't already in
+ * that set — so editing an activity of a not-offered type (a legacy `HAMMOCK`) keeps its own value
+ * visible and selected rather than silently coercing it (the honest-selector pattern, cf. the
+ * constraint editor). Order-stable and de-duplicated.
  */
-export function selectableActivityTypes(
-  advancedEnabled: boolean,
-  current?: ActivityType,
-): ActivityType[] {
-  const types = [...BASE_ACTIVITY_TYPES, ...(advancedEnabled ? ADVANCED_ACTIVITY_TYPES : [])];
+export function selectableActivityTypes(current?: ActivityType): ActivityType[] {
+  const types = [...BASE_ACTIVITY_TYPES, ...ADVANCED_ACTIVITY_TYPES];
   if (current && !types.includes(current)) types.push(current);
   return types;
 }
@@ -195,8 +192,8 @@ export const activityFormSchema = z
     type: z.enum(ACTIVITY_TYPES),
     // The P6 duration type (ADR-0040): how a future edit to one of {duration, units, units/time}
     // recomputes the others so `Units = Duration × Units/Time` stays true. A `<select>` over the four
-    // values; only editable behind `VITE_DURATION_TYPES`, but always seeded from the row so a stored
-    // value round-trips even with the picker hidden. Defaults to the API default.
+    // values; always seeded from the row so a stored
+    // value round-trips even while the picker is hidden (a duration-derived type). Defaults to the API default.
     durationType: z.enum(DURATION_TYPES),
     // Raw text (ADR-0070). `duration`, not `durationDays`, because what it holds depends on the
     // calendar: `2d 4h` when the factor is known, a whole number of days when it is not. The
@@ -205,9 +202,7 @@ export const activityFormSchema = z
     constraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     constraintDate: z.string().optional(),
     // Optional SECONDARY constraint (ADR-0035 §10, M4): the primary drives the forward pass, this the
-    // backward pass. Same shape and paired rule as the primary; only editable behind the
-    // `VITE_ADVANCED_CONSTRAINTS` flag, but always seeded from the row so a stored value round-trips
-    // even with the fields hidden.
+    // backward pass. Same shape and paired rule as the primary.
     secondaryConstraintType: z.union([z.enum(CONSTRAINT_TYPES), z.literal('')]).optional(),
     secondaryConstraintDate: z.string().optional(),
     // As-late-as-possible (ADR-0035 §11): a display-only placement preference; never changes dates/float.
@@ -218,7 +213,7 @@ export const activityFormSchema = z
     // External / inter-project dates (ADR-0043 / ADR-0035 §30, M1): imported commitments from ANOTHER
     // project, each a calendar day (`YYYY-MM-DD`) or `''` = none. `externalEarlyStart` is an SNET-shaped
     // forward lower bound; `externalLateFinish` an FNLT-shaped backward upper bound. Raw `<input
-    // type="date">` values (like `constraintDate`), only editable behind `VITE_INTER_PROJECT_DATES` but
+    // type="date">` values (like `constraintDate`) but
     // always seeded from the row so a stored value round-trips even with the section hidden. Cross-field
     // rule below mirrors the API's N26 `EXTERNAL_FINISH_BEFORE_START` reject.
     externalEarlyStart: z.string().optional(),
@@ -233,9 +228,8 @@ export const activityFormSchema = z
     parentId: z.string().optional(),
     // Resource-levelling tie-break (ADR-0041): a lower number wins the resource when two activities
     // contend for a capacity-constrained resource. Optional (blank = lowest priority — placed after
-    // any prioritised peer); a whole number 0–1,000,000 (bounded to match the API). Only editable
-    // behind `VITE_RESOURCE_LEVELLING`, but always seeded from the row so a stored value round-trips
-    // even with the field hidden. Registered with a `setValueAs` that maps a blank field to
+    // any prioritised peer); a whole number 0–1,000,000 (bounded to match the API). Always seeded
+    // from the row so a stored value round-trips even when the field is hidden (a duration-derived type). Registered with a `setValueAs` that maps a blank field to
     // `undefined`, so an empty priority is "absent", not `NaN`.
     levelingPriority: z
       .number({ message: 'Enter a whole number.' })
@@ -248,14 +242,13 @@ export const activityFormSchema = z
     // like `durationType`, always seeded from the row. `physicalPercentComplete` feeds the `PHYSICAL`
     // measure only — an integer 0–100, blank → `undefined` (unset). `budgetedExpense` / `actualExpense`
     // are lump-sum activity costs entered in MAJOR units (×100 → minor on submit, ÷100 to seed); optional,
-    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). All only
-    // editable behind `VITE_EARNED_VALUE`, but always seeded from the row so a stored value round-trips
-    // even when the fields are hidden.
+    // `>= 0`, at most 2 major decimals (the 2-decimal money assumption, `lib/format-money`). Always
+    // seeded from the row so a stored value round-trips even when a field is hidden.
     percentCompleteType: z.enum(PERCENT_COMPLETE_TYPES),
     // Cost accrual (M7 rung 5, ADR-0044 §32): how the activity's cost is time-phased in the EV read's
     // Planned Value (START/UNIFORM/END). A plain enum attribute like `percentCompleteType` (default
-    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); only editable
-    // behind `VITE_COST_ACCRUAL`, but always seeded from the row so a stored value round-trips when hidden.
+    // `UNIFORM`, byte-identical to the pre-ADR-0044 phasing — it NEVER changes a CPM date); editable
+    // in the cost scope, and always seeded from the row so a stored value round-trips.
     accrualType: z.enum(ACCRUAL_TYPES),
     physicalPercentComplete: z
       .number({ message: 'Enter a percentage from 0 to 100.' })
@@ -301,8 +294,8 @@ export type ActivityFormValues = z.infer<typeof activityFormSchema>;
  * dates are raw `<input type="date">` values (`''` = unset). The M2 progress-ingestion
  * fields (ADR-0035) — an explicit `remaining` (blank derives it from
  * percent) plus `suspendDate` / `resumeDate` for a paused activity — are optional and
- * only editable behind the `VITE_PROGRESS_INGESTION` flag; the dialog seeds them from
- * the row either way so a stored value round-trips unchanged. Cross-field rules mirror
+ * editable in the progress panel; the dialog seeds them from
+ * the row so a stored value round-trips unchanged. Cross-field rules mirror
  * the API: you cannot finish before you start, finish without starting, or resume
  * before you suspend.
  */

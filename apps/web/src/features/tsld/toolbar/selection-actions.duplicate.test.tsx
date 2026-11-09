@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The canvas selection bar's **Duplicate** action
- * (`docs/specs/activity-copy-paste/` M1-T3), with `VITE_ACTIVITY_COPY_PASTE` forced on.
- * `selectionActionItems` is built at module-eval from the flags, so the hoisted env mock lands
- * before the import; vitest isolates the module registry per file.
+ * (`docs/specs/activity-copy-paste/` M1-T3).
  *
  * Two rules, and they are different in kind — the distinction `selection-actions.dissolve.test.tsx`
  * draws, applied to the mirror case:
@@ -20,14 +18,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * row menu are two surfaces for the same operation, and a planner who learns the order on one
  * should not have to relearn it on the other (the bar's own wording-convergence rule).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  ACTIVITY_COPY_PASTE_ENABLED: true,
-}));
-
-import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
-
-const { SelectionActionsBar } = await import('@/features/plan-actions/selection-actions');
+import {
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from '@/features/plan-actions/selection-actions';
 
 const spies = {
   onOpenLogic: vi.fn(),
@@ -94,7 +88,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('SelectionActionsBar — Duplicate (VITE_ACTIVITY_COPY_PASTE on)', () => {
+describe('SelectionActionsBar — Duplicate', () => {
   it('offers Duplicate on an ordinary selection and calls back', () => {
     render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(within(bar()).getByRole('button', { name: 'Duplicate' }));

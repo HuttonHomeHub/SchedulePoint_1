@@ -148,8 +148,8 @@ export function resolveTsldPalette(root: Element): TsldPalette {
   return {
     canvasGround: token('--canvas', '#fcfdff'),
     gridLine: token('--border', '#e0e0e0'),
-    // Time-axis gridline tiers (F5, `VITE_CANVAS_TIME_AXIS`) — `gridLine` above stays the
-    // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
+    // Time-axis gridline tiers — `gridLine` above is the single tone the export strokes its axis
+    // with; these three are the day/month/year tiers the painter draws (see `paint.ts`).
     gridLineDay: token('--canvas-grid-day', '#eceeef'),
     gridLineMonth: token('--canvas-grid-month', '#cfd2d5'),
     gridLineYear: token('--canvas-grid-year', '#b2b7bb'),
@@ -185,13 +185,13 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     selection: token('--ring', '#1266a9'),
     // A muted wash for non-working columns and the destructive hue for the today marker.
     nonWorking: token('--canvas-nonworking', '#f8fafc'),
-    // The non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than the wash
+    // The non-working hatch stripe — a step stronger than the wash
     // it draws over, so a weekend/holiday differs by KIND, not just a darker shade of grey.
     today: token('--destructive', '#9c0711'),
-    // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
+    // Today pill ink — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
     todayInk: token('--destructive-foreground', '#ffffff'),
-    // The data-date status line + pill (`VITE_CANVAS_DATA_DATE`) — the FOREGROUND/BACKGROUND pair,
+    // The data-date status line + pill — the FOREGROUND/BACKGROUND pair,
     // deliberately NOT `--color-info`: in all three themes info is a near neighbour of the
     // `--color-primary` bar fill, and a "distinct" line in the bar hue is not distinct (spec CQ-1,
     // measured). Foreground is the strongest neutral already in the palette and pairs 1:1 with
@@ -236,7 +236,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
 
 /**
  * A light-forced painter palette for the **export & print** deliverables (spec
- * `docs/specs/export-print/`, behind `VITE_EXPORT_PRINT`). Extends {@link TsldPalette} (so it drops
+ * `docs/specs/export-print/`). Extends {@link TsldPalette} (so it drops
  * straight into `paintScene`) with the three surface colours the off-screen export composites around
  * the diagram — the paper `ground`, the title `ink`, and the muted subtitle `mutedInk`.
  */
@@ -395,8 +395,7 @@ export function resolvePrintResourceStripPalette(root: Element): ResourceStripPa
 }
 
 /**
- * Resolve the Colour-by **lens** palette (spec `docs/specs/canvas-lenses/`, behind
- * `VITE_CANVAS_LENSES`) from the same semantic design tokens (ADR-0006), so the recoloured bars stay
+ * Resolve the Colour-by **lens** palette (spec `docs/specs/canvas-lenses/`) from the same semantic design tokens (ADR-0006), so the recoloured bars stay
  * theme-aware without hardcoding colour. `critical`/`nearCritical`/`bar` mirror {@link resolveTsldPalette}
  * (same tokens + fallbacks), so Colour-by's **Criticality** mode is byte-identical to today's fills; the
  * float bands run destructive → warning → info → success (less → more slack); WBS groups cycle the five

@@ -291,12 +291,7 @@ async function startServers() {
     // Seeding ~40 plans is thousands of writes from one client; this instance is the harness's own.
     RATE_LIMIT_LIMIT: '100000',
   });
-  start('web', 'pnpm', ['dev'], HERE, {
-    VITE_CANVAS_AUTHORING: 'true',
-    VITE_TSLD_EDITING: 'true',
-    VITE_PLAN_EDIT_LOCK: 'true',
-    VITE_SCHEDULE_INTERCHANGE: 'true',
-  });
+  start('web', 'pnpm', ['dev'], HERE, {});
   await Promise.all([waitFor(API_HEALTH, 'the API'), waitFor(WEB, 'the dev server')]);
 }
 

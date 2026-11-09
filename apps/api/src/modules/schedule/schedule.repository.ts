@@ -8,7 +8,6 @@ import {
   type DependencyType,
   type LagCalendarSource,
   type PercentCompleteType,
-  type PlacementSnapshotLevel,
   type ResourceCurveType,
 } from '@prisma/client';
 
@@ -185,8 +184,6 @@ export interface EarnedValueActivityRow {
   steps: { weight: Prisma.Decimal; percentComplete: number }[];
   budgetedExpense: bigint | null;
   actualExpense: bigint | null;
-  earlyStart: Date | null;
-  earlyFinish: Date | null;
   /** The span as drawn (ADR-0148): where the bar is placed. Equal to the early span on an unplaced plan. */
   visualEffectiveStart: Date | null;
   visualEffectiveFinish: Date | null;
@@ -233,12 +230,11 @@ export interface ResourceHistogramAssignmentRow {
 /** The active baseline's cost-snapshot row the EV read time-phases PV against (EV2b, ADR-0042). */
 export interface EarnedValueBaselineRow {
   sourceActivityId: string;
-  budgetedCost: bigint | null;
-  /** The frozen activity-level lump-sum expense; null on a pre-ADR-0071 snapshot. */
-  budgetedExpense: bigint | null;
-  baselineStart: Date | null;
-  baselineFinish: Date | null;
-  /** The frozen placed span (ADR-0025 Amendment 3); null on a `NONE`-level baseline. */
+  /** The frozen budget in minor units; `0` is a real "no budget" (the column is NOT NULL). */
+  budgetedCost: bigint;
+  /** The frozen activity-level lump-sum expense. */
+  budgetedExpense: bigint;
+  /** The frozen placed span (ADR-0025 Amendment 3); null on an activity nothing had calculated. */
   placedStart: Date | null;
   placedFinish: Date | null;
 }
@@ -256,14 +252,12 @@ export interface EarnedValueBaselineAssignmentRow {
 
 /**
  * A plan's ACTIVE cost baseline as the EV read consumes it. Returned whole — with its
- * `costSnapshotLevel` discriminator — rather than as two loose arrays, because **zero
- * `assignments` rows is ambiguous** (a pre-amendment capture, or a genuinely assignment-free plan) and
- * must therefore never be the signal. `null` from the loader is the unambiguous "no active baseline".
+ * `costSnapshotLevel` discriminator — rather than as two loose arrays, so a label added to that
+ * enum is a compile error in the one `switch` that reads it. `null` from the loader is the
+ * unambiguous "no active baseline".
  */
 export interface EarnedValueCostSnapshot {
   costSnapshotLevel: BaselineCostSnapshotLevel;
-  /** Whether capture froze the placed span; decides which span PV is phased on (ADR-0042 amendment). */
-  placementSnapshotLevel: PlacementSnapshotLevel;
   activities: EarnedValueBaselineRow[];
   assignments: EarnedValueBaselineAssignmentRow[];
 }
@@ -680,8 +674,6 @@ export class ScheduleRepository {
         },
         budgetedExpense: true,
         actualExpense: true,
-        earlyStart: true,
-        earlyFinish: true,
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         assignments: {
@@ -757,10 +749,8 @@ export class ScheduleRepository {
    * cost and join lag that make a lagged PV split exact (ADR-0071 M3 / CQ-1).
    *
    * Returns **`null`** when the plan has no active baseline (the module then falls back to the live
-   * budget and flags `costBaselineMissing`). That is deliberately not an empty array: **zero
-   * `assignments` rows is ambiguous** — a pre-amendment capture and a genuinely assignment-free plan
-   * look identical — so the level is read from the discriminator the capture wrote and never inferred
-   * from a row count. Org + plan scoped (anti-IDOR), soft-deletes excluded; the assignment read rides
+   * budget and flags `costBaselineMissing`). That is deliberately not an empty array, and the level
+   * is read from the discriminator the capture wrote, never inferred from a row count. Org + plan scoped (anti-IDOR), soft-deletes excluded; the assignment read rides
    * `uq_baseline_assignments_baseline_source_assignment`'s leftmost prefix.
    */
   async loadActiveBaselineCostSnapshot(
@@ -770,7 +760,7 @@ export class ScheduleRepository {
   ): Promise<EarnedValueCostSnapshot | null> {
     const active = await db.baseline.findFirst({
       where: { organizationId, planId, isActive: true, deletedAt: null },
-      select: { id: true, costSnapshotLevel: true, placementSnapshotLevel: true },
+      select: { id: true, costSnapshotLevel: true },
     });
     if (!active) return null;
     const [activities, assignments] = await Promise.all([
@@ -780,8 +770,6 @@ export class ScheduleRepository {
           sourceActivityId: true,
           budgetedCost: true,
           budgetedExpense: true,
-          baselineStart: true,
-          baselineFinish: true,
           placedStart: true,
           placedFinish: true,
         },
@@ -799,7 +787,6 @@ export class ScheduleRepository {
     ]);
     return {
       costSnapshotLevel: active.costSnapshotLevel,
-      placementSnapshotLevel: active.placementSnapshotLevel,
       activities,
       assignments,
     };
@@ -1083,7 +1070,7 @@ export class ScheduleRepository {
    * (ADR-0022). A raw UPDATE, not a Prisma `update` (which would touch `updated_at`/`version`).
    *
    * **`criticality` is REQUIRED, and the compiler is the enforcement.** The four mirrors and the
-   * cursor describe the same recalculation, and `ck_plans_schedule_criticality_requires_cursor` says
+   * cursor describe the same recalculation, and `ck_plans_schedule_criticality_matches_cursor` says
    * so in the database; a required parameter is what stops a future caller stamping the cursor alone
    * and leaving the mirror describing an older computation. It is the object spread into that
    * computation's `ComputeOptions`, never a re-read of the plan's settings columns — those are the
@@ -1091,9 +1078,9 @@ export class ScheduleRepository {
    * loaded before this transaction opens.
    *
    * **`schedule_instants_computed_at` is written in THIS statement, never a second one** (ADR-0212 D4;
-   * m2-schema-design.md B1): `now()` is one value per statement, so a current recalculation always
-   * leaves it EQUAL to `schedule_computed_at`, and an older image's stamp (which names its columns)
-   * moves the cursor alone — the inequality is what tells the derivation the instants are not current.
+   * m2-schema-design.md B1): `now()` is one value per statement, so a recalculation always leaves
+   * it EQUAL to `schedule_computed_at`, which `ck_plans_schedule_instants_match_cursor` holds in the
+   * database (tidy T5, ADR-0215); the derivation trusts a stored instant on that basis.
    *
    * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
    * not coerce text to an enum without one.

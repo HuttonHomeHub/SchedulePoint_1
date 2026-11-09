@@ -207,12 +207,11 @@ test('a planner compares the open plan against another plan in the same project'
   // back under a correlation key the painter cannot resolve.
   await expect(page.getByText(/1 changed link\b/i)).toBeVisible();
 
-  // ── 8 · The "not shown" sentence is the CROSS-PLAN one ─────────────────────────────────────
+  // ── 8 · The "not shown" sentence says the positions are not comparable ──────────────────────
   //
-  // The same-plan wording — "the old revision did not record where they were" — is FALSE here: the
-  // other plan did record it, and the position is not comparable because two independently
-  // imported plans derive their lane order separately. This is the milestone's likeliest defect
-  // precisely because the mechanism is correct and reusing it feels like reuse.
+  // "The old revision did not record where they were" would be FALSE here: the other plan did record
+  // it, and the position is not comparable because two independently imported plans derive their
+  // lane order separately.
   const summary = page.getByText(/Comparison overlay:/i);
   await expect(summary).not.toContainText('did not record where they were');
 

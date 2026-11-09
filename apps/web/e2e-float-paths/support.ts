@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Journey helpers for the flag-ON **Float paths** suite (`VITE_FLOAT_PATHS`, audit F4).
+ * Journey helpers for the **Float paths** suite (audit F4).
  *
  * The network is built through the **API** rather than the canvas: this suite is about reading an
  * analysis, and drawing thirteen activities and their logic by hand would add a dozen reasons to

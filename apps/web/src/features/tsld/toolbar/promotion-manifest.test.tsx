@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { MENUS, readDeck, type Reading } from './promotion-test-support';
 import { makeTsldToolbarContext } from './test-helpers';
@@ -18,26 +18,6 @@ import { selectionActionItems } from '@/features/plan-actions/selection-actions'
 // Every flag the entries and menus read, pinned ON: this suite is the manifest of the full build, and
 // a flag-off command is on neither the bar nor a menu (the entry's `isVisible`), which the flag-off
 // registry suites cover.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_AUTHORING_ENABLED: true,
-  CANVAS_LENSES_ENABLED: true,
-  CANVAS_LIVE_FEEDBACK_ENABLED: true,
-  CANVAS_NAV_ENABLED: true,
-  CANVAS_ACTIVITY_TYPES_ENABLED: true,
-  CANVAS_RESOURCE_VIEW_ENABLED: true,
-  CANVAS_MULTI_SELECT_ENABLED: true,
-  CANVAS_TIME_AXIS_ENABLED: true,
-  EXPORT_PRINT_ENABLED: true,
-  GUEST_SHARE_LINKS_ENABLED: true,
-  EARNED_VALUE_ENABLED: true,
-  RESOURCE_CURVES_ENABLED: true,
-  SCHEDULE_INTERCHANGE_ENABLED: true,
-  TOOLBAR_QUICK_WINS_ENABLED: true,
-  NOTES_ENABLED: true,
-  ENTRY_ROUTES_ENABLED: true,
-  GANTT_VIEW_ENABLED: true,
-}));
 
 /**
  * **SC-14 and SC-19: no tool is lost** (toolbar-redesign M5, spec §4.11 "Checks").

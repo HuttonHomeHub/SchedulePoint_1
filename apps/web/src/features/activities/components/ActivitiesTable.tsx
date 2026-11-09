@@ -30,17 +30,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
-import {
-  ACTIVITY_CALENDAR_ENABLED,
-  ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
-  ACTIVITY_COPY_PASTE_ENABLED,
-  ADVANCED_ACTIVITY_TYPES_ENABLED,
-  ADVANCED_CONSTRAINTS_ENABLED,
-  INTER_PROJECT_DATES_ENABLED,
-  NOTES_ENABLED,
-  RESOURCES_ENABLED,
-  WBS_IMPROVEMENTS_ENABLED,
-} from '@/config/env';
 import { NoteCountBadge } from '@/features/notes';
 import {
   MAKE_MILESTONE_LABEL,
@@ -61,9 +50,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
   formatDayVariance,
-  floatVarianceColumnNote,
   formatRemainingFloat,
-  isFloatNotComparable,
   type FinishVariance,
   type VarianceField,
 } from '@/lib/schedule-format';
@@ -420,14 +407,14 @@ export function ActivitiesTable({
   varianceByActivityId?: ReadonlyMap<string, BaselineVarianceRow>;
   /**
    * Per-activity note counts (ADR-0046), route-composed like `varianceByActivityId` from ONE batch
-   * query (never per-row). When present (the plan's counts loaded behind `VITE_NOTES`), a row with
+   * query (never per-row). When present (the plan's counts loaded), a row with
    * ≥1 note shows a small count badge beside its name. A shared `@repo/types` shape, so activities
    * stays dependency-free of the notes feature's data layer.
    */
   noteCountByActivityId?: ReadonlyMap<string, number>;
   /**
    * The org's calendars (ADR-0037), route-composed like `varianceByActivityId` — used to name an
-   * activity's own calendar in the "Calendar" column (shown only when `ACTIVITY_CALENDAR_ENABLED`)
+   * activity's own calendar in the "Calendar" column
    * and threaded into the edit dialog's picker. A shared `@repo/types` shape, so activities stays
    * dependency-free of the calendars feature.
    */
@@ -459,8 +446,7 @@ export function ActivitiesTable({
     () => new Map(calendars.map((c) => [c.id, c.name])),
     [calendars],
   );
-  // Parent WBS-summary lookup for the read-only WBS column (entry-route gap #7, only when
-  // `ADVANCED_ACTIVITY_TYPES_ENABLED`): resolve each activity's `parentId` to the summary's display
+  // Parent WBS-summary lookup for the read-only WBS column (entry-route gap #7): resolve each activity's `parentId` to the summary's display
   // string (its code, else its name) from the already-loaded activities — no extra fetch, mirroring the
   // Calendar column's name resolution.
   const wbsParentLabelById = useMemo(() => {
@@ -475,16 +461,6 @@ export function ActivitiesTable({
   }, [activities.data]);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
-  // How many "Total float variance" cells read "—" for want of float minutes (ADR-0214), counted
-  // from the rows the table already holds. The visible line it drives counts them and each such
-  // cell says so in text a screen reader reads, so the dash is explained rather than left to read
-  // as "no change".
-  const floatNotComparableCount = useMemo(() => {
-    if (!varianceByActivityId) return 0;
-    let count = 0;
-    for (const row of varianceByActivityId.values()) if (isFloatNotComparable(row)) count += 1;
-    return count;
-  }, [varianceByActivityId]);
   const [resourcesId, setResourcesId] = useState<string | null>(null);
   // The row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
   // (ADR-0060 §7) — they carried three separate ids and three separate dialogs until the tabbed
@@ -519,11 +495,11 @@ export function ActivitiesTable({
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
   /**
-   * Whether **Resources** belongs to the host (the convergence epic) rather than to this table's
-   * own dialog. Narrowed as a const so the row action can call `onOpenResources` without a second
-   * existence check that TypeScript could not connect to this one.
+   * Whether **Resources** belongs to the host (the editor's Resources tab) rather than to this
+   * table's own dialog. Narrowed as a const so the row action can call `onOpenResources` without a
+   * second existence check that TypeScript could not connect to this one.
    */
-  const hostOwnsResources = ACTIVITY_EDITOR_CONVERGENCE_ENABLED && onOpenResources !== undefined;
+  const hostOwnsResources = onOpenResources !== undefined;
 
   /*
    * ---- Bulk assign (M4b) ------------------------------------------------------------------
@@ -546,14 +522,10 @@ export function ActivitiesTable({
       ? null
       : swimlanes.assignment;
   const selectableIds = useMemo(
-    () =>
-      WBS_IMPROVEMENTS_ENABLED || swimlaneAssignment !== null || codeBulk !== undefined
-        ? new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id))
-        : new Set<string>(),
-    [loadedActivities, swimlaneAssignment, codeBulk],
+    () => new Set(loadedActivities.filter((a) => a.type !== 'WBS_SUMMARY').map((a) => a.id)),
+    [loadedActivities],
   );
-  const wbsBulkAssignActive =
-    WBS_IMPROVEMENTS_ENABLED && loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
+  const wbsBulkAssignActive = loadedActivities.some((a) => a.type === 'WBS_SUMMARY');
   // The selection column serves both bars: it appears when either has somewhere to file things.
   const bulkAssignActive =
     wbsBulkAssignActive || swimlaneAssignment !== null || codeBulk !== undefined;
@@ -633,23 +605,21 @@ export function ActivitiesTable({
       // Members — only on a summary, because it is the only row that can hold anything. Any member
       // may look (the panel shades its controls with a reason rather than hiding them), so this is
       // not gated on `canEditSchedule`: seeing what is in a grouping is a read.
-      if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+      if (activity.type === 'WBS_SUMMARY') {
         actions.push({
           key: 'members',
           label: 'Members',
           onSelect: () => openFor(activity, 'members'),
         });
       }
-      // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
-      // writes inside are gated on `canEditSchedule`).
-      if (RESOURCES_ENABLED) {
-        actions.push({
-          key: 'resources',
-          label: 'Resources',
-          onSelect: () =>
-            hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
-        });
-      }
+      // Any member may open the assignments editor (reads are member-level; writes inside are gated
+      // on `canEditSchedule`).
+      actions.push({
+        key: 'resources',
+        label: 'Resources',
+        onSelect: () =>
+          hostOwnsResources ? onOpenResources(activity) : setResourcesId(activity.id),
+      });
       {
         // **Shaded, not hidden** (ADR-0082, `docs/TECH_DEBT.md` #111). These used to be pushed only
         // `if (canEditSchedule)`, so a Planner who lost the pen mid-session saw Duplicate shaded on
@@ -697,7 +667,7 @@ export function ActivitiesTable({
         // duplicating one leaf of a band would produce an empty grouping, and copying the band with
         // its subtree is M2. The check is `type`, the same fact `dissolve` gates on, so the action
         // cannot reach a state the product would render as breakage.
-        if (ACTIVITY_COPY_PASTE_ENABLED && onDuplicate && activity.type !== 'WBS_SUMMARY') {
+        if (onDuplicate && activity.type !== 'WBS_SUMMARY') {
           actions.push({
             key: 'duplicate',
             label: 'Duplicate',
@@ -726,7 +696,7 @@ export function ActivitiesTable({
         // Dissolve sits immediately BEFORE Delete, and only on a summary. Adjacency is the point:
         // the two are neighbours in intent ("get rid of this grouping") and opposites in effect, so
         // the non-destructive one has to be visible at the moment the destructive one is chosen.
-        if (WBS_IMPROVEMENTS_ENABLED && activity.type === 'WBS_SUMMARY') {
+        if (activity.type === 'WBS_SUMMARY') {
           actions.push({
             key: 'dissolve',
             label: 'Dissolve',
@@ -816,24 +786,24 @@ export function ActivitiesTable({
           // pill beside the name — always visible (the Constraint column hides below `lg`), so a
           // produced-and-flagged violation can't slip off narrow screens. Text carries the meaning
           // (never colour alone, WCAG 1.4.1); an sr-only clause spells out the cause for non-hover
-          // users, matching the summary strip's wording. Only shown when the M4 surface is on.
-          const violated = ADVANCED_CONSTRAINTS_ENABLED && activity.constraintViolated;
+          // users, matching the summary strip's wording.
+          const violated = activity.constraintViolated;
           // An imported external bound drove this activity's schedule (engine-owned, ADR-0043 M1):
           // the per-activity companion to the summary strip's "Externally driven" count, so a planner
           // can see WHICH activities an external commitment gated. Informational (soft bound), so a
           // neutral pill, not the critical Conflict tone. Text + sr-only clause carry the meaning
-          // (never colour alone, WCAG 1.4.1). Only shown when the inter-project surface is on.
-          const externalDriven = INTER_PROJECT_DATES_ENABLED && activity.externalDriven;
+          // (never colour alone, WCAG 1.4.1).
+          const externalDriven = activity.externalDriven;
           // A resource-dependent activity with no driving assignment (engine-owned, ADR-0035 §23):
           // the engine produces-and-flags rather than refusing, scheduling it on the ordinary calendar
           // and setting this. Until now the flag was computed, persisted and rendered NOWHERE, so the
           // failure was silent — the activity simply scheduled on the wrong working time and looked
           // fine. Critical tone because it means the dates on screen are not the ones the planner
-          // asked for. Gated on the same flag as the type that produces it.
-          const driverMissing = ADVANCED_ACTIVITY_TYPES_ENABLED && activity.resourceDriverMissing;
+          // asked for.
+          const driverMissing = activity.resourceDriverMissing;
           // Per-activity note count (ADR-0046), route-composed like variance — a small badge only when
-          // the map is supplied (behind `VITE_NOTES`) and the row has ≥1 note (the badge hides at zero).
-          const noteCount = NOTES_ENABLED ? (noteCountByActivityId?.get(activity.id) ?? 0) : 0;
+          // the map is supplied and the row has ≥1 note (the badge hides at zero).
+          const noteCount = noteCountByActivityId?.get(activity.id) ?? 0;
           return (
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-medium">{activity.name}</span>
@@ -932,31 +902,27 @@ export function ActivitiesTable({
           );
         },
       },
-      // An activity's own working-time calendar (ADR-0037), only when the picker feature is on. An em
+      // An activity's own working-time calendar (ADR-0037), An em
       // dash means "inherits the plan's calendar" — so a row that HAS a calendar must never fall back
       // to one: while the library is still loading it reads "Loading…", and if that fetch fails/omits
       // it "Unnamed" (with the id as a title), keeping the assigned case visibly distinct from a
       // genuine inherit. Conditional spread (not a post-hoc splice) so its position can't silently
       // drift. Hidden below `lg` like the other definition detail columns.
-      ...(ACTIVITY_CALENDAR_ENABLED
-        ? [
-            {
-              header: 'Calendar',
-              headClassName: 'hidden lg:table-cell',
-              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
-              cell: (activity: ActivitySummary) => {
-                if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
-                const name = calendarNameById.get(activity.calendarId);
-                if (name) return <span className="text-muted-foreground">{name}</span>;
-                return (
-                  <span className="text-muted-foreground italic" title={activity.calendarId}>
-                    {calendarsLoading ? 'Loading…' : 'Unnamed'}
-                  </span>
-                );
-              },
-            } satisfies Column<ActivitySummary>,
-          ]
-        : []),
+      {
+        header: 'Calendar',
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+        cell: (activity: ActivitySummary) => {
+          if (!activity.calendarId) return <span className="text-muted-foreground">—</span>;
+          const name = calendarNameById.get(activity.calendarId);
+          if (name) return <span className="text-muted-foreground">{name}</span>;
+          return (
+            <span className="text-muted-foreground italic" title={activity.calendarId}>
+              {calendarsLoading ? 'Loading…' : 'Unnamed'}
+            </span>
+          );
+        },
+      } satisfies Column<ActivitySummary>,
       // The activity's swimlane (swimlanes M4-T1), only when the host says the plan has some to show.
       // Display only: assigning is the bulk bar's job, as the other definition columns are the editor's.
       // Under the WBS source it says so rather than naming a swimlane the table does not derive — the
@@ -983,30 +949,25 @@ export function ActivitiesTable({
             } satisfies Column<ActivitySummary>,
           ]
         : []),
-      // The activity's parent WBS summary (ADR-0038), read-only, only when the WBS surface is on
-      // (`ADVANCED_ACTIVITY_TYPES_ENABLED`). An em dash means "no parent" (a top-level activity). The
+      // The activity's parent WBS summary (ADR-0038), read-only. An em dash means "no parent" (a top-level activity). The
       // parent's code (else its name) is resolved from the loaded activities by `parentId` — no extra
       // fetch, mirroring the Calendar column. Conditional spread (not a splice) so its position is stable;
       // hidden below `lg` like the other definition-detail columns.
-      ...(ADVANCED_ACTIVITY_TYPES_ENABLED
-        ? [
-            {
-              header: 'WBS',
-              headClassName: 'hidden lg:table-cell',
-              cellClassName: 'hidden whitespace-nowrap lg:table-cell',
-              cell: (activity: ActivitySummary) => {
-                const parentLabel = wbsParentLabelById.get(activity.id);
-                return parentLabel ? (
-                  <span className="text-muted-foreground" title={parentLabel}>
-                    {parentLabel}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                );
-              },
-            } satisfies Column<ActivitySummary>,
-          ]
-        : []),
+      {
+        header: 'WBS',
+        headClassName: 'hidden lg:table-cell',
+        cellClassName: 'hidden whitespace-nowrap lg:table-cell',
+        cell: (activity: ActivitySummary) => {
+          const parentLabel = wbsParentLabelById.get(activity.id);
+          return parentLabel ? (
+            <span className="text-muted-foreground" title={parentLabel}>
+              {parentLabel}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          );
+        },
+      } satisfies Column<ActivitySummary>,
       // Code columns (P6 activity codes, M3-T2): one per shown type, after the WBS column, read-only here
       // (the table's Set <type> and the editor are the writes). Hidden below `lg` like the other
       // definition-detail columns. A column still loading reads "Loading…" in the Calendar column's
@@ -1064,42 +1025,15 @@ export function ActivitiesTable({
         hideBelow?: 'lg',
       ): Column<ActivitySummary> => {
         const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
-        const floatNote =
-          field === 'float' ? floatVarianceColumnNote(floatNotComparableCount) : null;
         return {
           header,
           headClassName: show,
           cellClassName: `whitespace-nowrap tabular-nums${show}`,
-          // The visible description sits IN the header, not in a tooltip: a tooltip is invisible to
-          // a touch user and to anyone not hovering. `headerCell` replaces the text, so it renders
-          // the title itself.
-          ...(floatNote === null
-            ? {}
-            : {
-                headerCell: () => (
-                  <>
-                    {header}
-                    {/* Visual only: the header's accessible name stays "Total float variance", and
-                        each dash carries its own reason, so a screen reader meets the cause where
-                        the value is and not as a suffix on a column name. */}
-                    <span aria-hidden="true" className="text-muted-foreground block text-xs">
-                      {floatNote}
-                    </span>
-                  </>
-                ),
-              }),
           cell: (activity) => {
             const row = varianceByActivityId.get(activity.id);
             if (!row) return <span className="text-muted-foreground">—</span>;
             const variance = formatDayVariance(row, field);
-            return (
-              <span className={VARIANCE_TONE_CLASS[variance.tone]}>
-                {variance.text}
-                {field === 'float' && isFloatNotComparable(row) ? (
-                  <span className="sr-only"> could not be compared</span>
-                ) : null}
-              </span>
-            );
+            return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
           },
         };
       };
@@ -1113,39 +1047,35 @@ export function ActivitiesTable({
         varianceColumn('Total float variance', 'float', 'lg'),
       );
     }
-    if (canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED) {
-      cols.push({
-        header: 'Actions',
-        srHeader: true,
-        headClassName: 'pr-0',
-        cellClassName: 'pr-0 text-right whitespace-nowrap',
-        cell: (activity) => {
-          const actions = actionsFor(activity);
-          // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
-          // the second clause a Viewer would open a menu of nothing but refusals — and it is what
-          // keeps the all-disabled focus trap out of reach rather than merely fixed.
-          // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
-          // this component** — established by trying to test it rather than by assuming either way, after
-          // the consolidation pass blocked on it being untested. The column above renders only when
-          // `canEditSchedule || canReportProgress || onOpenLogic || RESOURCES_ENABLED`, and each of those
-          // four contributes an action that is never shaded (Logic, Resources and Report progress are
-          // reads or non-pen-gated; `canEditSchedule` and `editorGating.general.writable` are the same
-          // predicate — `penManaged ? canWrite && holdsPen : canWrite` — so they cannot disagree).
-          //
-          // A unit test can only reach it by turning all four off, at which point the column is absent and
-          // the test passes for the wrong reason. The first version of that test did exactly that and still
-          // passed with this clause deleted. Kept as a guard against a future action set where it IS
-          // reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
-          // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
-          if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
-            return null;
-          }
-          return (
-            <RowActionsButton store={store} activity={activity} menuTriggerRef={menuTriggerRef} />
-          );
-        },
-      });
-    }
+    cols.push({
+      header: 'Actions',
+      srHeader: true,
+      headClassName: 'pr-0',
+      cellClassName: 'pr-0 text-right whitespace-nowrap',
+      cell: (activity) => {
+        const actions = actionsFor(activity);
+        // No actions at all, or **every** action shaded: render no trigger (ADR-0082 §3). Without
+        // the second clause a Viewer would open a menu of nothing but refusals — and it is what
+        // keeps the all-disabled focus trap out of reach rather than merely fixed.
+        // ADR-0082 §3's "every item shaded ⇒ no trigger" clause. **Defensive, and today unreachable from
+        // this component** — established by trying to test it rather than by assuming either way, after
+        // the consolidation pass blocked on it being untested. The Resources action is never shaded
+        // (a read, so member-level), and the others contribute one that is not either (Logic and
+        // Report progress are reads or non-pen-gated; `canEditSchedule` and
+        // `editorGating.general.writable` are the same predicate — `canWrite && holdsPen` — so they
+        // cannot disagree).
+        //
+        // A unit test has nothing to switch off to reach it, so it is not tested directly. Kept as a
+        // guard against a future action set where it IS reachable; the behaviour it protects (a menu with no enabled item) is proven where it can be —
+        // `menu.test.tsx`, "focuses its first item on open even when every item is disabled".
+        if (actions.length === 0 || actions.every((a) => a.disabledReason !== undefined)) {
+          return null;
+        }
+        return (
+          <RowActionsButton store={store} activity={activity} menuTriggerRef={menuTriggerRef} />
+        );
+      },
+    });
     return cols;
   }, [
     bulkAssignActive,
@@ -1160,10 +1090,6 @@ export function ActivitiesTable({
     codeColumns,
     noteCountByActivityId,
     varianceByActivityId,
-    floatNotComparableCount,
-    canEditSchedule,
-    canReportProgress,
-    onOpenLogic,
     actionsFor,
   ]);
 
@@ -1334,7 +1260,7 @@ export function ActivitiesTable({
         windowed
       />
 
-      {RESOURCES_ENABLED && !hostOwnsResources ? (
+      {!hostOwnsResources ? (
         <ActivityResourcesDialog
           orgSlug={orgSlug}
           planId={planId}

@@ -103,7 +103,6 @@ import {
 import { LoadingShape, Skeleton } from '@/components/ui/page';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
-import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
 import { joinConflictReasons, matchingConflictFlags } from '@/features/tsld/render/conflicts';
@@ -257,8 +256,7 @@ export interface GanttPanelProps {
    * `host-parity.structural.test.ts` is what stops one host supplying it and the other not — which
    * is how the Gantt came to read `earlyStart` unconditionally in the first place.
    *
-   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days, which is the
-   * same path as `VITE_SUB_DAY_DURATIONS` off (ADR-0070).
+   * Absent, or returning undefined, ⇒ the read-out degrades to whole working days (ADR-0070).
    */
   hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
   /**
@@ -677,7 +675,7 @@ function GanttPanelBody({
     // invent a hierarchy it does not have.
     () =>
       buildRows(activities, sort, collapsed, {
-        unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
+        unassignedBucket: true,
         // The bucket's span follows the drawn dates. `buildRows` had accepted this option since the
         // WBS band shipped and this caller never passed it, so the one row summarising the plan's
         // unfiled work was framed on the early dates in a VISUAL plan while its members' bars sat

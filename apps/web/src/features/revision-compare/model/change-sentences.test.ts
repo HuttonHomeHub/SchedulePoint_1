@@ -35,24 +35,17 @@ describe('the change list’s sentences', () => {
     // The load-bearing assertion of this whole file. An empty list and an un-looked-at list read
     // identically unless the product distinguishes them, and the reassuring reading is the false
     // one.
-    for (const reason of ['NOT_SNAPSHOTTED', 'SIDE_NOT_SCHEDULED'] as const) {
+    for (const reason of ['SIDE_NOT_SCHEDULED'] as const) {
       const sentence = notAssessableSentence(reason, 'RELOGICKED');
       expect(sentence.toLowerCase()).not.toContain('no changes');
       expect(sentence.toLowerCase()).toContain('cannot be compared');
     }
   });
 
-  it('states the snapshot case as permanent for these revisions, not as a wait', () => {
-    // No backfill is possible, ever. Copy that implies "check back later" would be a promise the
-    // data model cannot keep.
-    const sentence = notAssessableSentence('NOT_SNAPSHOTTED', 'RELOGICKED');
-    expect(sentence).toContain('these two never will');
-  });
-
   it('withholds a count entirely for an unassessed class', () => {
     const notAssessed: RevisionClassAssessment = {
       changeClass: 'RELOGICKED',
-      notAssessableReason: 'NOT_SNAPSHOTTED',
+      notAssessableReason: 'SIDE_NOT_SCHEDULED',
       rows: [],
       total: 0,
     };
@@ -75,7 +68,7 @@ describe('the change list’s sentences', () => {
     // visible copy spends its words preventing.
     const spoken = changesAnnouncement([
       assessed(2),
-      { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+      { changeClass: 'RELOGICKED', notAssessableReason: 'SIDE_NOT_SCHEDULED', rows: [], total: 0 },
     ]);
     expect(spoken).toContain('2 changes');
     expect(spoken).toContain('1 category could not be compared');
@@ -100,7 +93,7 @@ describe('the change list’s sentences', () => {
     // were actually broken: the sentence must not embed a heading verbatim, and it must read as a
     // clause rather than as a label.
     for (const c of [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES]) {
-      const sentence = notAssessableSentence('NOT_SNAPSHOTTED', c);
+      const sentence = notAssessableSentence('SIDE_NOT_SCHEDULED', c);
       expect(sentence).toContain('cannot be compared');
       // The defect was the HEADING used verbatim as the subject — "so moved in the breakdown
       // cannot be compared". Asserted as that exact shape rather than as "the sentence does not
@@ -108,7 +101,7 @@ describe('the change list’s sentences', () => {
       // "which activities were added" for containing "added" — a legitimate phrase, not the bug.
       expect(sentence).not.toContain(`so ${classTitle(c).toLowerCase()} cannot`);
     }
-    expect(notAssessableSentence('NOT_SNAPSHOTTED', 'REPARENTED')).toContain(
+    expect(notAssessableSentence('SIDE_NOT_SCHEDULED', 'REPARENTED')).toContain(
       'how activities were re-parented cannot be compared',
     );
   });

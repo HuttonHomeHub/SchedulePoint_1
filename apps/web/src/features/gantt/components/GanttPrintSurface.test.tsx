@@ -233,22 +233,6 @@ describe('GanttPrintSurface', () => {
       'Baseline (placed dates)',
     );
 
-    const network = render(
-      <GanttPrintSurface
-        columns={VISIBLE_COLUMNS}
-        dependencies={[]}
-        codeColumns={[]}
-        title="N"
-        subtitle="—"
-        activities={[anActivity({ id: 'a1' })]}
-        varianceByActivityId={new Map([['a1', varianceRow()]])}
-        varianceBasis="NETWORK"
-      />,
-    );
-    expect(network.container.querySelector('.gantt-print-legend')?.textContent).toContain(
-      'Baseline (earliest dates)',
-    );
-
     // No variance printed → nothing to name, whatever `varianceBasis` says.
     const noVariance = render(
       <GanttPrintSurface

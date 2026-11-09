@@ -33,7 +33,6 @@ function row(overrides: Partial<ActivitySummary> = {}): ActivitySummary {
 }
 
 const PLANNER_WITH_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -41,7 +40,6 @@ const PLANNER_WITH_PEN = deriveActivityEditorGating({
 });
 
 const PLANNER_NO_PEN = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,
@@ -49,7 +47,6 @@ const PLANNER_NO_PEN = deriveActivityEditorGating({
 });
 
 const NO_COST = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,
@@ -265,7 +262,6 @@ describe('ActivityEditorDialog — tab markers', () => {
  */
 describe('ActivityEditorDialog — Progress tab', () => {
   const CONTRIBUTOR_NO_PEN = deriveActivityEditorGating({
-    penManaged: true,
     holdsPen: false,
     canWrite: false,
     canProgress: true,

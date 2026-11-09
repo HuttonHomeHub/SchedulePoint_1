@@ -20,8 +20,7 @@ import {
  *
  * Writers (`canEdit`) edit them; everyone else sees them read-only. Each change persists immediately (a
  * targeted PATCH of just that field + `version`, via the shared {@link PlanScheduleOptionSelect}); it
- * changes no dates itself — a later **Recalculate** applies the levelling. Flagged behind
- * `VITE_RESOURCE_LEVELLING` (the API/engine behind it is already live; only the controls are gated).
+ * changes no dates itself — a later **Recalculate** applies the levelling.
  *
  * The within-float control appears only while levelling is on because it has no effect otherwise
  * (ADR-0041 §4) — surfacing an inert control would misrepresent what it does.

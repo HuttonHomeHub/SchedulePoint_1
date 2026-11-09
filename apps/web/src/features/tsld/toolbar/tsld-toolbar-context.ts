@@ -54,19 +54,18 @@ export interface TsldToolbarContext {
    * available to every role including read-only viewers because navigating never mutates the plan. */
   goToDate: (iso: string) => void;
   /** Today as a local calendar day (`YYYY-MM-DD`) — the target of the **Recenter on today** command
-   * (`VITE_TOOLBAR_QUICK_WINS`), which reuses {@link goToDate}. View-only; offered to every role. */
+   * which reuses {@link goToDate}. View-only; offered to every role. */
   todayIso: string;
 
   // --- Lens / display (group 2) -------------------------------------------------------------
   viewToggles: TsldViewToggles;
   toggleView: (key: keyof TsldViewToggles) => void;
   /** Which projection the workspace is showing — `'tsld'` or `'gantt'` (ADR-0059). Drives the
-   * view-mode segment's pressed state. Always `'tsld'` when `VITE_GANTT_VIEW` is off, because the
-   * hook that supplies it is hard-wired to the diagram in that build. */
+   * view-mode segment's pressed state. */
   planView: PlanViewMode;
   /** Switch the workspace's projection. View-only and offered to **every** role — reading the
    * schedule as bars is not an edit, so unlike the scheduling-mode selector this is never shaded
-   * for a viewer. Registered but not surfaced when `VITE_GANTT_VIEW` is off. */
+   * for a viewer. */
   setPlanView: (view: PlanViewMode) => void;
   /**
    * The Gantt grid's hidden columns and how to change them (ADR-0095 M5-T1).
@@ -156,11 +155,10 @@ export interface TsldToolbarContext {
   /** Pick the dependency kind the Link tool creates. */
   setLinkType: (type: DependencyType) => void;
   /** True when the current edit mode is the two-click **Level of Effort (hammock)** endpoint-pick tool
-   * (Stage D, `VITE_CANVAS_ACTIVITY_TYPES`) — drives the Add-menu item's checked state. Mutually
+   * (Stage D) — drives the Add-menu item's checked state. Mutually
    * exclusive with add/link (a single {@link import('../interaction/gesture-machine').EditMode}). */
   isLoeSpanning: boolean;
-  /** Arm / disarm the LOE endpoint-pick tool (pen-gated). Only reachable when
-   * `VITE_CANVAS_ACTIVITY_TYPES` is on (the Add-menu item is flag-gated); a toggle like the Add/Link
+  /** Arm / disarm the LOE endpoint-pick tool (pen-gated). A toggle like the Add/Link
    * tools, and leaving it (Escape / re-select) returns to Select. */
   toggleLoeSpanMode: () => void;
   /** Whether the LOE tool has already picked its **start driver** (Stage D) — drives the Add trigger's
@@ -229,11 +227,10 @@ export interface TsldToolbarContext {
   recalculate: () => void;
   openBaselines: () => void;
   openCalendar: () => void;
-  /** Open the Earned-Value analysis dialog (EV4b, ADR-0042). Wired to the shared plan-chrome dialogs;
-   * the toolbar item that calls it is gated behind `VITE_EARNED_VALUE`. */
+  /** Open the Earned-Value analysis dialog (EV4b, ADR-0042). Wired to the shared plan-chrome dialogs; */
   openEarnedValue: () => void;
   /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
-   * plan-chrome dialogs; the toolbar item that calls it is gated behind `VITE_RESOURCE_CURVES`. */
+   * plan-chrome dialogs. */
   openResourceHistogram: () => void;
   /** Toggle the docked Health check panel (health M2) — the DCMA 14-point report beside the plan.
    * Named for what it does: a second select while the panel is open CLOSES it (the menu item is a
@@ -260,12 +257,11 @@ export interface TsldToolbarContext {
    */
   promotion: PromotionState;
   /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
-   * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
-   * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on
-   * every build; nothing reads it while the flag is off (the `share` id resolves to its placeholder). */
+   * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item. NOT pen-gated — sharing grants read
+   * access, it doesn't edit the plan. */
   canShare: boolean;
   /** Open the External-Guest **Share links** dialog (ADR-0051 F-M4). Wired to the shared plan-chrome
-   * dialogs; the toolbar item that calls it is gated behind `VITE_GUEST_SHARE_LINKS` + {@link canShare}. */
+   * dialogs; the toolbar item that calls it is gated on {@link canShare}. */
   openShare: () => void;
   /** Edit the plan's metadata (writer only); absent for non-writers. Surfaced by the Summary popover's
    * Edit-plan shortcut and the header edit-pencil — the standalone toolbar buttons were removed
@@ -274,7 +270,7 @@ export interface TsldToolbarContext {
 
   // --- Help (group 7) -----------------------------------------------------------------------
   openShortcuts: () => void;
-  // --- Resource-view lens (VITE_CANVAS_RESOURCE_VIEW, group 2 · Row 1 · Look — ADR-0049) ----------
+  // --- Resource-view lens (group 2 · Row 1 · Look — ADR-0049) ----------
   /** Whether the canvas-axis-aligned resource strip is revealed (drives the `resource-view` item's
    * pressed state). Populated on every build; nothing reads it while the flag is off (the id resolves to
    * its `placeholderItem()` stub), so it is inert by default. */
@@ -331,10 +327,9 @@ export interface TsldToolbarContext {
   /** True once the plan has activities to plot — the view/summary/legend controls appear then. */
   hasDiagram: boolean;
 
-  // --- Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) ------------------------------------------
+  // --- Toolbar quick-wins ---------------------------------------------------------------------
   // These wire four previously-"Coming soon" placeholders to shipped features (spec
-  // `docs/specs/toolbar-quick-wins/`). Populated on every build; nothing reads them while the flag is
-  // off (the four ids then resolve to their `placeholderItem()` stubs), so they are inert by default.
+  // `docs/specs/toolbar-quick-wins/`).
   /** The canvas selection lifted to the main toolbar (F0), or null when nothing is selected. Drives
    * the selection-aware items' enabled state. */
   selectedActivityId: string | null;
@@ -367,7 +362,7 @@ export interface TsldToolbarContext {
    * disagree about the same lock, each looking correct alone.
    *
    * Optional because the Gantt's selection context and every existing test build a toolbar context
-   * without one; the pen item's `isVisible` reads `penManaged`, so absent ⇒ no pen item.
+   * without one; the pen item's `isVisible` reads its presence, so absent ⇒ no pen item.
    */
   penLock?: PenLockView;
   /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`
@@ -376,7 +371,7 @@ export interface TsldToolbarContext {
    * and read by the workspace to build the selection bar's shared `clearVisualPlacementGate` input. */
   lateOverlayActive: boolean;
 
-  // --- Insight lenses (VITE_CANVAS_LENSES, group 2/3 · Row 1 · Look) -------------------------
+  // --- Insight lenses (group 2/3 · Row 1 · Look) -------------------------
   // Client view state over already-shipped reads (spec `docs/specs/canvas-lenses/`): the filter/search
   // dimming, the Colour-by picker, and the Baseline overlay. Populated on every build from
   // `canvasUi.lensState` + the variance query; nothing reads them while the flag is off (the ids then
@@ -459,7 +454,7 @@ export interface TsldToolbarContext {
   swimlanesLanesFailed?: boolean;
   swimlanesOverLimit?: { typeName: string; count: number };
 
-  // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
+  // --- Canvas navigation & authoring aids (spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and
   // Next conflict (cycle flagged activities). Populated on every build from `canvasUi.navState` + the
   // activities; nothing reads them while the flag is off (the ids then resolve to their
@@ -490,7 +485,7 @@ export interface TsldToolbarContext {
    * <name> — <reasons>". A no-op when there are no conflicts. View-only (every role). */
   goToNextConflict: () => void;
 
-  // --- Search that navigates (VITE_CANVAS_SEARCH_NAV, `docs/specs/canvas-search-navigation/`) ----
+  // --- Search that navigates (`docs/specs/canvas-search-navigation/`) ----
   /**
    * The find read-out: how many activities the live search matches, and which one the planner is
    * standing on (1-based; `null` before the first Enter). `null` for the whole object when the
@@ -532,10 +527,9 @@ export interface TsldToolbarContext {
    */
   zoomToSelection: () => void;
 
-  // --- Export & print (VITE_EXPORT_PRINT, spec `docs/specs/export-print/`) -------------------
+  // --- Export & print (spec `docs/specs/export-print/`) ---------------------------------------
   // Client-side deliverables over already-shipped data + the shipped canvas renderer — no API/schema/
-  // engine change. Populated on every build but derived cheaply when the flag is off (nothing reads
-  // them then: the `export`/`print` ids resolve to their `placeholderItem()` stubs), so they are inert.
+  // engine change.
   /** Serialise the activity table to an Excel-safe, injection-safe CSV and download it (scope `'all'`
    * = every activity; `'matching'` = the lens-narrowed subset, CQ-3), announcing the download (M1). */
   exportScheduleCsv: (scope: ExportScope) => void;
@@ -555,27 +549,26 @@ export interface TsldToolbarContext {
   /** Print the whole diagram via the browser print dialog (M4, CQ-4 — the image path): reuse the M2
    * off-screen PNG, mount it into the print-only `PrintSurface` (a print stylesheet hides the app-shell),
    * `window.print()`, then tear the surface down on `afterprint`/timeout. Off-screen paint only — the
-   * live canvas is never touched. A no-op when the flag is off. */
+   * live canvas is never touched. */
   printDiagram: () => void;
   /** True when a Stage-A filter or Stage-B isolate lens is currently narrowing the set — gates the
    * conditional **Matching activities only (N)** CSV item (CQ-3). False (item hidden) with no lens
-   * active or when `VITE_EXPORT_PRINT` is off. */
+   * active. */
   filterActive: boolean;
   /** How many activities match the active lens — the **N** in "Matching activities only (N)". */
   matchingCount: number;
   /** A user-safe VISIBLE error from a failed export/print (a PDF-library load failure, a `toBlob`
    * failure, …), or `null` when there is none. The `announce()` live-region message is sr-only, so this
    * is the sighted-user surface — the workspace renders it as a dismissable `role="alert"` banner beside
-   * the toolbar (UX review B2). Always `null` when `VITE_EXPORT_PRINT` is off. */
+   * the toolbar (UX review B2). */
   exportError: string | null;
   /** Dismiss the {@link exportError} banner (clears it back to `null`). */
   dismissExportError: () => void;
 
-  // --- Schedule interchange export (VITE_SCHEDULE_INTERCHANGE + interchange:export, ADR-0050 M4d) ----
+  // --- Schedule interchange export (interchange:export, ADR-0050 M4d) ----
   /** Whether the current member holds `interchange:export` (every member does — Viewer upward). Gates
-   * the Export menu's "Interchange" group ALONGSIDE the `VITE_SCHEDULE_INTERCHANGE` flag: both must be
-   * true for the P6/MS Project items to render. False (group hidden) when the flag is off — the
-   * `exportInterchange` command is then never called. */
+   * the Export menu's "Interchange" group; the P6/MS Project items render only when it is true.
+   * False (group hidden) ⇒ the `exportInterchange` command is never called. */
   canInterchangeExport: boolean;
   /** Download the plan serialised to a foreign schedule file (P6 `xer` / MS Project `mspdi`), reading the
    * fidelity report off the `X-Interchange-Report` header and surfacing it unobtrusively (a polite

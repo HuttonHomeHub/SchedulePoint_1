@@ -1,18 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-// ADR-0052 M4/M5: with direct manipulation on, the legend gains the visual-refresh shape
-// vocabulary — the LOE bracketed span, the WBS-summary bracket/tab glyph, the in-bar progress
-// band, and the dashed lag (waiting-time) run. The flag-off legend (no new rows — the parity
-// gate) is covered by the default TsldLegendPanel suite.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  CANVAS_DIRECT_MANIPULATION_ENABLED: true,
-}));
+// ADR-0052 M4/M5: the legend carries the visual-refresh shape vocabulary — the LOE bracketed
+// span, the WBS-summary bracket/tab glyph, the in-bar progress band, and the dashed lag
+// (waiting-time) run.
 
 import { TsldLegend } from './TsldLegend';
 
-describe('TsldLegend — visual-refresh shape vocabulary (flag on, ADR-0052 M4/M5)', () => {
+describe('TsldLegend — visual-refresh shape vocabulary (ADR-0052 M4/M5)', () => {
   it('lists the LOE / WBS-summary / Progress / Lag entries alongside the shared cues', () => {
     render(<TsldLegend />);
     const legend = screen.getByRole('list', { name: 'Legend' });

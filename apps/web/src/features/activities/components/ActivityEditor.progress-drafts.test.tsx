@@ -19,7 +19,6 @@ import { deriveActivityEditorGating } from '@/features/activities/lib/activity-e
  */
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: true,
   canWrite: true,
   canProgress: true,

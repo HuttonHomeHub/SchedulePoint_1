@@ -4,7 +4,7 @@ M1-T2 of the [implementation plan](./implementation-plan.md). The database-archi
 where it will be read next to the thing it describes, not copied here:
 
 - **The migration header** —
-  [`apps/api/prisma/migrations/20261017120000_activity_derived_duration_minutes/migration.sql`](../../../apps/api/prisma/migrations/20261017120000_activity_derived_duration_minutes/migration.sql):
+  `apps/api/prisma/migrations/20261017120000_activity_derived_duration_minutes/migration.sql` (at api-v1.0.0; the 1.1 baseline replaced it, ADR-0215):
   the column, the non-negative CHECK (`NOT VALID` then `VALIDATE`), why there is no type CHECK, no index and no
   backfill, and what was observed on a populated scratch cluster.
 - **`docs/DATABASE.md`** — the column's entry and its engine-owned classification.

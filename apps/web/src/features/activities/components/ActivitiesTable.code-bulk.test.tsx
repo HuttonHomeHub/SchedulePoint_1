@@ -22,10 +22,6 @@ import { anActivity } from '@/test/activity-fixture';
  * rows at the live list's versions and the editor's own `codes` gate, and that the swimlane and WBS
  * bars still own the container when they are present.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  WBS_IMPROVEMENTS_ENABLED: true,
-}));
 
 const ROWS: ActivitySummary[] = [
   anActivity({ id: 'a1', name: 'Excavate', version: 4 }),
@@ -34,7 +30,6 @@ const ROWS: ActivitySummary[] = [
 ];
 
 const GATING = deriveActivityEditorGating({
-  penManaged: true,
   holdsPen: false,
   canWrite: true,
   canProgress: true,

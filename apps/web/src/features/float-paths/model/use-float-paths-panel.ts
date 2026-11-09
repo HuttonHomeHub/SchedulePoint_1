@@ -15,7 +15,6 @@ import {
   type FloatPathsViewModel,
 } from './float-path-rows';
 
-import { FLOAT_PATHS_ENABLED } from '@/config/env';
 import { activityDayFactorFrame, effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
 
 export interface UseFloatPathsPanelInput {
@@ -102,13 +101,7 @@ export function useFloatPathsPanel({
     setMaxPaths(DEFAULT_FLOAT_PATHS);
   }, [planId]);
 
-  const query = useFloatPaths(
-    orgSlug,
-    planId,
-    targetId ?? '',
-    maxPaths,
-    FLOAT_PATHS_ENABLED && open && targetId !== null,
-  );
+  const query = useFloatPaths(orgSlug, planId, targetId ?? '', maxPaths, open && targetId !== null);
 
   // The day factor is the TARGET's (CQ-3 option A): relative float is a difference measured across
   // possibly-different calendars, and the panel renders it on the calendar of the activity the

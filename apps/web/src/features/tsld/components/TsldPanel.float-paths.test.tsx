@@ -5,16 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Canvas nav + insight lenses ON, so the three-way dim union is exercised for real rather than in
 // isolation. Editing/authoring off to keep the read surface simple.
-vi.mock('../../../config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_NAV_ENABLED: true,
-    CANVAS_LENSES_ENABLED: true,
-    TSLD_EDITING_ENABLED: false,
-    CANVAS_AUTHORING_ENABLED: false,
-  };
-});
 
 // Capture what the painter is HANDED, so the parity claim ("absent ⇒ no scene field") is an
 // assertion about the real call rather than a docblock. Stubbed to a no-op rather than wrapped:

@@ -29,15 +29,6 @@ const h = vi.hoisted(() => ({
   autoRecalcOpts: undefined as { onHoldExpired?: () => void } | undefined,
 }));
 
-vi.mock('@/config/env', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
-  return {
-    ...actual,
-    CANVAS_AUTHORING_ENABLED: false,
-    NOTES_ENABLED: false,
-  };
-});
-
 vi.mock('@/features/undo-redo', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanEditHistory: () => ({
@@ -61,7 +52,6 @@ vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'u1
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   usePlanPen: () => ({
-    penManaged: false,
     holdsPen: true,
     onWriteRejected: h.onWriteRejected,
   }),

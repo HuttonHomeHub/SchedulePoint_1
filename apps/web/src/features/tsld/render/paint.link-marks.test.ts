@@ -63,13 +63,19 @@ function edge(
   return { id: `${over.predecessorId}-${over.successorId}`, type: 'FS', isDriving: false, ...over };
 }
 
+/**
+ * The grid off: its day and month tiers are dashed, and the cases that use this assert the LINK
+ * layer sets no dash of its own.
+ */
+const NO_GRID = { dayGrid: false, monthGrid: false, yearGrid: false } as const;
+
 function paint(activities: RenderActivity[], edges: RenderEdge[], extra: Partial<TsldScene> = {}) {
   const { ctx, log } = recordingCtx();
   const scene: TsldScene = {
     activities,
     edges,
     dataDate: DATA_DATE,
-    view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false },
+    view: { ...DEFAULT_VIEW_TOGGLES, ...NO_GRID, labels: true, dates: false },
     visualRefresh: true,
     timeTrueLinks: true,
     linkRouting: true,
@@ -235,7 +241,7 @@ describe('paintScene — the link language (NetPoint-layout M2)', () => {
 
   it('is withheld when the Link gaps switch is off', () => {
     const log = paint([A, B], [edge({ predecessorId: 'A', successorId: 'B' })], {
-      view: { ...DEFAULT_VIEW_TOGGLES, labels: true, dates: false, linkSlack: false },
+      view: { ...DEFAULT_VIEW_TOGGLES, ...NO_GRID, labels: true, dates: false, linkSlack: false },
     });
     expect(log.some((l) => l.includes('fillText(["6d"'))).toBe(false);
   });

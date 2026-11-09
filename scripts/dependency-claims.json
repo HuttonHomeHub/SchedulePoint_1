@@ -25,14 +25,16 @@
     "body-parser": "2.4.0",
     "eslint": "9.39.5",
     "@prisma/client": "6.19.3",
-    "yazl": "3.3.1"
+    "yazl": "3.3.1",
+    "@better-auth/core": "1.7.14"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
     "@tanstack/router-core": "@tanstack/react-router",
     "@tanstack/history": "@tanstack/react-router",
     "@tanstack/query-core": "@tanstack/react-query",
-    "body-parser": "express"
+    "body-parser": "express",
+    "@better-auth/core": "better-auth"
   },
   "claims": [
     {
@@ -1690,6 +1692,28 @@
       "citedBy": [
         "docs/specs/browser-crash-reports/spec.md",
         "apps/web/src/app/route-catch.test.tsx"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:235-240",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "235-240",
+      "anchor": "await ctx.context.internalAdapter.linkAccount({",
+      "citedBy": [
+        "docs/adr/0107-a-migration-a-pristine-database-cannot-test.md",
+        "docs/specs/fresh-start-1-1/schema-design.md"
+      ]
+    },
+    {
+      "ref": "schema-diff.mjs:80-82",
+      "package": "@better-auth/core",
+      "path": "dist/db/schema-diff.mjs",
+      "lines": "80-82",
+      "anchor": "is required but Better Auth never writes it, so every insert into",
+      "citedBy": [
+        "docs/adr/0107-a-migration-a-pristine-database-cannot-test.md",
+        "docs/specs/fresh-start-1-1/schema-design.md"
       ]
     }
   ]

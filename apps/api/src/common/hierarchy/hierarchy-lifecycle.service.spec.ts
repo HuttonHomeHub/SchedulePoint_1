@@ -597,17 +597,34 @@ describe('HierarchyLifecycleService', () => {
       tx.plan.updateMany.mockResolvedValue({ count: 1 });
     });
 
-    it('answers not found when a legacy row with no batch id is removed before its update', async () => {
-      // The no-batch path updates by id, which raises P2025 instead of counting zero.
-      tx.plan.findFirst.mockResolvedValue({ deleteBatchId: null, projectId: 'pr1' });
-      tx.project.findFirst.mockResolvedValue({ id: 'pr1', clientId: 'c1' });
-      tx.$queryRaw.mockResolvedValue([{ id: 'pr1' }]); // ancestors active (locked FOR SHARE)
-      tx.plan.update.mockRejectedValue(
-        new Prisma.PrismaClientKnownRequestError('gone', { code: 'P2025', clientVersion: '6' }),
-      );
+    /**
+     * **A root with no batch id is refused, and nothing is written.** Prisma reads
+     * `where: { deleteBatchId: undefined }` as no filter at all, so a restore that carried the
+     * missing id into its `updateMany`s would reactivate every soft-deleted row in four tables.
+     * Verified red with the guard removed: each of the five cases then reached an `updateMany`.
+     */
+    it.each(['client', 'project', 'plan', 'activity', 'dependency'] as const)(
+      'refuses a %s root that carries no batch id and restores nothing',
+      async (entity) => {
+        const root = { deleteBatchId: null, organizationId: 'org-1' };
+        tx.client.findFirst.mockResolvedValue(root);
+        tx.project.findFirst.mockResolvedValue({ ...root, clientId: 'c1' });
+        tx.plan.findFirst.mockResolvedValue({ ...root, projectId: 'pr1' });
+        tx.activity.findFirst.mockResolvedValue({ ...root, planId: 'pl1', parentId: null });
+        tx.activityDependency.findFirst.mockResolvedValue({ ...root, planId: 'pl1' });
+        tx.$queryRaw.mockResolvedValue([{ id: 'x' }]);
 
-      await expect(service.restoreBatch(asTx(), 'plan', 'x', ACTOR)).rejects.toThrow(NotFoundError);
-    });
+        await expect(service.restoreBatch(asTx(), entity, 'x', ACTOR)).rejects.toThrow(
+          /no delete batch id/,
+        );
+
+        for (const [name, delegate] of Object.entries(tx)) {
+          if (typeof delegate !== 'object') continue;
+          expect(delegate.update, `${name}.update`).not.toHaveBeenCalled();
+          expect(delegate.updateMany, `${name}.updateMany`).not.toHaveBeenCalled();
+        }
+      },
+    );
 
     it.each(['client', 'project', 'plan'] as const)(
       'answers 404 when the %s root was removed between the read and the update',
@@ -1255,15 +1272,6 @@ describe('HierarchyLifecycleService', () => {
           expect((error as ConflictError).details).toMatchObject({ reason: 'CALENDAR_DELETED' });
         });
       });
-
-      it('does not tier-check a root that carries no batch id', async () => {
-        tx.plan.findFirst.mockResolvedValue({ ...root, deleteBatchId: null, calendarId: 'cal-1' });
-        tx.project.findFirst.mockResolvedValue({ clientId: 'c1' });
-        tx.$queryRaw.mockResolvedValue([{ id: 'x' }]);
-        tx.calendar.findMany.mockResolvedValue([projectCalendar('cal-1', 'pr-other')]);
-
-        await expect(service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR)).resolves.toBeDefined();
-      });
     });
 
     describe('the deleted-calendar guard (ADR-0201)', () => {
@@ -1406,23 +1414,6 @@ describe('HierarchyLifecycleService', () => {
             },
           }),
         );
-      });
-
-      it('guards a legacy root with no batch id by its own calendar', async () => {
-        tx.plan.findFirst.mockResolvedValue({
-          deleteBatchId: null,
-          organizationId: 'org-1',
-          projectId: 'pr1',
-          calendarId: 'cal-1',
-        });
-        tx.project.findFirst.mockResolvedValue({ id: 'pr1', clientId: 'c1' });
-        tx.$queryRaw.mockResolvedValue([{ id: 'pr1' }]); // ancestors active (locked FOR SHARE)
-        tx.calendar.findMany.mockResolvedValue([deletedCalendar('cal-1')]);
-
-        const error = await service.restoreBatch(asTx(), 'plan', 'pl1', ACTOR).catch((e) => e);
-
-        expect(error).toBeInstanceOf(ConflictError);
-        expect(tx.plan.update).not.toHaveBeenCalled();
       });
 
       it.each(['client', 'project', 'activity'] as const)(

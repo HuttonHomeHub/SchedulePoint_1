@@ -936,10 +936,11 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       costBaselineMissing: false,
       // The component sum ran: a zero-lag plan would report 0 here and take the previous expression.
       costPhasingLaggedCount: 1,
-      // And it ran EXACTLY — the baseline this capture wrote carries its own per-assignment breakdown,
-      // so no committed money was reallocated by a live share.
-      costPhasingApproximatedCount: 0,
     });
+    // And it ran EXACTLY: the baseline this capture wrote carries its own per-assignment breakdown,
+    // so no committed money was reallocated by a live share. The read no longer says so in a field —
+    // `costPhasingApproximatedCount` could only ever be 0 and was removed (ADR-0215 D6) — so the
+    // frozen components below are the evidence.
 
     // The frozen component is the evidence the capture actually wrote one, at the right lag.
     const frozen = await prisma.baselineAssignment.findMany({
@@ -1012,26 +1013,6 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
     // Frozen early (D), live early (D) and live placed (D) would all read the whole budget here.
     expect(res.body.data.total.pv).toBe(0);
-  });
-
-  it('E2: a NONE baseline keeps phasing on its frozen early span (characterisation)', async () => {
-    const { actor } = await adminWithOrg();
-    const planId = await makePlan(actor, 'Northgate');
-    const a = await startAccruedActivity(actor, planId, '2026-01-04');
-    const baselineId = await capturedThenUnplaced(actor, planId, a);
-
-    // The shape a baseline captured before `api-v0.70.0` has, which the public API no longer produces.
-    await prisma.baselineActivity.updateMany({
-      where: { baselineId },
-      data: { placedStart: null, placedFinish: null, visualStart: null },
-    });
-    await prisma.baseline.update({
-      where: { id: baselineId },
-      data: { placementSnapshotLevel: 'NONE' },
-    });
-
-    const res = await actor.agent.get(earnedValueUrl(planId)).expect(200);
-    expect(res.body.data.total.pv).toBe(1000000);
   });
 
   it('E3: with no baseline, the live-budget PV phases on the live placed span', async () => {

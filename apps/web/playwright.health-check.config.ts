@@ -59,13 +59,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: {
-              // Float paths ON: claim 5 proves the one-dock-at-a-time pair against the REAL
-              // sibling, not a stub. No pen: the report is a read and is not pen-gated — leaving
-              // the lock off keeps the journey about a planner reading, not authoring.
-              VITE_FLOAT_PATHS: 'true',
-              VITE_PLAN_EDIT_LOCK: 'false',
-            },
           },
         ],
       }),

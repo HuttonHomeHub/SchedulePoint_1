@@ -10,19 +10,13 @@ import { ActivityResourcesDialog } from './ActivityResourcesDialog';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The units/time (rate) surface (ADR-0040, M7 rung 4) with `VITE_DURATION_TYPES` forced ON — proves the
+ * The units/time (rate) surface (ADR-0040, M7 rung 4) — proves the
  * driving assignment's rate field renders, previews the derived duration for a units-driven type,
  * carries the `editedField` so the server recomputes the triad, and mirrors the N20 zero-rate block.
- * (Flag-off behaviour — no rate field, plain units store — is covered by `ActivityResourcesDialog.test.tsx`.)
  */
 // `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
 // native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
 // has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  DURATION_TYPES_ENABLED: true,
-  RESOURCES_ENABLED: true,
-}));
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

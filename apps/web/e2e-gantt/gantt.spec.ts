@@ -18,7 +18,7 @@ import {
 } from './support';
 
 /**
- * Flag-ON **Gantt view** journey (`VITE_GANTT_VIEW`, ADR-0059). It proves the claims the epic rests
+ * **Gantt view** journey (ADR-0059). It proves the claims the epic rests
  * on, end to end against a real API and database — the ones a unit test can only assert against a
  * mock:
  *

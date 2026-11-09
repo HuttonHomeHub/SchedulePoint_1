@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { FULL_BASELINE_ACTIVITY_COLUMNS, FULL_BASELINE_COLUMNS } from './baseline-columns';
 import { clearPlanTree } from './clear-plan-tree';
 
 /**
@@ -419,7 +420,13 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
   describe('baselines: the frozen code shape', () => {
     async function baseline(w: World, data: Partial<Prisma.BaselineUncheckedCreateInput>) {
       return prisma.baseline.create({
-        data: { organizationId: w.orgId, planId: w.planA, name: `B ${Math.random()}`, ...data },
+        data: {
+          organizationId: w.orgId,
+          planId: w.planA,
+          name: `B ${Math.random()}`,
+          ...FULL_BASELINE_COLUMNS,
+          ...data,
+        },
       });
     }
 
@@ -447,11 +454,10 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
       ).rejects.toThrow(/ck_baselines_swimlane_snapshot_shape/);
     });
 
-    it('requires the swimlane snapshot for a SWIMLANE_TYPE code snapshot', async () => {
+    it('accepts the one capture shape: FULL swimlanes with a SWIMLANE_TYPE code snapshot', async () => {
+      // The refusal this case used to carry — a code snapshot over a swimlane snapshot that froze
+      // nothing — needs a second swimlane level to be stated, and the enum has one label.
       const w = await setup();
-      await expect(baseline(w, { codeSnapshotLevel: 'SWIMLANE_TYPE' })).rejects.toThrow(
-        /ck_baselines_code_snapshot_shape/,
-      );
       await baseline(w, {
         swimlaneSnapshotLevel: 'FULL',
         swimlaneSource: 'NONE',
@@ -470,6 +476,7 @@ describe.skipIf(!hasDatabase)('P6 activity code tables (e2e)', () => {
             sourceActivityId: w.activityA,
             name: 'Excavate',
             durationMinutes: 1440,
+            ...FULL_BASELINE_ACTIVITY_COLUMNS,
             ...data,
           },
         });

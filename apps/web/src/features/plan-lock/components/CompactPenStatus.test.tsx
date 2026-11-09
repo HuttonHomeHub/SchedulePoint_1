@@ -30,7 +30,6 @@ function status(overrides: Partial<PlanEditLockStatus>): PlanEditLockStatus {
 
 function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
   return {
-    penManaged: true,
     status: undefined,
     holdsPen: false,
     isPending: false,
@@ -47,11 +46,6 @@ function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
 }
 
 describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
-  it('renders nothing when the pen layer is off', () => {
-    const { container } = render(<CompactPenStatus pen={makePen({ penManaged: false })} />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
   it('is a polite live region so transitions are announced (WCAG 4.1.3)', () => {
     render(
       <CompactPenStatus pen={makePen({ status: status({ state: 'FREE', canAcquire: true }) })} />,
@@ -230,12 +224,6 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
       expect(screen.getByTestId('status-bar')).not.toContainElement(
         document.activeElement as HTMLElement,
       );
-    });
-
-    it('renders neither half when the pen layer is off', () => {
-      const { container } = render(<CompactPenStatus pen={makePen({ penManaged: false })} />);
-      expect(container).toBeEmptyDOMElement();
-      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
   });
 
