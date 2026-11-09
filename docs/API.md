@@ -973,8 +973,8 @@ changes }`. `scope` is `DEFINITION` · `PROGRESS` · `PLACEMENT` · `LOGIC` · `
   named **as it was when recorded** — a later rename never rewrites an entry. Quantities on an
   assignment are canonical fixed-4 decimal **strings** (`"40.0000"`). A description is `{ changed: true }`
   only: its text and digest never leave the server.
-- `meta` — `{ nextCursor, hasMore, recordingSince }`; `recordingSince` is the later of the activity's
-  creation and the moment the database began recording, which is what "no changes recorded since …"
+- `meta` — `{ nextCursor, hasMore, recordingSince }`; `recordingSince` is the activity's creation instant
+  (history is recorded from the start since 1.1.0, ADR-0215), which is what "no changes recorded since …"
   must say.
 
 **Who sees what.** Every organisation member holds `activity:read`, Viewers included; there is **no
