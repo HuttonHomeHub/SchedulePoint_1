@@ -33,9 +33,9 @@ export interface CaptureActivityRow {
   totalFloat: number | null;
   /**
    * The same float in unrounded working minutes (#318, ADR-0214), copied verbatim: a day figure
-   * cannot be re-framed after a calendar's day length changes, the minutes can. NULL beside a
-   * non-null {@link totalFloat} is a plan not recalculated since the column existed, and a
-   * baseline captured from it stores NULL too — which readers treat as "not comparable".
+   * cannot be re-framed after a calendar's day length changes, the minutes can. Null exactly when
+   * {@link totalFloat} is null (`ck_baseline_activities_total_float_minutes_with_days`): a plan
+   * activity that was never calculated has neither.
    */
   totalFloatMinutes: number | null;
   isCritical: boolean;
@@ -43,8 +43,7 @@ export interface CaptureActivityRow {
    * The activity's budgeted cost frozen at capture (EV1, ADR-0042 — the ADR-0025 amendment), in
    * integer minor units: Σ over its active assignments `(budgetedCost ?? round(budgetedUnits ×
    * costPerUnit))` + the activity's `budgetedExpense`. A plan with no cost data captures `0` (a real
-   * "no budget", distinct from the SQL NULL a pre-EV baseline carries — which the EV read flags as
-   * `costBaselineMissing`), so a baseline captured now ALWAYS stores an integer, never NULL.
+   * "no budget"), so a baseline ALWAYS stores an integer, never NULL — the column is NOT NULL.
    */
   budgetedCost: number;
   /**
@@ -74,14 +73,10 @@ export interface CaptureActivityRow {
    * **The frozen SHAPE of the activity** — how the plan was built, as distinct from where the work
    * landed (the revision-snapshot extension, ADR-0126).
    *
-   * Every one of these is REQUIRED here while the column it lands in is nullable, and that
-   * asymmetry is deliberate. The column is nullable because a baseline captured before the
-   * extension has no value for it and never will; this interface describes a capture happening
-   * NOW, which always has one. Making them optional would let a future capture path omit a field
-   * silently and write a NULL that a reader cannot tell from "never recorded" — the exact absence
-   * this whole epic exists to remove. `laneIndex` and `percentComplete` are `number`, not
-   * `number | null`, for the same reason: the live columns are NOT NULL, so there is nothing to
-   * pass through.
+   * Every one of these is REQUIRED here: a capture records the shape of every activity, so a
+   * future capture path cannot omit a field and write a NULL a reader would have to guess the
+   * meaning of. `laneIndex` and `percentComplete` are `number`, not `number | null`, because the
+   * live columns and the snapshot columns are both NOT NULL.
    */
   laneIndex: number;
   parentId: string | null;
@@ -105,12 +100,10 @@ export interface CaptureActivityRow {
    * here, or did the engine?" is answerable only from `visualStart`, and an activity the planner
    * never moved has a placed span identical to its early span.
    *
-   * **Required here, nullable in the column, exactly as the shape block above is.** The column is
-   * nullable because a baseline captured before M-A has no value and never will; this interface
-   * describes a capture happening NOW, which always has one — even when that one is `null`, which
-   * is itself a fact (nothing placed, or nothing yet calculated). Optional fields would let a
-   * future capture path omit one silently and write a NULL a reader cannot tell from "never
-   * recorded", which is the absence `placement_snapshot_level` exists to remove.
+   * **Required here and nullable in the column**, because a capture always has a value — even when
+   * that one is `null`, which is itself a fact (nothing placed, or nothing yet calculated).
+   * Optional fields would let a future capture path omit one silently and write a NULL a reader
+   * cannot tell from a recorded one.
    */
   placedStart: Date | null;
   placedFinish: Date | null;
@@ -178,16 +171,16 @@ export interface CaptureInput {
   planId: string;
   name: string;
   isActive: boolean;
-  dataDate: Date | null;
-  capturedProjectFinish: Date | null;
+  dataDate: Date;
+  capturedProjectFinish: Date;
   /** The plan calendar's hours-per-day at capture, in minutes (ADR-0068 §5). */
   hoursPerDayMinutes: number;
   /**
    * The criticality rule this snapshot's `is_critical`/`total_float` were COMPUTED under
    * (ADR-0125 / CQ-1) — copied from the plan's ENGINE-OWNED `schedule_critical_*` mirrors, never
    * from its client-settable options. ONE nullable object rather than four nullable fields, so the
-   * compiler enforces all-or-none: `null` means the plan's last recalculation predates the mirror
-   * and the rule is unrecoverable, which is the all-NULL sentinel the four columns store.
+   * compiler enforces all-or-none: `null` means the rule is unknown (the plan was never
+   * recalculated), which is the all-NULL sentinel the four columns store.
    */
   criticalityRule: CriticalityRule | null;
   actorId: string;
@@ -195,9 +188,8 @@ export interface CaptureInput {
   /**
    * The plan's frozen logic. Written unconditionally — INCLUDING when the plan has no dependencies
    * at all, which is why the capture sets `revisionSnapshotLevel: 'FULL'` outside this array's
-   * emptiness check. Zero rows on a FULL baseline means "there genuinely were none"; zero rows on
-   * a NONE baseline means "nobody looked". A row count cannot tell those apart, and the
-   * discriminator is the only thing that can (the `costSnapshotLevel` precedent, ADR-0071 M3).
+   * emptiness check. Zero rows on a FULL baseline means "there genuinely were none". The level is
+   * single-valued since 1.1.0 (ADR-0215 D6) but stays written, so a future label is a decision.
    */
   dependencies: CaptureDependencyRow[];
   /**
@@ -252,43 +244,31 @@ export class BaselineRepository {
         capturedProjectFinish: input.capturedProjectFinish,
         hoursPerDayMinutes: input.hoursPerDayMinutes,
         // ADR-0071 M3 / CQ-1 (B). Written unconditionally, including when the plan has NO
-        // assignments at all: that is the whole point of the discriminator. Zero component rows
-        // then means "there genuinely were none, and this snapshot is complete", which Earned
-        // Value must read as EXACT — the opposite of what zero rows means on a baseline captured
-        // before this existed. A row count cannot tell those apart; this column is the only thing
-        // that can, so it must never be conditional on there being something to count.
+        // assignments at all: zero component rows then means "there genuinely were none, and this
+        // snapshot is complete", which Earned Value reads as EXACT. The column is single-valued
+        // since 1.1.0 (ADR-0215 D6) and has no default, so every capture states it.
         costSnapshotLevel: 'ASSIGNMENT',
-        // ADR-0125 / CQ-1. Written unconditionally, exactly as costSnapshotLevel above is and for
-        // the same reason: a CONDITIONAL write is how a NULL meaning "the rule is unknowable"
-        // becomes indistinguishable from a NULL meaning "we happened not to set it this time".
-        // `?? null` here defaults to the SENTINEL, never to a value — `?? 'TOTAL_FLOAT'` / `?? 0`
-        // is the forbidden form, because it manufactures a rule nothing ever ran under.
-        // ADR-0126. Written unconditionally, exactly as `costSnapshotLevel` above is: this capture
-        // reads and freezes the shape of every activity and every edge, so it IS full — whether or
-        // not the plan happens to contain any logic to freeze. Making it conditional on
-        // `dependencies.length` is the trap the sibling comment above describes, one column along.
+        // ADR-0125 / CQ-1. The criticality rule below is written unconditionally and `?? null`
+        // defaults to the SENTINEL, never to a value — `?? 'TOTAL_FLOAT'` / `?? 0` is the forbidden
+        // form, because it manufactures a rule nothing ever ran under.
+        // ADR-0126. Written unconditionally, as `costSnapshotLevel` above is: this capture reads
+        // and freezes the shape of every activity and every edge, so it IS full — whether or not the
+        // plan happens to contain any logic to freeze.
         revisionSnapshotLevel: 'FULL',
-        // One-planning-surface M-C. Written unconditionally, for the third time and the same
-        // reason: this capture reads and freezes the placement of every activity, so it IS full —
-        // whether or not the plan happens to have a single hand-placed bar, and whether or not it
-        // has ever been recalculated. Making it conditional on "did we find any placement" is the
-        // trap both comments above describe, one column along, and it is the likelier slip here
-        // because an unplaced plan's placement columns are ALL null, which looks like nothing to
-        // record. Zero placements on a FULL baseline means "there genuinely were none"; the same
-        // nulls on a NONE baseline mean nobody looked. Only this column separates them.
+        // One-planning-surface M-C. The capture freezes the placement of every activity, so it IS
+        // full — whether or not the plan has a hand-placed bar. An unplaced plan's placement
+        // columns are all null, which is a recorded fact, not a missing one.
         placementSnapshotLevel: 'FULL',
-        // Swimlanes (schema-design §13.4). Written unconditionally, for the fourth time and the same
-        // reason: a plan nobody laid out writes zero lane rows, and only this level says that is
-        // complete rather than unrecorded. The source and level are the plan's at capture; the
-        // table's CHECK makes the three columns one fact.
+        // Swimlanes (schema-design §13.4). A plan nobody laid out writes zero lane rows, which is
+        // complete. The source and level are the plan's at capture; the table's CHECK makes the
+        // three columns one fact.
         swimlaneSnapshotLevel: 'FULL',
         swimlaneSource: input.swimlane.source,
         swimlaneWbsLevel: input.swimlane.wbsLevel,
         // The plan's code type at capture (set iff the frozen source is ACTIVITY_CODE) and the level
-        // of what was frozen of the codes. Written unconditionally, for the fifth time and the same
-        // reason: under every other source the three activity columns are NULL and that is
-        // complete, which only this level says rather than "nobody looked". `SWIMLANE_TYPE`
-        // requires the FULL swimlane level above (`ck_baselines_code_snapshot_shape`).
+        // of what was frozen of the codes: under every other source the three activity columns are
+        // NULL and that is complete. `SWIMLANE_TYPE` requires the FULL swimlane level above
+        // (`ck_baselines_code_snapshot_shape`).
         swimlaneCodeTypeId: input.swimlane.codeTypeId,
         codeSnapshotLevel: 'SWIMLANE_TYPE',
         criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
@@ -644,10 +624,8 @@ export class BaselineRepository {
   /**
    * A baseline's frozen snapshot rows projected to the fields variance needs.
    *
-   * `placedStart`/`placedFinish` are selected alongside the network dates so the caller can
-   * project the row onto EITHER basis (`placement-baseline-variance`) without a second query —
-   * the basis is chosen once per read from the parent baseline's `placementSnapshotLevel`, never
-   * per row.
+   * Variance compares the frozen placed span (`placement-baseline-variance`, ADR-0148), so the
+   * network `baselineStart`/`baselineFinish` are not selected.
    */
   loadSnapshotRowsForVariance(
     baselineId: string,
@@ -657,8 +635,6 @@ export class BaselineRepository {
       sourceActivityId: string;
       code: string | null;
       name: string;
-      baselineStart: Date | null;
-      baselineFinish: Date | null;
       placedStart: Date | null;
       placedFinish: Date | null;
       totalFloat: number | null;
@@ -671,8 +647,6 @@ export class BaselineRepository {
         sourceActivityId: true,
         code: true,
         name: true,
-        baselineStart: true,
-        baselineFinish: true,
         placedStart: true,
         placedFinish: true,
         totalFloat: true,
@@ -722,14 +696,14 @@ export class BaselineRepository {
       baselineFinish: Date | null;
       placedStart: Date | null;
       placedFinish: Date | null;
-      laneIndex: number | null;
+      laneIndex: number;
       parentId: string | null;
       calendarId: string | null;
       constraintType: ConstraintType | null;
       constraintDate: Date | null;
       secondaryConstraintType: ConstraintType | null;
       secondaryConstraintDate: Date | null;
-      percentComplete: number | null;
+      percentComplete: number;
       actualStart: Date | null;
       actualFinish: Date | null;
       swimlaneId: string | null;
@@ -748,16 +722,10 @@ export class BaselineRepository {
         totalFloatMinutes: true,
         baselineStart: true,
         baselineFinish: true,
-        // The frozen placed span (placement-baseline-variance). Selected unconditionally for the
-        // reason the shape columns are: branching the SELECT on the level would make this read's
-        // shape depend on the answer the seam supplies. NULL on a NONE-level baseline, where the
-        // seam never reads it.
+        // The frozen placed span (placement-baseline-variance).
         placedStart: true,
         placedFinish: true,
-        // The frozen SHAPE (ADR-0126). Selected unconditionally, including from a NONE-level
-        // baseline where every one of them is NULL: the caller decides whether they mean anything
-        // by reading `revision_snapshot_level`, and branching the SELECT on the level would make
-        // this read's own shape depend on the answer it is trying to supply.
+        // The frozen SHAPE (ADR-0126).
         laneIndex: true,
         parentId: true,
         calendarId: true,
@@ -768,8 +736,7 @@ export class BaselineRepository {
         percentComplete: true,
         actualStart: true,
         actualFinish: true,
-        // The frozen swimlane membership (§13.3). Selected unconditionally like the shape columns:
-        // NULL on a NONE-level baseline, where `frozenGhostSwimlanes` never reads it.
+        // The frozen swimlane membership (§13.3).
         swimlaneId: true,
       },
     });
@@ -911,8 +878,7 @@ export class BaselineRepository {
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         // The live plan's shape — the counterpart of the frozen columns above. The live side is
-        // ALWAYS fully recorded: it IS the plan, so `bothSnapshotted` turns only on the frozen
-        // side(s).
+        // ALWAYS fully recorded: it IS the plan.
         laneIndex: true,
         parentId: true,
         calendarId: true,
@@ -1019,9 +985,8 @@ export class BaselineRepository {
   /**
    * A plan's active live activities projected to the fields variance needs, in a stable order.
    *
-   * `visualEffectiveStart`/`visualEffectiveFinish` are selected alongside the early dates for
-   * the same reason as `loadSnapshotRowsForVariance` above: the caller picks the basis once per
-   * read (`placement-baseline-variance`), never per row.
+   * `visualEffectiveStart`/`visualEffectiveFinish` are where each bar is drawn, the live
+   * counterpart of the frozen placed span `loadSnapshotRowsForVariance` returns (ADR-0148).
    */
   loadActiveActivitiesForVariance(
     organizationId: string,
@@ -1032,8 +997,6 @@ export class BaselineRepository {
       id: string;
       code: string | null;
       name: string;
-      earlyStart: Date | null;
-      earlyFinish: Date | null;
       visualEffectiveStart: Date | null;
       visualEffectiveFinish: Date | null;
       totalFloat: number | null;
@@ -1047,8 +1010,6 @@ export class BaselineRepository {
         id: true,
         code: true,
         name: true,
-        earlyStart: true,
-        earlyFinish: true,
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         totalFloat: true,

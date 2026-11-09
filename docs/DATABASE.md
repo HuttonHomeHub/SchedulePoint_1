@@ -556,19 +556,15 @@ Units/Time` true. The recompute is a **pure service-boundary** concern resolved 
   hours-per-day. Engine-owned like `total_float` (recalc `unnest` write only, never from a DTO,
   never touching `version`). `INTEGER`: the engine's value is a signed whole count of minutes
   bounded by its ~200-year horizon (< 2^31). Nullable, no default, no backfill, no index.
-  - **The NULL rule replaces a discriminator, deliberately** — a departure from the
-    `*_snapshot_level` rule recorded in both column comments: minutes NULL with days set means
-    "calculated or captured before this column, not comparable" (never 0); both NULL means "not
-    calculated". The product owner decided on 2026-11-08 that every plan is wiped at the 1.0
-    roll-out and no backwards compatibility is owed, so a discriminator would only describe a
-    population about to disappear.
-  - **One-way CHECKs** (`ck_activities_total_float_minutes_requires_days`,
-    `ck_baseline_activities_total_float_minutes_requires_days`): minutes never exist without days.
-    Not both-or-none: a `NOT VALID` check still applies to `UPDATE`, so it would refuse every edit
-    of a pre-existing row. No sign check — negative float is valid.
-  - **Rollback caveat.** An image older than the writer recalculates `total_float` and leaves the
-    minutes alone, so after a rollback they can be stale, not NULL, until the next recalculation on
-    a current image.
+  - **The pair is one fact** (both-way CHECKs since 1.1, tidy T6, ADR-0215):
+    `ck_activities_total_float_minutes_with_days` and
+    `ck_baseline_activities_total_float_minutes_with_days`,
+    `(total_float_minutes IS NULL) = (total_float IS NULL)`. NULL means "not calculated"; there is
+    no discriminator because there is nothing left to discriminate. Before 1.1 the checks were
+    one-way (`…_requires_days`) so rows calculated before the column (days set, minutes NULL, "not
+    comparable") stayed editable and an older image could recalculate days alone during a
+    rollback; a 1.1 database has neither (history at the git tag `api-v1.0.0`). No sign check —
+    negative float is valid.
 - **`remaining_float` — the room a PLACED bar has left** (one-planning-surface §4.3 /
   US-3; CQ-1 answered "persist"). `total_float` is measured from the pure-network
   **early** finish; once a planner hand-places a bar, the float they can still spend is
@@ -1027,30 +1023,26 @@ activity's own expense keeps `[start, finish)`, so the committed PV curve needs 
 cost **decomposed per component**. Three additions, all additive and all dark until the M3
 service slice reads them:
 
-| Addition                               | Shape                                                       | Meaning                                                                                 |
-| -------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `baselines.cost_snapshot_level`        | `BaselineCostSnapshotLevel`, NOT NULL, `DEFAULT 'ACTIVITY'` | **the discriminator** — `ACTIVITY` = a total only; `ASSIGNMENT` = total + decomposition |
-| `baseline_activities.budgeted_expense` | `BIGINT` nullable, no default                               | the activity-expense component, frozen; `NULL` = not decomposed                         |
-| `baseline_assignments`                 | new table, one row per assignment                           | that assignment's frozen `budgeted_cost` **and** its frozen `lag_minutes`               |
+| Addition                               | Shape                                                         | Meaning                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.cost_snapshot_level`        | `BaselineCostSnapshotLevel`, NOT NULL, no default (since 1.1) | **the discriminator** — `ASSIGNMENT` = total + decomposition; `ACTIVITY` (a total only) was removed by tidy T3 (ADR-0215 D6) |
+| `baseline_activities.budgeted_expense` | `BIGINT` NOT NULL, no default (since 1.1)                     | the activity-expense component, frozen; `0` is a real "no expense"                                                           |
+| `baseline_assignments`                 | new table, one row per assignment                             | that assignment's frozen `budgeted_cost` **and** its frozen `lag_minutes`                                                    |
 
-**The back-fill is impossible, not skipped.** A baseline captured before this froze one number
-per activity, and that number cannot be decomposed after the fact — the assignments it was made
-of may since have been re-costed, re-lagged, added or unassigned, and their resources'
-`cost_per_unit` may have moved. Any back-fill would compute a breakdown out of **today's** rows
-and stamp it as history, which is precisely what ADR-0025's copy-not-reference rule exists to
-prevent. Pre-ADR-0071 baselines therefore keep the **live-budget-shares approximation
-permanently**, and the Earned-Value read carries both paths for good.
+**No back-fill, and none is needed.** A baseline that froze one number per activity cannot be
+decomposed after the fact — the assignments it was made of may since have been re-costed, re-lagged,
+added or unassigned — and any back-fill would stamp **today's** rows as history, which is what
+ADR-0025's copy-not-reference rule exists to prevent. That was the reason `ACTIVITY` (a total only)
+existed: such a baseline kept the live-budget-shares approximation permanently. A 1.1 database holds
+no such baseline, so the label, the approximation and the Earned-Value path that carried them were
+removed (tidy T3, ADR-0215 D6).
 
-Which is why the discriminator exists, and why it is the load-bearing part of the design: a
-baseline with **zero** `baseline_assignments` rows is either **(a)** captured before this
-existed — undecomposable, so PV must fall back to live shares — or **(b)** captured from a plan
-whose activities genuinely carry no resource assignments, in which case the snapshot is
-**complete** and PV is exact with no assignment component at all. Those are opposite
-instructions, and `count(*) = 0` cannot tell them apart. `cost_snapshot_level` can, and it is
-the **only** thing that can. Never infer the level from a row count, and never from
-`budgeted_expense IS NULL` — those are corroborating facts, not the decision. The constant
-`DEFAULT 'ACTIVITY'` is true of every row that already exists **and** is the safe direction: a
-write path not yet taught the new pass reads as approximate, never as exact-but-empty.
+The discriminator stays because a baseline with **zero** `baseline_assignments` rows is also one
+captured from a plan whose activities genuinely carry no resource assignments: the snapshot is
+**complete** and PV is exact with no assignment component at all. `count(*) = 0` cannot say whether
+the decomposition was recorded; `cost_snapshot_level` can. Never infer the level from a row count.
+It has no default (since 1.1), so a write path not taught the capture is a not-null violation, not a
+row that quietly reads as recorded.
 
 The pairing between the discriminator and the child rows **cannot be a CHECK** — they are in
 different tables, and a CHECK sees one row of one table. It is a service invariant held inside
@@ -1107,17 +1099,17 @@ it, moved it to another calendar, re-parented it under a different summary, or r
 against it. Enumerated against the schema, eight of the fourteen change classes a planner is asked
 to defend already fell out of existing columns; the six that did not are the ones argued over.
 
-| Addition                                     | Shape                                               | Meaning                                                                                                    |
-| -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `baselines.revision_snapshot_level`          | `RevisionSnapshotLevel`, NOT NULL, `DEFAULT 'NONE'` | **the discriminator** — `NONE` = output only; `FULL` = output plus the ten columns and the edge rows below |
-| `baseline_activities.lane_index`             | `INTEGER` nullable, no default                      | the TSLD row it occupied                                                                                   |
-| `baseline_activities.parent_id`              | `UUID` nullable, no default, **no FK**              | its WBS summary, in the **source activity id space**; `NULL` = top level                                   |
-| `baseline_activities.calendar_id`            | `UUID` nullable, no default, **no FK**              | its own calendar; `NULL` = inherit the plan's                                                              |
-| `baseline_activities.constraint_type/_date`  | nullable pair, no default                           | the primary constraint; `NULL` = none                                                                      |
-| `baseline_activities.secondary_constraint_*` | nullable pair, no default                           | the secondary constraint; `NULL` = none                                                                    |
-| `baseline_activities.percent_complete`       | `INTEGER` nullable, no default                      | **schedule** %-complete; `0` = not started                                                                 |
-| `baseline_activities.actual_start/_finish`   | `DATE` nullable, no default                         | `NULL` = not started / not finished                                                                        |
-| `baseline_dependencies`                      | new table, one row per dependency active at capture | the frozen edge: `type`, signed `lag_minutes`, `lag_calendar`, `is_driving`                                |
+| Addition                                     | Shape                                                     | Meaning                                                                                                                           |
+| -------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.revision_snapshot_level`          | `RevisionSnapshotLevel`, NOT NULL, no default (since 1.1) | **the discriminator** — `FULL` = output plus the ten columns and the edge rows below; `NONE` (output only) was removed by tidy T3 |
+| `baseline_activities.lane_index`             | `INTEGER` NOT NULL, no default (since 1.1)                | the TSLD row it occupied                                                                                                          |
+| `baseline_activities.parent_id`              | `UUID` nullable, no default, **no FK**                    | its WBS summary, in the **source activity id space**; `NULL` = top level                                                          |
+| `baseline_activities.calendar_id`            | `UUID` nullable, no default, **no FK**                    | its own calendar; `NULL` = inherit the plan's                                                                                     |
+| `baseline_activities.constraint_type/_date`  | nullable pair, no default                                 | the primary constraint; `NULL` = none                                                                                             |
+| `baseline_activities.secondary_constraint_*` | nullable pair, no default                                 | the secondary constraint; `NULL` = none                                                                                           |
+| `baseline_activities.percent_complete`       | `INTEGER` NOT NULL, no default (since 1.1)                | **schedule** %-complete; `0` = not started                                                                                        |
+| `baseline_activities.actual_start/_finish`   | `DATE` nullable, no default                               | `NULL` = not started / not finished                                                                                               |
+| `baseline_dependencies`                      | new table, one row per dependency active at capture       | the frozen edge: `type`, signed `lag_minutes`, `lag_calendar`, `is_driving`                                                       |
 
 **`lane_index` is the trap, and it is worth naming on its own.** The live column is `NOT NULL
 DEFAULT 0`, so mirroring its shape is the reflex — and **lane 0 is a real lane**. A `NOT NULL
@@ -1141,15 +1133,16 @@ zero `baseline_dependencies` rows under `FULL`. That is the `cost_snapshot_level
 one table along, and the two now read the same way on purpose. Never infer the level from a column's
 nullness or a list's length. Like its cost sibling the pairing **cannot be a CHECK** (three tables;
 a CHECK sees one row of one table): it is a service invariant of the single capture transaction,
-which is why the constant `DEFAULT 'NONE'` is also the safe direction — a write path not yet taught
-the new pass reads as _nothing recorded_, never as _recorded and empty_.
+which is why the level has no default (since 1.1) — a write path not yet taught the new pass is a
+not-null violation, never a row that reads as _recorded and empty_.
 
-**The value is entirely prospective, and that was put in front of the decision rather than left in a
-consequences section.** No baseline captured before this can ever be told what its logic,
+**The value was entirely prospective, and that was put in front of the decision rather than left in
+a consequences section.** A baseline captured before this could never be told what its logic,
 constraints, calendars, WBS or progress were: the data was never recorded, a capture cannot be
-re-run, and a backfill could only stamp today's shape as history. Every baseline on every host reads
-`NONE`, which is the literal truth about it, and the read model states that per class rather than
-omitting the class or reporting a silent "no change".
+re-run, and a backfill could only stamp today's shape as history. Such baselines read `NONE`, and the
+read model stated that per class rather than omitting the class or reporting a silent "no change".
+A 1.1 database holds none (ADR-0215 D6), so `NONE`, the `NOT_SNAPSHOTTED` reason and the per-class
+statement of it were removed; the columns stay NOT NULL with no default.
 
 `baseline_dependencies` is a **sibling of `baseline_activities` in every respect**: `source_*` ids
 are plain correlation UUIDs with **no** foreign key, rows are immutable after capture, the full
@@ -1228,12 +1221,12 @@ basis along.
 Three nullable `date` columns on `baseline_activities` close it, and a fourth column on `baselines`
 says whether they were recorded at all:
 
-| Column                               | Frozen from                          | Means                                               |
-| ------------------------------------ | ------------------------------------ | --------------------------------------------------- |
-| `baseline_activities.placed_start`   | `activities.visual_effective_start`  | where the **bar sat** (engine output)               |
-| `baseline_activities.placed_finish`  | `activities.visual_effective_finish` | "                                                   |
-| `baseline_activities.visual_start`   | `activities.visual_start`            | what the **planner placed** (the one planner input) |
-| `baselines.placement_snapshot_level` | the capture path                     | `NONE` \| `FULL` — whether the three were recorded  |
+| Column                               | Frozen from                          | Means                                                                                     |
+| ------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `baseline_activities.placed_start`   | `activities.visual_effective_start`  | where the **bar sat** (engine output)                                                     |
+| `baseline_activities.placed_finish`  | `activities.visual_effective_finish` | "                                                                                         |
+| `baseline_activities.visual_start`   | `activities.visual_start`            | what the **planner placed** (the one planner input)                                       |
+| `baselines.placement_snapshot_level` | the capture path                     | `FULL` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1) — the three were recorded |
 
 **`visual_start` is frozen too, and it is not redundant with the other two.** `placed_*` is an
 engine **output**; `visual_start` is the planner's **input**, and after this epic it is the only one
@@ -1249,7 +1242,7 @@ are placed", and after this epic **neither** is true of a capture: every post-ep
 the whole ADR-0034 matrix depend on it) and the three columns land **beside** it rather than instead
 of it. So the row is not one or the other, and the question a reader has is not "which basis?" but
 "was the placement recorded at all?" — which only a level can answer. It is `revision_snapshot_level`'s
-argument verbatim, and `DEFAULT 'NONE'` is the literal truth of every existing row.
+argument verbatim; the level has no default since 1.1.
 
 **And no per-row test and no row count can substitute** — the same two traps as the two levels above
 it, and here the first one is the _common_ case. All three columns have a legitimate NULL under
@@ -1292,18 +1285,19 @@ in [`docs/specs/swimlanes/schema-design.md`](specs/swimlanes/schema-design.md) �
 **removed** work can be drawn in a swimlane rather than only counted: its position is a membership
 and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 
-| Column / table                      | Frozen from                         | Means                                                     |
-| ----------------------------------- | ----------------------------------- | --------------------------------------------------------- |
-| `baselines.swimlane_snapshot_level` | the capture path                    | `NONE` \| `FULL` — whether swimlanes were recorded at all |
-| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`         |
-| `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                        |
-| `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was      |
-| `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim         |
+| Column / table                      | Frozen from                         | Means                                                                                                                           |
+| ----------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `baselines.swimlane_snapshot_level` | the capture path                    | `FULL` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1, and `swimlane_source` NOT NULL by T4) — swimlanes were recorded |
+| `baselines.swimlane_source`         | `plans.swimlane_source`             | what membership meant at capture; NULL iff `NONE`                                                                               |
+| `baselines.swimlane_wbs_level`      | `plans.swimlane_wbs_level`          | 1–3 iff the frozen source is `WBS`                                                                                              |
+| `baseline_activities.swimlane_id`   | `activities.swimlane_id`            | hand-made membership, copied whatever the source was                                                                            |
+| `baseline_activity_swimlane_lanes`  | every `activity_swimlane_lanes` row | each captured activity's lane per basis, verbatim                                                                               |
 
 - **A level, not `swimlane_source IS NULL`.** The source has its own `NONE`, so a nullable source
   would carry two nothings ("recorded, swimlanes off" and "not recorded"). The fail-closed
-  `ck_baselines_swimlane_snapshot_shape` binds the level to the frozen pair (`NONE` ⇒ both NULL;
-  `FULL` ⇒ `ck_plans_swimlane_source_level` verbatim), so the three are one fact.
+  `ck_baselines_swimlane_snapshot_shape` binds the level to the frozen pair (`FULL` ⇒
+  `ck_plans_swimlane_source_level` verbatim, and `swimlane_source` is NOT NULL since 1.1), so the
+  three are one fact.
 - **Every lane row, not one effective lane.** Which row is effective depends on the source, level
   and tree, i.e. on a rule; a snapshot records facts. Copying the rows also lets a ghost be placed
   under the source the plan has **today**. `lane_updated_at` copies the live `updated_at`, which is
@@ -1315,9 +1309,9 @@ and an in-swimlane lane, neither of which may be guessed (ADR-0126).
 - **The capture locks the plan's live activities in id order** after the plan advisory lock, because
   a positions batch writes lanes under the activity row lock and not the plan lock; without it the
   frozen lanes can be one write newer than the frozen activities. The order matches the plan cascade.
-- **Every existing baseline reads `NONE`, permanently**, and with swimlanes on its removed work is
-  counted, not drawn. A backfill to (`FULL`, `NONE`) would be true of them but buys nothing visible
-  (they have no lane copies) and was rejected (§13.5 of the design).
+- **Every baseline is `FULL`.** A pre-swimlanes baseline read `NONE` permanently (its removed work was
+  counted, not drawn, and a backfill was rejected, §13.5 of the design); a 1.1 database holds none, so
+  the label was removed (tidy T3, ADR-0215 D6).
 - Correlation ids carry **no FK** (ADR-0025). The two CHECKs on the copies are the live table's,
   verbatim. One `NULLS NOT DISTINCT` unique serves the freeze-once guarantee, the `baseline_id` FK
   RESTRICT check and the load; without it the expiry's baselines delete was ~45× slower.
@@ -1337,20 +1331,20 @@ added at most 1 s to one capture of the largest plan, and only the swimlane sour
 Copying every type of a 5,000-activity, 30-type plan (150,000 rows) measured **2.4–2.8 s**, and the
 row write alone was over 1 s whatever the keys and indexes, so the narrower shape shipped:
 
-| Frozen column                                                  | Copied from                                               | Meaning                                                                             |
-| -------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `baselines.swimlane_code_type_id`                              | `plans.swimlane_code_type_id`                             | the code type the swimlanes came from; set iff the frozen source is `ACTIVITY_CODE` |
-| `baselines.code_snapshot_level`                                | the capture path                                          | `NONE` \| `SWIMLANE_TYPE` — whether the three columns below were recorded           |
-| `baseline_activities.code_value_id`                            | the activity's assignment for that type                   | its value at capture; NULL is "no value of that type"                               |
-| `baseline_activities.code_lane_index`, `.code_lane_updated_at` | its `code_swimlane_lanes` row for (that type, that value) | its lane there; both NULL is "never placed there"                                   |
+| Frozen column                                                  | Copied from                                               | Meaning                                                                                                          |
+| -------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `baselines.swimlane_code_type_id`                              | `plans.swimlane_code_type_id`                             | the code type the swimlanes came from; set iff the frozen source is `ACTIVITY_CODE`                              |
+| `baselines.code_snapshot_level`                                | the capture path                                          | `SWIMLANE_TYPE` (NOT NULL, no default; `NONE` removed by tidy T3 at 1.1) — the three columns below were recorded |
+| `baseline_activities.code_value_id`                            | the activity's assignment for that type                   | its value at capture; NULL is "no value of that type"                                                            |
+| `baseline_activities.code_lane_index`, `.code_lane_updated_at` | its `code_swimlane_lanes` row for (that type, that value) | its lane there; both NULL is "never placed there"                                                                |
 
 - **`swimlane_code_type_id` is mandatory in this release whatever Q1 said**: the capture copies the
   plan's source verbatim, so without it the first capture of a code-sourced plan would fail
   `ck_baselines_swimlane_snapshot_shape` (whose inner `CASE` is the new plan CHECK verbatim).
 - **A level, as for every other snapshot**: `SWIMLANE_TYPE` is written unconditionally by the capture
   once it is taught codes, and requires `swimlane_snapshot_level = 'FULL'`
-  (`ck_baselines_code_snapshot_shape`), because the frozen source is what names the type. Every
-  existing baseline reads `NONE` permanently.
+  (`ck_baselines_code_snapshot_shape`), because the frozen source is what names the type. `NONE`
+  (baselines before codes) was removed with the fresh start.
 - **Columns, not a table**: one value per activity, so they ride the `baseline_activities` row the
   capture already writes — no extra rows and no extra key checks. Correlation ids with no foreign key
   (ADR-0025). `ck_baseline_activities_code_lane_pair` keeps the frozen lane whole and non-negative.

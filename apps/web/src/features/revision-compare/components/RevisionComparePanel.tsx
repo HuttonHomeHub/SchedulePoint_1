@@ -17,7 +17,6 @@ import {
   criticalPathUnavailable,
   floatPairTexts,
   floatMovementPhrase,
-  floatNotComparableNote,
   frameSentence,
   membershipSentence,
   noCommonCodesSentence,
@@ -146,7 +145,6 @@ export function RevisionComparePanel({
   onComparePlanChange,
 }: RevisionComparePanelProps): React.ReactElement {
   const announce = useAnnounce();
-  const floatNote = compare ? floatNotComparableNote(compare.floatNotComparableCount) : null;
   /**
    * Which reading of the comparison is showing. Resets to the delta whenever a new comparison
    * settles is DELIBERATELY not done: a planner who switched to Changes and then changed one side
@@ -598,7 +596,6 @@ export function RevisionComparePanel({
                 {view === 'changes' && compare.changes ? (
                   <RevisionChangesView
                     report={compare.changes}
-                    floatNotComparableCount={compare.floatNotComparableCount}
                     onActivateActivity={announceActivation}
                     // The OTHER plan's name, so a row that lives only there explains its own
                     // missing control rather than going silent. THIS is where the null-id rows
@@ -608,11 +605,6 @@ export function RevisionComparePanel({
                   />
                 ) : (
                   <>
-                    {floatNote === null ? null : (
-                      <p data-float-not-comparable className="text-muted-foreground text-xs">
-                        {floatNote}
-                      </p>
-                    )}
                     {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
                       <p className="text-muted-foreground text-sm">
                         {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}

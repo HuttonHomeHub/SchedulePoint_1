@@ -150,17 +150,19 @@ describe.skipIf(!hasDatabase)('the placement schema (one-planning-surface M-A)',
     }
   });
 
-  it("placement_snapshot_level is NOT NULL and defaults to 'NONE'", async () => {
+  it('placement_snapshot_level is NOT NULL with NO default, and has the one label', async () => {
     const shape = await readColumn(prisma, 'baselines', 'placement_snapshot_level');
 
     expect(shape, 'placement_snapshot_level must exist on the running database').toBeDefined();
     expect(shape?.is_nullable).toBe('NO');
-    // 'NONE' is the literal truth of every baseline captured before this column, and a constant
-    // default is what makes the ADD COLUMN metadata-only. It is also the CONSERVATIVE value: a
-    // write path not yet taught the capture reads as "no placement recorded", never as
-    // recorded-but-empty — which is the distinction no per-row test and no row count can make,
-    // because every one of the three columns above has a legitimate NULL under 'FULL'.
-    expect(shape?.column_default).toContain("'NONE'");
+    // Single-valued since 1.1.0 (ADR-0215 D6): `NONE` described baselines that predate the column,
+    // and a 1.1 database has none. With no default, a write path not taught the capture is a
+    // not-null violation instead of a row that quietly reads as "recorded".
+    expect(shape?.column_default).toBeNull();
+    const labels = await prisma.$queryRaw<{ enumlabel: string }[]>`
+      SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'PlacementSnapshotLevel' ORDER BY e.enumsortorder`;
+    expect(labels.map((l) => l.enumlabel)).toEqual(['FULL']);
   });
 
   it('remaining_float is a NULLABLE integer with NO default', async () => {

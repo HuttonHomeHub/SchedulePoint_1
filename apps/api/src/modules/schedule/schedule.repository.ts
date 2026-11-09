@@ -8,7 +8,6 @@ import {
   type DependencyType,
   type LagCalendarSource,
   type PercentCompleteType,
-  type PlacementSnapshotLevel,
   type ResourceCurveType,
 } from '@prisma/client';
 
@@ -233,12 +232,11 @@ export interface ResourceHistogramAssignmentRow {
 /** The active baseline's cost-snapshot row the EV read time-phases PV against (EV2b, ADR-0042). */
 export interface EarnedValueBaselineRow {
   sourceActivityId: string;
-  budgetedCost: bigint | null;
-  /** The frozen activity-level lump-sum expense; null on a pre-ADR-0071 snapshot. */
-  budgetedExpense: bigint | null;
-  baselineStart: Date | null;
-  baselineFinish: Date | null;
-  /** The frozen placed span (ADR-0025 Amendment 3); null on a `NONE`-level baseline. */
+  /** The frozen budget in minor units; `0` is a real "no budget" (the column is NOT NULL). */
+  budgetedCost: bigint;
+  /** The frozen activity-level lump-sum expense. */
+  budgetedExpense: bigint;
+  /** The frozen placed span (ADR-0025 Amendment 3); null on an activity nothing had calculated. */
   placedStart: Date | null;
   placedFinish: Date | null;
 }
@@ -256,14 +254,12 @@ export interface EarnedValueBaselineAssignmentRow {
 
 /**
  * A plan's ACTIVE cost baseline as the EV read consumes it. Returned whole — with its
- * `costSnapshotLevel` discriminator — rather than as two loose arrays, because **zero
- * `assignments` rows is ambiguous** (a pre-amendment capture, or a genuinely assignment-free plan) and
- * must therefore never be the signal. `null` from the loader is the unambiguous "no active baseline".
+ * `costSnapshotLevel` discriminator — rather than as two loose arrays, so a label added to that
+ * enum is a compile error in the one `switch` that reads it. `null` from the loader is the
+ * unambiguous "no active baseline".
  */
 export interface EarnedValueCostSnapshot {
   costSnapshotLevel: BaselineCostSnapshotLevel;
-  /** Whether capture froze the placed span; decides which span PV is phased on (ADR-0042 amendment). */
-  placementSnapshotLevel: PlacementSnapshotLevel;
   activities: EarnedValueBaselineRow[];
   assignments: EarnedValueBaselineAssignmentRow[];
 }
@@ -757,10 +753,8 @@ export class ScheduleRepository {
    * cost and join lag that make a lagged PV split exact (ADR-0071 M3 / CQ-1).
    *
    * Returns **`null`** when the plan has no active baseline (the module then falls back to the live
-   * budget and flags `costBaselineMissing`). That is deliberately not an empty array: **zero
-   * `assignments` rows is ambiguous** — a pre-amendment capture and a genuinely assignment-free plan
-   * look identical — so the level is read from the discriminator the capture wrote and never inferred
-   * from a row count. Org + plan scoped (anti-IDOR), soft-deletes excluded; the assignment read rides
+   * budget and flags `costBaselineMissing`). That is deliberately not an empty array, and the level
+   * is read from the discriminator the capture wrote, never inferred from a row count. Org + plan scoped (anti-IDOR), soft-deletes excluded; the assignment read rides
    * `uq_baseline_assignments_baseline_source_assignment`'s leftmost prefix.
    */
   async loadActiveBaselineCostSnapshot(
@@ -770,7 +764,7 @@ export class ScheduleRepository {
   ): Promise<EarnedValueCostSnapshot | null> {
     const active = await db.baseline.findFirst({
       where: { organizationId, planId, isActive: true, deletedAt: null },
-      select: { id: true, costSnapshotLevel: true, placementSnapshotLevel: true },
+      select: { id: true, costSnapshotLevel: true },
     });
     if (!active) return null;
     const [activities, assignments] = await Promise.all([
@@ -780,8 +774,6 @@ export class ScheduleRepository {
           sourceActivityId: true,
           budgetedCost: true,
           budgetedExpense: true,
-          baselineStart: true,
-          baselineFinish: true,
           placedStart: true,
           placedFinish: true,
         },
@@ -799,7 +791,6 @@ export class ScheduleRepository {
     ]);
     return {
       costSnapshotLevel: active.costSnapshotLevel,
-      placementSnapshotLevel: active.placementSnapshotLevel,
       activities,
       assignments,
     };

@@ -76,20 +76,9 @@ describe('the revision ghost builder', () => {
     expect(buildRevisionGhosts([], [row({ activityId: 'new' })], CAP).ghosts).toEqual([]);
   });
 
-  it('COUNTS a moved activity whose old lane was never recorded, and draws nothing', () => {
-    // A pre-ADR-0126 baseline. Drawing it in lane 0 would say the work was in the top row.
-    const result = buildRevisionGhosts(
-      [row({ activityId: 'a', laneIndex: null })],
-      [row({ activityId: 'a', earlyStart: '2026-03-05' })],
-      CAP,
-    );
-    expect(result.ghosts).toEqual([]);
-    expect(result.undrawable).toBe(1);
-  });
-
   it('does NOT count an unscheduled old side as undrawable', () => {
     // Nothing was lost by a missing column — the plan was never calculated, which the completion
-    // half already reports. Counting it would attribute an absent capture to an absent schedule.
+    // half already reports. Counting it would attribute an absent schedule to a lost drawing.
     const result = buildRevisionGhosts(
       [row({ activityId: 'a', earlyStart: null, earlyFinish: null })],
       [row({ activityId: 'a' })],

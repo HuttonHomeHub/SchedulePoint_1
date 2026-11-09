@@ -71,10 +71,14 @@ recycle bin, retention, backups, the edit lock, and XER/MSPDI import.
 **D6. Published shapes are removed, once.** Under the owner's answer to Q1 (option E) and `schema-design.md` §12
 P-c and Q2, these go in 1.1.0: baseline response `placementSnapshotLevel` and `swimlaneSnapshotLevel` (enums
 narrowed); variance `basis` value `NETWORK`; revision and cross-plan compare `datesBasis` value `NETWORK`;
-revision compare `bothPlacementSnapshotted`; `NOT_SNAPSHOTTED` as a not-assessable reason; the route
+`placementNotAssessableReason` on both revision change reports (the published form of the `bothPlacementSnapshotted`
+option this list first named, which is internal: it could only ever be `null`); `NOT_SNAPSHOTTED` as a
+not-assessable reason; `PlanEarnedValue.costPhasingApproximatedCount` and `floatNotComparableCount` on variance,
+revision compare and cross-plan compare (all four became constant `0`; the owner chose to remove them, Q-A); the route
 `GET /api/v1/organizations/:orgSlug/plans/:planId/placement-migration`; the organisation export file
 `records-placement-migrations`; the constant snapshot-level columns of the exported `baselines`; and the "empty
-when calculated before 2.5" wording of `totalFloatMinutes` (spec §4.6 is the complete list). `docs/API.md`, the OpenAPI
+when calculated before 2.5" wording of `totalFloatMinutes` (spec §4.6 and the M3 inventory §6 together are the
+complete list). `docs/API.md`, the OpenAPI
 spec and `docs/ORGANISATION_EXPORT_FORMAT.md` (a new format version) change in the PR that removes each. No request
 shape changes; `swimlaneSource: NONE` is a live choice and stays.
 

@@ -187,12 +187,7 @@ export function GanttPrintSurface({
   // (`placement-baseline-variance`, US-2) — only worth stating when variance is actually
   // printed, and only when the caller knows the answer (an absent `basis`, an older API
   // image mid rolling-update, ADR-0047, says nothing rather than guessing).
-  const basisSuffix =
-    showVariance && varianceBasis === 'PLACED'
-      ? ' (placed dates)'
-      : showVariance && varianceBasis === 'NETWORK'
-        ? ' (earliest dates)'
-        : '';
+  const basisSuffix = showVariance && varianceBasis === 'PLACED' ? ' (placed dates)' : '';
   const standardWidth = columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0);
   const varianceWidth = showVariance ? PRINT_VARIANCE_WIDTH : 0;
   const { printed: printedCodes, omitted: omittedCodes } = fitPrintCodeColumns(

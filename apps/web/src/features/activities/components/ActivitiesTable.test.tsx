@@ -384,31 +384,19 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByText('−2 d float')).toBeInTheDocument();
   });
 
-  it('explains a float variance it could not compute, in the header and from the cell (#318)', async () => {
+  it('shows a float variance that was never calculated as a dash, with the header unannotated (#318)', async () => {
     const { container } = renderWithVariance(
       varianceRow({
-        currentTotalFloat: 5,
-        baselineTotalFloat: 2,
+        currentTotalFloat: null,
+        baselineTotalFloat: null,
         floatVarianceDays: null,
         floatVarianceMinutes: null,
       }),
     );
     expect((await axe(container)).violations).toEqual([]);
-    // The description is VISIBLE text in the header, never a tooltip.
-    const header = screen.getByRole('columnheader', { name: /Total float variance/ });
-    const note = within(header).getByText('1 not comparable');
-    // Visual only: the header's accessible name stays "Total float variance".
-    expect(note).toHaveAttribute('aria-hidden', 'true');
+    // Days and minutes are one fact since 1.1, so there is no "calculated but not comparable" state
+    // to explain: the header is its plain name and no cell carries a reason.
     expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
-    // The "—" cell carries its own reason in text a screen reader reads, so the dash is explained
-    // rather than read as "no change".
-    const reason = screen.getByText('could not be compared');
-    expect(reason).toHaveClass('sr-only');
-    expect(reason.parentElement?.textContent).toBe('— could not be compared');
-  });
-
-  it('adds no header note when every float variance could be computed', () => {
-    renderWithVariance(varianceRow());
     expect(screen.queryByText(/not comparable|could not be compared/)).not.toBeInTheDocument();
   });
 

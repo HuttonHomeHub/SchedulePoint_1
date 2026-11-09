@@ -20,6 +20,7 @@ import { HierarchyLifecycleService } from '../src/common/hierarchy/hierarchy-lif
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents, clearDomainData } from './audit-reset';
+import { FULL_BASELINE_ACTIVITY_COLUMNS, FULL_BASELINE_COLUMNS } from './baseline-columns';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 import { clearPlanTree } from './clear-plan-tree';
@@ -217,7 +218,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
       },
     });
     const baseline = await prisma.baseline.create({
-      data: { organizationId: orgId, planId, name: 'BL1' },
+      data: { organizationId: orgId, planId, name: 'BL1', ...FULL_BASELINE_COLUMNS },
       select: { id: true },
     });
     await prisma.baselineActivity.create({
@@ -227,6 +228,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
         sourceActivityId: activityId,
         name: 'Excavate',
         durationMinutes: 1440,
+        ...FULL_BASELINE_ACTIVITY_COLUMNS,
       },
     });
     await prisma.planShare.create({

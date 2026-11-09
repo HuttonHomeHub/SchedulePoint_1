@@ -332,9 +332,6 @@ test('a planner changes the working day and the comparison reads float as unchan
   await expect(row).toContainText('Float unchanged');
   await expect(row).not.toContainText(/Float (up|down)/);
 
-  // Every float could be compared, so the quiet note is absent rather than present and empty.
-  await expect(panel.locator('[data-float-not-comparable]')).toHaveCount(0);
-
   // The printed comparison says the same thing in the same words.
   await page.evaluate(() => {
     window.print = () => {};
@@ -345,7 +342,6 @@ test('a planner changes the working day and the comparison reads float as unchan
   );
   expect(printed).toContain(unmovedName);
   expect(printed).toContain('Float unchanged');
-  expect(printed).not.toMatch(/could not be compared/i);
   expect(printed).not.toMatch(/Float (up|down)/);
 
   const scan = await new AxeBuilder({ page })

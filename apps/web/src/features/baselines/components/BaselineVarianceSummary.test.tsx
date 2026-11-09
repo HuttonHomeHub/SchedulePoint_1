@@ -14,7 +14,6 @@ function summary(overrides: Partial<PlanVarianceSummary> = {}): PlanVarianceSumm
     addedCount: 1,
     removedCount: 0,
     basis: 'PLACED',
-    floatNotComparableCount: 0,
     ...overrides,
   };
 }
@@ -42,30 +41,14 @@ describe('BaselineVarianceSummary', () => {
     expect(screen.getByText(/on or ahead of baseline · 0 behind/)).toBeInTheDocument();
   });
 
-  // US-2 (placement-baseline-variance): a NONE-level baseline names the earliest basis
-  // and explains why bars moved by hand are not counted, with the recapture remedy.
-  it('names the earliest basis and explains it on a NONE-level baseline', () => {
-    render(<BaselineVarianceSummary summary={summary({ basis: 'NETWORK' })} />);
-    expect(screen.getByText(/vs\. Contract Baseline \(earliest dates\):/)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /captured before placements were recorded, so bars moved by hand are not counted/,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Capture a new baseline to compare placed dates\./),
-    ).toBeInTheDocument();
-  });
-
-  // basis absent (an older API image during a rolling update, ADR-0047) — no qualifier and
-  // no second sentence, since nothing is guessed.
-  it('shows no basis qualifier or explanation when basis is absent', () => {
+  // basis absent (an older API image during a rolling update, ADR-0047) — no qualifier, since
+  // nothing is guessed.
+  it('shows no basis qualifier when basis is absent', () => {
     render(
       <BaselineVarianceSummary
         summary={{ ...summary(), basis: undefined as unknown as PlanVarianceSummary['basis'] }}
       />,
     );
     expect(screen.getByText(/vs\. Contract Baseline:/)).toBeInTheDocument();
-    expect(screen.queryByText(/captured before placements were recorded/)).not.toBeInTheDocument();
   });
 });

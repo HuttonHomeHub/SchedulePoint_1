@@ -1329,15 +1329,14 @@ describe('ScheduleService.getEarnedValue', () => {
 
   it('joins the active baseline cost snapshot for PV (not flagged as missing)', async () => {
     schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
-      costSnapshotLevel: 'ACTIVITY',
-      placementSnapshotLevel: 'NONE',
+      costSnapshotLevel: 'ASSIGNMENT',
       activities: [
         {
           sourceActivityId: 'act-1',
           budgetedCost: 100000n,
           budgetedExpense: 100000n,
-          baselineStart: new Date('2026-01-01T00:00:00Z'),
-          baselineFinish: new Date('2026-01-05T00:00:00Z'),
+          placedStart: new Date('2026-01-01T00:00:00Z'),
+          placedFinish: new Date('2026-01-05T00:00:00Z'),
         },
       ],
       assignments: [],
@@ -1397,15 +1396,14 @@ describe('ScheduleService.getEarnedValue', () => {
     it('P4: a baseline’s frozen finish is the inclusive date too, and phases the same way', async () => {
       schedule.loadEarnedValueActivities.mockResolvedValue([task({ earlyStart: null })]);
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
-        costSnapshotLevel: 'ACTIVITY',
-        placementSnapshotLevel: 'NONE',
+        costSnapshotLevel: 'ASSIGNMENT',
         activities: [
           {
             sourceActivityId: 'act-1',
             budgetedCost: 10n,
             budgetedExpense: 10n,
-            baselineStart: d('2026-01-05'),
-            baselineFinish: d('2026-01-09'),
+            placedStart: d('2026-01-05'),
+            placedFinish: d('2026-01-09'),
           },
         ],
         assignments: [],
@@ -1440,13 +1438,12 @@ describe('ScheduleService.getEarnedValue', () => {
     });
   });
 
-  describe('PV phases on one basis per read, chosen from the baseline’s placement level (#405 (c))', () => {
-    // UNIFORM, £10,000.00 over ten-day spans (first day to last day inclusive, ADR-0023), data date D+10, with the four anchors set eight, six,
-    // four and two days before it: frozen early D+2, frozen placed D+4, live early D+6, live placed
-    // D+8. Each anchor gives a different PV, so a read that switches only one of them, or the wrong
-    // one, lands on a different number.
+  describe('PV phases on the placed span on both sides (#405 (c), ADR-0148)', () => {
+    // UNIFORM, £10,000.00 over ten-day spans (first day to last day inclusive, ADR-0023), data date
+    // D+10, with the anchors set six, four and two days before it: frozen placed D+4, live early D+6,
+    // live placed D+8. Each anchor gives a different PV, so a read that takes the wrong one lands on
+    // a different number.
     const at = (day: number) => new Date(Date.UTC(2026, 0, 1 + day));
-    const FROZEN_EARLY = 800000;
     const FROZEN_PLACED = 600000;
     const LIVE_EARLY = 400000;
     const LIVE_PLACED = 200000;
@@ -1475,21 +1472,17 @@ describe('ScheduleService.getEarnedValue', () => {
     });
 
     const snapshot = (
-      placementSnapshotLevel: 'FULL' | 'NONE',
       placed: { placedStart: Date | null; placedFinish: Date | null } = {
         placedStart: at(4),
         placedFinish: at(13),
       },
     ) => ({
-      costSnapshotLevel: 'ACTIVITY',
-      placementSnapshotLevel,
+      costSnapshotLevel: 'ASSIGNMENT',
       activities: [
         {
           sourceActivityId: 'act-1',
           budgetedCost: 1000000n,
           budgetedExpense: 1000000n,
-          baselineStart: at(2),
-          baselineFinish: at(11),
           ...placed,
         },
       ],
@@ -1499,16 +1492,16 @@ describe('ScheduleService.getEarnedValue', () => {
     const pv = async () =>
       (await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID)).total.pv;
 
-    it('U1: a FULL baseline phases on the frozen placed span, not on any of the other three', async () => {
-      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('FULL'));
+    it('U1: a baseline phases on the frozen placed span, not on a live one', async () => {
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot());
       const value = await pv();
       expect(value).toBe(FROZEN_PLACED);
-      expect([FROZEN_EARLY, LIVE_EARLY, LIVE_PLACED]).not.toContain(value);
+      expect([LIVE_EARLY, LIVE_PLACED]).not.toContain(value);
     });
 
-    it('U2a: a FULL row with no placed dates falls back to the live PLACED span, never an early one', async () => {
+    it('U2a: a row with no placed dates falls back to the live PLACED span, never an early one', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
-        snapshot('FULL', { placedStart: null, placedFinish: null }),
+        snapshot({ placedStart: null, placedFinish: null }),
       );
       expect(await pv()).toBe(LIVE_PLACED);
     });
@@ -1517,29 +1510,16 @@ describe('ScheduleService.getEarnedValue', () => {
       ['start', { placedStart: null, placedFinish: at(13) }],
       ['finish', { placedStart: at(4), placedFinish: null }],
     ])(
-      'U2b: a FULL row missing only its placed %s falls back to the live PLACED span, not a mix',
+      'U2b: a row missing only its placed %s falls back to the live PLACED span, not a mix',
       async (_which, placed) => {
-        schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('FULL', placed));
+        schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot(placed));
         expect(await pv()).toBe(LIVE_PLACED);
       },
     );
 
-    it('U2c: a NONE baseline phases on its frozen early span, ignoring any placement', async () => {
-      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('NONE'));
-      expect(await pv()).toBe(FROZEN_EARLY);
-    });
-
-    it('U2d: on a NONE baseline an activity added after capture falls back to its live EARLY span', async () => {
+    it('U2e: an activity added after capture falls back to its live PLACED span', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
-        ...snapshot('NONE'),
-        activities: [],
-      });
-      expect(await pv()).toBe(LIVE_EARLY);
-    });
-
-    it('U2e: on a FULL baseline an activity added after capture falls back to its live PLACED span', async () => {
-      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
-        ...snapshot('FULL'),
+        ...snapshot(),
         activities: [],
       });
       expect(await pv()).toBe(LIVE_PLACED);
@@ -1548,6 +1528,17 @@ describe('ScheduleService.getEarnedValue', () => {
     it('U2f: with no active baseline the live-budget PV phases on the live placed span', async () => {
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(null);
       expect(await pv()).toBe(LIVE_PLACED);
+    });
+
+    it('flags an activity added after capture as having no cost baseline', async () => {
+      // The one remaining cause of `costBaselineMissing` besides no baseline at all: a live activity
+      // the snapshot has no row for.
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue({
+        ...snapshot(),
+        activities: [],
+      });
+      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
+      expect(result.costBaselineMissing).toBe(true);
     });
   });
 
@@ -1581,41 +1572,25 @@ describe('ScheduleService.getEarnedValue', () => {
         },
       ]);
     };
-    const snapshot = (
-      costSnapshotLevel: 'ACTIVITY' | 'ASSIGNMENT',
-      assignments: unknown[] = [],
-    ) => ({
-      costSnapshotLevel,
-      placementSnapshotLevel: 'NONE',
+    const snapshot = (assignments: unknown[] = []) => ({
+      costSnapshotLevel: 'ASSIGNMENT',
       activities: [
         {
           sourceActivityId: 'act-1',
           budgetedCost: 100000n,
           budgetedExpense: 0n,
-          baselineStart: new Date('2026-01-01T00:00:00Z'),
-          baselineFinish: new Date('2026-01-10T00:00:00Z'),
+          placedStart: new Date('2026-01-01T00:00:00Z'),
+          placedFinish: new Date('2026-01-10T00:00:00Z'),
         },
       ],
       assignments,
     });
 
-    it('reports an ACTIVITY-level baseline’s lagged split as approximated', async () => {
-      // Captured before per-assignment cost was frozen. The breakdown was never recorded, so PV
-      // reallocates the committed total by live shares — and the read says so rather than staying
-      // quiet, which is the half of CQ-1 option B that is not the schema.
-      laggedPlan();
-      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ACTIVITY'));
-      const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
-      expect(result.costPhasingLaggedCount).toBe(1);
-      expect(result.costPhasingApproximatedCount).toBe(1);
-    });
-
     it('reads an ASSIGNMENT-level baseline’s frozen components as exact', async () => {
-      // Same live plan, same committed £1,000 — but the snapshot holds its own breakdown, so nothing
-      // is reallocated and nothing is reported approximate.
+      // The snapshot holds its own breakdown, so nothing is reallocated by live shares.
       laggedPlan();
       schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(
-        snapshot('ASSIGNMENT', [
+        snapshot([
           {
             sourceActivityId: 'act-1',
             sourceAssignmentId: 'asg-1',
@@ -1626,20 +1601,16 @@ describe('ScheduleService.getEarnedValue', () => {
       );
       const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
       expect(result.costPhasingLaggedCount).toBe(1);
-      expect(result.costPhasingApproximatedCount).toBe(0);
     });
 
-    it('an ASSIGNMENT-level baseline with NO component rows is exact, not approximated', async () => {
-      // The ambiguity in one test. Zero `baseline_assignments` rows is the SAME observation as the
-      // ACTIVITY case above and must produce the opposite answer: this activity is exactly known to
-      // have carried no assignments at capture, so it phases its frozen expense over the activity
-      // window and never reaches for the live assignment it has acquired since. Inferring the level
-      // from the row count would silently make this the approximate branch.
+    it('an ASSIGNMENT-level baseline with NO component rows is exact', async () => {
+      // This activity is exactly known to have carried no assignments at capture, so it phases its
+      // frozen expense over the activity window and never reaches for the live assignment it has
+      // acquired since: the seeding of every snapshotted activity in `frozenCostComponents`.
       laggedPlan();
-      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot('ASSIGNMENT'));
+      schedule.loadActiveBaselineCostSnapshot.mockResolvedValue(snapshot());
       const result = await service.getEarnedValue(principalWith(COST), 'acme', PLAN_ID);
       expect(result.costPhasingLaggedCount).toBe(0);
-      expect(result.costPhasingApproximatedCount).toBe(0);
     });
   });
 });

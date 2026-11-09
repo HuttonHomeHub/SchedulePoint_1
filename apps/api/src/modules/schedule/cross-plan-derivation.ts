@@ -108,21 +108,18 @@ export interface IncomingCrossPlanEdge {
    * effective-Visual columns, since one-planning-surface M-H. Null where the bound cannot be
    * derived, which the caller counts as an N32 warning rather than treating as a missing edge.
    *
-   * **Null has two causes and only one of them is "never calculated."** The columns were added by
-   * `20260714120000_add_scheduling_modes_columns` **with no backfill**, so a plan whose last
-   * recalculation predates 2026-07-14 has `early_start` set and `visual_effective_start` null — and
-   * a cross-plan bound that used to derive now reports as missing. It degrades gracefully (a
-   * counted warning, never a wrong bound) and is almost certainly an empty population on this
-   * estate, but a reader debugging an unexpected N32 should recalculate the upstream plan before
-   * looking anywhere else.
+   * Null means the upstream plan was never calculated (it holds no placed span to read), and it
+   * degrades gracefully: a counted warning, never a wrong bound. A reader debugging an unexpected
+   * N32 should recalculate the upstream plan before looking anywhere else.
    */
   predecessorPlacedStart: string | null;
   predecessorPlacedFinish: string | null;
   /**
    * The exact instants those two dates are dated from, as absolute minutes on the engine's axis
-   * (`EngineResult.placedStartInstant/placedFinishInstant`), or null where none is current. Null reads
-   * the date beside it exactly as before (ADR-0212 D3); withholding a stale instant is the caller's
-   * (D4), so this module never judges freshness.
+   * (`EngineResult.placedStartInstant/placedFinishInstant`), or null where the upstream plan was never
+   * calculated. Null reads the date beside it exactly as before (ADR-0212 D3); the database holds a
+   * plan's instants stamp equal to its calculation stamp, so there is no stale instant to withhold and
+   * this module judges nothing.
    */
   predecessorPlacedStartInstant: number | null;
   predecessorPlacedFinishInstant: number | null;

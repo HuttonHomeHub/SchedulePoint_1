@@ -220,7 +220,10 @@ export class BaselinesService {
 
         const criticalityRule: CriticalityRule | null =
           mirrors.scheduleCriticalPathDefinition === null
-            ? // Recalculated before the mirror shipped, or never. All four are NULL together —
+            ? // Never recalculated, or a plan whose activities were dated by an import that raced a
+              // project delete (its recalculation dates the activities while the stamp skips the
+              // soft-deleted plan; `hierarchy-lifecycle.service.ts` resolves a project's plan list
+              // before it locks). All four are NULL together —
               // ck_plans_schedule_criticality_all_or_none is what makes testing ONE of them total.
               null
             : {
@@ -452,7 +455,6 @@ export class BaselinesService {
           addedCount: 0,
           removedCount: 0,
           basis: null,
-          floatNotComparableCount: 0,
         },
       };
     }
@@ -474,8 +476,8 @@ export class BaselinesService {
         sourceActivityId: s.sourceActivityId,
         code: s.code,
         name: s.name,
-        baselineStart: basis === 'PLACED' ? day(s.placedStart) : day(s.baselineStart),
-        baselineFinish: basis === 'PLACED' ? day(s.placedFinish) : day(s.baselineFinish),
+        baselineStart: day(s.placedStart),
+        baselineFinish: day(s.placedFinish),
         totalFloat: s.totalFloat,
         totalFloatMinutes: s.totalFloatMinutes,
       })),
@@ -483,8 +485,8 @@ export class BaselinesService {
         id: l.id,
         code: l.code,
         name: l.name,
-        start: basis === 'PLACED' ? day(l.visualEffectiveStart) : day(l.earlyStart),
-        finish: basis === 'PLACED' ? day(l.visualEffectiveFinish) : day(l.earlyFinish),
+        start: day(l.visualEffectiveStart),
+        finish: day(l.visualEffectiveFinish),
         totalFloat: l.totalFloat,
         totalFloatMinutes: l.totalFloatMinutes,
       })),
@@ -508,19 +510,14 @@ export class BaselinesService {
    * The read's basis, from the active baseline's frozen placement level
    * (`placement-baseline-variance`, amending ADR-0025). `FULL → PLACED`: the baseline
    * recorded where bars were placed at capture, so compare placed-vs-placed (ADR-0148 — a
-   * bar is drawn where it is placed). `NONE → NETWORK`: every baseline captured before
-   * `api-v0.70.0` recorded nothing about placement, so the only honest comparison left is
-   * the pure-network dates on both sides — the accepted residual is that on such a
-   * baseline a constraint-to-placement conversion still reads as "ahead" (Q1 default (a)).
-   * Exhaustive with no `default` case: a third level is a compile error, not a silent fall-
-   * through to one of the two existing answers.
+   * bar is drawn where it is placed). Exhaustive with no `default` case, kept as a one-case
+   * `switch` on purpose: a label added to the enum is a compile error here, not a silent
+   * fall-through to the one existing answer.
    */
   private varianceBasisFor(level: PlacementSnapshotLevel): VarianceBasis {
     switch (level) {
       case 'FULL':
         return 'PLACED';
-      case 'NONE':
-        return 'NETWORK';
     }
   }
 

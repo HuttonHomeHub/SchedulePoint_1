@@ -1811,37 +1811,37 @@ export type CalendarErrorReason = keyof typeof CALENDAR_ERROR;
 
 /**
  * What a baseline's capture froze of the PLACEMENT (`placement-baseline-variance`,
- * amending ADR-0025 §Amendments 3). `NONE` is the literal truth of every baseline
- * captured before `api-v0.70.0` — the pure-network dates only. `FULL` is that plus
+ * amending ADR-0025 §Amendments 3). `FULL` is the pure-network dates plus
  * `baseline_activities.placedStart`/`placedFinish` (where the bar actually sat) and
- * `.visualStart` (what the planner placed). Mutually assignable with Prisma's
- * generated `PlacementSnapshotLevel` enum — see the lock-step check in
- * `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`, which fails to
- * compile if either side gains a member the other lacks.
+ * `.visualStart` (what the planner placed), and it is the only value a 1.1 database
+ * holds — the `NONE` label of the pre-placement capture was removed with the fresh
+ * start (ADR-0215 D6). A label added later is a deliberate, reviewed decision.
+ * Mutually assignable with Prisma's generated `PlacementSnapshotLevel` enum — see the
+ * lock-step check in `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`,
+ * which fails to compile if either side gains a member the other lacks.
  */
-export type PlacementSnapshotLevel = 'NONE' | 'FULL';
+export type PlacementSnapshotLevel = 'FULL';
 
 /**
  * What a baseline's capture froze of the SWIMLANES (swimlanes M1-T1b, the sixth amendment to
- * ADR-0025). `NONE` is the literal truth of every baseline captured before swimlanes shipped: its
- * removed work is counted, not drawn, when swimlanes are on. `FULL` is the plan's swimlane source
- * and level, each activity's own swimlane, and a verbatim copy of its lane rows for every basis.
- * Mutually assignable with Prisma's generated `SwimlaneSnapshotLevel` enum — see the lock-step
- * check in `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`.
+ * ADR-0025). `FULL` is the plan's swimlane source and level, each activity's own swimlane, and a
+ * verbatim copy of its lane rows for every basis — the only value a 1.1 database holds (the `NONE`
+ * label was removed with the fresh start, ADR-0215 D6). Mutually assignable with Prisma's generated
+ * `SwimlaneSnapshotLevel` enum — see the lock-step check in
+ * `apps/api/src/modules/baselines/dto/baseline-response.dto.ts`.
  */
-export type SwimlaneSnapshotLevel = 'NONE' | 'FULL';
+export type SwimlaneSnapshotLevel = 'FULL';
 
 /**
  * Which dates a variance read compared (`placement-baseline-variance`, amending
  * ADR-0025 §Amendments 3): `PLACED` reads the frozen `placedStart`/`placedFinish`
  * against the live `visualEffectiveStart`/`visualEffectiveFinish` — the bars as
- * drawn (ADR-0148). `NETWORK` reads the frozen `baselineStart`/`baselineFinish`
- * against the live `earlyStart`/`earlyFinish` — the pure-network dates, which is
- * the only comparison available on a baseline captured before placements were
- * recorded (`placementSnapshotLevel: 'NONE'`). The basis is chosen **once per
- * read**, from the active baseline's level, never per row.
+ * drawn (ADR-0148). It is the only basis since 1.1.0: the `NETWORK` value, which read
+ * the pure-network dates of a baseline captured before placements were recorded, was
+ * removed with the fresh start (ADR-0215 D6). The basis is chosen **once per read**,
+ * from the active baseline's level, never per row.
  */
-export type VarianceBasis = 'PLACED' | 'NETWORK';
+export type VarianceBasis = 'PLACED';
 
 /**
  * A baseline — a named, frozen snapshot of a plan's schedule, the "plan of record"
@@ -1866,16 +1866,15 @@ export interface BaselineSummary {
   /** How many activity snapshots the baseline froze. */
   activityCount: number;
   /**
-   * What this capture froze of the placement (`placement-baseline-variance`).
-   * `NONE` for every baseline captured before `api-v0.70.0`; `FULL` after.
-   * Decides the basis a variance read against this baseline can use — see
+   * What this capture froze of the placement (`placement-baseline-variance`): always `FULL`
+   * since 1.1.0. Decides the basis a variance read against this baseline uses — see
    * {@link VarianceBasis}.
    */
   placementSnapshotLevel: PlacementSnapshotLevel;
   /**
-   * What this capture froze of the swimlanes (swimlanes M1-T1b). `NONE` for every baseline
-   * captured before; read the level, never infer it from the absence of lane copies — a plan nobody
-   * laid out freezes zero lane rows and is still `FULL`.
+   * What this capture froze of the swimlanes (swimlanes M1-T1b): always `FULL` since 1.1.0. Read
+   * the level, never infer it from the absence of lane copies — a plan nobody laid out freezes zero
+   * lane rows and is still `FULL`.
    */
   swimlaneSnapshotLevel: SwimlaneSnapshotLevel;
   version: number;
@@ -1941,13 +1940,12 @@ export interface BaselineDetail extends BaselineSummary {
  * **`baselineStart`/`baselineFinish`/`currentStart`/`currentFinish` and the two
  * variance fields are on the read's `meta.basis`** (`placement-baseline-variance`,
  * amending ADR-0025 §Amendments 3) — see {@link VarianceBasis} and
- * {@link PlanVarianceSummary.basis}. On `basis: 'PLACED'` they compare the frozen
- * placed span against the live placed span (where the bars are drawn, ADR-0148); on
- * `basis: 'NETWORK'` they compare the frozen and live pure-network dates. The field
- * names do not change with the basis here, because they are basis-neutral
- * (`start`/`finish`). The revision comparison's moved rows name their dates with the
- * basis-neutral `fromStart`/`toStart`/`fromFinish`/`toFinish`, which hold placed dates when
- * `datesBasis` is `PLACED` (`docs/TECH_DEBT.md` #405).
+ * {@link PlanVarianceSummary.basis}. On `basis: 'PLACED'` (the only basis since 1.1.0) they
+ * compare the frozen placed span against the live placed span (where the bars are drawn,
+ * ADR-0148). The field names are basis-neutral (`start`/`finish`), which is why they were not
+ * renamed when the pure-network basis was removed. The revision comparison's moved rows name
+ * their dates with the basis-neutral `fromStart`/`toStart`/`fromFinish`/`toFinish`, which hold
+ * placed dates (`docs/TECH_DEBT.md` #405).
  */
 export interface BaselineVarianceRow {
   /** The activity id — the live activity's id, or the baselined `sourceActivityId` for a removed row. */
@@ -1975,9 +1973,8 @@ export interface BaselineVarianceRow {
   floatVarianceDays: number | null;
   /**
    * The exact `current − baseline` total float in working minutes. **Null is not zero**: it means
-   * the activity is not in the baseline, was removed, or its float has no minutes on a side — a
-   * baseline captured before minutes were stored, or a plan not recalculated since
-   * ({@link PlanVarianceSummary.floatNotComparableCount} counts those).
+   * the activity is not in the baseline, was removed, or a side was never calculated (it has no
+   * float at all).
    */
   floatVarianceMinutes: number | null;
 }
@@ -2001,17 +1998,10 @@ export interface PlanVarianceSummary {
    * Which dates this read compared (`placement-baseline-variance`, amending ADR-0025
    * §Amendments 3). `null` only when `baselineId` is `null` (no active baseline —
    * nothing was compared). Every row's dated fields and start/finish variances are on
-   * this basis; float variance is total float on both bases, always. An older API
-   * image (a rolling update, ADR-0047) omits this field — a client reading it as
-   * `undefined` shows no basis wording rather than guessing one.
+   * this basis. An older API image (a rolling update, ADR-0047) omits this field — a client
+   * reading it as `undefined` shows no basis wording rather than guessing one.
    */
   basis: VarianceBasis | null;
-  /**
-   * Activities in the baseline and live whose float was calculated on both sides but cannot be
-   * compared because a side has no float minutes (ADR-0214). Their `floatVarianceDays` is null; a
-   * client states the count rather than showing them as unchanged. 0 when `baselineId` is null.
-   */
-  floatNotComparableCount: number;
 }
 
 /**
@@ -2318,15 +2308,6 @@ export interface PlanEarnedValue {
    * the previous single-window expression verbatim.
    */
   costPhasingLaggedCount: number;
-  /**
-   * Of those, the leaf activities whose component split was **approximated from the live budget mix**
-   * because the plan's active cost baseline was captured before ADR-0025's second amendment froze
-   * per-assignment cost — and cannot be back-filled, since a breakdown that was never recorded is not
-   * recoverable from a total (ADR-0071 CQ-1). Always `≤ costPhasingLaggedCount`; `0` when there is no
-   * cost baseline (a live-budget PV has nothing to approximate) and when every baseline in play
-   * carries its own components. Re-capturing the baseline is what clears it.
-   */
-  costPhasingApproximatedCount: number;
   /**
    * The count of leaf activities whose progress steps are all zero-weight (M7 rung 5, ADR-0044 §33,
    * N27) — so the weighted-mean rollup fell back to the manual `physicalPercentComplete`. A read-time
@@ -3570,8 +3551,8 @@ export type RevisionCompletionReason = (typeof REVISION_COMPLETION_REASONS)[numb
  * set with every bar in the same place. A comparison across that reports a large, real-looking set
  * as having "entered the critical path" and is wrong about all of it.
  *
- * `UNKNOWN` is what a side whose rule was never recorded reports — a baseline captured before the
- * freeze shipped, or a plan not recalculated since the mirror did. It is a permanent sentinel on
+ * `UNKNOWN` is what a side whose rule was never recorded reports — a baseline captured from a plan
+ * that was never calculated, or a live plan not recalculated yet. It is a permanent sentinel on
  * the baseline side (a capture cannot be re-run) and a self-clearing one on the live side. It is
  * NOT a claim in either direction, and coalescing it (`?? 'MATCH'`, `?? 0` on a mirror field) is
  * the exact lie the columns exist to prevent.
@@ -3613,8 +3594,8 @@ export interface RevisionMovedActivity {
   toTotalFloatMinutes: number | null;
   floatMovementMinutes: number | null;
   /**
-   * The dates the read's `datesBasis` selects: placed when `PLACED`, earliest when `NETWORK`.
-   * Named for what they hold, not for one basis (`docs/TECH_DEBT.md` #405).
+   * The placed dates (the bars as drawn). Named for what they hold, not for one basis
+   * (`docs/TECH_DEBT.md` #405).
    */
   fromStart: string | null;
   toStart: string | null;
@@ -3732,9 +3713,10 @@ export const REVISION_FREE_CHANGE_CLASSES = [
 export type RevisionFreeChangeClass = (typeof REVISION_FREE_CHANGE_CLASSES)[number];
 
 /**
- * The classes that need the snapshot extension. Named here rather than merely omitted: an absent
- * class and an unchanged one are different facts, and a reader who cannot tell them apart concludes
- * the plan's logic did not change when nobody ever looked.
+ * The classes that need the frozen shape (the snapshot extension, ADR-0126) rather than the output
+ * columns alone. Named here rather than merely omitted: an absent class and an unchanged one are
+ * different facts, and a reader who cannot tell them apart concludes the plan's logic did not change
+ * when nobody ever looked.
  */
 export const REVISION_PAID_CHANGE_CLASSES = [
   'RELOGICKED',
@@ -3753,7 +3735,7 @@ export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeCl
  * empty and `total` is zero in both states, and only this field separates them.
  *
  * `CODE_IS_THE_CORRELATION_KEY` is reachable only on a CROSS-PLAN comparison, and it is the sharpest
- * of the three: two separately-imported plans are matched ON the activity code, so for every matched
+ * of the two: two separately-imported plans are matched ON the activity code, so for every matched
  * pair the two codes are equal **by construction** and the "Code changed" class can never report a
  * change. Left unsaid, that class prints a confident "no changes in this revision" for a question
  * the product structurally cannot answer — every row individually true and the picture a lie, which
@@ -3761,7 +3743,6 @@ export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeCl
  * missing by the M4 ux review, which is why it says so here.
  */
 export const REVISION_NOT_ASSESSABLE_REASONS = [
-  'NOT_SNAPSHOTTED',
   'SIDE_NOT_SCHEDULED',
   'CODE_IS_THE_CORRELATION_KEY',
 ] as const;
@@ -3831,27 +3812,6 @@ export interface RevisionChangeReport {
   /** Every class, assessed or not — total over the union, so a class is never simply missing. */
   readonly classes: readonly RevisionClassAssessment[];
   readonly cap: number;
-  /**
-   * **Whether the two sides' PLACEMENTS can be compared at all** — null when both recorded one, a
-   * reason when they did not (one-planning-surface M-C).
-   *
-   * A baseline froze where the NETWORK said work could go and never where a planner had put it,
-   * until `placed_start`/`placed_finish`/`visual_start` were frozen beside the early columns. Every
-   * baseline captured before that is `placement_snapshot_level: 'NONE'` and **permanently** so: a
-   * backfill would state as history a placement that baseline never saw.
-   *
-   * **It is reported whether or not either plan happens to hold a placement**, which is the same
-   * rule the three `*_snapshot_level` columns are written under and is deliberate. Making it
-   * conditional on there being something to compare is how a NULL meaning "nobody looked" becomes
-   * indistinguishable from one meaning "we looked and there was nothing" — the exact absence this
-   * field exists to remove, and the likelier slip here than elsewhere, because an unplaced plan's
-   * placement columns are all null and read as nothing worth reporting.
-   *
-   * It is a nullable REASON and deliberately not a three-valued verdict. A verdict invites the
-   * `?? 'MATCH'` that the criticality mirrors exist to forbid; absence of a reason is the only
-   * thing that can mean "comparable", and it cannot be defaulted into existence.
-   */
-  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 /**
@@ -4080,14 +4040,6 @@ export interface CrossPlanClassAssessment extends Omit<RevisionClassAssessment, 
 export interface CrossPlanChangeReport {
   readonly classes: readonly CrossPlanClassAssessment[];
   readonly cap: number;
-  /**
-   * The same question as {@link RevisionChangeReport.placementNotAssessableReason}, and it is NOT
-   * trivially null here. A cross-plan comparison matches two **plans** on the activity code, but
-   * either side may still be one of that plan's baselines — so a pre-M-C snapshot reaches this
-   * route exactly as it reaches the plan-nested one, and reporting nothing would tell a reader the
-   * placements agreed when nobody recorded one of them.
-   */
-  readonly placementNotAssessableReason: RevisionNotAssessableReason | null;
 }
 
 export interface CrossPlanCriticalPathDelta extends Omit<
@@ -4135,8 +4087,6 @@ export interface CrossPlanRevisionCompare {
   readonly from: RevisionSide;
   readonly to: RevisionSide;
   readonly dayFactorMinutes: number;
-  /** See {@link RevisionCompare.floatNotComparableCount}. */
-  readonly floatNotComparableCount: number;
   readonly frame: CrossPlanRevisionFrame;
   readonly settingsVerdict: RevisionSettingsVerdict;
   /** Stated first, and rendered first: everything below is worth exactly what this says it is. */
@@ -4158,14 +4108,11 @@ export interface RevisionCompare {
   planId: string;
   planName: string;
   /**
-   * Which dates every date-bearing figure below compares — chosen **once per read**, never per row
-   * (ADR-0025 Amendment 3; the variance read follows the same rule). `PLACED`: every frozen side
-   * recorded where its bars were placed, so placed spans are compared against the live
-   * effective-Visual span and a bar moved by placement alone is a move. `NETWORK`: some frozen side
-   * predates that record, so the only honest comparison is the network's earliest dates on both
-   * sides. It is a property of the PAIR, so a mixed pair is `NETWORK`. The `fromStart`/`toStart`/
-   * `fromFinish`/`toFinish` fields elsewhere in this response carry whichever dates this states;
-   * criticality and float are network quantities on either basis.
+   * Which dates every date-bearing figure below compares — `PLACED` since 1.1.0 (the `NETWORK`
+   * value was removed with the fresh start, ADR-0215 D6): placed spans are compared against the
+   * live effective-Visual span, so a bar moved by placement alone is a move. The `fromStart`/
+   * `toStart`/`fromFinish`/`toFinish` fields elsewhere in this response carry those dates;
+   * criticality and float are network quantities.
    */
   datesBasis: VarianceBasis;
   from: RevisionSide;
@@ -4177,14 +4124,6 @@ export interface RevisionCompare {
    * planner's `1d` on an eight-hour calendar as three days' work.
    */
   dayFactorMinutes: number;
-  /**
-   * Matched activities whose float was calculated on both sides but has no minutes on at least one
-   * (a baseline captured before minutes were stored, or a live plan not recalculated since), so
-   * their float movement is null in `criticalPath` and the float half of the change list is not
-   * judged for them (ADR-0214). A client states the count; it never reads these as "unchanged".
-   * 0 when a side was never calculated — the criticality delta is then not assessable at all.
-   */
-  floatNotComparableCount: number;
   /**
    * Whether both sides' numbers came from the same criticality rule. Never coalesced; see
    * {@link RevisionSettingsVerdict}.

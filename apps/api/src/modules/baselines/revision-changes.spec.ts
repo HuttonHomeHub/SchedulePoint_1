@@ -28,8 +28,7 @@ const row = (o: Partial<RevisionRow> & { activityId: string }): RevisionRow => (
   earlyStart: '2026-01-05',
   earlyFinish: '2026-01-09',
   // Every one of these is a REAL value on a fully-recorded side: lane 0 is a lane, 0 % is a
-  // progress figure, no constraint is the commonest state there is. Which is exactly why the
-  // classifier may never read them as "was this recorded?" — see `bothSnapshotted`.
+  // progress figure, no constraint is the commonest state there is.
   laneIndex: 0,
   parentId: null,
   calendarId: null,
@@ -61,11 +60,6 @@ const side = (rows: RevisionRow[], edges: RevisionEdge[] = []): RevisionSideInpu
 const opts = (o: Partial<ClassifyOptions> = {}): ClassifyOptions => ({
   fromScheduled: true,
   toScheduled: true,
-  bothSnapshotted: true,
-  // The M-C default, separate from the one above because the two levels are written by different
-  // milestones — see `ClassifyOptions.bothPlacementSnapshotted`. True keeps every existing case
-  // running against exactly the behaviour it always did.
-  bothPlacementSnapshotted: true,
   // The same-plan default: matched on ACTIVITY ID, so a re-code is a real, reportable change and
   // every existing case below runs against exactly the behaviour it always did.
   codeIsTheCorrelationKey: false,
@@ -248,85 +242,17 @@ describe('the revision change classifier', () => {
     expect(classOf(report, 'RENAMED')?.rows).toHaveLength(1);
   });
 
-  it.each(PAID_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED'))(
-    '%s says NOT_SNAPSHOTTED rather than reporting no change',
-    (changeClass) => {
-      const report = classifyRevisionChanges(side([]), side([]), opts({ bothSnapshotted: false }));
-      expect(classOf(report, changeClass)?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
-    },
-  );
-
-  it('reports NOT_SNAPSHOTTED even when the rows in front of it DO differ', () => {
-    // The load-bearing case for the whole snapshot discriminator, and the one a naive
-    // implementation passes by accident. A NONE-level baseline stores NULL for every shape column,
-    // so comparing it against a live plan finds real differences — a lane, a parent, a progress
-    // figure — every one of which is an artefact of the snapshot's absence rather than an edit
-    // anybody made. Reporting them would be a confident, fabricated list of changes.
-    const report = classifyRevisionChanges(
-      side([row({ activityId: 'a', laneIndex: null, parentId: null, percentComplete: null })]),
-      side([row({ activityId: 'a', laneIndex: 7, parentId: 'phase', percentComplete: 40 })]),
-      opts({ bothSnapshotted: false, includeProgress: true }),
-    );
+  it('assesses every paid class on every pair — none is withheld for want of a snapshot', () => {
+    // Every baseline carries the shape (ADR-0215 D6), so the paid classes have no reason of their
+    // own to be withheld. An empty pair is the discriminating fixture: a reason that appeared only
+    // when there was nothing to compare would show here.
+    const report = classifyRevisionChanges(side([]), side([]), opts({ includeProgress: true }));
     for (const c of PAID_CHANGE_CLASSES) {
-      expect(classOf(report, c)?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
-      expect(classOf(report, c)?.rows).toEqual([]);
-      expect(classOf(report, c)?.total).toBe(0);
+      expect(classOf(report, c)?.notAssessableReason).toBeNull();
     }
   });
 
-  describe('the placement, and whether it can be compared at all (M-C-T2)', () => {
-    it('reports a reason when a side froze no placement, even with nothing to compare', () => {
-      // **Both sides empty is the discriminating fixture, not a lazy one.** The rule the three
-      // `*_snapshot_level` columns are all written under is that the discriminator does not depend
-      // on there being content — a reason that appeared only when there was something to compare
-      // could not separate "nobody looked" from "we looked and there was nothing". A conditional
-      // implementation returns null here and passes every other case in this file.
-      const report = classifyRevisionChanges(
-        side([]),
-        side([]),
-        opts({ bothPlacementSnapshotted: false }),
-      );
-      expect(report.classes.every((c) => c.rows.length === 0)).toBe(true);
-      expect(report.placementNotAssessableReason).toBe('NOT_SNAPSHOTTED');
-    });
-
-    it('reports NOTHING — not a verdict — when both sides froze one', () => {
-      const report = classifyRevisionChanges(
-        side([]),
-        side([]),
-        opts({ bothPlacementSnapshotted: true }),
-      );
-      // `null` is the ONLY thing that can mean comparable. A three-valued verdict would invite the
-      // `?? 'MATCH'` the criticality mirrors exist to forbid — absence cannot be defaulted into
-      // existence, and that is why this field is a nullable reason and not a verdict.
-      expect(report.placementNotAssessableReason).toBeNull();
-    });
-
-    it('is decided independently of the SHAPE snapshot, in both directions', () => {
-      // The case a "just reuse `bothSnapshotted`" simplification breaks, and it is the reason the
-      // second flag exists. The two levels are written by different milestones, so a baseline can
-      // carry either without the other — and folding them is wrong in BOTH directions, each
-      // silently: a shape-complete baseline would report its placement as recorded when it is not,
-      // and a placement-complete one would report its logic as unrecorded.
-      const shapeOnly = classifyRevisionChanges(
-        side([]),
-        side([]),
-        opts({ bothSnapshotted: true, bothPlacementSnapshotted: false }),
-      );
-      expect(shapeOnly.placementNotAssessableReason).toBe('NOT_SNAPSHOTTED');
-      expect(classOf(shapeOnly, 'RELOGICKED')?.notAssessableReason).toBeNull();
-
-      const placementOnly = classifyRevisionChanges(
-        side([]),
-        side([]),
-        opts({ bothSnapshotted: false, bothPlacementSnapshotted: true }),
-      );
-      expect(placementOnly.placementNotAssessableReason).toBeNull();
-      expect(classOf(placementOnly, 'RELOGICKED')?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
-    });
-  });
-
-  describe('the paid classes, once both sides recorded the shape', () => {
+  describe('the paid classes', () => {
     it.each([
       ['RECONSTRAINED', { constraintType: null }, { constraintType: 'SNET' as const }],
       [
@@ -588,7 +514,7 @@ describe('the RECODED class across two SEPARATELY IMPORTED plans', () => {
     constraintDate: null,
     secondaryConstraintType: null,
     secondaryConstraintDate: null,
-    percentComplete: null,
+    percentComplete: 0,
     actualStart: null,
     actualFinish: null,
   });

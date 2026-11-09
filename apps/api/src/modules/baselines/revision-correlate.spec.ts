@@ -28,7 +28,7 @@ const row = (over: Partial<RevisionRow> & Pick<RevisionRow, 'activityId'>): Revi
   constraintDate: null,
   secondaryConstraintType: null,
   secondaryConstraintDate: null,
-  percentComplete: null,
+  percentComplete: 0,
   actualStart: null,
   actualFinish: null,
   ...over,

@@ -1219,34 +1219,19 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
       return { planId, place };
     }
 
-    /**
-     * Capture a baseline. A fresh capture records the placement (`FULL`) — so the `NONE` case is
-     * built the only way one can exist today, as a baseline captured BEFORE placement was recorded:
-     * the level put back and the frozen placed finishes erased.
-     */
-    async function captureAs(actor: Actor, planId: string, level: 'NONE' | 'FULL') {
+    /** Capture a baseline. A capture records the placement (`FULL`, the only level). */
+    async function capture(actor: Actor, planId: string) {
       const res = await actor.agent
         .post(`/api/v1/organizations/acme/plans/${planId}/baselines`)
         .send({ name: 'Contract award' })
         .expect(201);
-      const baselineId = res.body.data.id as string;
       expect(res.body.data.placementSnapshotLevel).toBe('FULL');
-      if (level === 'NONE') {
-        await prisma.baselineActivity.updateMany({
-          where: { baselineId },
-          data: { placedStart: null, placedFinish: null, visualStart: null },
-        });
-        await prisma.baseline.update({
-          where: { id: baselineId },
-          data: { placementSnapshotLevel: 'NONE' },
-        });
-      }
     }
 
-    it('reports movement when only the PLACED finish moved, against a placement-recording baseline', async () => {
+    it('reports movement when only the PLACED finish moved', async () => {
       const { actor } = await adminWithOrg();
       const { planId, place } = await placedPlan(actor, 'Tower P');
-      await captureAs(actor, planId, 'FULL');
+      await capture(actor, planId);
 
       // The last bar is re-placed two weeks later; the network's own finish does not change.
       await place('2026-03-16');
@@ -1258,19 +1243,6 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
         baselineFinish: '2026-03-02',
       });
       expect((row?.baselineMovement as { workingDays: number }).workingDays).toBeGreaterThan(0);
-    });
-
-    it('still compares network finishes for a baseline that recorded no placement', async () => {
-      const { actor } = await adminWithOrg();
-      const { planId, place } = await placedPlan(actor, 'Tower Q');
-      await captureAs(actor, planId, 'NONE');
-
-      await place('2026-03-16');
-
-      // A NONE baseline froze only the network finish, and comparing today's PLACED finish against
-      // it would report the placement as slippage (the ADR-0025 Amendment 3 fallback, as #359).
-      const row = standingFor(await fetchOverview(actor), planId);
-      expect(row?.baselineMovement).toMatchObject({ kind: 'UNCHANGED' });
     });
 
     it('omits a flag that is zero, and carries one that is not', async () => {

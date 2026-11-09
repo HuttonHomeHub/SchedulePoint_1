@@ -1569,14 +1569,6 @@ export function ToolbarPlanWorkspace({
       levelResources={plan.levelResources}
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
-      // The reason follows the COMPARISON, not the picker: `comparePlanId` is the request and this
-      // is a fact about the payload on screen, which is a beat behind it while a switch is in
-      // flight. Reading the payload keeps the sentence true of the picture it describes.
-      compareUndrawableReason={
-        activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
-          ? 'NOT_COMPARABLE'
-          : 'NOT_RECORDED'
-      }
       hasRevisionPair={hasRevisionPair}
       placementMigrationNotice={placementMigrationNotice}
       touchGestureHint={touchGestureHint}

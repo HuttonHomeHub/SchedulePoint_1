@@ -272,15 +272,6 @@ export interface TsldPanelProps {
   levelResources?: boolean | undefined;
   /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
   compareLinksUndrawable?: number | undefined;
-  /**
-   * **Why a changed bar could not be drawn** — passed through to the overlay's spoken summary
-   * because the two comparisons have DIFFERENT true answers, and one is not the other's default.
-   *
-   * Same-plan the old side did not record a position. Cross-plan it did, and the position is not
-   * comparable: two independently imported plans derive their lane order separately. Reusing the
-   * same-plan wording would state something false about the other plan's data.
-   */
-  compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
   /**
    * Whether the legend lists the constraint pin. Default `true`; the share view passes `false`
@@ -678,7 +669,6 @@ export function TsldPanel({
   compareGhostsUndrawable = 0,
   levelResources,
   compareLinksUndrawable = 0,
-  compareUndrawableReason = 'NOT_RECORDED',
   hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
@@ -1542,7 +1532,6 @@ export function TsldPanel({
           drawn: compareLinkLines?.length ?? 0,
           undrawable: compareLinkLines ? compareLinksUndrawable : 0,
         },
-        compareUndrawableReason,
         compareGhostBars ? compareGhostsUnplaced : 0,
         swimlanes?.source === 'ACTIVITY_CODE' ? 'CODE' : 'SWIMLANE',
       ),
@@ -1552,7 +1541,6 @@ export function TsldPanel({
       compareGhostsUnplaced,
       compareLinkLines,
       compareLinksUndrawable,
-      compareUndrawableReason,
       swimlanes?.source,
     ],
   );

@@ -3,11 +3,9 @@ import type {
   ConstraintType,
   DependencyType,
   LagCalendarSource,
-  PlacementSnapshotLevel,
   SwimlaneLaneBasis,
-  SwimlaneSnapshotLevel,
 } from '@prisma/client';
-import type { RevisionGhostFrozenLane, VarianceBasis } from '@repo/types';
+import type { RevisionGhostFrozenLane } from '@repo/types';
 
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 
@@ -42,18 +40,6 @@ import type { FrozenGhostCode, FrozenGhostSwimlanes } from './revision-ghosts';
 export const revisionDate = (value: Date | null): string | null =>
   value ? formatCalendarDate(value) : null;
 
-/**
- * **Which dates a comparison reads — chosen ONCE per read, from the frozen sides' placement level,
- * and never per row** (ADR-0025 Amendment 3; `varianceBasisFor` is the same rule for the variance
- * read). `PLACED` only when every frozen side recorded where its bars were placed; one side that
- * predates the record makes the whole pair `NETWORK`, because comparing a placed span on one side
- * with a network span on the other would report every placement as a move. A read with no frozen
- * side at all (two live plans, cross-plan) has nothing to fall back from and is `PLACED`.
- */
-export const revisionDatesBasis = (
-  frozenLevels: readonly PlacementSnapshotLevel[],
-): VarianceBasis => (frozenLevels.every((level) => level === 'FULL') ? 'PLACED' : 'NETWORK');
-
 /** The columns a snapshot row must carry for {@link frozenRevisionSide} to project it. */
 export interface FrozenRevisionRowInput {
   readonly sourceActivityId: string;
@@ -64,25 +50,19 @@ export interface FrozenRevisionRowInput {
   readonly isCritical: boolean;
   readonly totalFloat: number | null;
   readonly totalFloatMinutes: number | null;
-  readonly baselineStart: Date | null;
-  readonly baselineFinish: Date | null;
   readonly placedStart: Date | null;
   readonly placedFinish: Date | null;
-  readonly laneIndex: number | null;
+  readonly laneIndex: number;
   readonly parentId: string | null;
   readonly calendarId: string | null;
   readonly constraintType: ConstraintType | null;
   readonly constraintDate: Date | null;
   readonly secondaryConstraintType: ConstraintType | null;
   readonly secondaryConstraintDate: Date | null;
-  readonly percentComplete: number | null;
+  readonly percentComplete: number;
   readonly actualStart: Date | null;
   readonly actualFinish: Date | null;
-  /**
-   * The activity's own swimlane at capture (schema-design §13.3). NULL means "none" on a `FULL`
-   * baseline and "unknown" on a `NONE` one; only the baseline's `swimlaneSnapshotLevel` says which,
-   * so {@link frozenGhostSwimlanes} is the one reader entitled to interpret it.
-   */
+  /** The activity's own swimlane at capture (schema-design §13.3); null means "none". */
   readonly swimlaneId: string | null;
 }
 
@@ -118,22 +98,16 @@ export interface LiveRevisionRowInput {
   readonly constraintDate: Date | null;
   readonly secondaryConstraintType: ConstraintType | null;
   readonly secondaryConstraintDate: Date | null;
-  readonly percentComplete: number | null;
+  readonly percentComplete: number;
   readonly actualStart: Date | null;
   readonly actualFinish: Date | null;
 }
 
 /**
- * A **frozen** side — a baseline's snapshot rows.
- *
- * The ADR-0126 shape columns are carried through **unread**: on a `NONE`-level baseline every one of
- * them is NULL, and nothing here interprets that. Only the capture-level discriminator is entitled
- * to, and it lives at the seam.
+ * A **frozen** side — a baseline's snapshot rows. The dates are the frozen PLACED span: the bar as
+ * it was drawn at capture (ADR-0148).
  */
-export const frozenRevisionSide = (
-  rows: readonly FrozenRevisionRowInput[],
-  basis: VarianceBasis,
-): RevisionRow[] =>
+export const frozenRevisionSide = (rows: readonly FrozenRevisionRowInput[]): RevisionRow[] =>
   rows.map((r) => ({
     activityId: r.sourceActivityId,
     code: r.code,
@@ -143,11 +117,10 @@ export const frozenRevisionSide = (
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
     totalFloatMinutes: r.totalFloatMinutes,
-    // `earlyStart`/`earlyFinish` carry the BASIS's dates — placed on `PLACED`, earliest on
-    // `NETWORK` — and the read states which in `datesBasis`. Never chosen per row. Renaming these
-    // to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
-    earlyStart: revisionDate(basis === 'PLACED' ? r.placedStart : r.baselineStart),
-    earlyFinish: revisionDate(basis === 'PLACED' ? r.placedFinish : r.baselineFinish),
+    // `earlyStart`/`earlyFinish` carry the PLACED dates, and the read states so in `datesBasis`.
+    // Renaming these to basis-neutral names is the intended follow-up (`docs/TECH_DEBT.md` #405).
+    earlyStart: revisionDate(r.placedStart),
+    earlyFinish: revisionDate(r.placedFinish),
     laneIndex: r.laneIndex,
     parentId: r.parentId,
     calendarId: r.calendarId,
@@ -178,21 +151,14 @@ export interface FrozenCodeInput {
 /**
  * **A baseline's frozen swimlane facts, for the ghosts of removed work** (schema-design §13.6).
  *
- * `null` unless the baseline's level is `FULL`. That is the whole interpretation this function does,
- * and it is the reason it takes the level: on a `NONE` baseline every `swimlaneId` is NULL and means
- * "unknown", on a `FULL` one it means "no swimlane", and nothing downstream can tell them apart.
- * `null` makes the builder attach nothing, which the client reads as "count, do not draw".
- *
  * Every row of an activity is carried (one per basis) and none is chosen: the choice depends on the
  * plan's source today, which is the client's derivation, not a fact this seam may freeze.
  */
 export const frozenGhostSwimlanes = (
-  level: SwimlaneSnapshotLevel,
   rows: readonly FrozenRevisionRowInput[],
   lanes: readonly FrozenLaneInput[],
   codes?: FrozenCodeInput,
-): FrozenGhostSwimlanes | null => {
-  if (level !== 'FULL') return null;
+): FrozenGhostSwimlanes => {
   const lanesByActivity = new Map<string, RevisionGhostFrozenLane[]>();
   for (const l of lanes) {
     const list = lanesByActivity.get(l.sourceActivityId) ?? [];
@@ -235,14 +201,11 @@ export const frozenGhostSwimlanes = (
 };
 
 /**
- * A **live** side — the plan's own persisted columns. On `PLACED` the effective-Visual span, which
- * is where the bar is drawn (ADR-0148), falling back to the earliest date only for a row no
- * recalculation has written one for.
+ * A **live** side — the plan's own persisted columns: the effective-Visual span, which is where
+ * the bar is drawn (ADR-0148), falling back to the earliest date only for a row no recalculation
+ * has written one for.
  */
-export const liveRevisionSide = (
-  rows: readonly LiveRevisionRowInput[],
-  basis: VarianceBasis,
-): RevisionRow[] =>
+export const liveRevisionSide = (rows: readonly LiveRevisionRowInput[]): RevisionRow[] =>
   rows.map((r) => ({
     activityId: r.id,
     code: r.code,
@@ -252,12 +215,8 @@ export const liveRevisionSide = (
     isCritical: r.isCritical,
     totalFloatDays: r.totalFloat,
     totalFloatMinutes: r.totalFloatMinutes,
-    earlyStart: revisionDate(
-      basis === 'PLACED' ? (r.visualEffectiveStart ?? r.earlyStart) : r.earlyStart,
-    ),
-    earlyFinish: revisionDate(
-      basis === 'PLACED' ? (r.visualEffectiveFinish ?? r.earlyFinish) : r.earlyFinish,
-    ),
+    earlyStart: revisionDate(r.visualEffectiveStart ?? r.earlyStart),
+    earlyFinish: revisionDate(r.visualEffectiveFinish ?? r.earlyFinish),
     laneIndex: r.laneIndex,
     parentId: r.parentId,
     calendarId: r.calendarId,

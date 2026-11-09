@@ -67,7 +67,6 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
       dataDate: '2026-01-01',
     },
     dayFactorMinutes: 1440,
-    floatNotComparableCount: 0,
     settingsVerdict: 'MATCH',
     completion: {
       assessable: true,
@@ -237,39 +236,6 @@ describe('RevisionComparePanel', () => {
       }),
     });
     expect(screen.getByText(/float unchanged/i)).toBeInTheDocument();
-  });
-
-  it('says nothing about float it could not compare when there is none', () => {
-    renderPanel({ from: 'b1', compare: comparison() });
-    expect(document.querySelector('[data-float-not-comparable]')).toBeNull();
-  });
-
-  it('states how many activities’ float could not be compared, as a quiet note', () => {
-    const { container } = renderPanel({
-      from: 'b1',
-      compare: comparison({ floatNotComparableCount: 4 }),
-    });
-    const note = container.querySelector('[data-float-not-comparable]');
-    expect(note?.textContent).toMatch(/Float could not be compared for 4 activities/);
-    // A standing condition (ADR-0132): text on the page, never a live-region announcement.
-    expect(note).not.toHaveAttribute('role');
-    expect(note).not.toHaveAttribute('aria-live');
-  });
-
-  it('places the note directly under the view toggle and has no axe violations with it showing', async () => {
-    const { container } = renderPanel({
-      from: 'b1',
-      compare: comparison({
-        floatNotComparableCount: 4,
-        criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
-      }),
-    });
-    const note = container.querySelector('[data-float-not-comparable]');
-    expect(note).not.toBeNull();
-    // Ahead of every section it qualifies, not after them.
-    const entered = screen.getByRole('region', { name: /Entered the critical path/i });
-    expect(note?.compareDocumentPosition(entered)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect((await axe(container)).violations).toEqual([]);
   });
 
   it('reads the basis-neutral date fields', () => {
@@ -603,10 +569,6 @@ describe('the Changes view', () => {
     ...comparison(),
     changes: {
       cap: 200,
-      // one-planning-surface M-C. Null = both sides froze a placement, which is what a fixture
-      // built to exercise the CHANGE LIST should say: a reason here would make every case below
-      // also a case about an unrecorded placement.
-      placementNotAssessableReason: null,
       classes: [
         {
           changeClass: 'RENAMED',
@@ -627,7 +589,12 @@ describe('the Changes view', () => {
           ],
           total: 1,
         },
-        { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+        {
+          changeClass: 'RELOGICKED',
+          notAssessableReason: 'SIDE_NOT_SCHEDULED',
+          rows: [],
+          total: 0,
+        },
       ],
     },
   });
@@ -653,7 +620,6 @@ describe('the Changes view', () => {
       ...base,
       changes: {
         cap: base.changes?.cap ?? 200,
-        placementNotAssessableReason: base.changes?.placementNotAssessableReason ?? null,
         classes: [
           {
             ...renamed!,
@@ -684,32 +650,6 @@ describe('the Changes view', () => {
     // bare text query is ambiguous — and an ambiguous locator is how a suite comes to assert on
     // whichever node happens to be first.
     expect(screen.getByRole('region', { name: /Entered the critical path/i })).toBeVisible();
-  });
-
-  it('states the not-comparable float in the change list too, and only when there is some', () => {
-    const { container, rerender } = renderPanel({ compare: withChanges() });
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
-    expect(container.querySelector('[data-float-not-comparable]')).toBeNull();
-    rerender(
-      <RevisionComparePanel
-        {...panelProps({ compare: { ...withChanges(), floatNotComparableCount: 2 } })}
-      />,
-    );
-    expect(container.querySelector('[data-float-not-comparable]')?.textContent).toMatch(
-      /for 2 activities/,
-    );
-  });
-
-  it('has no axe violations in the change list with the not-comparable note showing', async () => {
-    const { container } = renderPanel({
-      compare: { ...withChanges(), floatNotComparableCount: 2 },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
-    const note = container.querySelector('[data-float-not-comparable]');
-    expect(note).not.toBeNull();
-    // Directly under the summary line, as the print puts it before both views.
-    expect(note?.previousElementSibling?.className).toMatch(/border-b/);
-    expect((await axe(container)).violations).toEqual([]);
   });
 
   it('renders a class it could not assess as a REASON, never as "no changes"', () => {

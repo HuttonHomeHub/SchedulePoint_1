@@ -18,6 +18,7 @@ import { computeSchedule } from '../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { FULL_BASELINE_ACTIVITY_COLUMNS, FULL_BASELINE_COLUMNS } from './baseline-columns';
 import { clearActivityTree } from './clear-activity-tree';
 import { clearBaselineTree } from './clear-baseline-tree';
 import { clearPlanTree } from './clear-plan-tree';
@@ -718,6 +719,7 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
         organizationId: planRow.organizationId,
         planId: scalePlan.id,
         name: 'F3 scale baseline',
+        ...FULL_BASELINE_COLUMNS,
         createdBy: planRow.createdBy,
         updatedBy: planRow.updatedBy,
       },
@@ -731,6 +733,8 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
         durationMinutes: 480,
         isCritical: i % 3 === 0,
         totalFloat: i % 3 === 0 ? 0 : i,
+        // Days and minutes are one fact (ck_activities_total_float_minutes_with_days).
+        totalFloatMinutes: (i % 3 === 0 ? 0 : i) * 480,
         createdBy: planRow.createdBy,
         updatedBy: planRow.updatedBy,
       })),
@@ -749,6 +753,8 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
         durationMinutes: 480,
         isCritical: i % 4 === 0,
         totalFloat: i % 4 === 0 ? 0 : i,
+        totalFloatMinutes: (i % 4 === 0 ? 0 : i) * 480,
+        ...FULL_BASELINE_ACTIVITY_COLUMNS,
         createdBy: planRow.createdBy,
         updatedBy: planRow.updatedBy,
       })),

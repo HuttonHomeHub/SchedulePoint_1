@@ -131,8 +131,6 @@ describe('computeRevisionDelta', () => {
     expect(d.entered[0]?.fromTotalFloatDays).toBeNull();
     expect(d.entered[0]?.floatMovementDays).toBeNull();
     expect(d.entered[0]?.floatMovementMinutes).toBeNull();
-    // Never calculated is not "could not be compared": the existing unknown handling says why.
-    expect(d.floatNotComparableCount).toBe(0);
   });
 
   describe('float is compared in minutes and shown in days on one frame (#318, ADR-0214)', () => {
@@ -159,7 +157,6 @@ describe('computeRevisionDelta', () => {
         fromTotalFloatDays: 5,
         toTotalFloatDays: 5,
       });
-      expect(d.floatNotComparableCount).toBe(0);
     });
 
     it('derives days once from the movement in minutes, on the frame passed in', () => {
@@ -173,32 +170,6 @@ describe('computeRevisionDelta', () => {
         floatMovementMinutes: -960,
         floatMovementDays: -2,
       });
-    });
-
-    it('reports a float with days but no minutes as not comparable, never zero or unchanged', () => {
-      const d = entering(
-        { totalFloatDays: 5, totalFloatMinutes: null },
-        { totalFloatDays: 5, totalFloatMinutes: 2400 },
-      );
-      expect(d.entered[0]).toMatchObject({
-        fromTotalFloatDays: null,
-        toTotalFloatDays: 5,
-        floatMovementMinutes: null,
-        floatMovementDays: null,
-      });
-      expect(d.floatNotComparableCount).toBe(1);
-    });
-
-    it('counts a not-comparable pair among the rows that remained, not only entered and left', () => {
-      const d = computeRevisionDelta(
-        [row({ activityId: 'a', totalFloatDays: 4, totalFloatMinutes: null })],
-        [row({ activityId: 'a', totalFloatDays: 4, totalFloatMinutes: 1920 })],
-        CAP,
-        undefined,
-        480,
-      );
-      expect(d.entered).toHaveLength(0);
-      expect(d.floatNotComparableCount).toBe(1);
     });
 
     it('orders by the movement in minutes, not by the rounded day figure beside it', () => {

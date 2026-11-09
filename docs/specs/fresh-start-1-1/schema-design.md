@@ -723,3 +723,113 @@ recalculations move the cursor backwards (the reason m2-schema-design.md B3 reje
 `apps/api/src` finds no other write of any of the six. Two e2e specs wrote the states the old one-way CHECKs
 admitted for an older image; they now assert the refusal (`schedule-instants.e2e-spec.ts`) or set the
 "never stamped" state whole (`cross-plan-instants.e2e-spec.ts` FC-5).
+
+### M3 tidy — T3, T4, T6, T9 (2026-11-09, database-architect, M3-T2)
+
+**Change.** Four tidy items folded into the unreleased baseline in place, with the T8 comments (owner's
+Q2 → narrow, Q3 → T8 not taken). Prisma-visible: the five level enums narrow, eight `baselines` /
+`baseline_activities` columns change nullability or default. Hand-written section: eight CHECKs (two
+renamed). Every changed object's `was:` line names the legacy form and the tidy item.
+
+- **T3** The `CREATE TYPE` lists shrink to one label each: `BaselineCostSnapshotLevel` →
+  `ASSIGNMENT`; `RevisionSnapshotLevel`, `PlacementSnapshotLevel`, `SwimlaneSnapshotLevel` → `FULL`;
+  `CodeSnapshotLevel` → `SWIMLANE_TYPE`. The five columns are `NOT NULL` with no default. The two shape
+  CHECKs lose their NONE branch and stay `CASE … ELSE false`:
+
+  ```sql
+  ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_code_snapshot_shape" CHECK ( CASE code_snapshot_level
+      WHEN 'SWIMLANE_TYPE'::"CodeSnapshotLevel" THEN (swimlane_snapshot_level = 'FULL'::"SwimlaneSnapshotLevel")
+      ELSE false
+      END);
+  ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_swimlane_snapshot_shape" CHECK ( CASE swimlane_snapshot_level
+      WHEN 'FULL'::"SwimlaneSnapshotLevel" THEN CASE swimlane_source
+      WHEN 'NONE'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))
+      WHEN 'MANUAL'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))
+      WHEN 'WBS'::"SwimlaneSource" THEN ((swimlane_code_type_id IS NULL) AND (swimlane_wbs_level IS NOT NULL) AND (swimlane_wbs_level >= 1) AND (swimlane_wbs_level <= 3))
+      WHEN 'ACTIVITY_CODE'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NOT NULL))
+      ELSE false END
+      ELSE false
+      END);
+  ```
+
+  With one label on each side, `ck_baselines_code_snapshot_shape` can no longer be violated by any
+  representable row; it is kept as the fail-closed guard for a future label, and a test that expected it
+  to refuse a row must go.
+
+- **T4** `NOT NULL` on `baselines.data_date`, `.captured_project_finish`, `.swimlane_source` and
+  `baseline_activities.budgeted_cost`, `.budgeted_expense`, `.lane_index`, `.percent_complete` (no
+  default on any). Four CHECKs lose their `IS NULL OR` arm: `ck_baseline_activities_budgeted_cost_nonneg
+CHECK ((budgeted_cost >= 0))`, `…_budgeted_expense_nonneg CHECK ((budgeted_expense >= 0))`,
+  `…_lane_index_nonneg CHECK ((lane_index >= 0))`, `…_percent_complete_range CHECK (((percent_complete >=
+
+0. AND (percent_complete <= 100)))`.
+
+- **T6** `ck_activities_total_float_minutes_requires_days` and
+  `ck_baseline_activities_total_float_minutes_requires_days` (one-way) are replaced by
+  `…_total_float_minutes_with_days CHECK (((total_float_minutes IS NULL) = (total_float IS NULL)))` on both
+  tables. §3's condition is met by reading: `writeResults` (`schedule.repository.ts` ~:844–848) derives
+  `total_float` as `Math.round(r.totalFloat / factor)` and `total_float_minutes` as `r.totalFloat` from the
+  same non-null engine figure in one `UPDATE`, and `rg 'total_float' apps/api/src` finds no other writer;
+  capture copies both verbatim.
+- **T9** `baselines.hours_per_day_minutes` loses `DEFAULT 1440` (`calendars.hours_per_day_minutes` keeps
+  its default, which is a real starting value for a new calendar).
+- **T8** not taken: comments only (`Baseline` criticality docblock now names TECH_DEBT #576 as the one
+  known path to a NULL rule; `BaselineActivity` and `Activity.totalFloatMinutes` docblocks rewritten).
+
+The generated part of the file was re-derived (`prisma migrate diff --from-empty --to-schema-datamodel`)
+and differs from the file only in the three marked `NULLS NOT DISTINCT` hand edits, as before.
+
+**Allow-list** (`tidy.sql`, now T5 + the block below, applied to the api-v1.0.0 chain in one transaction).
+PostgreSQL cannot drop an enum label, so on the chain each level type is renamed, recreated with one label,
+the column re-typed through `text`, and the old type dropped; the shape CHECKs reference those types, so
+they are dropped first and re-added after.
+
+```sql
+ALTER TABLE "baselines" DROP CONSTRAINT "ck_baselines_code_snapshot_shape",
+  DROP CONSTRAINT "ck_baselines_swimlane_snapshot_shape",
+  ALTER COLUMN "cost_snapshot_level" DROP DEFAULT, ALTER COLUMN "revision_snapshot_level" DROP DEFAULT,
+  ALTER COLUMN "placement_snapshot_level" DROP DEFAULT, ALTER COLUMN "swimlane_snapshot_level" DROP DEFAULT,
+  ALTER COLUMN "code_snapshot_level" DROP DEFAULT;
+ALTER TYPE "BaselineCostSnapshotLevel" RENAME TO "BaselineCostSnapshotLevel_old";   -- and the other four
+CREATE TYPE "BaselineCostSnapshotLevel" AS ENUM ('ASSIGNMENT');                       -- RevisionSnapshotLevel ('FULL'),
+                                                                                      -- Placement ('FULL'), Swimlane ('FULL'),
+                                                                                      -- Code ('SWIMLANE_TYPE')
+ALTER TABLE "baselines"
+  ALTER COLUMN "cost_snapshot_level" TYPE "BaselineCostSnapshotLevel" USING "cost_snapshot_level"::text::"BaselineCostSnapshotLevel";
+                                                                                      -- and the other four
+DROP TYPE "BaselineCostSnapshotLevel_old", "RevisionSnapshotLevel_old", "PlacementSnapshotLevel_old",
+  "SwimlaneSnapshotLevel_old", "CodeSnapshotLevel_old";
+ALTER TABLE "baselines"
+  ALTER COLUMN "data_date" SET NOT NULL, ALTER COLUMN "captured_project_finish" SET NOT NULL,
+  ALTER COLUMN "swimlane_source" SET NOT NULL, ALTER COLUMN "hours_per_day_minutes" DROP DEFAULT,
+  ADD CONSTRAINT "ck_baselines_code_snapshot_shape" CHECK (CASE "code_snapshot_level"
+    WHEN 'SWIMLANE_TYPE' THEN "swimlane_snapshot_level" = 'FULL' ELSE false END),
+  ADD CONSTRAINT "ck_baselines_swimlane_snapshot_shape" CHECK (/* the FULL branch above, verbatim */);
+ALTER TABLE "baseline_activities"
+  ALTER COLUMN "budgeted_cost" SET NOT NULL, ALTER COLUMN "budgeted_expense" SET NOT NULL,
+  ALTER COLUMN "lane_index" SET NOT NULL, ALTER COLUMN "percent_complete" SET NOT NULL,
+  DROP CONSTRAINT "ck_baseline_activities_budgeted_cost_nonneg",
+  ADD CONSTRAINT "ck_baseline_activities_budgeted_cost_nonneg" CHECK ("budgeted_cost" >= 0),
+  -- … the same drop/add for budgeted_expense_nonneg, lane_index_nonneg, percent_complete_range …
+  DROP CONSTRAINT "ck_baseline_activities_total_float_minutes_requires_days",
+  ADD CONSTRAINT "ck_baseline_activities_total_float_minutes_with_days" CHECK (("total_float_minutes" IS NULL) = ("total_float" IS NULL));
+ALTER TABLE "activities" DROP CONSTRAINT "ck_activities_total_float_minutes_requires_days",
+  ADD CONSTRAINT "ck_activities_total_float_minutes_with_days" CHECK (("total_float_minutes" IS NULL) = ("total_float" IS NULL));
+```
+
+(Abbreviated here where marked; the executed file is written out in full.)
+
+**Command:** the M2-T1 one, on fresh `sq_chain` and `sq_base` (PostgreSQL 16.15), with
+`psql $P/sq_chain -v ON_ERROR_STOP=1 -1 -f tidy.sql` between the chain's `migrate deploy` and the
+catalogue runs; a third database `sq_neg` is the chain plus the T5-only `tidy.sql` of M3-T1.
+
+**Result:** `NO-DIFF` on `catalog.final.sql` (1,173 lines each side) and `catalog.extra.sql` (1,409 each
+side). **Discriminates:** `sq_neg` against the new baseline differs in exactly the expected 28 lines and
+nothing else — 13 `col` lines (the seven T4 nullability changes, the five T3 dropped defaults, T9's
+dropped default), 8 `con` lines (T6 × 2 renamed, T4 × 4 arms, T3 × 2 shapes), 5 `enum` label lists, and
+in the supplement the 2 `conx` lines of the renamed T6 constraints. The eight changed CHECKs in the file
+were also compared text-for-text (whitespace-normalised) against `pg_get_constraintdef` on `sq_base`: all
+equal, so the file keeps the catalogue's own rendering. `DATABASE_URL=$P/sq_base pnpm --filter @repo/api
+prisma:check-drift` → "No difference detected". New file: 2,086 lines, 111,892 bytes, sha256
+`48f663fc…7e2bd502`, equal to the `_prisma_migrations.checksum` Prisma recorded; a local `app_test` holding
+M3-T1's `28124a0b…af7a26` is dropped and rebuilt by `scripts/e2e-local.sh` (`baseline-changed`).

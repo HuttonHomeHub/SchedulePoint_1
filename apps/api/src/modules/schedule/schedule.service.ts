@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  CriticalPathDefinition,
-  PlacementSnapshotLevel,
-  Prisma,
-  TotalFloatMode,
-} from '@prisma/client';
+import type { CriticalPathDefinition, Prisma, TotalFloatMode } from '@prisma/client';
 import type {
   CrossPlanChangeReport,
   CrossPlanCorrelation,
@@ -28,6 +23,7 @@ import type {
   RevisionPresenceActivity,
   RevisionSide,
   ScheduleHealthReport,
+  VarianceBasis,
 } from '@repo/types';
 import { DEFAULT_HOURS_PER_DAY_MINUTES, LIVE_REVISION } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -69,7 +65,6 @@ import {
   frozenRevisionSide,
   liveRevisionEdges,
   liveRevisionSide,
-  revisionDatesBasis,
   revisionDate,
 } from '../baselines/revision-projections';
 import { CalendarRepository } from '../calendars/calendar.repository';
@@ -166,29 +161,22 @@ function closesLastDay(inclusiveFinish: string | null): string | null {
 
 /**
  * Group an active cost baseline's **frozen per-assignment** cost components by source activity, or
- * `null` when this baseline has none to give (ADR-0071 M3 / CQ-1 option B).
+ * `null` when there is no active baseline (ADR-0071 M3 / CQ-1 option B).
  *
- * The level is read from the discriminator the capture wrote and from nothing else. A row count
- * cannot answer it: an `ASSIGNMENT`-level baseline of a plan with no resource assignments has zero
- * `baseline_assignments` rows and is nonetheless **exact**, while a pre-amendment baseline has zero
- * rows and can only ever be **approximated** — the same observation, two opposite answers. The
- * migration header states this as an invariant; the `switch` is where the code obeys it.
+ * The level is read from the discriminator the capture wrote and from nothing else: an
+ * `ASSIGNMENT`-level baseline of a plan with no resource assignments has zero `baseline_assignments`
+ * rows and is nonetheless **exact**, so a row count cannot say whether the breakdown was recorded.
  *
- * The switch is deliberately **exhaustive with no `default`**: `BaselineCostSnapshotLevel` is a
- * database enum whose members the schema cannot pin to the rows, so a third level added later must
- * come back here and say which side it falls on. A `default` would silently choose one — and it would
- * choose it for money.
+ * The switch is deliberately **exhaustive with no `default`**, and kept as a one-case `switch`
+ * rather than flattened to an `if`: `BaselineCostSnapshotLevel` is a database enum, so a label added
+ * later must come back here and say which side it falls on. A `default` would silently choose one —
+ * and it would choose it for money.
  */
 function frozenCostComponents(
   snapshot: EarnedValueCostSnapshot | null,
 ): Map<string, EvBaselineCostComponents> | null {
   if (!snapshot) return null;
   switch (snapshot.costSnapshotLevel) {
-    case 'ACTIVITY':
-      // Captured before per-assignment cost was snapshotted. The breakdown was never recorded and
-      // cannot be recovered from a frozen total, so PV keeps the live-share approximation for the
-      // life of this baseline — counted out to the reader as `costPhasingApproximatedCount`.
-      return null;
     case 'ASSIGNMENT': {
       // Seed EVERY snapshotted activity, not only the ones with components: an activity that had no
       // assignments at capture is exactly known to have had none, and must not fall through to the
@@ -196,7 +184,7 @@ function frozenCostComponents(
       const byActivity = new Map<string, EvBaselineCostComponents>(
         snapshot.activities.map((a) => [
           a.sourceActivityId,
-          { budgetedExpense: Number(a.budgetedExpense ?? 0n), assignments: [] },
+          { budgetedExpense: Number(a.budgetedExpense), assignments: [] },
         ]),
       );
       for (const a of snapshot.assignments) {
@@ -1335,9 +1323,8 @@ export class ScheduleService {
    * persisted span and cost inputs, joins the active baseline's cost snapshot (live-budget fallback
    * when absent → `costBaselineMissing`), and runs the pure `computeEarnedValue`.
    *
-   * PV is phased on **one basis for the whole read** (ADR-0042 amendment, ADR-0148): the placed span —
-   * frozen on a baseline that recorded one, live otherwise — or the early span against a baseline that
-   * never recorded a placement. The pure function does not know which it was handed.
+   * PV is phased on the **placed span** on both sides (ADR-0042 amendment, ADR-0148): the frozen
+   * placed span of the active baseline against the live effective-Visual span.
    */
   async getEarnedValue(
     principal: Principal,
@@ -1359,7 +1346,6 @@ export class ScheduleService {
     // Join the active baseline's cost snapshot by source activity id; a missing row (or no active
     // baseline at all) leaves the baseline fields null → the module's live-budget PV fallback.
     const baselineById = new Map((snapshot?.activities ?? []).map((s) => [s.sourceActivityId, s]));
-    const basis = this.pvBasisFor(snapshot);
     const componentsById = frozenCostComponents(snapshot);
     const activities: EvActivityInput[] = activityRows.map((r) => {
       const base = baselineById.get(r.id) ?? null;
@@ -1396,27 +1382,18 @@ export class ScheduleService {
           // received before the column existed and takes the single-window fast path by construction.
           ...(a.lagMinutes > 0 ? { lagMinutes: a.lagMinutes } : {}),
         })),
-        baselineStart: base
-          ? day(basis === 'PLACED' ? base.placedStart : base.baselineStart)
-          : null,
-        baselineFinish: base
-          ? closesLastDay(day(basis === 'PLACED' ? base.placedFinish : base.baselineFinish))
-          : null,
-        // A SQL-NULL snapshot cost (a pre-EV baseline) stays null → PV falls back to the live BAC and
-        // the module flags `costBaselineMissing`; a snapshot captured post-EV carries an integer (0+).
-        baselineBudgetedCost: base
-          ? base.budgetedCost === null
-            ? null
-            : Number(base.budgetedCost)
-          : null,
+        baselineStart: base ? day(base.placedStart) : null,
+        baselineFinish: base ? closesLastDay(day(base.placedFinish)) : null,
+        // An activity absent from the snapshot (added after capture) stays null → PV falls back to
+        // the live BAC and the module flags `costBaselineMissing`; a snapshotted one carries an
+        // integer (0+).
+        baselineBudgetedCost: base ? Number(base.budgetedCost) : null,
         // The baseline's own frozen breakdown, when it captured one (ADR-0071 M3). Spread only when
         // present, so an activity outside an ASSIGNMENT-level snapshot builds the identical object the
         // EV read received before, and the live-share path is preserved rather than re-derived.
         ...(frozen ? { baselineCostComponents: frozen } : {}),
-        liveStart: day(basis === 'PLACED' ? r.visualEffectiveStart : r.earlyStart),
-        liveFinish: closesLastDay(
-          day(basis === 'PLACED' ? r.visualEffectiveFinish : r.earlyFinish),
-        ),
+        liveStart: day(r.visualEffectiveStart),
+        liveFinish: closesLastDay(day(r.visualEffectiveFinish)),
       };
     });
 
@@ -1449,7 +1426,6 @@ export class ScheduleService {
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
       costPhasingLaggedCount: result.costPhasingLaggedCount,
-      costPhasingApproximatedCount: result.costPhasingApproximatedCount,
       // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
       // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
       stepWeightZeroCount: result.stepWeightZeroCount,
@@ -2038,26 +2014,6 @@ export class ScheduleService {
   }
 
   /**
-   * Which span the Earned-Value read phases planned value on, chosen once for the whole read from the
-   * active baseline's placement level (ADR-0042 amendment; the same rule as variance's
-   * `varianceBasisFor`, ADR-0025 Amendment 3). No baseline or `FULL`: `PLACED`, the bar as drawn
-   * (ADR-0148). `NONE`: `NETWORK` — a baseline that never recorded a placement cannot be backfilled
-   * with one, so it keeps the early dates on both sides. Exhaustive with no `default`: a third level is
-   * a compile error rather than a silent fall-through.
-   */
-  private pvBasisFor(
-    snapshot: { placementSnapshotLevel: PlacementSnapshotLevel } | null,
-  ): 'PLACED' | 'NETWORK' {
-    if (snapshot === null) return 'PLACED';
-    switch (snapshot.placementSnapshotLevel) {
-      case 'FULL':
-        return 'PLACED';
-      case 'NONE':
-        return 'NETWORK';
-    }
-  }
-
-  /**
    * The plan's working-day calendar for this recalculation, built once (ADR-0024).
    * A null `calendarId`, or a calendar that is missing/soft-deleted (defensive — the
    * delete-in-use guard prevents deleting an in-use calendar), falls back to
@@ -2200,15 +2156,11 @@ export class ScheduleService {
         wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
       ]);
 
-    // The dates the whole read compares, chosen ONCE from the frozen sides (#405 (a)) — never per
-    // row, which would mix two questions in one report. `bothPlacementSnapshotted` below is derived
-    // from this, so there is one rule for "was placement recorded on every frozen side".
-    const datesBasis = revisionDatesBasis(
-      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
-    );
+    // The dates the whole read compares: the placed span on every side (#405, ADR-0148).
+    const datesBasis = 'PLACED' satisfies VarianceBasis;
 
     // The SHARED projections. A local copy would look right and drift — `revision-projections.ts`.
-    const liveSide = liveRevisionSide(liveRows, datesBasis);
+    const liveSide = liveRevisionSide(liveRows);
 
     // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
     // FROZEN hours-per-day factor. Not the carrier's own calendar — `BaselineActivity` carries no
@@ -2231,8 +2183,8 @@ export class ScheduleService {
      * It also makes the "one projection, three readers" claim in this method's docblocks true by
      * construction rather than by three identical calls happening to agree.
      */
-    const fromSide = frozenRevisionSide(fromRows, datesBasis);
-    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows, datesBasis);
+    const fromSide = frozenRevisionSide(fromRows);
+    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows);
 
     const delta = computeRevisionDelta(
       fromSide,
@@ -2258,14 +2210,11 @@ export class ScheduleService {
      * fabricated version — and the completion half already reports its own non-assessability, so
      * this is the same honesty applied to the half that did not have it.
      *
-     * A baseline's `capturedProjectFinish` is the frozen side's evidence: a capture from an
-     * uncalculated plan has none.
+     * A baseline is always scheduled: a capture of an uncalculated plan is refused
+     * (`SCHEDULE_NOT_CALCULATED`), so only the live side can lack a schedule.
      */
-    const sideScheduled = (
-      side: { capturedProjectFinish: Date | null } | null,
-      livePlanComputedAt: Date | null,
-    ): boolean =>
-      side === null ? livePlanComputedAt !== null : side.capturedProjectFinish !== null;
+    const sideScheduled = (side: object | null, livePlanComputedAt: Date | null): boolean =>
+      side === null ? livePlanComputedAt !== null : true;
     const bothScheduled =
       sideScheduled(fromBaseline, plan.scheduleComputedAt) &&
       sideScheduled(toBaseline, plan.scheduleComputedAt);
@@ -2284,30 +2233,6 @@ export class ScheduleService {
       existsLive: liveIds.has(r.activityId),
     });
 
-    /**
-     * **Whether the paid classes mean anything on THIS pair**, and the answer comes from the
-     * capture-level discriminator — never from the row values, every one of which has a legitimate
-     * null on a fully recorded side.
-     *
-     * The LIVE side is always recorded: it IS the plan's shape. So a live comparison turns on the
-     * one frozen side, and a baseline-vs-baseline comparison needs BOTH. A pair where either side
-     * predates the snapshot extension is `false` **permanently** — no backfill is possible, because
-     * writing today's logic into a historic snapshot would state as history a graph that baseline
-     * never saw — and the classifier then reports each paid class as not assessable with a reason,
-     * never as "no change". Defaulting this to `true` would ship a report that quietly claims the
-     * logic did not change, which is the defect this whole epic exists to remove.
-     */
-    const bothSnapshotted =
-      fromBaseline.revisionSnapshotLevel === 'FULL' &&
-      (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
-
-    // The PLACEMENT half of the same question (one-planning-surface M-C). A SECOND derivation
-    // rather than a widening of the one above: the two levels are written by different milestones,
-    // so a baseline can carry either without the other, and folding them would make a
-    // shape-complete baseline report its placement as recorded when it is not.
-    // Derived from `datesBasis` so the flag and the dates compared cannot disagree.
-    const bothPlacementSnapshotted = datesBasis === 'PLACED';
-
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
 
     // **The change list, only when asked for.**
@@ -2322,8 +2247,6 @@ export class ScheduleService {
           {
             fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
             toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
-            bothSnapshotted,
-            bothPlacementSnapshotted,
             // The plan's own revisions are matched on ACTIVITY ID, so a re-code is a real,
             // reportable change here — the opposite of the cross-plan case.
             codeIsTheCorrelationKey: false,
@@ -2345,10 +2268,6 @@ export class ScheduleService {
         ? null
         : {
             cap: changes.cap,
-            // Carried through verbatim, never re-derived here. The classifier is the one thing
-            // entitled to decide it, and a second derivation beside the `existsLive` widening
-            // below is exactly how the two would drift.
-            placementNotAssessableReason: changes.placementNotAssessableReason,
             classes: changes.classes.map((c) => ({
               ...c,
               rows: c.rows.map((r) => ({ ...r, existsLive: liveIds.has(r.activityId) })),
@@ -2360,12 +2279,11 @@ export class ScheduleService {
      * projections the delta and the change list read — a second assembly would drift, and the drift
      * would show as a ghost in a place the change list does not mention.
      */
-    // The frozen swimlane facts of REMOVED work, only from a baseline that froze swimlanes (§13.6):
-    // a `NONE` baseline passes nothing, and the client counts rather than draws. Loaded for the
-    // removed ids alone — a moved ghost sits beside a live activity — and after the geometry is
-    // known to be wanted, so a caller that did not ask for ghosts pays nothing.
+    // The frozen swimlane facts of REMOVED work (§13.6). Loaded for the removed ids alone — a moved
+    // ghost sits beside a live activity — and after the geometry is known to be wanted, so a caller
+    // that did not ask for ghosts pays nothing.
     let frozenSwimlanes: FrozenGhostSwimlanes | null = null;
-    if (wantsGeometry && fromBaseline.swimlaneSnapshotLevel === 'FULL') {
+    if (wantsGeometry) {
       const toIds = new Set(toSide.map((r) => r.activityId));
       const removedIds = fromSide.map((r) => r.activityId).filter((id) => !toIds.has(id));
       // Read under schedule:read + baseline:read without code:read, as `frozenSwimlaneId` is: the
@@ -2388,7 +2306,6 @@ export class ScheduleService {
             ),
       ]);
       frozenSwimlanes = frozenGhostSwimlanes(
-        fromBaseline.swimlaneSnapshotLevel,
         fromRows,
         frozenLaneRows,
         frozenCodeTypeId === null || frozenCodeRows === null
@@ -2439,9 +2356,6 @@ export class ScheduleService {
             dataDate: revisionDate(plan.plannedStart),
           } satisfies RevisionSide),
       dayFactorMinutes,
-      // Zero over a side that was never calculated: the criticality delta is then not assessable
-      // and a count of "float that could not be compared" would describe rows nobody is shown.
-      floatNotComparableCount: bothScheduled ? delta.floatNotComparableCount : 0,
       settingsVerdict: compareCriticalityRules(
         readCriticalityRule(fromBaseline),
         toBaseline
@@ -2535,7 +2449,6 @@ export class ScheduleService {
         toRowCount: toRows === null ? liveSide.length : toRows.length,
         enteredTotal: delta.enteredTotal,
         leftTotal: delta.leftTotal,
-        floatNotComparableCount: result.floatNotComparableCount,
         settingsVerdict: result.settingsVerdict,
         durationMs: Date.now() - startedAt,
       },
@@ -2648,11 +2561,8 @@ export class ScheduleService {
       toPlanId,
     );
 
-    // The dates the whole comparison reads — once, from the frozen sides (#405 (a)). Two live
-    // plans have no frozen side to fall back from and compare placed spans.
-    const datesBasis = revisionDatesBasis(
-      [fromBaseline, toBaseline].flatMap((b) => (b ? [b.placementSnapshotLevel] : [])),
-    );
+    // The dates the whole comparison reads: the placed span on every side (#405, ADR-0148).
+    const datesBasis = 'PLACED' satisfies VarianceBasis;
 
     const [
       fromRawRows,
@@ -2666,15 +2576,15 @@ export class ScheduleService {
       fromBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(fromBaseline.id, organization.id)
-            .then((rows) => frozenRevisionSide(rows, datesBasis))
+            .then((rows) => frozenRevisionSide(rows))
         : this.baselines
             .loadActiveActivitiesForDelta(organization.id, fromPlanId)
-            .then((rows) => liveRevisionSide(rows, datesBasis)),
+            .then((rows) => liveRevisionSide(rows)),
       toBaseline
         ? this.baselines
             .loadSnapshotRowsForDelta(toBaseline.id, organization.id)
-            .then((rows) => frozenRevisionSide(rows, datesBasis))
-        : anchorLiveRowsPromise.then((rows) => liveRevisionSide(rows, datesBasis)),
+            .then((rows) => frozenRevisionSide(rows))
+        : anchorLiveRowsPromise.then((rows) => liveRevisionSide(rows)),
       /**
        * **The anchor plan's LIVE rows, read whether or not the `to` side is live — but read ONCE.**
        *
@@ -2856,7 +2766,6 @@ export class ScheduleService {
           newSideCarrierActivityId: null,
           newSideCarrierName: null,
         },
-        floatNotComparableCount: 0,
         criticalPath: { ...EMPTY_CRITICAL_PATH_DELTA, notAssessableReason: 'NO_COMMON_CODES' },
       };
     }
@@ -2873,12 +2782,9 @@ export class ScheduleService {
     // uncalculated side has no critical activity — and comparing a real one against it reports every
     // activity that was critical as having LEFT the critical path. Alarming, confident and false.
     const scheduled = (
-      baseline: { capturedProjectFinish: Date | null } | null,
+      baseline: object | null,
       plan: { scheduleComputedAt: Date | null },
-    ): boolean =>
-      baseline === null
-        ? plan.scheduleComputedAt !== null
-        : baseline.capturedProjectFinish !== null;
+    ): boolean => (baseline === null ? plan.scheduleComputedAt !== null : true);
     const fromScheduled = scheduled(fromBaseline, fromPlan);
     const toScheduled = scheduled(toBaseline, toPlan);
     const bothScheduled = fromScheduled && toScheduled;
@@ -2894,19 +2800,6 @@ export class ScheduleService {
       existsLive: anchorCodes.has(r.activityId),
     });
 
-    /**
-     * Whether the ADR-0126 paid classes mean anything on THIS pair. A LIVE side is always recorded —
-     * it IS the plan's shape — so only a frozen side can be short, and a pair where either predates
-     * the snapshot extension is `false` PERMANENTLY: no backfill is possible, because writing
-     * today's logic into a historic snapshot would state as history a graph that baseline never saw.
-     */
-    const bothSnapshotted =
-      (fromBaseline === null || fromBaseline.revisionSnapshotLevel === 'FULL') &&
-      (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
-
-    // The PLACEMENT half (M-C) — see the sibling derivation on the plan-nested route.
-    const bothPlacementSnapshotted = datesBasis === 'PLACED';
-
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
     // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.
     const fromCorrelated = correlateEdges(fromRawEdges, fromRawRows);
@@ -2921,8 +2814,6 @@ export class ScheduleService {
           {
             fromScheduled,
             toScheduled,
-            bothSnapshotted,
-            bothPlacementSnapshotted,
             /**
              * **The sides are matched ON the code here, so the `RECODED` class is unanswerable.**
              *
@@ -2946,10 +2837,6 @@ export class ScheduleService {
         ? null
         : {
             cap: changes.cap,
-            // Carried through verbatim, never re-derived here. The classifier is the one thing
-            // entitled to decide it, and a second derivation beside the `existsLive` widening
-            // below is exactly how the two would drift.
-            placementNotAssessableReason: changes.placementNotAssessableReason,
             classes: changes.classes.map((c) => ({
               ...c,
               rows: c.rows.map((r) => ({
@@ -2981,7 +2868,6 @@ export class ScheduleService {
 
     const result: CrossPlanRevisionCompare = {
       ...identity,
-      floatNotComparableCount: bothScheduled ? delta.floatNotComparableCount : 0,
       correlation,
       notAssessableReason: null,
       completion: {
@@ -3083,7 +2969,6 @@ export class ScheduleService {
         toUnmatched: correlation.toUnmatched,
         enteredTotal: result.criticalPath.enteredTotal,
         leftTotal: result.criticalPath.leftTotal,
-        floatNotComparableCount: result.floatNotComparableCount,
         settingsVerdict: result.settingsVerdict,
         durationMs: Date.now() - startedAt,
       },

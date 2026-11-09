@@ -103,32 +103,6 @@ export function formatDayVariance(row: BaselineVarianceRow, field: VarianceField
     : { text: `${magnitude} d ahead`, tone: 'ahead' };
 }
 
-/**
- * A row whose float was calculated on both sides but cannot be compared because a side has no float
- * minutes (a baseline captured, or a plan last recalculated, before they were stored — ADR-0214).
- * The server states this as `null` days beside two set day figures; it is the same population its
- * `floatNotComparableCount` counts, derived here from the row's own fields so the table needs no
- * second input.
- */
-export function isFloatNotComparable(row: BaselineVarianceRow): boolean {
-  return (
-    row.inBaseline &&
-    !row.removed &&
-    row.currentTotalFloat !== null &&
-    row.baselineTotalFloat !== null &&
-    row.floatVarianceMinutes === null
-  );
-}
-
-/**
- * The short visible line under the "Total float variance" header, or `null` at zero: how many
- * activities show "—" because their float could not be compared, rather than a bare dash a reader
- * could take for "no change". The full explanation is the Compare revisions panel's note.
- */
-export function floatVarianceColumnNote(count: number): string | null {
-  return count <= 0 ? null : `${count} not comparable`;
-}
-
 /** Finish variance — the headline comparison. Convenience wrapper over {@link formatDayVariance}. */
 export function formatFinishVariance(row: BaselineVarianceRow): FinishVariance {
   return formatDayVariance(row, 'finish');

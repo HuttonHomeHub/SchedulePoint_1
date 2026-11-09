@@ -99,13 +99,13 @@ CREATE TYPE "NoteEntityType" AS ENUM ('PLAN', 'ACTIVITY');
 CREATE TYPE "CalendarScope" AS ENUM ('ORG', 'PROJECT');
 
 -- CreateEnum
-CREATE TYPE "BaselineCostSnapshotLevel" AS ENUM ('ACTIVITY', 'ASSIGNMENT');
+CREATE TYPE "BaselineCostSnapshotLevel" AS ENUM ('ASSIGNMENT');
 
 -- CreateEnum
-CREATE TYPE "RevisionSnapshotLevel" AS ENUM ('NONE', 'FULL');
+CREATE TYPE "RevisionSnapshotLevel" AS ENUM ('FULL');
 
 -- CreateEnum
-CREATE TYPE "PlacementSnapshotLevel" AS ENUM ('NONE', 'FULL');
+CREATE TYPE "PlacementSnapshotLevel" AS ENUM ('FULL');
 
 -- CreateEnum
 CREATE TYPE "SwimlaneSource" AS ENUM ('NONE', 'MANUAL', 'WBS', 'ACTIVITY_CODE');
@@ -114,10 +114,10 @@ CREATE TYPE "SwimlaneSource" AS ENUM ('NONE', 'MANUAL', 'WBS', 'ACTIVITY_CODE');
 CREATE TYPE "SwimlaneLaneBasis" AS ENUM ('SWIMLANE', 'NO_SWIMLANE', 'WBS_SUMMARY', 'NO_WBS_SUMMARY');
 
 -- CreateEnum
-CREATE TYPE "SwimlaneSnapshotLevel" AS ENUM ('NONE', 'FULL');
+CREATE TYPE "SwimlaneSnapshotLevel" AS ENUM ('FULL');
 
 -- CreateEnum
-CREATE TYPE "CodeSnapshotLevel" AS ENUM ('NONE', 'SWIMLANE_TYPE');
+CREATE TYPE "CodeSnapshotLevel" AS ENUM ('SWIMLANE_TYPE');
 
 -- CreateEnum
 CREATE TYPE "DependencyType" AS ENUM ('FS', 'SS', 'FF', 'SF');
@@ -519,17 +519,17 @@ CREATE TABLE "baselines" (
     "name" TEXT NOT NULL,
     "is_active" BOOLEAN NOT NULL DEFAULT false,
     "captured_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "data_date" DATE,
-    "captured_project_finish" DATE,
-    "hours_per_day_minutes" INTEGER NOT NULL DEFAULT 1440,
-    "cost_snapshot_level" "BaselineCostSnapshotLevel" NOT NULL DEFAULT 'ACTIVITY',
-    "revision_snapshot_level" "RevisionSnapshotLevel" NOT NULL DEFAULT 'NONE',
-    "placement_snapshot_level" "PlacementSnapshotLevel" NOT NULL DEFAULT 'NONE',
-    "swimlane_snapshot_level" "SwimlaneSnapshotLevel" NOT NULL DEFAULT 'NONE',
-    "swimlane_source" "SwimlaneSource",
+    "data_date" DATE NOT NULL,
+    "captured_project_finish" DATE NOT NULL,
+    "hours_per_day_minutes" INTEGER NOT NULL,
+    "cost_snapshot_level" "BaselineCostSnapshotLevel" NOT NULL,
+    "revision_snapshot_level" "RevisionSnapshotLevel" NOT NULL,
+    "placement_snapshot_level" "PlacementSnapshotLevel" NOT NULL,
+    "swimlane_snapshot_level" "SwimlaneSnapshotLevel" NOT NULL,
+    "swimlane_source" "SwimlaneSource" NOT NULL,
     "swimlane_wbs_level" SMALLINT,
     "swimlane_code_type_id" UUID,
-    "code_snapshot_level" "CodeSnapshotLevel" NOT NULL DEFAULT 'NONE',
+    "code_snapshot_level" "CodeSnapshotLevel" NOT NULL,
     "critical_path_definition" "CriticalPathDefinition",
     "critical_float_threshold_minutes" INTEGER,
     "total_float_mode" "TotalFloatMode",
@@ -562,16 +562,16 @@ CREATE TABLE "baseline_activities" (
     "total_float" INTEGER,
     "total_float_minutes" INTEGER,
     "is_critical" BOOLEAN NOT NULL DEFAULT false,
-    "budgeted_cost" BIGINT,
-    "budgeted_expense" BIGINT,
-    "lane_index" INTEGER,
+    "budgeted_cost" BIGINT NOT NULL,
+    "budgeted_expense" BIGINT NOT NULL,
+    "lane_index" INTEGER NOT NULL,
     "parent_id" UUID,
     "calendar_id" UUID,
     "constraint_type" "ConstraintType",
     "constraint_date" DATE,
     "secondary_constraint_type" "ConstraintType",
     "secondary_constraint_date" DATE,
-    "percent_complete" INTEGER,
+    "percent_complete" INTEGER NOT NULL,
     "actual_start" DATE,
     "actual_finish" DATE,
     "placed_start" DATE,
@@ -1578,8 +1578,11 @@ ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_resume_after_suspend" CHE
 ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_schedule_instants_all_or_none_with_dates" CHECK (((num_nonnulls(visual_effective_start_instant, visual_effective_finish_instant, late_start_instant, late_finish_instant) = 0) OR (num_nonnulls(visual_effective_start_instant, visual_effective_finish_instant, late_start_instant, late_finish_instant, visual_effective_start, visual_effective_finish, late_start, late_finish) = 8)));
 -- was: 20260716140000_m4_secondary_constraint (git tag api-v1.0.0)
 ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_secondary_constraint_pair" CHECK (((secondary_constraint_type IS NULL) = (secondary_constraint_date IS NULL)));
--- was: 20261108120000_total_float_minutes (git tag api-v1.0.0)
-ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_total_float_minutes_requires_days" CHECK (((total_float_minutes IS NULL) OR (total_float IS NOT NULL)));
+-- was: 20261108120000_total_float_minutes (git tag api-v1.0.0), one-way, as
+-- ck_activities_total_float_minutes_requires_days. Tidy T6 (ADR-0215): both ways, because the only
+-- rows with days and no minutes were calculated before the column, or by an older image during a
+-- rollback, and a fresh 1.1 database has neither. writeResults writes both in one UPDATE.
+ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_total_float_minutes_with_days" CHECK (((total_float_minutes IS NULL) = (total_float IS NULL)));
 -- was: 20260920120300_activity_visual_conflict_reason (git tag api-v1.0.0)
 ALTER TABLE "activities" ADD CONSTRAINT "ck_activities_visual_conflict_matches_reason" CHECK ((visual_conflict = (visual_conflict_reason IS NOT NULL)));
 -- was: 20260715130000_activate_activity_calendar_fk (git tag api-v1.0.0)
@@ -1670,24 +1673,30 @@ CREATE INDEX idx_audit_events_staff_occurred ON audit_events USING btree (occurr
 CREATE INDEX idx_audit_events_subject_occurred ON audit_events USING btree (subject_id, occurred_at DESC, id DESC) WHERE ((actor_user_id IS NULL) AND (subject_id IS NOT NULL));
 
 -- ---- baseline_activities ---------------------------------------------------
--- was: 20260717050000_m7_cost_and_earned_value_schema (git tag api-v1.0.0)
-ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_budgeted_cost_nonneg" CHECK (((budgeted_cost IS NULL) OR (budgeted_cost >= 0)));
--- was: 20260802140000_baseline_assignment_costs (git tag api-v1.0.0)
-ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_budgeted_expense_nonneg" CHECK (((budgeted_expense IS NULL) OR (budgeted_expense >= 0)));
+-- was: 20260717050000_m7_cost_and_earned_value_schema (git tag api-v1.0.0), nullable-safe. Tidy T4
+-- (ADR-0215): the column is NOT NULL, so the IS NULL arm went with it.
+ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_budgeted_cost_nonneg" CHECK ((budgeted_cost >= 0));
+-- was: 20260802140000_baseline_assignment_costs (git tag api-v1.0.0), nullable-safe. Tidy T4
+-- (ADR-0215): the column is NOT NULL, so the IS NULL arm went with it.
+ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_budgeted_expense_nonneg" CHECK ((budgeted_expense >= 0));
 -- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0)
 ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_code_lane_pair" CHECK ((((code_lane_index IS NULL) = (code_lane_updated_at IS NULL)) AND ((code_lane_index IS NULL) OR (code_lane_index >= 0))));
 -- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0)
 ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_constraint_pair" CHECK (((constraint_type IS NULL) = (constraint_date IS NULL)));
 -- was: 20260715120000_activity_dependency_baseline_minutes (git tag api-v1.0.0)
 ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_duration_minutes_nonneg" CHECK ((duration_minutes >= 0));
--- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0)
-ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_lane_index_nonneg" CHECK (((lane_index IS NULL) OR (lane_index >= 0)));
--- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0)
-ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_percent_complete_range" CHECK (((percent_complete IS NULL) OR ((percent_complete >= 0) AND (percent_complete <= 100))));
+-- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0), nullable-safe. Tidy T4
+-- (ADR-0215): the column is NOT NULL, so the IS NULL arm went with it.
+ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_lane_index_nonneg" CHECK ((lane_index >= 0));
+-- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0), nullable-safe. Tidy T4
+-- (ADR-0215): the column is NOT NULL, so the IS NULL arm went with it.
+ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_percent_complete_range" CHECK (((percent_complete >= 0) AND (percent_complete <= 100)));
 -- was: 20260906120000_baseline_revision_snapshot (git tag api-v1.0.0)
 ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_secondary_constraint_pair" CHECK (((secondary_constraint_type IS NULL) = (secondary_constraint_date IS NULL)));
--- was: 20261108120000_total_float_minutes (git tag api-v1.0.0)
-ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_total_float_minutes_requires_days" CHECK (((total_float_minutes IS NULL) OR (total_float IS NOT NULL)));
+-- was: 20261108120000_total_float_minutes (git tag api-v1.0.0), one-way, as
+-- ck_baseline_activities_total_float_minutes_requires_days. Tidy T6 (ADR-0215): both ways, as on
+-- activities; capture copies the live pair verbatim, and the live pair is one fact.
+ALTER TABLE "baseline_activities" ADD CONSTRAINT "ck_baseline_activities_total_float_minutes_with_days" CHECK (((total_float_minutes IS NULL) = (total_float IS NULL)));
 -- was: 20260710140000_add_baselines (git tag api-v1.0.0)
 CREATE INDEX idx_baseline_activities_delete_batch_id ON baseline_activities USING btree (delete_batch_id) WHERE (delete_batch_id IS NOT NULL);
 
@@ -1722,9 +1731,9 @@ ALTER TABLE "baseline_dependencies" ADD CONSTRAINT "ck_baseline_dependencies_no_
 CREATE INDEX idx_baseline_dependencies_delete_batch_id ON baseline_dependencies USING btree (delete_batch_id) WHERE (delete_batch_id IS NOT NULL);
 
 -- ---- baselines -------------------------------------------------------------
--- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0)
+-- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0), with a NONE branch. Tidy T3 (ADR-0215
+-- D6): the enum is narrowed to the one label every capture writes; still fail-closed (ELSE false).
 ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_code_snapshot_shape" CHECK ( CASE code_snapshot_level
-    WHEN 'NONE'::"CodeSnapshotLevel" THEN true
     WHEN 'SWIMLANE_TYPE'::"CodeSnapshotLevel" THEN (swimlane_snapshot_level = 'FULL'::"SwimlaneSnapshotLevel")
     ELSE false
     END);
@@ -1734,9 +1743,10 @@ ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_critical_float_threshold_mi
 ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_criticality_snapshot_all_or_none" CHECK ((num_nonnulls(critical_path_definition, critical_float_threshold_minutes, total_float_mode, make_open_ends_critical) = ANY (ARRAY[0, 4])));
 -- was: 20260801120000_calendar_hours_per_day (git tag api-v1.0.0)
 ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_hours_per_day_minutes_range" CHECK (((hours_per_day_minutes >= 1) AND (hours_per_day_minutes <= 1440)));
--- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0)
+-- was: 20261027120100_p6_activity_codes (git tag api-v1.0.0), with a NONE branch (all three NULL).
+-- Tidy T3/T4 (ADR-0215 D6): the enum is narrowed to FULL and swimlane_source is NOT NULL; still
+-- fail-closed on both discriminators (ELSE false).
 ALTER TABLE "baselines" ADD CONSTRAINT "ck_baselines_swimlane_snapshot_shape" CHECK ( CASE swimlane_snapshot_level
-    WHEN 'NONE'::"SwimlaneSnapshotLevel" THEN ((swimlane_source IS NULL) AND (swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))
     WHEN 'FULL'::"SwimlaneSnapshotLevel" THEN CASE swimlane_source
     WHEN 'NONE'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))
     WHEN 'MANUAL'::"SwimlaneSource" THEN ((swimlane_wbs_level IS NULL) AND (swimlane_code_type_id IS NULL))

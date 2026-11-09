@@ -500,11 +500,10 @@ const SNET_UNCLASSIFIED: DiagnosticEntry = {
 /**
  * **D-I — of the binding SNETs, how many could be recovered if a strip went wrong.**
  *
- * ADR-0126 froze `constraint_type` / `constraint_date` on `baseline_activities`, but only at
- * `revision_snapshot_level = 'FULL'` and only for captures taken since that release — a `NONE`
- * baseline holds nulls there and a row count cannot tell "there was no constraint" from "nobody
- * looked", which is exactly what the level column exists to say. So this counts the binding set
- * against the ONE historic copy that exists anywhere in the system.
+ * ADR-0126 froze `constraint_type` / `constraint_date` on `baseline_activities` at every capture
+ * (`revision_snapshot_level` is single-valued since 1.1.0, ADR-0215 D6, so the predicate below is
+ * always true and is kept only until this probe is retired with the SNET diagnostics). So this
+ * counts the binding set against the ONE historic copy that exists anywhere in the system.
  *
  * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference.** The
  * natural shape is a semi-join, and its `SELECT 1` is not an aliased `count(...)`, so the gate

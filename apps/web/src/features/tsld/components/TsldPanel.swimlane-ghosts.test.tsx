@@ -237,7 +237,9 @@ describe('TsldPanel — the comparison overlay words each count for its own caus
     ).toEqual([['b', 1]]);
     // The canvas is a recorder here, so the summary is read off the panel's own sr-only text.
     const text = container.textContent ?? '';
-    expect(text).toContain('2 not shown because the old revision did not record where they were');
+    expect(text).toContain(
+      '2 not shown because the two plans lay their activities out independently',
+    );
     expect(text).toContain('1 not shown because their swimlane or row can no longer be matched');
   });
 });

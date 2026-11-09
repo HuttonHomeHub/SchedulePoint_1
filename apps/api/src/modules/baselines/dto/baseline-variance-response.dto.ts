@@ -10,7 +10,7 @@ import type { BaselineVarianceRow, PlanVarianceSummary, VarianceBasis } from '@r
  * **Every dated field and both variance fields below are on the read's `meta.basis`**
  * (`placement-baseline-variance`, amending ADR-0025) — see
  * {@link PlanVarianceSummaryResponseDto.basis}. `currentTotalFloat`/`baselineTotalFloat`/
- * `floatVarianceDays` are total float on both bases, always.
+ * `floatVarianceDays` are total float, not dates.
  */
 export class BaselineVarianceRowResponseDto implements BaselineVarianceRow {
   @ApiProperty({ format: 'uuid' })
@@ -66,8 +66,7 @@ export class BaselineVarianceRowResponseDto implements BaselineVarianceRow {
     type: Number,
     description:
       'current − baseline total float in working minutes, exact. Null when the activity is not in ' +
-      'the baseline, was removed, or either side’s float has no minutes (a baseline captured, or a ' +
-      'plan last recalculated, before minutes were stored) — counted in `floatNotComparableCount`.',
+      'the baseline, was removed, or either side’s float was never calculated.',
   })
   floatVarianceMinutes!: number | null;
 }
@@ -100,22 +99,14 @@ export class PlanVarianceSummaryResponseDto implements PlanVarianceSummary {
   removedCount!: number;
 
   @ApiProperty({
-    enum: ['PLACED', 'NETWORK'],
+    enum: ['PLACED'],
     nullable: true,
     description:
       'Which dates this read compared (placement-baseline-variance, amending ADR-0025). ' +
       "null only when baselineId is null (no active baseline). 'PLACED': the frozen placed " +
-      'span vs the live placed span (where the bars are drawn, ADR-0148) — the active ' +
-      "baseline's placementSnapshotLevel is FULL. 'NETWORK': the frozen and live pure-" +
-      'network dates — the level is NONE, i.e. this baseline was captured before placements ' +
-      'were recorded. Every row’s dated fields and start/finish variances are on this basis.',
+      'span vs the live placed span (where the bars are drawn, ADR-0148) — the only value ' +
+      "since 1.1.0 ('NETWORK' was removed, ADR-0215 D6). Every row’s dated fields and " +
+      'start/finish variances are on this basis.',
   })
   basis!: VarianceBasis | null;
-
-  @ApiProperty({
-    description:
-      'Activities in the baseline and live whose float was calculated on both sides but has no ' +
-      'minutes on one, so `floatVarianceDays` is null for them (ADR-0214). 0 with no active baseline.',
-  })
-  floatNotComparableCount!: number;
 }

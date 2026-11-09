@@ -254,8 +254,8 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       // 2.3 — appended (swimlanes made from activity codes): the code type the swimlanes come from.
       'swimlaneCodeTypeId:text',
       // 2.4 — appended (cross-plan instants, ADR-0212): when the activities' instants were written.
-      // EXPORTED rather than withheld: it is the predicate a reader needs to know whether a row's
-      // instants are current (equal to `scheduleComputedAt`).
+      // EXPORTED rather than withheld: it is always equal to `scheduleComputedAt` (one statement
+      // writes both, and a CHECK holds them equal), so it tells a reader the instants are current.
       'scheduleInstantsComputedAt:instant',
     ),
     withheld: {
@@ -338,14 +338,14 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       // 2.1 — appended (swimlanes): the hand-made swimlane the activity belongs to, if any.
       'swimlaneId:text',
       // 2.4 — appended (cross-plan instants, ADR-0212): the exact engine instant each of four dates
-      // is calculated from. Current only when the plan's `scheduleInstantsComputedAt` equals its
-      // `scheduleComputedAt`.
+      // is calculated from. Written with the plan's `scheduleComputedAt` in one statement, so they
+      // are current whenever the plan has been calculated.
       'visualEffectiveStartInstant:instant',
       'visualEffectiveFinishInstant:instant',
       'lateStartInstant:instant',
       'lateFinishInstant:instant',
       // 2.5 — appended (baseline float frame, #318): total float in working minutes, unrounded. Empty
-      // where `totalFloatDays` was calculated before this column existed: not comparable, never 0.
+      // exactly where `totalFloatDays` is empty (not calculated), never 0.
       'totalFloatMinutes:int',
     ),
     withheld: {
@@ -580,7 +580,7 @@ export const EXPORT_FILES: readonly ExportFile[] = [
       'codeLaneIndex:int',
       'codeLaneUpdatedAt:instant',
       // 2.5 — appended (baseline float frame, #318): the activity's float minutes copied at capture.
-      // Empty where captured before this column existed, or from a plan not recalculated since.
+      // Empty exactly where `totalFloatDays` is empty (the activity was not calculated at capture).
       'totalFloatMinutes:int',
     ),
     withheld: {

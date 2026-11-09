@@ -101,34 +101,6 @@ export function floatPairTexts(row: {
   return { from, to };
 }
 
-/**
- * The quiet note for float that could not be compared, or `null` at zero — silence is right when
- * every float could be compared, and a line saying so on every comparison trains a reader to skip
- * the place the note will appear (ADR-0214, ADR-0127's count-what-you-cannot-draw shape).
- *
- * A standing condition, not an event (ADR-0132): it is text on the page, and the announcement
- * carries only the short {@link floatNotComparableClause}.
- */
-export function floatNotComparableNote(count: number): string | null {
-  if (count <= 0) return null;
-  const subject =
-    count === 1
-      ? 'Float could not be compared for 1 activity.'
-      : `Float could not be compared for ${count} activities.`;
-  return (
-    `${subject} They were calculated or captured before this version recorded float exactly, so ` +
-    'a change of working day cannot be told apart from a change of float. They are left out of ' +
-    'the float movement here. Recalculating the plan refreshes the current side; an earlier ' +
-    'baseline stays as it was captured.'
-  );
-}
-
-/** The short spoken form of the same fact, appended to the settled-comparison announcement. */
-export function floatNotComparableClause(count: number): string | null {
-  if (count <= 0) return null;
-  return `Float could not be compared for ${count} ${count === 1 ? 'activity' : 'activities'}.`;
-}
-
 /** How a side is named in running prose. The live side is LABELLED as live, never left blank. */
 export function sideLabel(side: RevisionSide): string {
   return side.kind === 'LIVE' ? 'the plan as it stands now' : (side.name ?? 'an unnamed revision');
@@ -316,10 +288,7 @@ export function comparisonAnnouncement(
    */
   const coverage = 'correlation' in compare ? `${correlationSentence(compare.correlation)} ` : '';
   const unavailable = criticalPathUnavailable(compare.criticalPath.notAssessableReason);
-  const floatClause = floatNotComparableClause(compare.floatNotComparableCount);
-  const withFloat = (text: string): string =>
-    floatClause === null ? text : `${text} ${floatClause}`;
-  if (unavailable !== null) return withFloat(`${coverage}${unavailable}`);
+  if (unavailable !== null) return `${coverage}${unavailable}`;
   const { enteredTotal, leftTotal, addedTotal, removedTotal } = compare.criticalPath;
   const parts: string[] = [];
   // **Every count is the server's TRUE total, never a returned array's length.** All four row sets
@@ -347,7 +316,7 @@ export function comparisonAnnouncement(
   ]
     .filter((c): c is string => c !== null)
     .join(' ');
-  return withFloat(caveats === '' ? headline : `${headline} ${caveats}`);
+  return caveats === '' ? headline : `${headline} ${caveats}`;
 }
 
 /** "Showing 200 of 412" — the cap and the true total both from the payload, never a local constant. */

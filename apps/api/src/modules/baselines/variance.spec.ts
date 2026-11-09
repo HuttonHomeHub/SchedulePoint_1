@@ -48,7 +48,6 @@ describe('computeVariance', () => {
       behindCount: 0,
       addedCount: 0,
       removedCount: 0,
-      floatNotComparableCount: 0,
     });
   });
 
@@ -95,14 +94,13 @@ describe('computeVariance', () => {
     it('reads an unmoved float after a day-length change as zero, not as the day columns differ', () => {
       // Captured on a 24-hour day (2,400 minutes → 2 d); the calendar is then edited to eight hours
       // and the live float reads 5 d for the very same 2,400 minutes. Nothing moved.
-      const { rows, rollup } = computeVariance(
+      const { rows } = computeVariance(
         [base({ totalFloat: 2, totalFloatMinutes: 2400 })],
         [live({ totalFloat: 5, totalFloatMinutes: 2400 })],
         allMinutesWorkCalendar,
         1440,
       );
       expect(rows[0]).toMatchObject({ floatVarianceDays: 0, floatVarianceMinutes: 0 });
-      expect(rollup.floatNotComparableCount).toBe(0);
     });
 
     it('converts the minutes once, on the baseline’s frame', () => {
@@ -115,31 +113,20 @@ describe('computeVariance', () => {
       expect(rows[0]).toMatchObject({ floatVarianceMinutes: -960, floatVarianceDays: -2 });
     });
 
-    it('reports a float with days but no minutes as not comparable, and counts it', () => {
-      const { rows, rollup } = computeVariance(
-        [base({ totalFloat: 2, totalFloatMinutes: null }), base({ sourceActivityId: 'a2' })],
-        [live({ totalFloat: 2, totalFloatMinutes: 2880 }), live({ id: 'a2' })],
-        allMinutesWorkCalendar,
-      );
-      expect(rows[0]).toMatchObject({ floatVarianceDays: null, floatVarianceMinutes: null });
-      expect(rows[1]).toMatchObject({ floatVarianceDays: 0, floatVarianceMinutes: 0 });
-      expect(rollup.floatNotComparableCount).toBe(1);
-    });
-
-    it('does not count a float that was never calculated, nor an added or removed row', () => {
-      const { rows, rollup } = computeVariance(
+    it('reports a float that was never calculated as null, never as zero', () => {
+      const { rows } = computeVariance(
         [
           base({ totalFloat: null, totalFloatMinutes: null }),
-          base({ sourceActivityId: 'gone', totalFloat: 3, totalFloatMinutes: null }),
+          base({ sourceActivityId: 'gone', totalFloat: 3, totalFloatMinutes: 4320 }),
         ],
         [
           live({ totalFloat: 3, totalFloatMinutes: 4320 }),
-          live({ id: 'new', totalFloat: 1, totalFloatMinutes: null }),
+          live({ id: 'new', totalFloat: null, totalFloatMinutes: null }),
         ],
         allMinutesWorkCalendar,
       );
       expect(rows.map((r) => r.floatVarianceDays)).toEqual([null, null, null]);
-      expect(rollup.floatNotComparableCount).toBe(0);
+      expect(rows.map((r) => r.floatVarianceMinutes)).toEqual([null, null, null]);
     });
   });
 

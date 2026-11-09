@@ -64,10 +64,10 @@ export type NullableCriticalityColumns = {
  * Read a rule out of four nullable columns, or `null` when it was never recorded.
  *
  * **The null is a sentinel — "the rule is unknown" — and never a claim.** It is what a baseline
- * captured before the freeze shipped reports (permanently: a capture cannot be re-run), and what a
- * plan not recalculated since the mirror shipped reports (until its next recalculation). Nothing may
- * coalesce it to a default: after the four options became planner-writable, a default would tell an
- * old snapshot it was computed under a rule it may never have seen.
+ * captured from a plan that was never recalculated reports (permanently: a capture cannot be
+ * re-run), and what a live plan not yet recalculated reports (until its next recalculation).
+ * Nothing may coalesce it to a default: the four options are planner-writable, so a default would
+ * tell a snapshot it was computed under a rule it may never have seen.
  *
  * Reads `criticalPathDefinition` as the discriminator and asserts the other three, which is exactly
  * what the all-or-none CHECK makes safe. There is deliberately no fifth `*_snapshot_level` column to

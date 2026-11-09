@@ -179,9 +179,7 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
      * not `apps/api/test`. Widening it turned the comment into a failing test, which is what a
      * gate is for and an intention is not.
      */
-    // Two live plans, no frozen side: the basis the service derives for exactly this pair.
-    const project_ = (rows: Parameters<typeof liveRevisionSide>[0]) =>
-      liveRevisionSide(rows, 'PLACED');
+    const project_ = (rows: Parameters<typeof liveRevisionSide>[0]) => liveRevisionSide(rows);
 
     /**
      * The correlation M1 will ship, written here so P2 measures its shape rather than omitting it.
@@ -259,12 +257,6 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
         {
           fromScheduled: true,
           toScheduled: true,
-          // Both sides are live imported plans, so every paid class IS recorded — which is the
-          // cross-plan case's one advantage over a pre-ADR-0126 baseline.
-          bothSnapshotted: true,
-          // Same reasoning one level along (M-C): two live plans each hold their own placement,
-          // so there is no NONE-level side for the reason to be about.
-          bothPlacementSnapshotted: true,
           // The probe stands in for the cross-plan path, so it states that world's answer.
           codeIsTheCorrelationKey: true,
           includeProgress: true,

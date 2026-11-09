@@ -11,6 +11,7 @@ import type { BaselineRepository } from '../src/modules/baselines/baseline.repos
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { FULL_BASELINE_ACTIVITY_COLUMNS, FULL_BASELINE_COLUMNS } from './baseline-columns';
 
 /**
  * End-to-end tests for the baselines capture/list/get endpoints (M7 Task B1,
@@ -272,7 +273,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     const secondId = second.body.data.id as string;
     // A baseline with no snapshot rows at all, and one snapshot row deleted on its own.
     const empty = await prisma.baseline.create({
-      data: { organizationId: orgId, planId, name: 'Empty' },
+      data: { organizationId: orgId, planId, name: 'Empty', ...FULL_BASELINE_COLUMNS },
     });
     const secondRows = await prisma.baselineActivity.findMany({
       where: { baselineId: secondId },
@@ -308,6 +309,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
         organizationId: otherOrgId,
         planId: otherPlan.body.data.id as string,
         name: 'Theirs',
+        ...FULL_BASELINE_COLUMNS,
       },
     });
     await prisma.baselineActivity.createMany({
@@ -317,6 +319,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
         sourceActivityId: randomUUID(),
         name: `Other ${String(i)}`,
         durationMinutes: 480,
+        ...FULL_BASELINE_ACTIVITY_COLUMNS,
       })),
     });
 
@@ -400,15 +403,18 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(byId.get(short)).toMatchObject({ totalFloat: 3, totalFloatMinutes: 3 * 1440 });
     expect(byId.get(long)).toMatchObject({ totalFloat: 0, totalFloatMinutes: 0 });
 
-    // A plan whose rows carry days but no minutes (calculated before the column existed) freezes
-    // NULL, never a guess derived from the day figure.
-    await prisma.activity.update({ where: { id: short }, data: { totalFloatMinutes: null } });
-    const second = await actor.agent.post(baselinesUrl(planId)).send({ name: 'Two' }).expect(201);
-    const legacy = await prisma.baselineActivity.findFirstOrThrow({
-      where: { baselineId: second.body.data.id as string, sourceActivityId: short },
-      select: { totalFloat: true, totalFloatMinutes: true },
-    });
-    expect(legacy).toEqual({ totalFloat: 3, totalFloatMinutes: null });
+    // Days without minutes is not a state the database holds: the two columns are one fact, null
+    // together (ck_activities_total_float_minutes_with_days), so a capture can never freeze one
+    // without the other.
+    await expect(
+      prisma.activity.update({ where: { id: short }, data: { totalFloatMinutes: null } }),
+    ).rejects.toThrow(/ck_activities_total_float_minutes_with_days/);
+    await expect(
+      prisma.baselineActivity.updateMany({
+        where: { baselineId: first.body.data.id as string, sourceActivityId: short },
+        data: { totalFloatMinutes: null },
+      }),
+    ).rejects.toThrow(/ck_baseline_activities_total_float_minutes_with_days/);
   });
 
   // T3 (placement-baseline-variance): a plain fixture where placed == early cannot tell
@@ -1091,60 +1097,6 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(byId.get(aId)).toMatchObject({ startVarianceDays: 5, finishVarianceDays: 5 });
     expect(byId.get(bId)).toMatchObject({ startVarianceDays: 5, finishVarianceDays: 5 });
     expect(res.body.meta).toMatchObject({ basis: 'PLACED', behindCount: 2 });
-  });
-
-  // R3 (characterisation): a NONE-level baseline compares network-vs-network, unchanged from
-  // before this epic. Repeats R1's fixture, then forces the active baseline back to how a
-  // pre-M-C capture reads (`placement_snapshot_level: 'NONE'`, the three placement columns
-  // null) through Prisma directly — the public API never produces this shape any more. Pins
-  // the Q1 default; if Q1 is ever answered otherwise, this case changes with it.
-  it('R3: a NONE-level baseline compares network-vs-network, unchanged', async () => {
-    const { actor } = await adminWithOrg();
-    const planId = await makePlan(actor, 'Northgate');
-    const a = await actor.agent
-      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
-      .send({ name: 'A', durationDays: 3, constraintType: 'SNET', constraintDate: '2026-01-10' })
-      .expect(201);
-    const aId = a.body.data.id as string;
-    const bId = await makeActivity(actor, planId, 'B', 2);
-    await actor.agent
-      .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
-      .send({ predecessorId: aId, successorId: bId, type: 'FS' })
-      .expect(201);
-    await recalc(actor, planId);
-    const created = await actor.agent
-      .post(baselinesUrl(planId))
-      .send({ name: 'Contract' })
-      .expect(201);
-    const baselineId = created.body.data.id as string;
-
-    await prisma.baselineActivity.updateMany({
-      where: { baselineId },
-      data: { placedStart: null, placedFinish: null, visualStart: null },
-    });
-    await prisma.baseline.update({
-      where: { id: baselineId },
-      data: { placementSnapshotLevel: 'NONE' },
-    });
-
-    await actor.agent
-      .patch(`/api/v1/organizations/acme/activities/${aId}`)
-      .send({ constraintType: null, constraintDate: null, visualStart: '2026-01-10', version: 1 })
-      .expect(200);
-    await recalc(actor, planId);
-
-    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
-    const byId = new Map(
-      (res.body.data as { activityId: string; startVarianceDays: number | null }[]).map((r) => [
-        r.activityId,
-        r,
-      ]),
-    );
-    // -9 (ahead): the frozen constraint-bound early start compared with today's lowered one —
-    // exactly today's (pre-epic) behaviour, kept for a NONE-level baseline by Q1's default (a).
-    expect(byId.get(aId)).toMatchObject({ startVarianceDays: -9, finishVarianceDays: -9 });
-    expect(byId.get(bId)).toMatchObject({ startVarianceDays: -9, finishVarianceDays: -9 });
-    expect(res.body.meta.basis).toBe('NETWORK');
   });
 
   it('variance reads for any member but hides the plan from non-members (404)', async () => {

@@ -50,9 +50,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import {
   criticality,
   formatDayVariance,
-  floatVarianceColumnNote,
   formatRemainingFloat,
-  isFloatNotComparable,
   type FinishVariance,
   type VarianceField,
 } from '@/lib/schedule-format';
@@ -463,16 +461,6 @@ export function ActivitiesTable({
   }, [activities.data]);
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
-  // How many "Total float variance" cells read "—" for want of float minutes (ADR-0214), counted
-  // from the rows the table already holds. The visible line it drives counts them and each such
-  // cell says so in text a screen reader reads, so the dash is explained rather than left to read
-  // as "no change".
-  const floatNotComparableCount = useMemo(() => {
-    if (!varianceByActivityId) return 0;
-    let count = 0;
-    for (const row of varianceByActivityId.values()) if (isFloatNotComparable(row)) count += 1;
-    return count;
-  }, [varianceByActivityId]);
   const [resourcesId, setResourcesId] = useState<string | null>(null);
   // The row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
   // (ADR-0060 §7) — they carried three separate ids and three separate dialogs until the tabbed
@@ -1037,42 +1025,15 @@ export function ActivitiesTable({
         hideBelow?: 'lg',
       ): Column<ActivitySummary> => {
         const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
-        const floatNote =
-          field === 'float' ? floatVarianceColumnNote(floatNotComparableCount) : null;
         return {
           header,
           headClassName: show,
           cellClassName: `whitespace-nowrap tabular-nums${show}`,
-          // The visible description sits IN the header, not in a tooltip: a tooltip is invisible to
-          // a touch user and to anyone not hovering. `headerCell` replaces the text, so it renders
-          // the title itself.
-          ...(floatNote === null
-            ? {}
-            : {
-                headerCell: () => (
-                  <>
-                    {header}
-                    {/* Visual only: the header's accessible name stays "Total float variance", and
-                        each dash carries its own reason, so a screen reader meets the cause where
-                        the value is and not as a suffix on a column name. */}
-                    <span aria-hidden="true" className="text-muted-foreground block text-xs">
-                      {floatNote}
-                    </span>
-                  </>
-                ),
-              }),
           cell: (activity) => {
             const row = varianceByActivityId.get(activity.id);
             if (!row) return <span className="text-muted-foreground">—</span>;
             const variance = formatDayVariance(row, field);
-            return (
-              <span className={VARIANCE_TONE_CLASS[variance.tone]}>
-                {variance.text}
-                {field === 'float' && isFloatNotComparable(row) ? (
-                  <span className="sr-only"> could not be compared</span>
-                ) : null}
-              </span>
-            );
+            return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
           },
         };
       };
@@ -1129,7 +1090,6 @@ export function ActivitiesTable({
     codeColumns,
     noteCountByActivityId,
     varianceByActivityId,
-    floatNotComparableCount,
     actionsFor,
   ]);
 

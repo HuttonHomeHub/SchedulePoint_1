@@ -77,23 +77,17 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     dataDate: new Date('2026-01-05T00:00:00Z'),
     capturedProjectFinish: new Date('2026-03-01T00:00:00Z'),
     hoursPerDayMinutes: 1440,
-    // ADR-0071 M3: what this baseline's cost snapshot decomposes to. ACTIVITY is the column's
-    // constant default and what every capture writes until the M3 service slice lands.
-    costSnapshotLevel: 'ACTIVITY',
-    // NONE is what every baseline captured before the revision-snapshot extension is, and
-    // what this fixture's other fields describe — the shape frozen without logic,
-    // constraints, calendars, WBS or progress.
-    revisionSnapshotLevel: 'NONE',
-    // one-planning-surface M-A: the column exists and ships dark; M-C writes 'FULL'.
-    placementSnapshotLevel: 'NONE',
-    // Swimlanes M1-T1b: NONE is what every baseline captured before swimlanes shipped is.
-    swimlaneSnapshotLevel: 'NONE',
-    swimlaneSource: null,
+    // The five discriminators are single-valued since 1.1.0 (ADR-0215 D6): what every capture writes.
+    costSnapshotLevel: 'ASSIGNMENT',
+    revisionSnapshotLevel: 'FULL',
+    placementSnapshotLevel: 'FULL',
+    swimlaneSnapshotLevel: 'FULL',
+    swimlaneSource: 'NONE',
     swimlaneWbsLevel: null,
     swimlaneCodeTypeId: null,
-    codeSnapshotLevel: 'NONE',
+    codeSnapshotLevel: 'SWIMLANE_TYPE',
     // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
-    // unknown, which is what a baseline captured before the freeze shipped should say.
+    // unknown (the plan was never recalculated).
     criticalPathDefinition: null,
     criticalFloatThresholdMinutes: null,
     totalFloatMode: null,
@@ -710,10 +704,6 @@ describe('BaselinesService', () => {
       expect(baselines.loadSnapshotRowsForVariance).not.toHaveBeenCalled();
     });
 
-    // U2 / R3-in-miniature: a NONE-level baseline (the default the `baseline()` fixture
-    // gives, unchanged since before this epic) reads network-vs-network and reports
-    // `basis: 'NETWORK'` — the response is byte-identical to before this epic apart from
-    // that one new field (SC-3, placement-baseline-variance).
     it('computes variance against the active baseline (all-days calendar when the plan has none)', async () => {
       baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
       baselines.loadSnapshotRowsForVariance.mockResolvedValue([
@@ -721,11 +711,8 @@ describe('BaselinesService', () => {
           sourceActivityId: 'a1',
           code: 'A1',
           name: 'A',
-          baselineStart: new Date('2026-01-05T00:00:00Z'),
-          baselineFinish: new Date('2026-01-09T00:00:00Z'),
-          // Never recorded on a NONE-level baseline; not read by a NETWORK-basis projection.
-          placedStart: null,
-          placedFinish: null,
+          placedStart: new Date('2026-01-05T00:00:00Z'),
+          placedFinish: new Date('2026-01-09T00:00:00Z'),
           totalFloat: 0,
         },
       ]);
@@ -734,13 +721,8 @@ describe('BaselinesService', () => {
           id: 'a1',
           code: 'A1',
           name: 'A',
-          earlyStart: new Date('2026-01-05T00:00:00Z'),
-          earlyFinish: new Date('2026-01-12T00:00:00Z'), // 3 calendar days behind
-          // A placed span exists on the live plan regardless of the baseline's level; a
-          // NETWORK-basis projection must not read it (that would be the per-row fallback
-          // Q1's edge-case table rejects).
           visualEffectiveStart: new Date('2026-01-05T00:00:00Z'),
-          visualEffectiveFinish: new Date('2026-01-05T00:00:00Z'),
+          visualEffectiveFinish: new Date('2026-01-12T00:00:00Z'), // 3 calendar days behind
           totalFloat: 0,
         },
       ]);
@@ -753,27 +735,21 @@ describe('BaselinesService', () => {
         baselineName: 'Contract Baseline',
         worstFinishSlipDays: 3,
         behindCount: 1,
-        basis: 'NETWORK',
+        basis: 'PLACED',
       });
       // plan.calendarId is null in the fixture → all-days-work, no calendar load.
       expect(baselines.loadPlanCalendar).not.toHaveBeenCalled();
     });
 
-    // U1: the four-quadrant fixture (placement-baseline-variance §2 Regression tests). Frozen
-    // early D+4, frozen placed D+7, live early D+5, live placed D+11 — placed-vs-placed = +4,
-    // network-vs-network = +1, and the two CROSS mixes each give a THIRD, different answer, so
-    // switching only one side to placed (the obvious slip) is caught by this alone.
-    it('U1: on a FULL baseline, compares placed-vs-placed and not any mix with network', async () => {
-      baselines.findActiveBaselineByPlan.mockResolvedValue(
-        baseline({ id: 'active-1', placementSnapshotLevel: 'FULL' }),
-      );
+    // U1: frozen placed D+7 against live placed D+11 = +4. The loaders return no network dates, so
+    // a projection that reached for `earlyStart` would read `undefined` and fail here.
+    it('U1: compares the frozen placed span with the live placed span', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
       baselines.loadSnapshotRowsForVariance.mockResolvedValue([
         {
           sourceActivityId: 'a1',
           code: 'A1',
           name: 'A',
-          baselineStart: new Date('2026-01-04T00:00:00Z'), // D+4 (frozen early)
-          baselineFinish: new Date('2026-01-04T00:00:00Z'),
           placedStart: new Date('2026-01-07T00:00:00Z'), // D+7 (frozen placed)
           placedFinish: new Date('2026-01-07T00:00:00Z'),
           totalFloat: 0,
@@ -784,8 +760,6 @@ describe('BaselinesService', () => {
           id: 'a1',
           code: 'A1',
           name: 'A',
-          earlyStart: new Date('2026-01-05T00:00:00Z'), // D+5 (live early)
-          earlyFinish: new Date('2026-01-05T00:00:00Z'),
           visualEffectiveStart: new Date('2026-01-11T00:00:00Z'), // D+11 (live placed)
           visualEffectiveFinish: new Date('2026-01-11T00:00:00Z'),
           totalFloat: 0,
@@ -793,29 +767,19 @@ describe('BaselinesService', () => {
       ]);
 
       const { rows, summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
-      // Placed (D+7) vs placed (D+11) = +4. NOT network-early (D+5) = +1, NOT
-      // frozen-early-vs-live-placed (D+4 vs D+11) = +7, NOT frozen-placed-vs-live-early
-      // (D+7 vs D+5) = -2. Any wrong mix fails this assertion.
       expect(rows[0]).toMatchObject({ startVarianceDays: 4, finishVarianceDays: 4 });
       expect(summary.basis).toBe('PLACED');
     });
 
-    // U2: a FULL baseline row with a null placed date reads null variance — never a fallback
-    // to the network figure (placement-baseline-variance edge-case table: "the basis is
-    // chosen per read, never per row").
-    it('U2: a FULL row with no frozen placed date gives null variance, not the network figure', async () => {
-      baselines.findActiveBaselineByPlan.mockResolvedValue(
-        baseline({ id: 'active-1', placementSnapshotLevel: 'FULL' }),
-      );
+    // U2: a baseline row with a null placed date (the activity was never calculated at capture)
+    // reads null variance — it is never given a different figure.
+    it('U2: a row with no frozen placed date gives null variance', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
       baselines.loadSnapshotRowsForVariance.mockResolvedValue([
         {
           sourceActivityId: 'a1',
           code: 'A1',
           name: 'A',
-          baselineStart: new Date('2026-01-05T00:00:00Z'),
-          baselineFinish: new Date('2026-01-09T00:00:00Z'),
-          // Plan was never recalculated between capture and the FULL freeze — a legitimate
-          // null under FULL (spec §2 edge-case table).
           placedStart: null,
           placedFinish: null,
           totalFloat: 0,
@@ -826,8 +790,6 @@ describe('BaselinesService', () => {
           id: 'a1',
           code: 'A1',
           name: 'A',
-          earlyStart: new Date('2026-01-05T00:00:00Z'),
-          earlyFinish: new Date('2026-01-12T00:00:00Z'),
           visualEffectiveStart: new Date('2026-01-05T00:00:00Z'),
           visualEffectiveFinish: new Date('2026-01-12T00:00:00Z'),
           totalFloat: 0,

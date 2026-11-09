@@ -588,41 +588,31 @@ enum CalendarScope {
 // WHAT a baseline's frozen cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B — the
 // second amendment to ADR-0025 after ADR-0042's cost baseline itself).
 //
-//   ACTIVITY   one committed number per activity (`baseline_activities.budgeted_cost`) and
-//              NOTHING about how that number was made up. Every baseline captured before this
-//              rung is exactly this, which is why it is the constant DEFAULT — no data migration,
-//              and no existing row is described as something it is not.
-//   ASSIGNMENT that same per-activity total PLUS its decomposition: the activity's own expense
-//              (`baseline_activities.budgeted_expense`) and one `baseline_assignments` row per
-//              resource assignment, each carrying its frozen cost AND its frozen `lag_minutes`.
+//   ASSIGNMENT the per-activity total (`baseline_activities.budgeted_cost`) PLUS its decomposition:
+//              the activity's own expense (`baseline_activities.budgeted_expense`) and one
+//              `baseline_assignments` row per resource assignment, each carrying its frozen cost
+//              AND its frozen `lag_minutes`.
 //
-// THIS COLUMN IS THE ANSWER TO THE ONE QUESTION THE ROWS THEMSELVES CANNOT ANSWER, and it is the
-// point of the whole slice. A baseline with zero `baseline_assignments` rows is either
-//   (a) captured BEFORE this existed — its total is undecomposable, so PV must fall back to
-//       splitting it by LIVE budget shares (the documented ADR-0071 approximation), or
-//   (b) captured from a plan whose activities genuinely carry NO resource assignments — in which
-//       case the snapshot is COMPLETE and PV is exact with no assignment component at all.
-// Those two are opposite instructions to the Earned-Value read, and `rows.length === 0` cannot
-// tell them apart. This discriminator can, and it is the ONLY thing that can. NEVER infer the
-// level from a row count, and never from `budgeted_expense IS NULL` — those are corroborating
-// facts, not the decision.
+// ONE LABEL SINCE 1.1 (tidy T3, ADR-0215 D6; owner's Q2: narrow to what is produced). Before 1.1
+// the enum also held ACTIVITY — "one committed number per activity and NOTHING about how it was
+// made up", the truth of every baseline captured before ADR-0071 M3 and the column's DEFAULT. A 1.1
+// database starts empty and every capture has written ASSIGNMENT unconditionally since that rung
+// (`baseline.repository.ts` createWithSnapshot), so the label described a population that cannot
+// exist here. Its history and the Earned-Value live-share fallback it drove resolve at the git tag
+// api-v1.0.0 (migration 20260802140000_baseline_assignment_costs).
 //
-// (a) IS PERMANENT. A per-assignment breakdown that was never recorded cannot be recovered from a
-// frozen total: the live assignments it was made of may since have been re-costed, added or
-// deleted, and their resources' `cost_per_unit` may have moved. Any back-fill would invent a
-// decomposition out of today's data and stamp it as history — precisely what ADR-0025's
-// copy-not-reference rule exists to prevent. So the read carries BOTH paths for good.
+// WHY THE COLUMN STAYS WITH ONE VALUE. A baseline with zero `baseline_assignments` rows must still
+// say whether that is "there genuinely were none" or "nothing was decomposed", and a row count
+// cannot; a future deeper level (per-step? per-expense?) is a new label (two migrations), and this
+// column is where it lands. NEVER infer the level from a row count or from `budgeted_expense`.
 //
-// The pairing between this discriminator and the child rows CANNOT be a CHECK — they live in
-// different tables, and a CHECK sees one row of one table. It is a SERVICE invariant held inside
-// the single capture transaction (the "exactly one driving assignment" precedent), which is also
-// why the DEFAULT is the conservative value: a write path that has not been taught the new pass
-// reads as APPROXIMATE, never as exact-but-empty. Fail-closedness then lives at the TypeScript
-// boundary — read it with an exhaustive switch so a future third level (per-step? per-expense?)
-// is a compile error rather than a silently mis-scaled PV curve. MUST stay in lock-step with the
-// `BaselineCostSnapshotLevel` union in @repo/types when EV surfaces it.
+// The pairing with the child rows CANNOT be a CHECK — they live in different tables, and a CHECK
+// sees one row of one table. It is a SERVICE invariant held inside the single capture transaction.
+// NOT NULL with NO DEFAULT (the BaselineAssignment/BaselineDependency precedent), so a write path
+// that has not been taught the column is a compile error rather than a silently assumed level.
+// Read it with an exhaustive switch so a second label is a compile error at every reader. MUST stay
+// in lock-step with the `BaselineCostSnapshotLevel` union in @repo/types (⊂, ADR-0215 D6).
 enum BaselineCostSnapshotLevel {
-  ACTIVITY
   ASSIGNMENT
 }
 
@@ -630,10 +620,8 @@ enum BaselineCostSnapshotLevel {
 // (the fourth amendment to ADR-0025, after ADR-0042's cost baseline, ADR-0071 M3's cost
 // decomposition and ADR-0125's criticality rule).
 //
-//   NONE  the snapshot recorded identity, duration, the four CPM dates, float/criticality and
-//         cost, and NOTHING about the plan's SHAPE. This is the constant DEFAULT and it is the
-//         literal truth of every baseline captured before this column existed.
-//   FULL  the snapshot additionally recorded, for every activity active at capture:
+//   FULL  the snapshot recorded identity, duration, the four CPM dates, float/criticality and cost,
+//         AND, for every activity active at capture:
 //           * lane_index                                (the TSLD row it occupied)
 //           * parent_id                                 (its WBS summary, NULL = top level)
 //           * calendar_id                               (its own calendar, NULL = inherit the plan)
@@ -643,85 +631,62 @@ enum BaselineCostSnapshotLevel {
 //           * actual_start / actual_finish              (NULL = not started / not finished)
 //         and one `baseline_dependencies` row for every dependency active at capture.
 //
-// WHY A DISCRIMINATOR IS UNAVOIDABLE HERE, WHERE ADR-0125's CRITICALITY SET NEEDED NONE. That set
-// could use `critical_path_definition IS NULL` as its own discriminator, because a fail-closed
-// all-or-none CHECK made "half a rule" unrepresentable and none of the four has a legitimate NULL.
-// EVERY ONE of the ten columns above has a legitimate NULL (or a legitimate zero) under FULL: an
-// activity with no constraint, no parent, no own calendar, in lane 0, at 0 %, not yet started. So
-// no per-row test — and no combination of them — can separate "not recorded" from "recorded as
-// absent". Nor can a ROW COUNT: a plan with no dependencies captures zero `baseline_dependencies`
-// rows under FULL, which is the `cost_snapshot_level` argument verbatim, one table along. This
-// column is the ONLY thing that can answer the question, so the read branches on it and never on
-// a column's nullness or a list's length.
+// ONE LABEL SINCE 1.1 (tidy T3, ADR-0215 D6). Before 1.1 the enum also held NONE — "nothing about
+// the plan's shape", the literal truth of every baseline captured before this column existed and
+// the column's DEFAULT. A 1.1 database starts empty and every capture writes FULL unconditionally,
+// so NONE described a population that cannot exist here; its history resolves at the git tag
+// api-v1.0.0 (migration 20260906120000_baseline_revision_snapshot).
+//
+// WHY THE COLUMN STAYS WITH ONE VALUE. Every shape column above has a LEGITIMATE null (or zero)
+// under FULL — no constraint, no parent, no own calendar, lane 0, 0 %, not started — and a plan
+// with no logic captures zero `baseline_dependencies` rows. So no per-row test and no row count can
+// say what was recorded; this column is the only thing that can, and a future level (PARTIAL?
+// per-class?) is a new label (two migrations). The read never branches on a column's nullness or a
+// list's length.
 //
 // THE PAIRING IS A SERVICE INVARIANT, NOT A CHECK — the columns it vouches for live in two other
-// tables and a CHECK sees one row of one table (the `cost_snapshot_level` reasoning, unchanged).
-// It is held inside the single capture transaction, which is why the DEFAULT is the conservative
-// value: a write path that has not been taught the new pass reads as NONE, never as
-// recorded-but-empty. Fail-closedness lives at the TypeScript boundary — read it with an
-// exhaustive switch so a future third level (PARTIAL? per-class?) is a compile error rather than a
-// silently fabricated change list.
-//
-// `NONE` IS PERMANENT for any baseline already captured. Nothing surviving records what a plan's
-// logic, constraints, calendars or WBS were at a past instant, and a capture cannot be re-run — so
-// a backfill could only stamp TODAY's shape as history, which is exactly what ADR-0025's
-// copy-not-reference rule exists to prevent. MUST stay in lock-step with the
-// `RevisionSnapshotLevel` union in @repo/types when the change list surfaces it.
+// tables (the `cost_snapshot_level` reasoning, unchanged), held inside the single capture
+// transaction. NOT NULL with NO DEFAULT, so a write path not taught the column fails to compile.
+// Read it with an exhaustive switch so a second label is a compile error. MUST stay in lock-step
+// with the `RevisionSnapshotLevel` union in @repo/types.
 enum RevisionSnapshotLevel {
-  NONE
   FULL
 }
 
 // WHAT A BASELINE FROZE OF THE PLACEMENT — the one-planning-surface capture discriminator, and
 // the FIFTH amendment to ADR-0025's snapshot-copy model (after ADR-0042's cost baseline,
 // ADR-0071 M3's cost decomposition, ADR-0125's criticality rule and ADR-0126's revision snapshot).
-// Spec: docs/specs/one-planning-surface/feature-spec.md §4.9 / US-6; written by M-C, dark here.
+// Spec: docs/specs/one-planning-surface/feature-spec.md §4.9 / US-6.
 //
-//   NONE  the snapshot recorded the pure-network dates (`baseline_activities.baseline_start` /
-//         `.baseline_finish` ARE the captured early start/finish) and NOTHING about where the
-//         work was PLACED. This is the constant DEFAULT and the literal truth of every baseline
-//         captured before this column existed.
-//   FULL  the snapshot additionally recorded, for every activity active at capture:
+//   FULL  the snapshot recorded the pure-network dates (`baseline_activities.baseline_start` /
+//         `.baseline_finish` ARE the captured early start/finish) AND, for every activity active
+//         at capture:
 //           * placed_start / placed_finish  the engine's effective-Visual span (`activities
 //                                           .visual_effective_start` / `_finish`) — where the bar
-//                                           actually sat, which after this epic is the product's
-//                                           only answer to "when is this activity?"
-//           * visual_start                  the PLANNER'S OWN hand-placement, the one input that
-//                                           survives the collapse (ADR-0033's `visual_start`)
+//                                           actually sat, the product's only answer to "when is
+//                                           this activity?"
+//           * visual_start                  the PLANNER'S OWN hand-placement (ADR-0033's
+//                                           `visual_start`)
 //
-// WHY A LEVEL AND NOT A TWO-VALUED `date_basis`. A basis says these dates are early OR these
-// dates are placed, and after this epic NEITHER is true of a capture: EVERY post-epic capture
-// writes BOTH column sets, because `baseline_start` stays the pure-network early date (float
-// variance, DCMA and the whole ADR-0034 matrix depend on it) and the placed columns land BESIDE
-// it rather than instead of it. So the row is not one or the other, and the question a reader
-// actually has is not "which basis?" but "was the placement recorded at all?" — which only a
-// level can answer. The two-valued form is rejected in the spec's §4.13 alternatives table.
+// ONE LABEL SINCE 1.1 (tidy T3, ADR-0215 D6). Before 1.1 the enum also held NONE — the pure-network
+// dates only, the literal truth of every baseline captured before this column existed and the
+// column's DEFAULT; it drove the comparisons' NETWORK date basis and NOT_SNAPSHOTTED. A 1.1
+// database starts empty and every capture writes FULL unconditionally, so NONE described a
+// population that cannot exist here; its history resolves at the git tag api-v1.0.0.
 //
-// AND NO PER-ROW TEST CAN ANSWER IT — `revision_snapshot_level`'s argument verbatim, one column
-// along. All three columns have a LEGITIMATE null under FULL: `visual_start` is null for any
-// activity the planner never moved (FC-1 predicts that is EVERY activity on the deployed estate
-// today, so the common case is the ambiguous one), and `placed_start`/`placed_finish` are null
-// for a plan never recalculated — exactly the nulls `baseline_start`/`baseline_finish` already
-// carry beside them. NOR CAN A ROW COUNT: `baseline.repository.ts` guards its `createMany` on
-// `input.activities.length > 0`, so a FULL capture of an empty plan writes no rows at all. This
-// column is the only thing that can answer the question, so the read branches on it and never on
-// a column's nullness or a list's length.
+// WHY A LEVEL AND NOT A TWO-VALUED `date_basis`. Every capture writes BOTH column sets, because
+// `baseline_start` stays the pure-network early date (float variance, DCMA and the whole ADR-0034
+// matrix depend on it) and the placed columns land BESIDE it. The question is not "which basis?"
+// but "was the placement recorded?", and no per-row test answers it: all three columns have a
+// legitimate null under FULL (`visual_start` for any bar never hand-placed, the placed pair for a
+// plan never recalculated), and a FULL capture of an empty plan writes no rows. A future level is
+// a new label (two migrations).
 //
-// THE PAIRING IS A SERVICE INVARIANT, NOT A CHECK — the columns it vouches for live in another
-// table and a CHECK sees one row of one table (the `cost_snapshot_level` / `revision_snapshot_
-// level` reasoning, unchanged). It is held inside the single capture transaction, which is why
-// the DEFAULT is the conservative value: a write path not yet taught the new pass reads as NONE,
-// never as recorded-but-empty. Fail-closedness lives at the TypeScript boundary — read it with an
-// exhaustive switch so a future third level is a compile error rather than a silently fabricated
-// comparison.
-//
-// `NONE` IS PERMANENT for any baseline already captured, and this is the reason the columns take
-// no DEFAULT. Nothing surviving records where a plan's bars sat at a past instant, and a capture
-// cannot be re-run — so a backfill could only stamp TODAY's placement as history, which is
-// precisely what ADR-0025's copy-not-reference rule exists to prevent. MUST stay in lock-step
-// with the `PlacementSnapshotLevel` union in @repo/types when the comparison surfaces it (M-C).
+// THE PAIRING IS A SERVICE INVARIANT, NOT A CHECK (another table), held inside the single capture
+// transaction. NOT NULL with NO DEFAULT, so a write path not taught the column fails to compile.
+// Read it with an exhaustive switch so a second label is a compile error. MUST stay in lock-step
+// with the `PlacementSnapshotLevel` union in @repo/types (⊂, ADR-0215 D6).
 enum PlacementSnapshotLevel {
-  NONE
   FULL
 }
 
@@ -761,28 +726,24 @@ enum SwimlaneLaneBasis {
 // §13). The PlacementSnapshotLevel docblock above carries the general argument; this is its
 // swimlane instance.
 //
-//   NONE  nothing about swimlanes was recorded. The constant DEFAULT, and the literal truth of every
-//         baseline captured before this column existed. `baselines.swimlane_source` and
-//         `.swimlane_wbs_level` are NULL, `baseline_activities.swimlane_id` is NULL meaning
-//         UNKNOWN, and there are no `baseline_activity_swimlane_lanes` rows.
-//   FULL  the capture additionally recorded the plan's `swimlane_source` and `swimlane_wbs_level`,
-//         every captured activity's hand-made membership (`baseline_activities.swimlane_id`, NULL
-//         now meaning "No swimlane") and EVERY `activity_swimlane_lanes` row of every captured
-//         activity, copied into `baseline_activity_swimlane_lanes`.
+//   FULL  the capture recorded the plan's `swimlane_source` and `swimlane_wbs_level`, every captured
+//         activity's hand-made membership (`baseline_activities.swimlane_id`, NULL meaning "No
+//         swimlane") and EVERY `activity_swimlane_lanes` row of every captured activity, copied
+//         into `baseline_activity_swimlane_lanes`.
 //
-// NO PER-ROW TEST AND NO ROW COUNT CAN ANSWER IT. `swimlane_id` is legitimately NULL under FULL
-// (No swimlane, and every activity of a plan whose source is NONE), and a FULL capture of a plan
-// nobody ever laid out writes zero lane rows. Nor can `swimlane_source IS NULL` stand in for it: the
-// source has its own `NONE`, and "recorded, swimlanes were off" and "not recorded" are two different
-// nothings a reader must not confuse. ck_baselines_swimlane_snapshot_shape binds the level to the two
-// frozen plan columns, so the three are one fact and cannot disagree.
+// ONE LABEL SINCE 1.1 (tidy T3, ADR-0215 D6). Before 1.1 the enum also held NONE — nothing about
+// swimlanes recorded, `baselines.swimlane_source` NULL — the truth of every baseline captured
+// before this column and the column's DEFAULT. A 1.1 database starts empty and every capture writes
+// FULL, so NONE and the NULL source went together (tidy T4 makes `swimlane_source` NOT NULL).
 //
-// `NONE` IS PERMANENT for any baseline already captured: a capture cannot be re-run. The pairing
-// with the rows lives in the single capture transaction (a CHECK sees one row of one table). Read
-// it with an exhaustive switch so a third level is a compile error. MUST stay in lock-step with the
-// `SwimlaneSnapshotLevel` union in @repo/types.
+// NO PER-ROW TEST AND NO ROW COUNT CAN ANSWER "WHAT WAS RECORDED". `swimlane_id` is legitimately
+// NULL under FULL, and a FULL capture of a plan nobody laid out writes zero lane rows; the frozen
+// source has its own `NONE` ("recorded, swimlanes were off"). ck_baselines_swimlane_snapshot_shape
+// (fail-closed `CASE … ELSE false` on both discriminators) binds the level to the two frozen plan
+// columns, so a future label inserted before its branch is REJECTED. The pairing with the rows lives
+// in the single capture transaction. NOT NULL with NO DEFAULT; read it with an exhaustive switch.
+// MUST stay in lock-step with the `SwimlaneSnapshotLevel` union in @repo/types (⊂, ADR-0215 D6).
 enum SwimlaneSnapshotLevel {
-  NONE
   FULL
 }
 
@@ -793,8 +754,6 @@ enum SwimlaneSnapshotLevel {
 // (migration 20261027120100_p6_activity_codes, m2-record.md), so this is the fallback shape. The
 // SwimlaneSnapshotLevel docblock carries the general argument.
 //
-//   NONE           nothing about codes was recorded: the constant DEFAULT and the permanent truth
-//                  of every baseline captured before the capture path writes codes.
 //   SWIMLANE_TYPE  the capture recorded, on every captured baseline_activities row, the activity's
 //                  value and code lane for the frozen swimlane code type
 //                  (baselines.swimlane_code_type_id). Requires swimlane_snapshot_level FULL. When the
@@ -803,12 +762,15 @@ enum SwimlaneSnapshotLevel {
 //
 // What it cannot do, stated rather than hidden: a plan that switches its swimlanes from one code
 // type to another after the baseline cannot place that baseline's REMOVED work in the new type's
-// swimlanes; it is counted instead. `NONE` IS PERMANENT: a capture cannot be re-run, and a backfill
-// would stamp today's codes as history. A later "every type" level is a new label (two migrations).
-// MUST stay in lock-step with the `CodeSnapshotLevel` union in @repo/types when the comparison
-// surfaces it.
+// swimlanes; it is counted instead. A later "every type" level is a new label (two migrations).
+//
+// ONE LABEL SINCE 1.1 (tidy T3, ADR-0215 D6). Before 1.1 the enum also held NONE — nothing about
+// codes recorded, the column's DEFAULT and the truth of every baseline captured before the capture
+// path wrote codes. A 1.1 database starts empty and every capture writes SWIMLANE_TYPE, so NONE
+// described a population that cannot exist here. ck_baselines_code_snapshot_shape stays
+// fail-closed (`CASE … ELSE false`). NOT NULL with NO DEFAULT. MUST stay in lock-step with the
+// `CodeSnapshotLevel` union in @repo/types.
 enum CodeSnapshotLevel {
-  NONE
   SWIMLANE_TYPE
 }
 
@@ -1451,26 +1413,19 @@ model Activity {
   // and shift windows are whole minutes), bounded by the engine's ~200-year horizon (≈1.05e8 <
   // 2^31) — the `duration_minutes`/`leveling_delay_minutes` precedent.
   //
-  // NULL RULE — READ IT BEFORE "FIXING" IT. This column carries NO `*_snapshot_level`-style
-  // discriminator, deliberately departing from that rule (`baselines.cost_snapshot_level` et al.):
-  //   * `total_float_minutes` NULL with `total_float` set ⇒ calculated before this column existed
-  //     (or not recalculated since) — the float is NOT comparable in minutes. Never read it as 0.
-  //   * both NULL ⇒ not calculated.
-  //   * both set ⇒ minutes are exact.
-  // The product owner decided on 2026-11-08 that every plan is wiped at the 1.0 roll-out and no
-  // backwards compatibility is owed, so after that wipe the first state arises only from a plan not
-  // yet recalculated, which a recalculation repairs; a discriminator would describe a population
-  // that is about to stop existing.
+  // NULL RULE: NULL exactly when `total_float` is NULL (not calculated); both set ⇒ the minutes
+  // are exact. ck_activities_total_float_minutes_with_days (raw SQL, migration only):
+  // `(total_float_minutes IS NULL) = (total_float IS NULL)`. writeResults derives both from the
+  // same engine figure in one UPDATE, and nothing else writes either.
   //
-  // ck_activities_total_float_minutes_requires_days (raw SQL, migration
-  // 20261108120000_total_float_minutes): minutes never exist without the day figure. ONE-WAY only —
-  // a both-or-none check would refuse every edit of a pre-existing row (days set, minutes NULL),
-  // because a NOT VALID check still applies to updates. No sign CHECK: negative float is valid. No
-  // index: read only in the plan-scoped activity load; nothing filters or sorts by it.
-  //
-  // ROLLBACK CAVEAT. An image older than the writer (T2) recalculates `total_float` and leaves this
-  // column as it was, so after a rollback the minutes can be STALE rather than NULL until the next
-  // recalculation on a current image rewrites them. No marker guards this (owner's decision, above).
+  // BOTH WAYS SINCE 1.1 (tidy T6, ADR-0215). Before 1.1 the check was one-way
+  // (`…_requires_days`, migration 20261108120000_total_float_minutes at the git tag api-v1.0.0),
+  // because a both-way check would have refused every edit of a row calculated before the column
+  // existed (days set, minutes NULL — the "float not comparable" state), and an older image
+  // during a rollback recalculated days without minutes. A 1.1 database starts empty and no
+  // pre-1.1 image runs against it, so neither state can arise. No `*_snapshot_level`-style
+  // discriminator: the pair is one fact. No sign CHECK: negative float is valid. No index: read
+  // only in the plan-scoped activity load; nothing filters or sorts by it.
   totalFloatMinutes     Int?      @map("total_float_minutes")
   // Free float in whole working days (ADR-0035 §17–§20, M6-F1; day-denominated public
   // column per ADR-0036 §7). Engine-owned CPM output exactly like total_float:
@@ -2383,87 +2338,78 @@ model Baseline {
   // loading snapshot rows. `captured_at` is the as-of instant; `data_date` is the
   // plan's plannedStart at capture; `captured_project_finish` is the plan's latest
   // inclusive finish at capture (both date-only, like the CPM columns, ADR-0023).
-  capturedAt            DateTime  @default(now()) @map("captured_at") @db.Timestamptz(3)
-  dataDate              DateTime? @map("data_date") @db.Date
-  capturedProjectFinish DateTime? @map("captured_project_finish") @db.Date
+  //
+  // NOT NULL since 1.1 (tidy T4, ADR-0215): `plans.planned_start` is NOT NULL, and capture refuses
+  // a plan with no computed finish (SCHEDULE_NOT_CALCULATED), so every capture has both. They were
+  // nullable only for baselines captured before the columns existed, which a 1.1 database has none
+  // of. The API keeps `dataDate` / `capturedProjectFinish` typed nullable (a no-break choice).
+  capturedAt            DateTime @default(now()) @map("captured_at") @db.Timestamptz(3)
+  dataDate              DateTime @map("data_date") @db.Date
+  capturedProjectFinish DateTime @map("captured_project_finish") @db.Date
 
   // The plan calendar's hours-per-day AT CAPTURE (ADR-0068 §5) — ADR-0025's snapshot-copy rule
   // applied to the day↔minute factor. Without it, editing a calendar's hours-per-day would
   // retroactively change what a frozen baseline reports as its captured durations and float, and a
-  // snapshot that moves is not a snapshot. Same constant 1440 default, so every existing baseline
-  // reads exactly as it does today. Bounds: ck_baselines_hours_per_day_minutes_range (raw SQL).
-  hoursPerDayMinutes Int @default(1440) @map("hours_per_day_minutes")
+  // snapshot that moves is not a snapshot. NOT NULL with NO DEFAULT since 1.1 (tidy T9, ADR-0215):
+  // the 1440 default existed only so that baselines captured before the column read as they did,
+  // and a 1.1 database has none; capture always writes the plan calendar's value, and a write path
+  // that forgot it is now a compile error rather than a silent full day. Bounds:
+  // ck_baselines_hours_per_day_minutes_range (raw SQL).
+  hoursPerDayMinutes Int @map("hours_per_day_minutes")
 
   // WHAT this baseline's cost snapshot decomposes to (ADR-0071 M3 / CQ-1 option B) — see the
   // BaselineCostSnapshotLevel docblock, which carries the reasoning this column exists for.
-  // ACTIVITY (the constant DEFAULT, and every pre-ADR-0071 row) = a per-activity total only;
-  // ASSIGNMENT = that total plus `baseline_activities.budgeted_expense` and the
+  // ASSIGNMENT = the per-activity total plus `baseline_activities.budgeted_expense` and the
   // `baseline_assignments` rows. It is a CAPTURE-level fact, not a per-activity one: one pass
   // freezes the whole plan inside one transaction, so all activities of a baseline share it —
   // and the EV read needs the answer BEFORE it looks at any row, since the answer decides
   // whether "no rows" means "nothing to decompose" or "nothing was decomposed".
   //
-  // Set by the capture path, then IMMUTABLE like every other snapshot column. Constant DEFAULT
-  // ⇒ metadata-only ADD COLUMN, no rewrite, and every existing baseline keeps today's meaning.
-  costSnapshotLevel BaselineCostSnapshotLevel @default(ACTIVITY) @map("cost_snapshot_level")
+  // Set by the capture path, then IMMUTABLE like every other snapshot column.
+  //
+  // THE FIVE LEVELS BELOW ARE ONE-LABEL ENUMS, NOT NULL WITH NO DEFAULT, since 1.1 (tidy T3,
+  // ADR-0215 D6). Each had a "captured before this column existed" label as its DEFAULT
+  // (ACTIVITY / NONE / NONE / NONE / NONE); a 1.1 database starts empty and every capture writes the
+  // full label unconditionally (`baseline.repository.ts` createWithSnapshot), so those labels and
+  // defaults described a population that cannot exist here. With no default the generated `create`
+  // input requires all five, so the compiler asks the question (the BaselineAssignment precedent).
+  costSnapshotLevel BaselineCostSnapshotLevel @map("cost_snapshot_level")
 
   /// WHAT this baseline froze of the plan's SHAPE — see the RevisionSnapshotLevel docblock, which
-  /// carries the reasoning and ENUMERATES what FULL vouches for. NONE (the constant DEFAULT, and
-  /// the literal truth of every baseline captured before this column) = identity, duration, dates,
-  /// float and cost only; FULL = those plus ten per-activity shape columns and one
-  /// `baseline_dependencies` row per active dependency.
+  /// carries the reasoning and ENUMERATES what FULL vouches for: ten per-activity shape columns and
+  /// one `baseline_dependencies` row per active dependency.
   ///
-  /// Like `costSnapshotLevel` this is a CAPTURE-level fact, not a per-activity one: one pass
-  /// freezes the whole plan inside one transaction, so every row of a baseline shares it — and the
-  /// change list needs the answer BEFORE it looks at any row, because it decides whether a NULL
-  /// `constraint_type` means "no constraint" or "unknown", and whether zero dependency rows means
-  /// "no logic" or "no record of the logic". NEVER infer it from a column's nullness or from a row
-  /// count: every one of those columns has a legitimate NULL under FULL.
-  ///
-  /// Set by the capture path, then IMMUTABLE like every other snapshot column: a soft-delete /
-  /// restore stamps only `deletedAt`/`deleteBatchId` and never touches it. Constant DEFAULT ⇒
-  /// metadata-only ADD COLUMN, no rewrite, and every existing baseline is described as exactly
-  /// what it is rather than as something it is not.
-  revisionSnapshotLevel RevisionSnapshotLevel @default(NONE) @map("revision_snapshot_level")
+  /// Like `costSnapshotLevel` this is a CAPTURE-level fact, not a per-activity one, and the change
+  /// list needs it BEFORE it looks at any row. NEVER infer it from a column's nullness or from a row
+  /// count: every one of those columns has a legitimate NULL under FULL. Set by the capture path,
+  /// then IMMUTABLE: a soft-delete / restore stamps only `deletedAt`/`deleteBatchId`.
+  revisionSnapshotLevel RevisionSnapshotLevel @map("revision_snapshot_level")
 
-  /// WHAT this baseline froze of the PLACEMENT — see the PlacementSnapshotLevel docblock, which
-  /// carries the reasoning and enumerates what FULL vouches for. NONE (the constant DEFAULT, and
-  /// the literal truth of every baseline captured before this column) = the pure-network dates
-  /// only; FULL = those plus `baseline_activities.placed_start`/`.placed_finish` (where the bar
+  /// WHAT this baseline froze of the PLACEMENT — see the PlacementSnapshotLevel docblock. FULL =
+  /// the pure-network dates plus `baseline_activities.placed_start`/`.placed_finish` (where the bar
   /// actually sat) and `.visual_start` (what the planner placed).
   ///
-  /// A CAPTURE-level fact like its three siblings above: one pass freezes the whole plan inside
-  /// one transaction, so every row of a baseline shares it — and the comparison needs the answer
-  /// BEFORE it looks at any row, because it decides whether a NULL `visual_start` means "never
-  /// hand-placed" or "unknown", and whether a NULL `placed_start` means "never calculated" or
-  /// "never recorded". NEVER infer it from a column's nullness or from a row count: all three
-  /// columns have a legitimate NULL under FULL, and on today's estate the ambiguous one is the
-  /// COMMON case (FC-1 predicts zero placements anywhere).
-  ///
-  /// Set by the capture path, then IMMUTABLE like every other snapshot column: a soft-delete /
-  /// restore stamps only `deletedAt`/`deleteBatchId` and never touches it. Constant DEFAULT ⇒
-  /// metadata-only ADD COLUMN, no rewrite, and every existing baseline is described as exactly
-  /// what it is rather than as something it is not.
-  ///
-  /// DARK until M-C writes it: this milestone lands the column, nothing sets it to FULL yet, and
-  /// NONE stays correct for every row in the meantime.
-  placementSnapshotLevel PlacementSnapshotLevel @default(NONE) @map("placement_snapshot_level")
+  /// A CAPTURE-level fact like its siblings: it decides whether a NULL `visual_start` means "never
+  /// hand-placed" and a NULL `placed_start` "never calculated", rather than "never recorded". NEVER
+  /// infer it from a column's nullness or a row count. Set by the capture path, then IMMUTABLE.
+  placementSnapshotLevel PlacementSnapshotLevel @map("placement_snapshot_level")
 
   /// WHAT this baseline froze of the SWIMLANES (swimlanes M1-T1b) — see the SwimlaneSnapshotLevel
-  /// docblock. A capture-level fact like its three sibling levels, written unconditionally by the
-  /// capture path and then IMMUTABLE. Constant DEFAULT 'NONE' ⇒ metadata-only ADD COLUMN, and every
-  /// existing baseline reads as exactly what it is.
+  /// docblock. A capture-level fact like its sibling levels, written unconditionally by the capture
+  /// path and then IMMUTABLE.
   ///
   /// `swimlaneSource` / `swimlaneWbsLevel` are the plan's `swimlane_source` / `swimlane_wbs_level`
   /// AT CAPTURE, read under the capture's plan lock. They say what membership MEANT then: under
   /// MANUAL the frozen `baseline_activities.swimlane_id`, under WBS the level-L ancestor in the
-  /// frozen parent tree. NULLABLE WITH NO DEFAULT: NULL iff the level is NONE.
+  /// frozen parent tree. `swimlaneSource` is NOT NULL with NO DEFAULT since 1.1 (tidy T4, ADR-0215):
+  /// it was NULL iff the level was NONE, and that label is gone (T3); the plan's own column is NOT
+  /// NULL, and a capture with swimlanes off freezes its `NONE`.
   /// ck_baselines_swimlane_snapshot_shape (raw SQL, fail-closed on BOTH discriminators) pins it:
-  /// NONE ⇒ both NULL; FULL ⇒ source NOT NULL and the level 1–3 iff the source is WBS — the live
+  /// FULL ⇒ the level 1–3 iff the source is WBS, the code type iff ACTIVITY_CODE — the live
   /// ck_plans_swimlane_source_level verbatim, so a frozen copy cannot hold what its source refuses.
   /// No index: read only with its own row, never filtered across baselines.
-  swimlaneSnapshotLevel SwimlaneSnapshotLevel @default(NONE) @map("swimlane_snapshot_level")
-  swimlaneSource        SwimlaneSource?       @map("swimlane_source")
+  swimlaneSnapshotLevel SwimlaneSnapshotLevel @map("swimlane_snapshot_level")
+  swimlaneSource        SwimlaneSource        @map("swimlane_source")
   swimlaneWbsLevel      Int?                  @map("swimlane_wbs_level") @db.SmallInt
   /// The plan's `swimlane_code_type_id` AT CAPTURE: set iff the frozen source is ACTIVITY_CODE
   /// (ck_baselines_swimlane_snapshot_shape, the live ck_plans_swimlane_source_level verbatim). A
@@ -2471,12 +2417,11 @@ model Baseline {
   /// whatever DB-2 said: without it the first capture of a code-sourced plan fails 23514
   /// (database-design §6.1).
   swimlaneCodeTypeId    String?               @map("swimlane_code_type_id") @db.Uuid
-  /// WHAT this baseline froze of the P6 activity codes (the CodeSnapshotLevel docblock). Constant
-  /// DEFAULT 'NONE' ⇒ metadata-only ADD COLUMN; written SWIMLANE_TYPE unconditionally by every capture
-  /// (since M4), and then immutable. SWIMLANE_TYPE requires
-  /// `swimlaneSnapshotLevel` FULL (ck_baselines_code_snapshot_shape), because the frozen swimlane
-  /// source is what says which type baseline_activities.code_value_id belongs to.
-  codeSnapshotLevel     CodeSnapshotLevel     @default(NONE) @map("code_snapshot_level")
+  /// WHAT this baseline froze of the P6 activity codes (the CodeSnapshotLevel docblock): written
+  /// SWIMLANE_TYPE by every capture, then immutable. SWIMLANE_TYPE requires `swimlaneSnapshotLevel`
+  /// FULL (ck_baselines_code_snapshot_shape, fail-closed), because the frozen swimlane source is
+  /// what says which type baseline_activities.code_value_id belongs to.
+  codeSnapshotLevel     CodeSnapshotLevel     @map("code_snapshot_level")
 
   /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
   ///
@@ -2501,15 +2446,18 @@ model Baseline {
   /// column: a soft-delete/restore stamps only `deletedAt`/`deleteBatchId` and never touches these.
   ///
   /// NULLABLE WITH NO DEFAULT, AND THE NULL IS A SENTINEL — "the rule is unknown", never a claim.
-  /// This deliberately does NOT follow the `hoursPerDayMinutes DEFAULT 1440` pattern above: that
-  /// default was legal because 1440 was TRUE of every pre-existing row (nothing could author a
-  /// non-full-day calendar). These four have been planner-writable since 20260716180000, so a
-  /// DEFAULT would tell an old baseline it was computed under a rule it may never have seen — and
-  /// the source is itself nullable, so a NOT NULL column here would have nothing to copy for any
-  /// plan not recalculated since the mirror shipped. The governing precedent is one table along:
-  /// `baseline_activities.budgetedExpense` (ADR-0071 M3), which rejected `NOT NULL DEFAULT 0`
-  /// because "0 is a claim". UNLIKE the plan's mirror this sentinel is PERMANENT — a plan's mirror
-  /// self-clears on its next recalculation, and a capture cannot be re-run.
+  /// A DEFAULT would name a rule the snapshot's numbers may never have come from, and the source
+  /// (the plan's mirror) is itself nullable: NULL exactly when the plan was never stamped
+  /// (ck_plans_schedule_criticality_matches_cursor, tidy T5).
+  ///
+  /// KEPT NULLABLE AT 1.1 (tidy T8 NOT taken; ADR-0215, owner's Q3). With T5 a plan whose
+  /// activities carry computed dates normally has a mirror, so a capture (which refuses a plan with
+  /// no computed finish) normally copies four values. ONE path is known to break that: a project
+  /// delete can soft-delete a plan an import committed in between, whose queued recalculation then
+  /// dates the activities while the stamp skips the deleted plan; restoring the batch brings the
+  /// plan back dated and unstamped (docs/TECH_DEBT.md #576). Its first capture stores this sentinel
+  /// rather than failing 23502. When #576 is fixed, NOT NULL can be reconsidered. Like every snapshot
+  /// column the value is PERMANENT — a capture cannot be re-run.
   ///
   /// ALL FOUR OR NONE. `ck_baselines_criticality_snapshot_all_or_none` (raw SQL in the migration —
   /// Prisma cannot express CHECK, so there is deliberately no declaration here that the database
@@ -2520,7 +2468,7 @@ model Baseline {
   /// same row, and a fifth column would be the two-sources-of-truth defect that docblock warns
   /// about. `ck_baselines_critical_float_threshold_minutes_range` bounds the threshold
   /// (nullable-safe, the same 0…5_256_000 as `ck_plans_critical_float_threshold_minutes_range`).
-  /// There is deliberately NO third CHECK: the mirror's "may not exist without its cursor" has no
+  /// There is deliberately NO third CHECK: the mirror's "set exactly when the cursor is" has no
   /// analogue here, because `capturedAt` is NOT NULL and coupling to it would be a tautology.
   ///
   /// WORKING MINUTES, NOT DAYS. `criticalFloatThresholdMinutes` is in the same unit the engine
@@ -2548,18 +2496,18 @@ model Baseline {
   organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   plan         Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
   activities   BaselineActivity[]
-  // The per-assignment cost decomposition (ADR-0071 M3). EMPTY on an ACTIVITY-level baseline
-  // AND on an ASSIGNMENT-level one whose plan has no assignments — read `costSnapshotLevel`,
-  // never this list's length, to tell those apart.
+  // The per-assignment cost decomposition (ADR-0071 M3). EMPTY when the plan had no assignments
+  // at capture — which is complete, not unrecorded, because `costSnapshotLevel` says ASSIGNMENT.
+  // Read the level, never this list's length, for what was recorded.
   assignments  BaselineAssignment[]
-  // The frozen logic (the revision-snapshot extension). EMPTY on a NONE-level baseline AND on a
-  // FULL-level one whose plan has no dependencies — read `revisionSnapshotLevel`, never this
-  // list's length. The same sentence as `assignments` above, and for the same reason.
+  // The frozen logic (the revision-snapshot extension). EMPTY when the plan had no dependencies at
+  // capture — read `revisionSnapshotLevel`, never this list's length. The same sentence as
+  // `assignments` above, and for the same reason.
   dependencies BaselineDependency[]
 
-  // The frozen in-swimlane lanes (swimlanes M1-T1b). EMPTY on a NONE-level baseline AND on a
-  // FULL-level one whose plan nobody laid out in swimlanes — read `swimlaneSnapshotLevel`, never
-  // this list's length. The third time this sentence is written, for the third time for this reason.
+  // The frozen in-swimlane lanes (swimlanes M1-T1b). EMPTY when nobody laid the plan out in
+  // swimlanes — read `swimlaneSnapshotLevel`, never this list's length. The third time this
+  // sentence is written, for the third time for this reason.
   swimlaneLanes BaselineActivitySwimlaneLane[]
 
   // Baseline name is unique per PLAN among ACTIVE rows — partial unique
@@ -2614,30 +2562,28 @@ model BaselineActivity {
   // Lets a comparison measure float movement exactly when a calendar's hours-per-day changed
   // between capture and now (the day column above was rounded with the factor of its day).
   //
-  // NULL RULE, AND NO `*_snapshot_level` DISCRIMINATOR — a deliberate departure from the rule this
-  // model's other late-added snapshot columns follow (`baselines.cost_snapshot_level`,
-  // `revision_snapshot_level`, …): NULL here with `total_float` set ⇒ captured before this column
-  // existed, or from a plan not recalculated since — the float is NOT comparable; never read it as 0.
-  // Both NULL ⇒ not calculated at capture. The product owner decided on 2026-11-08 that every plan
-  // (and so every baseline) is wiped at the 1.0 roll-out and no backwards compatibility is owed;
-  // after that the only source of the first state is a capture from a not-yet-recalculated plan,
-  // and the source row itself says so. See `Activity.totalFloatMinutes`.
+  // NULL RULE, AND NO `*_snapshot_level` DISCRIMINATOR: the minutes are NULL exactly when
+  // `total_float` is (not calculated at capture), because the live pair is one fact and capture
+  // copies both verbatim. ck_baseline_activities_total_float_minutes_with_days (raw SQL):
+  // `(total_float_minutes IS NULL) = (total_float IS NULL)`, both ways since 1.1 (tidy T6, ADR-0215).
+  // Before 1.1 it was one-way (`…_requires_days`), admitting "days without minutes" for a capture
+  // from a plan calculated before ADR-0214 — the "float not comparable" state, which a 1.1 database
+  // cannot hold. See `Activity.totalFloatMinutes`.
   //
-  // INT for the reason given there. ck_baseline_activities_total_float_minutes_requires_days (raw
-  // SQL): minutes never exist without days — one-way, so every pre-existing row is admitted. No
-  // sign CHECK (negative float is valid); no index (the snapshot is loaded whole per baseline).
+  // INT for the reason given there. No sign CHECK (negative float is valid); no index (the snapshot
+  // is loaded whole per baseline).
   totalFloatMinutes Int?      @map("total_float_minutes")
   isCritical        Boolean   @default(false) @map("is_critical")
 
   // The captured COST BASELINE — the activity's budgeted cost frozen at capture (EV1,
   // ADR-0042; the ADR-0025 snapshot amendment), giving the active baseline a committed PV /
-  // BCWS reference. BIGINT minor units in the plan's currency. NULLABLE / NO default ⇒ a
-  // baseline captured BEFORE this rung reads NULL (PV falls back to the live budget and the
-  // EV read flags `costBaselineMissing`, never an error). Immutable after capture like every
-  // snapshot column. ck_baseline_activities_budgeted_cost_nonneg (nullable-safe `>= 0`) is
-  // defence-in-depth (N22 family). No index (the snapshot is loaded whole per baseline).
-  // DARK until EV2 reads it.
-  budgetedCost BigInt? @map("budgeted_cost")
+  // BCWS reference. BIGINT minor units in the plan's currency. NOT NULL with NO DEFAULT since 1.1
+  // (tidy T4, ADR-0215): every capture stores an integer (a plan with no cost data captures 0, a
+  // real "no budget"); the column was nullable only for baselines captured before this rung, which a
+  // 1.1 database has none of. Immutable after capture like every snapshot column.
+  // ck_baseline_activities_budgeted_cost_nonneg (`>= 0`) is defence-in-depth (N22 family). No index
+  // (the snapshot is loaded whole per baseline).
+  budgetedCost BigInt @map("budgeted_cost")
 
   // The ACTIVITY-EXPENSE half of that total, frozen (ADR-0071 M3 / CQ-1 option B): the activity's
   // own lump-sum (`activities.budgeted_expense`) as it stood at capture, in the same BIGINT minor
@@ -2652,15 +2598,15 @@ model BaselineActivity {
   // the subtraction does not know about — a decade-long snapshot should not depend on a rule stated
   // only in code. One BIGINT is cheaper than that risk.
   //
-  // NULLABLE / NO DEFAULT, and the NULL means "not decomposed", i.e. this row belongs to an
-  // ACTIVITY-level baseline. It is a CORROBORATING fact only: the authoritative discriminator is
-  // `baselines.cost_snapshot_level`, and the read must branch on that (see its docblock) — two
-  // sources of truth for one question is how the two absences get confused again. A `NOT NULL
-  // DEFAULT 0` was rejected for the same reason: 0 is a claim ("this activity had no expense"), and
-  // on a pre-ADR-0071 baseline that claim is unknowable, not zero. Immutable after capture.
-  // ck_baseline_activities_budgeted_expense_nonneg (nullable-safe `>= 0`) mirrors the live
-  // ck_activities_budgeted_expense_nonneg exactly. No index (the snapshot is loaded whole).
-  budgetedExpense BigInt? @map("budgeted_expense")
+  // NOT NULL with NO DEFAULT since 1.1 (tidy T4, ADR-0215). Before 1.1 a NULL meant "not
+  // decomposed" — a row of an ACTIVITY-level baseline — and that label is gone (tidy T3), so every
+  // capture writes the activity's expense (0 when it has none, a real figure). Still NO DEFAULT:
+  // 0 is a claim ("this activity had no expense"), so a write path must state it. It is a
+  // CORROBORATING fact only; the authoritative discriminator stays `baselines.cost_snapshot_level`.
+  // Immutable after capture. ck_baseline_activities_budgeted_expense_nonneg (`>= 0`); the live
+  // ck_activities_budgeted_expense_nonneg is its nullable-safe form, because the live column is
+  // optional. No index (the snapshot is loaded whole).
+  budgetedExpense BigInt @map("budgeted_expense")
 
   /// THE FROZEN SHAPE of the activity (the revision-snapshot extension; the fourth amendment to
   /// ADR-0025). Until these existed a baseline froze WHERE the work was and WHAT it was called and
@@ -2668,25 +2614,19 @@ model BaselineActivity {
   /// could not report that somebody re-parented it, re-constrained it, put it on a different
   /// calendar or reported progress against it.
   ///
-  /// ALL TEN ARE NULLABLE WITH NO DEFAULT, AND THAT IS THE LOAD-BEARING DECISION — but NOT because
-  /// the null is a per-row sentinel, which is where the ADR-0125 criticality precedent stops
-  /// applying. Every one of these columns has a LEGITIMATE null (or zero) in a snapshot that
-  /// recorded them fully: an activity with no constraint, no parent, no calendar of its own, in
-  /// lane 0, at 0 %, not yet started. So a reader CANNOT test any of them for "was this recorded?"
-  /// — the answer is `baselines.revision_snapshot_level`, and it is the only answer. See that
-  /// column's docblock; this one is the corroborating half, exactly as `budgetedExpense` above is
-  /// corroborating for `cost_snapshot_level`.
+  /// NO DEFAULT ON ANY OF THEM, AND THAT IS THE LOAD-BEARING DECISION. Every one of these columns
+  /// has a LEGITIMATE null (or zero) in a snapshot that recorded them fully: an activity with no
+  /// constraint, no parent, no calendar of its own, in lane 0, at 0 %, not yet started. So a reader
+  /// CANNOT test any of them for "was this recorded?" — the answer is
+  /// `baselines.revision_snapshot_level`, and it is the only answer.
   ///
-  /// WHY NOT COPY THE LIVE COLUMNS' SHAPES. `activities.lane_index` is `NOT NULL DEFAULT 0` and
-  /// `activities.percent_complete` is `NOT NULL DEFAULT 0`; copying either shape here is the trap.
-  /// LANE 0 IS A REAL LANE and 0 % IS A REAL PROGRESS FIGURE, so a constant DEFAULT would tell
-  /// every baseline captured before this migration that all its activities sat in the top row and
-  /// none of them had started — a confident, fabricated picture that a future ghost layer would
-  /// paint and a change list would report. That is `budgetedExpense`'s "0 is a claim" (ADR-0071 M3)
-  /// and ADR-0125's rejected `is_critical DEFAULT false`, in the one place where the live column
-  /// genuinely is NOT NULL and the temptation to mirror it is therefore strongest. The `hours_per_
-  /// day_minutes DEFAULT 1440` precedent does not license one either: that default was legal
-  /// because 1440 was TRUE of every pre-existing row, and none of these values is knowable for any.
+  /// `laneIndex` and `percentComplete` are NOT NULL WITH NO DEFAULT since 1.1 (tidy T4, ADR-0215):
+  /// they copy live NOT NULL columns, and were nullable only for baselines captured before this
+  /// extension, which a 1.1 database has none of. The live columns' `DEFAULT 0` is deliberately NOT
+  /// copied: LANE 0 IS A REAL LANE and 0 % IS A REAL PROGRESS FIGURE, so a default would let a write
+  /// path that forgot the column state a confident, fabricated picture — `budgetedExpense`'s "0 is
+  /// a claim" (ADR-0071 M3) and ADR-0125's rejected `is_critical DEFAULT false`. Without one the
+  /// generated `create` input requires them. The other eight stay nullable: their null is a value.
   ///
   /// PLAIN CORRELATION UUIDs, NO FOREIGN KEYS, for `parentId` and `calendarId` — the
   /// `sourceActivityId` rule (ADR-0025): a snapshot that referenced live rows would either block
@@ -2701,11 +2641,11 @@ model BaselineActivity {
   /// columns (docs/DATABASE.md). Constraints (raw SQL in the migration; Prisma cannot express
   /// CHECK, so nothing is declared here that the database does not have — prisma:check-drift,
   /// TECH_DEBT #54): ck_baseline_activities_lane_index_nonneg and
-  /// ck_baseline_activities_percent_complete_range are the nullable-safe forms of the live
-  /// ck_activities_lane_index_nonneg / ck_activities_percent_complete, and
+  /// ck_baseline_activities_percent_complete_range are the live ck_activities_lane_index_nonneg /
+  /// ck_activities_percent_complete verbatim (their `IS NULL OR` arm went with tidy T4), and
   /// ck_baseline_activities_constraint_pair / _secondary_constraint_pair mirror the live pair
   /// checks verbatim — a frozen copy must not be able to hold a value its source would refuse.
-  laneIndex               Int?            @map("lane_index")
+  laneIndex               Int             @map("lane_index")
   parentId                String?         @map("parent_id") @db.Uuid
   calendarId              String?         @map("calendar_id") @db.Uuid
   constraintType          ConstraintType? @map("constraint_type")
@@ -2727,7 +2667,7 @@ model BaselineActivity {
   /// because CQ-1's permanence applies to them exactly as it applies to these three.
   ///
   /// Calendar days (`@db.Date`) like the live columns and like the CPM dates above (ADR-0023).
-  percentComplete Int?      @map("percent_complete")
+  percentComplete Int       @map("percent_complete")
   actualStart     DateTime? @map("actual_start") @db.Date
   actualFinish    DateTime? @map("actual_finish") @db.Date
 
@@ -2762,11 +2702,9 @@ model BaselineActivity {
   /// NO DEFAULT, AND NO BACKFILL IS POSSIBLE — EVER. A baseline is a historical record and a
   /// capture cannot be re-run, so the only value a backfill could write is TODAY's placement,
   /// which would state as history something the capture never saw. That is ADR-0025's
-  /// copy-not-reference rule and ADR-0126 CQ-1's permanence verbatim. The
-  /// `baselines.hours_per_day_minutes DEFAULT 1440` precedent licenses nothing here: that default
-  /// was legal because 1440 was TRUE of every pre-existing row, and none of these three values is
-  /// knowable for any row that exists. The value of these columns is entirely PROSPECTIVE and the
-  /// clock starts at this migration.
+  /// copy-not-reference rule and ADR-0126 CQ-1's permanence verbatim. (The former
+  /// `baselines.hours_per_day_minutes DEFAULT 1440`, dropped by tidy T9, never licensed one here:
+  /// it was legal only because 1440 was TRUE of every pre-existing row.)
   ///
   /// `@db.Date` — calendar days, like `baselineStart`/`lateStart` above and like the live columns
   /// they copy (ADR-0023's date-only CPM convention). NOT `@db.Timestamptz`.
@@ -2780,8 +2718,6 @@ model BaselineActivity {
   /// particular nothing asserts `placed_finish >= placed_start` — a zero-length milestone makes
   /// them equal, and asserting an ordering the engine has never been asked to guarantee would let
   /// a future engine change fail a capture rather than record it.
-  ///
-  /// DARK until M-C writes them; every row reads NULL under a NONE-level baseline until then.
   placedStart  DateTime? @map("placed_start") @db.Date
   placedFinish DateTime? @map("placed_finish") @db.Date
   visualStart  DateTime? @map("visual_start") @db.Date
@@ -2792,9 +2728,8 @@ model BaselineActivity {
   /// FOREIGN KEY — the `parentId` / `calendarId` rule above (ADR-0025). It may name a swimlane that
   /// was soft-deleted at capture, exactly as the live column may.
   ///
-  /// NULLABLE WITH NO DEFAULT, and the null is NOT a per-row sentinel: under a FULL
-  /// `baselines.swimlane_snapshot_level` NULL is "No swimlane", under NONE it is "unknown". Only the
-  /// level tells them apart. No CHECK (the live column has only its FK) and no index (read only with
+  /// NULLABLE WITH NO DEFAULT: NULL is "No swimlane" (the level is FULL on every baseline since
+  /// tidy T3; before 1.1 a NONE level made it "unknown"). No CHECK (the live column has only its FK) and no index (read only with
   /// its own row when a comparison loads a whole baseline). IMMUTABLE after capture.
   swimlaneId String? @map("swimlane_id") @db.Uuid
 

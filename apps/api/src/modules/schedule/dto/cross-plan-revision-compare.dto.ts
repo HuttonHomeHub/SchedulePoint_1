@@ -221,8 +221,8 @@ export class CrossPlanMovedActivityDto implements CrossPlanMovedActivity {
     nullable: true,
     type: Number,
     description:
-      '`to − from` in working minutes, exact; **null** when either side is unknown or has no ' +
-      'minutes (counted in `floatNotComparableCount`).',
+      '`to − from` in working minutes, exact; **null** when either side is unknown (never ' +
+      'calculated).',
   })
   floatMovementMinutes!: number | null;
 
@@ -276,7 +276,7 @@ export class CrossPlanChangeRowDto implements CrossPlanChangeRow {
     type: String,
     description:
       'How the OLD side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
-      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+      'placed dates (`datesBasis: PLACED`).',
   })
   from!: string | null;
   @ApiProperty({
@@ -284,7 +284,7 @@ export class CrossPlanChangeRowDto implements CrossPlanChangeRow {
     type: String,
     description:
       'How the NEW side reads for this class. On `REDATED` it is a `start → finish` span of the ' +
-      'dates `datesBasis` states: placed dates when `PLACED`, earliest dates when `NETWORK`.',
+      'placed dates (`datesBasis: PLACED`).',
   })
   to!: string | null;
   @ApiProperty({ nullable: true, type: String }) orderKey!: string | null;
@@ -318,19 +318,6 @@ export class CrossPlanChangeReportDto implements CrossPlanChangeReport {
   classes!: readonly CrossPlanClassAssessmentDto[];
 
   @ApiProperty() cap!: number;
-
-  @ApiProperty({
-    nullable: true,
-    enum: REVISION_NOT_ASSESSABLE_REASONS,
-    description:
-      'Whether the comparison read the two sides’ PLACEMENTS — null when both recorded one, a ' +
-      'reason when they did not. Null is exactly `datesBasis: PLACED` (placed dates are compared); a ' +
-      'reason is exactly `datesBasis: NETWORK` (the whole pair falls back to earliest dates). NOT ' +
-      'trivially null on this route: a cross-plan comparison matches two plans on the activity ' +
-      'code, but either side may still be one of that plan’s baselines, so a snapshot captured ' +
-      'before placements were frozen reaches this route exactly as it reaches the plan-nested one.',
-  })
-  placementNotAssessableReason!: RevisionNotAssessableReason | null;
 }
 
 export class CrossPlanCriticalPathDeltaDto implements CrossPlanCriticalPathDelta {
@@ -373,13 +360,10 @@ export class CrossPlanCriticalPathDeltaDto implements CrossPlanCriticalPathDelta
 
 export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
   @ApiProperty({
-    enum: ['PLACED', 'NETWORK'],
+    enum: ['PLACED'],
     description:
-      'Which dates every date-bearing figure compares, chosen once per read: `PLACED` when every ' +
-      'baseline side recorded where its bars were placed, `NETWORK` (earliest dates on both ' +
-      'sides) when any baseline side predates that record; two live plans have no baseline side ' +
-      'and are `PLACED`. The `Early*` fields carry whichever dates this states. Criticality and ' +
-      'float are network quantities on either basis.',
+      'Which dates every date-bearing figure compares: `PLACED`, the only value since 1.1.0 ' +
+      '(`NETWORK` was removed, ADR-0215 D6). Criticality and float are network quantities.',
   })
   datesBasis!: VarianceBasis;
 
@@ -394,14 +378,6 @@ export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
   @ApiProperty({ type: RevisionSideDto }) from!: RevisionSideDto;
   @ApiProperty({ type: RevisionSideDto }) to!: RevisionSideDto;
   @ApiProperty() dayFactorMinutes!: number;
-
-  @ApiProperty({
-    description:
-      'Matched activities whose float was calculated on both sides but has no minutes on at ' +
-      'least one, so their float movement is null (ADR-0214). 0 when a side was never calculated ' +
-      'or when notAssessableReason is NO_COMMON_CODES.',
-  })
-  floatNotComparableCount!: number;
 
   @ApiProperty({ type: CrossPlanRevisionFrameDto }) frame!: CrossPlanRevisionFrameDto;
 

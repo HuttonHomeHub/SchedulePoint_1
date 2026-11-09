@@ -505,7 +505,6 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         expect(r.floatVarianceDays).toBe(0);
         expect(r.floatVarianceMinutes).toBe(0);
       }
-      expect(v.body.meta.floatNotComparableCount).toBe(0);
 
       const res = await admin.agent
         .get(`${compareUrl(planId, before)}&include=changes`)
@@ -515,16 +514,16 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       ).find((c) => c.changeClass === 'CRITICALITY');
       // The old predicate listed Slack here, as a change of "criticality", on the day columns alone.
       expect(criticality?.rows).toEqual([]);
-      expect(res.body.data.floatNotComparableCount).toBe(0);
     });
 
-    it('reports a float with days but no minutes as not comparable, and counts it', async () => {
+    it('reports a baseline float that was never calculated as null variance, never zero', async () => {
       const admin = await adminWithOrg();
       const { planId, before } = await dayLengthChanged(admin);
-      // A baseline captured before the minutes were stored: days present, minutes NULL.
+      // Days and minutes are one fact (ck_baseline_activities_total_float_minutes_with_days): a
+      // frozen activity either has both or, never calculated, neither.
       await prisma.baselineActivity.updateMany({
         where: { baselineId: before },
-        data: { totalFloatMinutes: null },
+        data: { totalFloat: null, totalFloatMinutes: null },
       });
 
       const v = await admin.agent.get(variance(planId)).expect(200);
@@ -538,10 +537,8 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         expect(r.floatVarianceDays).toBeNull();
         expect(r.floatVarianceMinutes).toBeNull();
       }
-      expect(v.body.meta.floatNotComparableCount).toBe(3);
 
-      const res = await admin.agent.get(compareUrl(planId, before)).expect(200);
-      expect(res.body.data.floatNotComparableCount).toBe(3);
+      await admin.agent.get(compareUrl(planId, before)).expect(200);
     });
   });
 
@@ -550,11 +547,11 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     const { planId } = await chainPlan(admin);
     const from = await capture(admin, planId, 'Rev A');
 
-    // A baseline captured before the freeze shipped has all four columns null — a permanent
-    // sentinel, because a capture cannot be re-run. Written directly here BECAUSE the public API
-    // structurally cannot produce it any more: the capture path always copies the plan's mirrors.
-    // That is the one legitimate exception to the build-through-the-API rule, and it is exactly
-    // the legacy state the three-valued verdict exists for.
+    // A baseline captured from a plan that holds no criticality rule has all four columns null — a
+    // permanent sentinel, because a capture cannot be re-run. Written directly here because the
+    // public API does not produce it for an ordinary calculated plan (the capture copies the plan's
+    // mirrors): the one legitimate exception to the build-through-the-API rule, and exactly the
+    // state the three-valued verdict exists for.
     await prisma.baseline.update({
       where: { id: from },
       data: {
@@ -655,49 +652,6 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       expect(classes.get('RELANED')?.rows[0]?.to).toBe('Row 5');
       // …and `b` was not touched, so it appears in none of them.
       expect(classes.get('RELANED')?.rows.every((r) => r.subjectId !== b)).toBe(true);
-    });
-
-    it('says NOT_SNAPSHOTTED — never "no change" — when a side predates the extension', async () => {
-      const admin = await adminWithOrg();
-      const { planId } = await chainPlan(admin);
-      const from = await capture(admin, planId, 'Rev A');
-
-      // Written directly BECAUSE the public API structurally cannot produce it any more: every
-      // capture is FULL. This is the permanent legacy state of every baseline taken before the
-      // extension, and it is the whole reason the discriminator exists. Same exception, and same
-      // justification, as the criticality-rule case above.
-      await prisma.baseline.update({
-        where: { id: from },
-        data: { revisionSnapshotLevel: 'NONE' },
-      });
-      // Its frozen shape goes with it — a NONE baseline stores NULLs. Comparing those NULLs
-      // against a live plan finds REAL differences (lane 0 vs lane 0 is equal, but a null parent
-      // and a null percent are not what the live row holds), so this is the case where a naive
-      // implementation reports a confident, fabricated list of changes.
-      await prisma.baselineActivity.updateMany({
-        where: { baselineId: from },
-        data: { laneIndex: null, percentComplete: null },
-      });
-      await prisma.baselineDependency.deleteMany({ where: { baselineId: from } });
-
-      const res = await admin.agent
-        .get(`${compareUrl(planId, from)}&include=changes&include=progress`)
-        .expect(200);
-      const classes = classesOf(res.body);
-      for (const name of [
-        'RELOGICKED',
-        'RECONSTRAINED',
-        'RECALENDARED',
-        'REPARENTED',
-        'RELANED',
-        'PROGRESSED',
-      ]) {
-        expect(classes.get(name)?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
-        expect(classes.get(name)?.rows).toEqual([]);
-        expect(classes.get(name)?.total).toBe(0);
-      }
-      // The FREE classes are unaffected — the snapshot's absence is about the shape, not the plan.
-      expect(classes.get('RENAMED')?.notAssessableReason).toBeNull();
     });
 
     it('emits the change picture only when asked, and never a link it cannot anchor', async () => {
@@ -925,18 +879,10 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
 
     describe('the dates compared (#405 (a))', () => {
       /** A bar hand-placed AFTER capture: the network's dates do not move, the drawn bar does. */
-      async function placedAfterCapture(baselineLevel: 'FULL' | 'NONE') {
+      async function placedAfterCapture() {
         const admin = await adminWithOrg();
         const { planId, a } = await chainPlan(admin);
         const from = await capture(admin, planId, 'Rev A');
-        if (baselineLevel === 'NONE') {
-          // The legacy state (every baseline taken before placement was recorded), which the public
-          // API can no longer produce — the same exception as the revision-level case above.
-          await prisma.baseline.update({
-            where: { id: from },
-            data: { placementSnapshotLevel: 'NONE' },
-          });
-        }
         const live = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
         await admin.agent
           .patch(`/api/v1/organizations/acme/activities/${a}`)
@@ -945,7 +891,7 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         await recalculate(admin, planId);
         const after = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
         // The premise, asserted rather than assumed: placement moved the drawn bar and left the
-        // network's dates alone. Without it neither outcome below proves anything.
+        // network's dates alone. Without it the outcome below proves nothing.
         expect(after.visualEffectiveStart?.toISOString()).not.toBe(after.earlyStart?.toISOString());
         expect(after.earlyStart?.toISOString()).toBe(live.earlyStart?.toISOString());
         const res = await admin.agent
@@ -954,22 +900,14 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
         return { body: res.body, a, classes: classesOf(res.body) };
       }
 
-      it('reports a bar moved by placement alone, on a baseline that recorded its placement', async () => {
-        const { body, a, classes } = await placedAfterCapture('FULL');
+      it('reports a bar moved by placement alone', async () => {
+        const { body, a, classes } = await placedAfterCapture();
 
         expect(body.data.datesBasis).toBe('PLACED');
         // The moved bar is reported — and so is its successor, which is drawn later because the bar
         // it follows now is. Both are placed-date moves; the network's dates moved for neither.
         expect(classes.get('REDATED')?.rows.map((r) => r.subjectId)).toContain(a);
         expect(body.data.ghosts.map((g: { activityId: string }) => g.activityId)).toContain(a);
-      });
-
-      it('falls back to earliest-vs-earliest on a baseline captured before placement was recorded', async () => {
-        const { body, classes } = await placedAfterCapture('NONE');
-
-        expect(body.data.datesBasis).toBe('NETWORK');
-        expect(classes.get('REDATED')?.rows).toEqual([]);
-        expect(body.data.ghosts).toEqual([]);
       });
     });
   });
