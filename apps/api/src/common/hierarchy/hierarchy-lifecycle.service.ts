@@ -115,8 +115,6 @@ interface DeletedRoot {
   organizationId: string;
   parentId: string | null;
   wbsParentId?: string | null;
-  /** The root's own calendar: only used when the root carries no batch id to key a read on. */
-  calendarId: string | null;
 }
 
 /** A deleted PROJECT calendar a project or client restore brings back with it (ADR-0201 D6). */
@@ -701,16 +699,25 @@ export class HierarchyLifecycleService {
     knockOn?: KnockOn,
   ): Promise<CascadeCounts> {
     const root = await this.loadDeletedRoot(tx, entity, id);
+    // **Fail closed, before the first lock or write.** Every soft-delete stamps a batch id on the
+    // five tables this restores (`softDelete*` build `stamp` with `deleteBatchId`), so a deleted
+    // root without one is a corrupt row, not a state to handle. It must never reach the updates
+    // below as `undefined`: Prisma reads `where: { deleteBatchId: undefined }` as NO filter, and
+    // `updateMany` would then reactivate every soft-deleted row in four tables.
+    if (root.deleteBatchId === null) {
+      throw new Error(
+        `Cannot restore ${entity} ${id}: it is soft-deleted but carries no delete batch id.`,
+      );
+    }
+    const batchId = root.deleteBatchId;
     // The calendar locks come BEFORE the parent check: the lock order is calendar, then ancestors
     // (`docs/specs/deleted-calendar-restore/spec.md` §4.6), the order `CalendarsService.restore` takes.
     const calendarIds = await this.lockBatchCalendars(tx, entity, root);
     await this.assertParentActive(tx, entity, root);
     const strandedCalendars = await this.assertCalendarsActive(tx, entity, id, root, calendarIds);
 
-    // Every soft-deleted row carries a batch id; fall back to the row itself for
-    // defensiveness. Restore across all four tables so a client's batch (which
-    // spans projects/plans/activities) is reactivated in one shot.
-    const batchId = root.deleteBatchId ?? undefined;
+    // Restore across all four tables so a client's batch (which spans
+    // projects/plans/activities) is reactivated in one shot.
     const restore = { deletedAt: null, deleteBatchId: null, updatedBy: actorId };
     const counts: CascadeCounts = {
       clients: 0,
@@ -729,183 +736,158 @@ export class HierarchyLifecycleService {
     };
 
     try {
-      if (batchId) {
-        counts.clients = (
-          await tx.client.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        counts.projects = (
-          await tx.project.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        counts.plans = (
-          await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        // **The root itself must have been reactivated.** `loadDeletedRoot` read it without a lock,
-        // so the retention expiry can claim and delete it between that read and these updates; the
-        // updates then match nothing and the caller would answer 200 for a restore that did not
-        // happen. Only the three expirable levels: an activity or link batch is never swept, and a
-        // link batch can legitimately restore zero rows (endpoint guard).
-        const rootRestored =
-          entity === 'client'
-            ? counts.clients
-            : entity === 'project'
-              ? counts.projects
-              : entity === 'plan'
-                ? counts.plans
-                : 1;
-        if (rootRestored === 0) {
-          throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
-        }
-        if (knockOn) {
-          // The same statement, returning the ids it reactivated: the caller tells the survivors by
-          // what is NOT among them.
-          const restored = await tx.activity.updateManyAndReturn({
-            where: { deleteBatchId: batchId },
-            data: restore,
-            select: { id: true },
-          });
-          appendAll(
-            knockOn.activityIds,
-            restored.map((a) => a.id),
-          );
-          counts.activities = restored.length;
-        } else {
-          counts.activities = (
-            await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-          ).count;
-        }
-        // Restore the batch's baselines and their snapshot rows (M7, ADR-0025). The
-        // batch is self-consistent — at most one baseline was active when deleted — so
-        // the one-active partial unique cannot collide on restore.
-        counts.baselines = (
-          await tx.baseline.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        await tx.baselineActivity.updateMany({
-          where: { deleteBatchId: batchId },
-          data: restore,
-        });
-        // …and its cost decomposition (ADR-0071 M3), swept in the same batch above.
-        await tx.baselineAssignment.updateMany({
-          where: { deleteBatchId: batchId },
-          data: restore,
-        });
-        // …and its frozen logic (the revision-snapshot extension), swept in the same batch above.
-        // Like a note or a step and unlike a dependency, no endpoint guard is needed: a snapshot
-        // edge has exactly ONE parent (its baseline) and its two `source_*` endpoints are plain
-        // correlation ids naming rows in another table's id space, so there is nothing whose
-        // liveness could make restoring it inconsistent.
-        await tx.baselineDependency.updateMany({
-          where: { deleteBatchId: batchId },
-          data: restore,
-        });
-        // Restore the batch's activity steps (M7 rung 5, ADR-0044 §2). A step belongs to exactly one
-        // activity and was swept in the SAME batch as it, so — unlike a dependency — no endpoint guard
-        // is needed: restoring the batch reactivates each step with its owning activity. Steps removed
-        // by a bulk-replace carry their OWN (different) batch id, so they never resurrect here.
-        counts.steps = (
-          await tx.activityStep.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        // Restore the batch's notes (the Notes feature, ADR-0046). A note has exactly ONE parent and
-        // was swept in the SAME batch as it, so — like a step, unlike a dependency — no endpoint guard
-        // is needed: restoring the batch reactivates each note with its parent, and the parent's own
-        // top-down `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
-        // note deleted individually (its own fresh batch) carries a different id and never resurrects here.
-        counts.notes = (
-          await tx.note.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        // Restore the batch's share links (Stage F, ADR-0051). A link has exactly ONE parent (its plan)
-        // and was swept in the SAME batch as it — like a note/step, unlike a dependency — so no endpoint
-        // guard is needed: restoring the batch reactivates each link with its plan, and the top-down
-        // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A link deleted
-        // individually carries its own batch id and never resurrects here.
-        counts.planShares = (
-          await tx.planShare.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        // Restore the batch's swimlanes (swimlanes schema-design §6). One parent (the plan), swept in
-        // the SAME batch, so no endpoint guard is needed. Deliberately no refusal for an activity
-        // that names a deleted swimlane: that is the state a swimlane delete creates and its restore
-        // reverses, unlike a deleted calendar, which is a scheduling input (ADR-0201 D1). A swimlane
-        // deleted on its own carries its own batch id and never resurrects here. A name taken
-        // meanwhile raises P2002 on uq_swimlanes_plan_name, which the catch below maps.
-        // Skipped for an activity or dependency batch: only a plan, project or client delete stamps
-        // swimlanes, so such a batch holds none and the statement would be pure cost (it is pinned
-        // by the activity-history statement budget).
-        if (entity !== 'activity' && entity !== 'dependency') {
-          counts.swimlanes = (
-            await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-          ).count;
-          // …and the batch's code types, then their values (p6-activity-codes database-design §8.2),
-          // under the same skip and for the same reason. Both were swept in the SAME batch as their
-          // plan, so no parent guard is needed: a value or type deleted on its own carries its own
-          // batch id and never resurrects here, and an assignment to a deleted value is admitted —
-          // it reads as "no value" until the value is restored (the ADR-0206 A8 rule, not ADR-0201's
-          // calendar refusal). A name taken meanwhile raises P2002, which the catch below maps.
-          counts.codeTypes = (
-            await tx.codeType.updateMany({
-              where: { deleteBatchId: batchId, deletedAt: { not: null } },
-              data: restore,
-            })
-          ).count;
-          counts.codeValues = (
-            await tx.codeValue.updateMany({
-              where: { deleteBatchId: batchId, deletedAt: { not: null } },
-              data: restore,
-            })
-          ).count;
-        }
-        // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
-        // calendar has exactly ONE parent (its project) and was swept in the SAME batch as it, so
-        // — like a note or a step, unlike a dependency — no endpoint guard is needed: restoring
-        // the batch reactivates each calendar with its project, and the top-down
-        // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
-        // calendar deleted on its own carries its own batch id and never resurrects here. If the
-        // project has meanwhile gained an active calendar of the same name, the per-tier partial
-        // unique raises P2002 and the catch below turns it into 409 NAME_TAKEN.
-        counts.calendars = (
-          await tx.calendar.updateMany({ where: { deleteBatchId: batchId }, data: restore })
-        ).count;
-        await tx.calendarException.updateMany({
-          where: { deleteBatchId: batchId },
-          data: restore,
-        });
-        counts.calendars += await this.restoreStrandedCalendars(
-          tx,
-          root.organizationId,
-          strandedCalendars,
-          actorId,
-        );
-        // Restore the batch's links AFTER their activities, and only where BOTH
-        // endpoints are now active — a link whose other end was deleted separately
-        // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).
-        counts.dependencies = await this.restoreLinksInBatch(tx, batchId, restore, knockOn);
-      } else {
-        // Defensive: a soft-deleted row should always carry a batch id.
-        if (entity === 'client') {
-          await tx.client.update({ where: { id }, data: restore });
-          counts.clients = 1;
-        } else if (entity === 'project') {
-          await tx.project.update({ where: { id }, data: restore });
-          counts.projects = 1;
-        } else if (entity === 'plan') {
-          await tx.plan.update({ where: { id }, data: restore });
-          counts.plans = 1;
-        } else if (entity === 'activity') {
-          await tx.activity.update({ where: { id }, data: restore });
-          counts.activities = 1;
-        } else {
-          await tx.activityDependency.update({ where: { id }, data: restore });
-          counts.dependencies = 1;
-        }
+      counts.clients = (
+        await tx.client.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      counts.projects = (
+        await tx.project.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      counts.plans = (
+        await tx.plan.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      // **The root itself must have been reactivated.** `loadDeletedRoot` read it without a lock,
+      // so the retention expiry can claim and delete it between that read and these updates; the
+      // updates then match nothing and the caller would answer 200 for a restore that did not
+      // happen. Only the three expirable levels: an activity or link batch is never swept, and a
+      // link batch can legitimately restore zero rows (endpoint guard).
+      const rootRestored =
+        entity === 'client'
+          ? counts.clients
+          : entity === 'project'
+            ? counts.projects
+            : entity === 'plan'
+              ? counts.plans
+              : 1;
+      if (rootRestored === 0) {
+        throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
       }
+      if (knockOn) {
+        // The same statement, returning the ids it reactivated: the caller tells the survivors by
+        // what is NOT among them.
+        const restored = await tx.activity.updateManyAndReturn({
+          where: { deleteBatchId: batchId },
+          data: restore,
+          select: { id: true },
+        });
+        appendAll(
+          knockOn.activityIds,
+          restored.map((a) => a.id),
+        );
+        counts.activities = restored.length;
+      } else {
+        counts.activities = (
+          await tx.activity.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+      }
+      // Restore the batch's baselines and their snapshot rows (M7, ADR-0025). The
+      // batch is self-consistent — at most one baseline was active when deleted — so
+      // the one-active partial unique cannot collide on restore.
+      counts.baselines = (
+        await tx.baseline.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      await tx.baselineActivity.updateMany({
+        where: { deleteBatchId: batchId },
+        data: restore,
+      });
+      // …and its cost decomposition (ADR-0071 M3), swept in the same batch above.
+      await tx.baselineAssignment.updateMany({
+        where: { deleteBatchId: batchId },
+        data: restore,
+      });
+      // …and its frozen logic (the revision-snapshot extension), swept in the same batch above.
+      // Like a note or a step and unlike a dependency, no endpoint guard is needed: a snapshot
+      // edge has exactly ONE parent (its baseline) and its two `source_*` endpoints are plain
+      // correlation ids naming rows in another table's id space, so there is nothing whose
+      // liveness could make restoring it inconsistent.
+      await tx.baselineDependency.updateMany({
+        where: { deleteBatchId: batchId },
+        data: restore,
+      });
+      // Restore the batch's activity steps (M7 rung 5, ADR-0044 §2). A step belongs to exactly one
+      // activity and was swept in the SAME batch as it, so — unlike a dependency — no endpoint guard
+      // is needed: restoring the batch reactivates each step with its owning activity. Steps removed
+      // by a bulk-replace carry their OWN (different) batch id, so they never resurrect here.
+      counts.steps = (
+        await tx.activityStep.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      // Restore the batch's notes (the Notes feature, ADR-0046). A note has exactly ONE parent and
+      // was swept in the SAME batch as it, so — like a step, unlike a dependency — no endpoint guard
+      // is needed: restoring the batch reactivates each note with its parent, and the parent's own
+      // top-down `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
+      // note deleted individually (its own fresh batch) carries a different id and never resurrects here.
+      counts.notes = (
+        await tx.note.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      // Restore the batch's share links (Stage F, ADR-0051). A link has exactly ONE parent (its plan)
+      // and was swept in the SAME batch as it — like a note/step, unlike a dependency — so no endpoint
+      // guard is needed: restoring the batch reactivates each link with its plan, and the top-down
+      // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A link deleted
+      // individually carries its own batch id and never resurrects here.
+      counts.planShares = (
+        await tx.planShare.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      // Restore the batch's swimlanes (swimlanes schema-design §6). One parent (the plan), swept in
+      // the SAME batch, so no endpoint guard is needed. Deliberately no refusal for an activity
+      // that names a deleted swimlane: that is the state a swimlane delete creates and its restore
+      // reverses, unlike a deleted calendar, which is a scheduling input (ADR-0201 D1). A swimlane
+      // deleted on its own carries its own batch id and never resurrects here. A name taken
+      // meanwhile raises P2002 on uq_swimlanes_plan_name, which the catch below maps.
+      // Skipped for an activity or dependency batch: only a plan, project or client delete stamps
+      // swimlanes, so such a batch holds none and the statement would be pure cost (it is pinned
+      // by the activity-history statement budget).
+      if (entity !== 'activity' && entity !== 'dependency') {
+        counts.swimlanes = (
+          await tx.swimlane.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+        ).count;
+        // …and the batch's code types, then their values (p6-activity-codes database-design §8.2),
+        // under the same skip and for the same reason. Both were swept in the SAME batch as their
+        // plan, so no parent guard is needed: a value or type deleted on its own carries its own
+        // batch id and never resurrects here, and an assignment to a deleted value is admitted —
+        // it reads as "no value" until the value is restored (the ADR-0206 A8 rule, not ADR-0201's
+        // calendar refusal). A name taken meanwhile raises P2002, which the catch below maps.
+        counts.codeTypes = (
+          await tx.codeType.updateMany({
+            where: { deleteBatchId: batchId, deletedAt: { not: null } },
+            data: restore,
+          })
+        ).count;
+        counts.codeValues = (
+          await tx.codeValue.updateMany({
+            where: { deleteBatchId: batchId, deletedAt: { not: null } },
+            data: restore,
+          })
+        ).count;
+      }
+      // Restore the batch's PROJECT-scoped calendars and their exceptions (ADR-0053 §2). A
+      // calendar has exactly ONE parent (its project) and was swept in the SAME batch as it, so
+      // — like a note or a step, unlike a dependency — no endpoint guard is needed: restoring
+      // the batch reactivates each calendar with its project, and the top-down
+      // `assertParentActive` already blocks resurrecting under a still-deleted ancestor. A
+      // calendar deleted on its own carries its own batch id and never resurrects here. If the
+      // project has meanwhile gained an active calendar of the same name, the per-tier partial
+      // unique raises P2002 and the catch below turns it into 409 NAME_TAKEN.
+      counts.calendars = (
+        await tx.calendar.updateMany({ where: { deleteBatchId: batchId }, data: restore })
+      ).count;
+      await tx.calendarException.updateMany({
+        where: { deleteBatchId: batchId },
+        data: restore,
+      });
+      counts.calendars += await this.restoreStrandedCalendars(
+        tx,
+        root.organizationId,
+        strandedCalendars,
+        actorId,
+      );
+      // Restore the batch's links AFTER their activities, and only where BOTH
+      // endpoints are now active — a link whose other end was deleted separately
+      // stays soft-deleted (endpoint-guarded; see ADR-0021 / DECISIONS.md).
+      counts.dependencies = await this.restoreLinksInBatch(tx, batchId, restore, knockOn);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictError('A sibling with this name already exists.', {
           reason: HIERARCHY_CONFLICT.NAME_TAKEN,
         });
-      }
-      // The legacy path (no batch id) updates by id, which raises P2025 rather than counting zero
-      // when the retention expiry removed the row first.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundError(`${entity.charAt(0).toUpperCase()}${entity.slice(1)} not found.`);
       }
       throw error;
     }
@@ -951,9 +933,6 @@ export class HierarchyLifecycleService {
         distinct: ['calendarId'],
       });
       for (const row of [...plans, ...activities]) if (row.calendarId) ids.add(row.calendarId);
-    } else if (root.calendarId) {
-      // The legacy no-batch path restores the root alone, so its own calendar is the only reference.
-      ids.add(root.calendarId);
     }
     const sorted = [...ids].sort();
     for (const calendarId of sorted) await acquireCalendarWriteLock(tx, calendarId);
@@ -1170,8 +1149,7 @@ export class HierarchyLifecycleService {
    * calendar and a later delete of Y would sweep a calendar something still uses. Refused instead,
    * naming the calendar and the project it now belongs to.
    *
-   * Keyed on the batch, so a row restored with no batch id (older than batch ids) is not checked
-   * here. Only plans and activities in the batch are looked at, and an activity is placed by its
+   * Keyed on the batch. Only plans and activities in the batch are looked at, and an activity is placed by its
    * plan: the plan is read in any state because a batch restore may bring the plan back with it.
    * Three grouped reads however many calendars there are; the lowest calendar id is still reported.
    *
@@ -1288,7 +1266,6 @@ export class HierarchyLifecycleService {
         deleteBatchId: row.deleteBatchId,
         organizationId: row.organizationId,
         parentId: null,
-        calendarId: null,
       };
     }
     if (entity === 'project') {
@@ -1301,20 +1278,18 @@ export class HierarchyLifecycleService {
         deleteBatchId: row.deleteBatchId,
         organizationId: row.organizationId,
         parentId: row.clientId,
-        calendarId: null,
       };
     }
     if (entity === 'plan') {
       const row = await tx.plan.findFirst({
         where: { id, deletedAt: { not: null } },
-        select: { deleteBatchId: true, organizationId: true, projectId: true, calendarId: true },
+        select: { deleteBatchId: true, organizationId: true, projectId: true },
       });
       if (!row) throw new NotFoundError('Plan not found.');
       return {
         deleteBatchId: row.deleteBatchId,
         organizationId: row.organizationId,
         parentId: row.projectId,
-        calendarId: row.calendarId,
       };
     }
     if (entity === 'activity') {
@@ -1325,7 +1300,6 @@ export class HierarchyLifecycleService {
           organizationId: true,
           planId: true,
           parentId: true,
-          calendarId: true,
         },
       });
       if (!row) throw new NotFoundError('Activity not found.');
@@ -1336,7 +1310,6 @@ export class HierarchyLifecycleService {
         organizationId: row.organizationId,
         parentId: row.planId,
         wbsParentId: row.parentId,
-        calendarId: row.calendarId,
       };
     }
     // Dependency — its parent for the restore guard is its plan (this slice has no
@@ -1350,7 +1323,6 @@ export class HierarchyLifecycleService {
       deleteBatchId: row.deleteBatchId,
       organizationId: row.organizationId,
       parentId: row.planId,
-      calendarId: null,
     };
   }
 

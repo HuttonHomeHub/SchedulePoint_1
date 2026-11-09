@@ -508,8 +508,8 @@ secret manager — never baked into images or committed. See
 `20260923120000_finish_milestone_end_of_day_placements` (ADR-0155): shift every placed finish milestone
 back one day, check against `finish_milestone_date_migrations`, then drop that table and the
 migration's `_prisma_migrations` row. The 1.1 baseline (ADR-0215) contains no such migration, and a
-1.1 database has no row the reverse could act on: its `finish_milestone_date_migrations` table is
-created empty and is never written. Rolling 1.1 back to 1.0 is the old volume, not a reverse script
+1.1 database has no row the reverse could act on: the table `finish_milestone_date_migrations` no
+longer exists (ADR-0215 D6). Rolling 1.1 back to 1.0 is the old volume, not a reverse script
 (ADR-0215 D3, [`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md)). The procedure, with
 its measurement on a populated copy, is at git tag `api-v1.0.0` (this file).
 
@@ -521,7 +521,7 @@ cross-plan lag from working minutes back to `days × 1440`, checked against `cro
 then drop that table and the migration's `_prisma_migrations` row. Its e2e proof
 (`cross-plan-lag-migration.e2e-spec.ts`) went with the migration (ADR-0215 amending ADR-0107 D2). On a
 1.1 database every lag has been written in working minutes from the first row, so there is nothing to
-re-encode, and `cross_plan_lag_migrations` is created empty and never written. Rolling 1.1 back to
+re-encode, and the table `cross_plan_lag_migrations` no longer exists (ADR-0215 D6). Rolling 1.1 back to
 1.0 is the old volume (ADR-0215 D3). The procedure, its three caveats and the migration's `resolved`
 CTE are at git tag `api-v1.0.0` (this file).
 
@@ -537,123 +537,15 @@ technique again defines it afresh, with its own rollback step.
 
 ### Rolling back past the P6 activity codes release
 
-The P6 activity codes schema (`docs/specs/p6-activity-codes/database-design.md` §13) lands in two
-migrations: `20261027120000_swimlane_source_activity_code` adds the value `ACTIVITY_CODE` to the
-`SwimlaneSource` enum and nothing else, and `20261027120100_p6_activity_codes` adds the four code
-tables (`code_types`, `code_values`, `code_value_assignments`, `code_swimlane_lanes`), the plan's
-swimlane pointer `plans.swimlane_code_type_id`, two columns on `baselines`, three on
-`baseline_activities` and one index on `activities`. Both are forward-only (`docs/DATABASE.md`
-"Migrations"). What running the **previous** images after both have applied does:
-
-- **During a rolling deploy** the second migration holds a `SHARE` lock on `activities` (readers proceed,
-  writers wait) and an `ACCESS EXCLUSIVE` lock on `baseline_activities` (everything on it waits), for
-  under a second at 500,000 activities and 2,000,000 `baseline_activities` rows
-  (`docs/specs/p6-activity-codes/m2-record.md` §1). Containers still running the previous image queue
-  behind them for that long and then carry on.
-
-- **Before anybody uses a code as the swimlane source, it works with no database step.** The previous
-  image's Prisma client selects named columns and never sees the new tables or columns; the new
-  `activities` index costs it nothing; and its swimlane lane upsert is untouched, which is why code lanes
-  have a table of their own.
-- **Expiry and import rollback in the previous image fail on plans that hold codes.** Its expiry does not
-  know the new tables, so expiring such a plan fails with a foreign-key error (23503), which it logs and
-  retries every hour; nothing is lost, and the clear-out ships switched off. Its own imports never write
-  codes, so its import rollback is unaffected.
-- **Once any plan's swimlanes come from a code (`swimlane_source = 'ACTIVITY_CODE'`), what breaks
-  depends on how far back you go.** Run every command from the stack folder (the one holding
-  `docker-compose.yml`, `/apps/schedulepoint` on the reference host). On the reference stack `<user>`
-  and `<db>` are both `app`. Work through these steps in order and stop at the first one that does not
-  say what it should.
-
-  1. **Back up and check the copy first** (ADR-0192). A restore never overwrites the live database;
-     if you ever need the copy, follow the steps in `docs/guides/back-up-and-restore.md` to switch to
-     the restored database.
-
-     ```sh
-     docker compose run --rm backup now
-     docker compose run --rm backup check
-     ```
-
-     The second command must end with `CHECK PASSED`. If it does not, stop here.
-
-  2. **Find out whether anything is affected.** If this prints 0, nothing below applies and you can
-     roll back as usual:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM plans WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     Deleted plans are counted on purpose: they come back if someone restores them, and they would
-     break in the same way. Write the number down; call it N.
-
-  3. **Check baselines, and decide how far back you can go.** Deleted baselines are counted on
-     purpose, because they come back on restore:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -At -c "SELECT count(*) FROM baselines WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     - **Going back to api 0.103.1, 0.103.0 or 0.102.2** (the images that already know the value): such a plan
-       still opens, but it draws no swimlanes. Those images fail with a server error when you change
-       that plan's swimlane source and when you capture a baseline of it. A baseline that froze the
-       code source is harmless to them, so a non-zero count here does not stop you.
-     - **Going back to api 0.102.1 or earlier** (inferred from the schema design, not run): those
-       images cannot read such a plan at all, which breaks it and any list that loads it, and they
-       cannot read such a baseline either. **If this count is not 0, stop.** Rewriting a baseline would
-       falsify a snapshot (ADR-0025), so there is no clean route back that far: roll forward instead
-       or, as a last resort, restore the pre-update copy the backup service made before migrating
-       (ADR-0192, the same guide), which loses everything written since.
-
-  4. **Stop the API and the web containers, and only those.** Never a bare `docker compose stop`: the
-     database must stay up. Roll both images back together, because a newer web sends lane writes that
-     an older API answers with a server error.
-
-     ```sh
-     docker compose stop api web
-     ```
-
-     Run the count from step 2 again. It must still be N.
-
-  5. **Save the list of affected plans, and check the file** before changing anything. The file lands
-     in the folder you are in:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 \
-       -c "COPY (SELECT id, swimlane_code_type_id FROM plans WHERE swimlane_source = 'ACTIVITY_CODE') TO STDOUT WITH CSV HEADER" \
-       > p6-code-swimlanes.csv && wc -l p6-code-swimlanes.csv
-     ```
-
-     The line count must be N plus 1 (the header). If it is not, or the command printed an error, stop:
-     nothing has been changed yet.
-
-  6. **Reset the plans.** This writes no audit row (a swimlane source is not a governance setting), so
-     note it where the host's changes are recorded:
-
-     ```sh
-     docker compose exec -T db psql -U <user> -d <db> -v ON_ERROR_STOP=1 -c "UPDATE plans SET swimlane_source = 'NONE', swimlane_code_type_id = NULL, version = version + 1, updated_at = now() WHERE swimlane_source = 'ACTIVITY_CODE';"
-     ```
-
-     It prints `UPDATE n`; n must equal N and the CSV's line count minus 1. The version goes up so
-     that anyone still holding the old plan in a browser is asked to reload before saving.
-
-  7. **Pin the previous images and start again.** Set the previous `API_IMAGE_TAG` and
-     `WEB_IMAGE_TAG` in the stack's `.env`, then `docker compose up -d`. With auto-update on, the pin
-     is what stops the newer image coming straight back.
-
-  What is kept: every code, value and assignment, and every code swimlane lane
-  (`code_swimlane_lanes` is not touched). After rolling forward, a planner chooses **Swimlanes… ▸ One per
-  value of <code>** again for each plan in the saved file and the bars return to the lanes they had. What is
-  lost: only the choice itself, until it is made again.
-
-- **Do not drop the new tables, columns or the enum value as a "rollback".** A later roll-forward finds
-  both migrations already recorded in `_prisma_migrations` and does not re-create anything, the trap the
-  milestone cross-calendar section above records for a marker row. PostgreSQL cannot drop an enum value
-  anyway, and an unused one costs nothing.
-
-Measured on a shared container (migration B's header): the second migration takes about 0.1 s at 50,000
-activities and 0.7–0.8 s at 500,000 activities with 2,000,000 baseline rows, almost all of it building
-the `activities` index and checking `baseline_activities`. The API migrates before it serves, so that
-is added to one boot.
+**History; it does not apply to a 1.1 database.** Until 1.0 this section described running the images
+before the P6 activity codes release (two forward-only migrations, `20261027120000` and
+`20261027120100`) against a database that had applied them: the lock cost during a rolling deploy, the
+expiry failures on plans holding codes, and a seven-step reset of every plan whose swimlanes came from a
+code, with a per-version table of how far back a baseline allowed. The 1.1 baseline (ADR-0215) contains
+the code tables from the first row and a 1.1 database is never run by a pre-1.1 image: rolling 1.1 back
+to 1.0 is the old volume, not a reverse script (ADR-0215 D3,
+[`docs/guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md)). The procedure and its
+measurements are at git tag `api-v1.0.0` (this file).
 
 ### Which switches actually work on a running container, and which do not
 

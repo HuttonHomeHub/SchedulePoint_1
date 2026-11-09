@@ -177,16 +177,6 @@ const SITES: Record<string, Site> = {
       'Restore of the subjects themselves: in the audit log. The ids it returns are what the ' +
       "knock-on uses to tell the survivors, and are recorded by restoreLinksInBatch's callers.",
   },
-  'common/hierarchy/hierarchy-lifecycle.service.ts::restoreBatch::activity.update': {
-    status: 'exempt',
-    reason: 'Restore of the subject itself: in the audit log.',
-  },
-  'common/hierarchy/hierarchy-lifecycle.service.ts::restoreBatch::activityDependency.update': {
-    status: 'exempt',
-    reason:
-      'The defensive branch for a row with no batch id, which no delete produces ' +
-      '("a soft-deleted row should always carry a batch id", in that method).',
-  },
   'common/hierarchy/hierarchy-lifecycle.service.ts::restoreLinksInBatch::activityDependency.updateMany':
     {
       status: 'recorded',

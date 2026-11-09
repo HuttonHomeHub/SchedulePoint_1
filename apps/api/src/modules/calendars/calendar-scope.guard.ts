@@ -83,8 +83,7 @@ export async function assertCalendarUsableBy(
     });
   }
 
-  // The shared tier is usable by every holder in the org — today's only behaviour, and the
-  // reason every pre-ADR-0053 row (all ORG) keeps working unchanged.
+  // The shared tier is usable by every holder in the org.
   if (calendar.scope === 'ORG') return calendar;
 
   // scope === 'PROJECT' from here: the holder must be inside the owning project.

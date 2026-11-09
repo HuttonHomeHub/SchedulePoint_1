@@ -130,7 +130,8 @@ describe.skipIf(!hasDatabase)('Remove unused calendars (e2e)', () => {
         name,
         calendarId,
         plannedStart: new Date('2026-01-05'),
-        ...(deleted ? { deletedAt: new Date() } : {}),
+        // A soft-deleted plan always carries a batch id; a restore refuses one that does not.
+        ...(deleted ? { deletedAt: new Date(), deleteBatchId: randomUUID() } : {}),
       },
     });
   }

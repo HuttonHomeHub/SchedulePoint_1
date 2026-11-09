@@ -12,7 +12,6 @@ import { StaffDiagnosticsRepository } from '../src/modules/staff/staff-diagnosti
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
-import { clearBaselineTree } from './clear-baseline-tree';
 import { resetThrottleCounters } from './throttle-reset';
 
 /**
@@ -25,11 +24,10 @@ import { resetThrottleCounters } from './throttle-reset';
  * named what the repository thinks, whether `count(*)`'s `bigint` survives `JSON.stringify`, and
  * whether the response survives the real `TransformInterceptor` rather than being double-wrapped.
  *
- * **The fixture discriminates both predicates in both directions**, which is the whole point. A
+ * **The fixture discriminates each predicate in both directions**, which is the whole point. A
  * diagnostic that returns a plausible number is worse than one that fails, because somebody pastes
- * it into a measurement record. So the plan below contains, deliberately, one activity that answers
- * each question, one that answers neither, and — the case a reviewer would rightly question — one
- * that looks like it should answer D-A and must not.
+ * it into a measurement record. So each estate below contains, deliberately, rows that answer a
+ * question and rows that answer none.
  *
  * Built through the public REST API throughout (the ADR-0066 rule): a fixture assembled below the
  * write path would reuse the assembly the counts are about and would agree with itself.
@@ -83,7 +81,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
   });
 
   async function resetDatabase(): Promise<void> {
-    await clearBaselineTree(prisma);
     await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.updateMany({ data: { parentId: null } });
@@ -164,217 +161,9 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     return planId;
   }
 
-  async function drive(actor: Actor, activityId: string, resourceId: string): Promise<void> {
-    await actor.agent
-      .post(`${org}/activities/${activityId}/assignments`)
-      .send({ resourceId, budgetedUnits: 1, isDriving: true })
-      .expect(201);
-  }
-
-  /** An assignment that is NOT the driver — the witness for `ra.is_driving = true`. */
-  async function assignNonDriving(
-    actor: Actor,
-    activityId: string,
-    resourceId: string,
-  ): Promise<void> {
-    await actor.agent
-      .post(`${org}/activities/${activityId}/assignments`)
-      .send({ resourceId, budgetedUnits: 1, isDriving: false })
-      .expect(201);
-  }
-
-  /**
-   * The discriminating fixture. Five activities across two plans in one organisation:
-   *
-   * | # | Activity            | Shape                                              | D-A | D-B |
-   * | - | ------------------- | -------------------------------------------------- | --- | --- |
-   * | 1 | Inheriting task     | TASK, no own calendar, 8 h plan                    | no  | YES |
-   * | 2 | Crane lift          | RD, driven by a 24 h crane, 8 h plan               | YES | no  |
-   * | 3 | Own calendar task   | TASK naming the 8 h calendar explicitly            | no  | no  |
-   * | 4 | Inherit-driver lift | RD, driven by a resource with **no** calendar      | no  | YES |
-   * | 5 | Round the clock     | TASK on a 24 h plan                                | no  | no  |
-   * | 6 | Task with driver    | TASK driven by the 24 h crane                      | no  | YES |
-   * | 7 | Twin-calendar lift  | RD, driven onto a DIFFERENT calendar of equal hours | no  | no  |
-   *
-   * **Rows 3 to 7 are the ones worth the setup cost, and rows 6 and 7 exist because the fixture
-   * failed without them.** Each predicate clause was removed in turn and the suite re-run: with
-   * five rows, two D-A mutations stayed green — dropping the `RESOURCE_DEPENDENT` filter from the
-   * numerator, and comparing calendar **ids** instead of day lengths. Both are wrong and neither
-   * had a witness.
-   *
-   * - Row 6 is the A5500 contrast: `effectiveOf` ignores a driver entirely for any type but
-   *   `RESOURCE_DEPENDENT`, so a driven TASK keeps its own calendar and nothing changed meaning.
-   *   It is D-B, though — it reaches the inherit sentinel like any other inheriting activity, which
-   *   is also what exercises D-B's own restriction of the driver join to `RESOURCE_DEPENDENT`.
-   * - Row 7 separates "a different calendar" from "a different day length". Only the second one
-   *   changes a number; an id comparison would count this and be wrong.
-   * - Row 4 looks like D-A and must not be counted: with no driver calendar, `effectiveOf` falls
-   *   back to the activity's own, so the two coincide.
-   * - Row 5 is the 24-hour plan, where the old fallback constant and the correct answer agree.
-   * - Row 3 named its own calendar, so it never reached the inherit sentinel at all.
-   *
-   * **Rows 8 to 10 were added by the M4 test review, which found the diagnostic's own PREMISE
-   * unwitnessed.** Every `drive()` call hard-codes `isDriving: true` and nothing was ever
-   * reassigned, so `ra.is_driving = true` and `ra.deleted_at IS NULL` — the two clauses that make
-   * this "the DRIVING resource's calendar" rather than "any resource's" — could both be deleted
-   * with the suite green. And no `RESOURCE_DEPENDENT` activity named a calendar of its own, so the
-   * middle rung of both `COALESCE` chains was never reached: their argument order could be swapped
-   * and nothing would notice.
-   *
-   * | #  | Activity            | Shape                                                    | D-A | D-B |
-   * | -- | ------------------- | -------------------------------------------------------- | --- | --- |
-   * | 8  | Passenger lift      | RD on a 24 h crane held NON-driving, no driver at all     | no  | YES |
-   * | 9  | Reassigned lift     | RD whose crane assignment was UNASSIGNED, then re-driven  | no  | YES |
-   * | 10 | Own-calendar lift   | RD naming a 24 h calendar itself, driver has none         | no  | no  |
-   * | 11 | Unassigned lift     | RD whose only crane assignment was unassigned, no driver  | no  | YES |
-   *
-   * Row 8 has a live assignment to a diverging resource that is not the driver: drop
-   * `is_driving = true` and D-A counts it. Row 9 had its crane assignment unassigned and was then
-   * driven by a resource with no calendar: drop `ra.deleted_at IS NULL` and the stale 24-hour row
-   * makes D-A count it. Row 10 resolves `oc` through its **own** calendar rather than
-   * the plan's, which is the rung nothing else reaches.
-   *
-   * **Row 10 is a NEGATIVE witness, and that is the point of it** — the first draft of this table
-   * said `D-A: YES` and was wrong. With the activity naming 24 h and its driver naming nothing,
-   * `oc` and `sc` both resolve to that same 24 h calendar, so it is correctly not counted. Swap
-   * `oc`'s `COALESCE` to plan-before-activity and it resolves to 8 h while `sc` stays 24 h: the row
-   * turns positive and the count moves. A rung is witnessed by a row whose answer CHANGES when the
-   * rung changes, not by one that happens to be affected.
-   */
-  async function seedEstate(actor: Actor): Promise<void> {
-    const eightHourDay = await calendar(actor, 'Crew (8h)', 8);
-    const roundTheClock = await calendar(actor, 'Crane (24h)', 24);
-
-    const planA = await planOn(actor, eightHourDay, 'Eight hour plan');
-    const planB = await planOn(actor, roundTheClock, 'Round the clock plan');
-
-    const crane = await actor.agent
-      .post(`${org}/resources`)
-      .send({ name: 'Crane', kind: 'EQUIPMENT', calendarId: roundTheClock })
-      .expect(201);
-    const gang = await actor.agent
-      .post(`${org}/resources`)
-      .send({ name: 'Gang (inherits)', kind: 'LABOUR' })
-      .expect(201);
-
-    await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Inheriting task', durationDays: 5 })
-      .expect(201);
-
-    const lift = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Crane lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    await drive(actor, lift.body.data.id as string, crane.body.data.id as string);
-
-    await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Own calendar task', durationDays: 5, calendarId: eightHourDay })
-      .expect(201);
-
-    const inheritDriver = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Inherit-driver lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    await drive(actor, inheritDriver.body.data.id as string, gang.body.data.id as string);
-
-    await actor.agent
-      .post(`${org}/plans/${planB}/activities`)
-      .send({ name: 'Round the clock', durationDays: 5 })
-      .expect(201);
-
-    const drivenTask = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Task with driver', durationDays: 5 })
-      .expect(201);
-    await drive(actor, drivenTask.body.data.id as string, crane.body.data.id as string);
-
-    const otherEightHourDay = await calendar(actor, 'Subcontractor (8h)', 8);
-    const twin = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Twin-calendar lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    const subcontractor = await actor.agent
-      .post(`${org}/resources`)
-      .send({ name: 'Subcontractor', kind: 'LABOUR', calendarId: otherEightHourDay })
-      .expect(201);
-    await drive(actor, twin.body.data.id as string, subcontractor.body.data.id as string);
-
-    // Row 8 — the `is_driving` witness. A live assignment to the 24 h crane that is NOT the
-    // driver, so the activity falls back to the plan's day exactly as if the crane were not there.
-    const passenger = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Passenger lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    await assignNonDriving(actor, passenger.body.data.id as string, crane.body.data.id as string);
-
-    // Row 9 — the `ra.deleted_at` witness, and it took two attempts to build.
-    //
-    // The obvious construction is "drive it with the crane, then drive it with the gang", on the
-    // assumption that a second driving assignment supersedes the first. It does not: the service
-    // calls `clearDrivingForActivity`, which sets `is_driving = false` on the live row and deletes
-    // nothing (`resource-assignment.repository.ts:150-163`). So that shape is row 8 again, and
-    // dropping `ra.deleted_at IS NULL` stayed green against it — the witness witnessed nothing,
-    // which only running the mutation showed.
-    //
-    // The crane assignment is therefore UNASSIGNED, which is the one path that soft-deletes
-    // (`softDelete`, `:184-195`), leaving a row with `is_driving = true` AND `deleted_at` set. The
-    // gang then drives it and inherits, so the activity is correctly not D-A; the stale 24 h row is
-    // exactly what a missing `deleted_at IS NULL` picks up.
-    const reassigned = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Reassigned lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    const reassignedId = reassigned.body.data.id as string;
-    const craneAssignment = await actor.agent
-      .post(`${org}/activities/${reassignedId}/assignments`)
-      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
-      .expect(201);
-    await actor.agent
-      .delete(`${org}/assignments/${craneAssignment.body.data.id as string}`)
-      .expect(204);
-    await drive(actor, reassignedId, gang.body.data.id as string);
-
-    // Row 10 — the activity-calendar rung of both COALESCE chains, which nothing else reaches: an
-    // RD activity naming a 24 h calendar of its own, driven by a resource that has none. `oc`
-    // resolves through `a.calendar_id`, and `sc` falls through the driver to the same place.
-    const ownCalendarLift = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({
-        name: 'Own-calendar lift',
-        durationDays: 5,
-        type: 'RESOURCE_DEPENDENT',
-        calendarId: roundTheClock,
-      })
-      .expect(201);
-    await drive(actor, ownCalendarLift.body.data.id as string, gang.body.data.id as string);
-
-    // Row 11 — D-B's OWN copy of the `ra.deleted_at` clause, which row 9 does not reach.
-    //
-    // Row 9 has both a stale crane row and a live gang row, so under D-B's `count(*)` the activity
-    // is counted once either way: dropping the filter adds a second joined row that the
-    // `r.calendar_id IS NULL` test then throws away, and the live one still qualifies. The clause
-    // can only change an answer where the stale row is the ONLY one — so here the crane assignment
-    // is unassigned and never replaced. With the filter the activity inherits and is D-B; without
-    // it, the stale 24 h crane row makes `r.calendar_id` non-null and the activity vanishes from
-    // the count the diagnostic exists to produce.
-    const unassigned = await actor.agent
-      .post(`${org}/plans/${planA}/activities`)
-      .send({ name: 'Unassigned lift', durationDays: 5, type: 'RESOURCE_DEPENDENT' })
-      .expect(201);
-    const orphaned = await actor.agent
-      .post(`${org}/activities/${unassigned.body.data.id as string}/assignments`)
-      .send({ resourceId: crane.body.data.id, budgetedUnits: 1, isDriving: true })
-      .expect(201);
-    await actor.agent.delete(`${org}/assignments/${orphaned.body.data.id as string}`).expect(204);
-  }
-
   // -------------------------------------------------------------------------------------------
-  // The one-planning-surface readings (M0). A second estate, deliberately separate from
-  // `seedEstate` above: that fixture is tuned to make the two day-factor questions discriminate,
-  // and folding placements and constraints into it would make both tables harder to read and each
-  // one's counts depend on the other's rows.
+  // The one-planning-surface readings (M0): the placement estate, which the conflict and the
+  // activity-grain placement questions are counted over.
   // -------------------------------------------------------------------------------------------
 
   async function activityOn(
@@ -394,41 +183,26 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
   }
 
   /**
-   * **The placement estate. Three plans, and the SNET half is the part worth the setup cost.**
+   * **The placement estate.** Plans with and without hand-placed bars, so the plan-grain and
+   * activity-grain placement questions diverge, and so the conflict denominators (the placed set)
+   * differ from the whole population. The `Constrained` plan carries ordinary SNET constraints, one
+   * of them on a placed activity, to prove a placement above a lower bound is not a conflict.
    *
-   * The four SNET classes are read off `early_start` against `constraint_date`, because an SNET
-   * applies as `Math.max(logicEarlyStart, constraint.startAbs)` and provenance is unrecoverable —
-   * a drag and the activity editor write the identical row, and the PATCH route is unaudited.
-   *
-   * | Plan          | Activity     | Shape                                         | Class        |
-   * | ------------- | ------------ | --------------------------------------------- | ------------ |
-   * | Placed        | Placed A     | `visual_start` set                            | —            |
-   * | Placed        | Placed B     | `visual_start` set                            | —            |
-   * | Placed        | Unplaced     | nothing                                       | —            |
-   * | Constrained   | Anchor       | 10 d from the data date, no constraint        | —            |
-   * | Constrained   | Binding      | SNET after the data date, then recalculated   | binding      |
-   * | Constrained   | Inert        | successor of Anchor, SNET BEFORE Anchor ends  | inert        |
-   * | Constrained   | Stale        | recalculated, THEN its constraint moved later | unclassified |
-   * | Never touched | Unscheduled  | SNET, plan never recalculated                 | unclassified |
-   *
-   * **`Stale` is the row the implementation plan did not have, and it is why this is four classes
-   * and not three.** That plan called its binding / inert / unscheduled split "exhaustive and
-   * disjoint". It is not: setting a constraint does not recalculate the plan, so the stored
-   * schedule can predate it and leave `early_start < constraint_date` — a state the `max(...)`
-   * makes unreachable in a FRESH schedule and which is perfectly reachable in a stored one. This
-   * row reaches it through the public API in three ordinary calls, so it is a fact about the
-   * product rather than a hypothesis about it. Such a row is neither binding nor inert, and a
-   * migration cannot know where its bar would land, so it is counted and touched by nothing.
-   *
-   * Two baselines are captured, over DIFFERENT plans, and that separation is load-bearing: one
-   * over `Placed` (which is what `baselines-over-placed-plans` counts) and one over `Constrained`
-   * (which is what `snet-full-baseline-coverage` counts). A fixture with a single baseline over a
-   * plan that had both would let either query be wrong in the other's direction and stay green.
+   * | Plan          | Activity     | Shape                                         |
+   * | ------------- | ------------ | --------------------------------------------- |
+   * | Placed        | Placed A     | `visual_start` set                            |
+   * | Placed        | Placed B     | `visual_start` set                            |
+   * | Placed        | Unplaced     | nothing                                       |
+   * | Constrained   | Anchor       | 10 d from the data date, no constraint        |
+   * | Constrained   | Binding      | SNET after the data date, placed later        |
+   * | Constrained   | Inert        | successor of Anchor, SNET BEFORE Anchor ends  |
+   * | Constrained   | Stale        | recalculated, THEN its constraint moved later |
+   * | Never touched | Unscheduled  | SNET, plan never recalculated                 |
    */
   async function seedPlacementEstate(actor: Actor): Promise<void> {
     const allDay = await calendar(actor, 'Round the clock (placements)', 24);
 
-    // --- Plan 1: placements, and the baseline that covers them -------------------------------
+    // --- Plan 1: placements -------------------------------------------------------------------
     const placed = await planOn(actor, allDay, 'Placed');
     const placedA = await activityOn(actor, placed, { name: 'Placed A' });
     const placedB = await activityOn(actor, placed, { name: 'Placed B' });
@@ -440,7 +214,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
         .expect(200);
     }
     await recalculate(actor, placed);
-    await actor.agent.post(`${org}/plans/${placed}/baselines`).send({ name: 'Over placements' });
 
     // --- Plan 1b: a second placed plan --------------------------------------------------------
     // This was D-D2's negative witness — the one placed plan NOT in Early mode, which was the only
@@ -499,7 +272,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       .send({ visualStart: '2026-05-04', version: 1 })
       .expect(200);
     await recalculate(actor, constrained);
-    await actor.agent.post(`${org}/plans/${constrained}/baselines`).send({ name: 'Over SNETs' });
     // AFTER the recalculation, and deliberately without another: this is the whole point of the
     // row. The stored schedule now predates the constraint it is compared against.
     const staleNow = await actor.agent.get(`${org}/activities/${stale}`).expect(200);
@@ -519,30 +291,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
       constraintType: 'SNET',
       constraintDate: '2026-03-01',
     });
-    // --- Plan 4: a baseline over a plan with NO placement — the negative witness for D-E -------
-    //
-    // Added 2026-09-21 alongside M-I's fourth-class row, because that row silently cost an existing
-    // assertion its discriminator. Before it, `baselines-over-placed-plans` read 1 of 2: the
-    // `Placed` capture counted and the `Over SNETs` one did not, so a query that had dropped its
-    // placement predicate would have reported 2 and failed. The fourth-class row puts a placement
-    // on `Constrained`, so `Over SNETs` legitimately started counting too — and with the WHOLE
-    // population qualifying, the assertion could no longer tell a working predicate from a missing
-    // one. Restoring the negative is the fix; relaxing the expected number to 2 would have been a
-    // green test that proves nothing.
-    //
-    // **It needs its own plan, and finding that out is the useful part.** The first attempt put the
-    // baseline on `Never touched`, which cannot carry one — a capture needs a computed schedule
-    // (ADR-0025) and that plan's whole purpose is never to have been scheduled. The request failed
-    // silently, because it was written without an `.expect()`, and the only thing that noticed was
-    // the count this baseline exists to move. Hence the `.expect(201)` below: a fixture that
-    // half-applies is worse than one that is absent, because the suite goes green around it.
-    const unplaced = await planOn(actor, allDay, 'No placements');
-    await activityOn(actor, unplaced, { name: 'Plain work' });
-    await recalculate(actor, unplaced);
-    await actor.agent
-      .post(`${org}/plans/${unplaced}/baselines`)
-      .send({ name: 'Over nothing' })
-      .expect(201);
   }
 
   async function readDiagnostics(
@@ -553,33 +301,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     return new Map(rows.map((row) => [row.id, row]));
   }
 
-  it('counts each question over a fixture that discriminates it in both directions', async () => {
-    const actor = await adminWithOrg();
-    await seedEstate(actor);
-    const staff = await signedInStaff();
-
-    const byId = await readDiagnostics(staff);
-
-    // D-A — the driving-resource half, `api-v0.62.0`. Only the crane lift: the inherit-driver lift
-    // resolves to the SAME calendar it would have used anyway, so nothing about it changed meaning.
-    expect(byId.get('day-factor-divergence')).toMatchObject({
-      examined: 7, // every RESOURCE_DEPENDENT activity was asked
-      affected: 1,
-      affectedPlans: 1,
-      affectedOrganizations: 1,
-    });
-
-    // D-B — the inherited-plan-calendar half, `api-v0.63.0`. The inheriting task AND the
-    // inherit-driver lift; not the one naming its own calendar, and not the 24 h plan.
-    expect(byId.get('inherited-day-factor')).toMatchObject({
-      examined: 11, // every activity in the estate
-      affected: 6,
-      affectedPlans: 1,
-      affectedOrganizations: 1,
-    });
-  });
-
-  it('counts placements and baselines over them, at both grains (M0, one planning surface)', async () => {
+  it('counts placements at both grains, and conflicts against the placed set (M0, one planning surface)', async () => {
     const actor = await adminWithOrg();
     await seedPlacementEstate(actor);
     const staff = await signedInStaff();
@@ -588,18 +310,18 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
 
     // The plan-grain and activity-grain questions are separate entries precisely because these two
     // numbers diverge, and the fixture makes them: four activities carry a placement across three
-    // plans, out of eleven activities in five. (Three and three until M-I added the fourth-class row — a binding SNET on an activity
+    // plans, out of ten activities in four. (Three and three until M-I added the fourth-class row — a binding SNET on an activity
     // that ALSO carries a placement — which lands on the `Constrained` plan and so moves both the
     // activity count and the plan count. Updated rather than worked around: it is a real placement
     // on a real plan and both entries are right to see it.)
     expect(byId.get('visual-placement-plans')).toMatchObject({
-      examined: 5,
+      examined: 4,
       affected: 3,
       affectedPlans: 3,
       affectedOrganizations: 1,
     });
     expect(byId.get('visual-placement-activities')).toMatchObject({
-      examined: 11,
+      examined: 10,
       affected: 4,
       affectedPlans: 3,
       affectedOrganizations: 1,
@@ -612,7 +334,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
      * query with a mis-typed enum literal reports zero just as cheerfully. What discriminates is
      * the population each is measured against, which is the decision these entries make — a
      * conflict is a property of a PLACEMENT, so the denominator is the placed set (4, the
-     * `affected` figure above) and not every activity (11, the `examined` one). Counting out of
+     * `affected` figure above) and not every activity (10, the `examined` one). Counting out of
      * every activity would report a rate that falls purely because somebody added unplaced work.
      *
      * The placed set grew by one at M-I (the fourth-class row), and `affected` stays **zero** —
@@ -628,71 +350,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     for (const id of ['visual-conflict-earlier-than-logic', 'visual-conflict-later-than-bound']) {
       expect(byId.get(id), id).toMatchObject({ examined: 4, affected: 0, affectedPlans: 0 });
     }
-
-    // Two of THREE baselines, and the third is what makes this an assertion rather than a tally:
-    // `Over nothing` sits on a plan with no placement, so counting it would mean the placement
-    // predicate was dropped, and counting neither of the other two would mean the join lost its
-    // rows. Both directions are live.
-    expect(byId.get('baselines-over-placed-plans')).toMatchObject({
-      examined: 3,
-      affected: 2,
-      affectedPlans: 2,
-      affectedOrganizations: 1,
-    });
-  });
-
-  it('splits the SNET population by effect, exhaustively (M0, one planning surface)', async () => {
-    const actor = await adminWithOrg();
-    await seedPlacementEstate(actor);
-    const staff = await signedInStaff();
-
-    const byId = await readDiagnostics(staff);
-
-    const binding = byId.get('snet-binding');
-    const inert = byId.get('snet-inert');
-    const unclassified = byId.get('snet-unclassified');
-
-    // Five SNETs, not four, since the fourth-class row joined the fixture (M-I). It counts as
-    // BINDING here, which is the point: these three entries classify by EFFECT, and "is it already
-    // placed?" is a different question that this partition deliberately does not ask.
-    expect(binding).toMatchObject({ examined: 5, affected: 2, affectedPlans: 1 });
-    expect(inert).toMatchObject({ examined: 5, affected: 1, affectedPlans: 1 });
-    // Two rows, in two plans: the never-scheduled one and the one whose schedule predates its
-    // constraint. `affectedPlans: 2` is what separates them from a single-cause miscount.
-    expect(unclassified).toMatchObject({ examined: 5, affected: 2, affectedPlans: 2 });
-
-    // **The cheapest possible guard against a mis-written WHERE**, and the reason the three share
-    // one denominator. A class that overlapped another, or a fourth state nobody had noticed,
-    // shows up here as arithmetic rather than as a judgement about SQL.
-    expect(
-      (binding?.affected ?? 0) + (inert?.affected ?? 0) + (unclassified?.affected ?? 0),
-      'the three classes must partition the SNET population exactly',
-    ).toBe(binding?.examined);
-  });
-
-  it('sizes what a FULL baseline could restore (M0, one planning surface)', async () => {
-    const actor = await adminWithOrg();
-    await seedPlacementEstate(actor);
-    const staff = await signedInStaff();
-
-    const byId = await readDiagnostics(staff);
-
-    // The denominator is the BINDING set, not every SNET — the only class a strip would touch.
-    // The `Constrained` baseline covers it, and the `Placed` one is over a different plan, so a
-    // query that lost its `b.plan_id = a.plan_id` clause would report MORE than the binding set
-    // here and be wrong for the wrong reason. That is what the second baseline is for.
-    //
-    // Two rather than one since M-I added the fourth-class row: it is binding, so it joins the
-    // denominator, and the same `Over SNETs` capture covers it. Worth noting what that means for
-    // this entry's purpose — it sizes how much of an irreversible migration would be recoverable,
-    // and the row it just gained is the one the migration DOES NOT TOUCH. The entry is not wrong;
-    // it answers "could a FULL baseline restore this?", not "will the strip take it?"
-    expect(byId.get('snet-full-baseline-coverage')).toMatchObject({
-      examined: 2,
-      affected: 2,
-      affectedPlans: 1,
-      affectedOrganizations: 1,
-    });
   });
 
   // -------------------------------------------------------------------------------------------
@@ -1071,8 +728,8 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
 
   it('carries each entry’s nature, read from the registry rather than hard-coded', async () => {
     // TypeScript stops the field being DROPPED — it is non-optional on the DTO — and stops nothing
-    // if a producer writes the wrong literal. Both entries are retrospective today, so this cannot
-    // catch a hard-coded `'retrospective'`; what it does assert is that the value survives the
+    // if a producer writes the wrong literal. Every entry is prospective since 1.1.0, so this cannot
+    // catch a hard-coded `'prospective'`; what it does assert is that the value survives the
     // whole path and lands inside the closed vocabulary, which is what the panel branches on to
     // tell a reader whether a count means "broken now" or "who to tell". Said plainly rather than
     // left to look stronger than it is.
@@ -1085,8 +742,6 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
         row.nature,
       );
     }
-    expect(byId.get('day-factor-divergence')?.nature).toBe('retrospective');
-    expect(byId.get('inherited-day-factor')?.nature).toBe('retrospective');
   });
 
   it('reports zeroes on an empty estate rather than omitting the rows', async () => {
@@ -1098,15 +753,8 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     const byId = await readDiagnostics(staff);
 
     expect([...byId.keys()]).toEqual([
-      'day-factor-divergence',
-      'inherited-day-factor',
       'visual-placement-plans',
       'visual-placement-activities',
-      'baselines-over-placed-plans',
-      'snet-binding',
-      'snet-inert',
-      'snet-unclassified',
-      'snet-full-baseline-coverage',
       'visual-conflict-earlier-than-logic',
       'visual-conflict-later-than-bound',
       'zero-duration-tasks',
@@ -1144,7 +792,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     // somebody remembered to check. The fixture above names its plans, clients and activities
     // distinctively for exactly this: if any of them can appear, this is where it shows.
     const actor = await adminWithOrg();
-    await seedEstate(actor);
+    await seedPlacementEstate(actor);
     const staff = await signedInStaff();
 
     const response = await staff.get('/api/v1/staff/diagnostics').set('Origin', ORIGIN).expect(200);
@@ -1195,7 +843,7 @@ describe.skipIf(!hasDatabase)('Staff diagnostics (e2e)', () => {
     // simply drop an undeclared parameter, and that is the assertion: a caller who tries to scope
     // the count gets the same installation-wide answer, so the endpoint cannot be differenced.
     const actor = await adminWithOrg();
-    await seedEstate(actor);
+    await seedPlacementEstate(actor);
     const staff = await signedInStaff();
 
     const plain = await readDiagnostics(staff);

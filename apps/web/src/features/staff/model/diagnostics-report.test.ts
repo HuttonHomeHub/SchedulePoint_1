@@ -13,8 +13,8 @@ import {
 
 function row(overrides: Partial<StaffDiagnosticRow> = {}): StaffDiagnosticRow {
   return {
-    id: 'day-factor-divergence',
-    label: 'Day factor divergence (driving resource)',
+    id: 'visual-placement-activities',
+    label: 'Activities placed by hand',
     nature: 'retrospective',
     unit: 'activity',
     examined: 1284,
@@ -69,11 +69,13 @@ describe('diagnosticSentence', () => {
     ).toBe('1 of 4 plans, in 1 organisation.');
 
     expect(
-      diagnosticSentence(row({ id: 'baselines-over-placed-plans', unit: 'baseline', affected: 2 })),
-    ).toBe('2 of 1284 baselines, across 3 plans in 1 organisation.');
+      diagnosticSentence(
+        row({ id: 'history-entries-last-28-days', unit: 'history-entry', affected: 2 }),
+      ),
+    ).toBe('2 of 1284 history entries, across 3 plans in 1 organisation.');
 
-    expect(diagnosticSentence(row({ unit: 'baseline', examined: 7, affected: 0 }))).toBe(
-      'None of the 7 baselines examined is affected.',
+    expect(diagnosticSentence(row({ unit: 'history-entry', examined: 7, affected: 0 }))).toBe(
+      'None of the 7 history entries examined is affected.',
     );
   });
 
@@ -200,9 +202,7 @@ describe('diagnosticsStatus', () => {
   });
 
   it('names the questions that found something, rather than summing them', () => {
-    expect(diagnosticsStatus(result)).toBe(
-      'Diagnostics complete. Day factor divergence (driving resource): 17.',
-    );
+    expect(diagnosticsStatus(result)).toBe('Diagnostics complete. Activities placed by hand: 17.');
   });
 
   it('says so plainly when nothing is affected', () => {
@@ -240,7 +240,7 @@ describe('formatDiagnosticsReport', () => {
       diagnostics: [row({ examined: 0, affected: 0, affectedPlans: 0, affectedOrganizations: 0 })],
     });
 
-    expect(report).toContain('Day factor divergence (driving resource)');
+    expect(report).toContain('Activities placed by hand');
     expect(report).toContain('examined               0');
     expect(report).toContain('No work of this shape exists');
   });
@@ -259,10 +259,13 @@ describe('formatDiagnosticsReport', () => {
   it('names every registry entry it was given', () => {
     const report = formatDiagnosticsReport({
       ...result,
-      diagnostics: [row(), row({ id: 'inherited-day-factor', label: 'Inherited', affected: 4 })],
+      diagnostics: [
+        row(),
+        row({ id: 'zero-duration-tasks', label: 'Zero-duration tasks', affected: 4 }),
+      ],
     });
 
-    expect(report).toContain('(day-factor-divergence)');
-    expect(report).toContain('(inherited-day-factor)');
+    expect(report).toContain('(visual-placement-activities)');
+    expect(report).toContain('(zero-duration-tasks)');
   });
 });

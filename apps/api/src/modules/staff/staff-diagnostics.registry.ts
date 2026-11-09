@@ -22,15 +22,8 @@ import { Prisma } from '@prisma/client';
 
 /** The identifiers this console can report. A literal union, never an open string. */
 export const DIAGNOSTIC_IDS = [
-  'day-factor-divergence',
-  'inherited-day-factor',
   'visual-placement-plans',
   'visual-placement-activities',
-  'baselines-over-placed-plans',
-  'snet-binding',
-  'snet-inert',
-  'snet-unclassified',
-  'snet-full-baseline-coverage',
   'visual-conflict-earlier-than-logic',
   'visual-conflict-later-than-bound',
   'zero-duration-tasks',
@@ -45,9 +38,10 @@ export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];
 /**
  * **What a non-zero count MEANS, and it is a field rather than a sentence for a measured reason.**
  *
- * Both entries today are `retrospective`: they size whose stored numbers changed meaning when a
- * release landed, not work that is wrong now. The M4 UX review found that nothing on screen or in
- * the paste-ready block said so — so "17 of 1,284" reads as "17 activities are broken right now" to
+ * `retrospective` sizes whose stored numbers changed meaning when a release landed, not work that is
+ * wrong now. No entry is retrospective since 1.1.0 (ADR-0215 started the product from a new
+ * database, so no row predates a fix); the literal stays for the next probe. The M4 UX review found
+ * that nothing on screen or in the paste-ready block said so — so "17 of 1,284" reads as "17 activities are broken right now" to
  * anybody who has not read ADR-0139, which is nearly everybody who will later read the pasted block.
  *
  * The cheap fix was one sentence on the panel. It was rejected because it is true only by
@@ -79,11 +73,11 @@ export type DiagnosticNature = (typeof DIAGNOSTIC_NATURES)[number];
  * single renderer that speaks them.
  *
  * It carries no installation data, exactly like `label` and `nature`: it is a property of the
- * QUESTION. Four members because the registry has four grains, counted from the denominators
- * rather than assumed — activities, plans (`visual-placement-plans`), baselines
- * (`baselines-over-placed-plans`) and history entries (the three `history-entries-*` entries).
+ * QUESTION. Three members because the registry has three grains, counted from the denominators
+ * rather than assumed — activities, plans (`visual-placement-plans`) and history entries (the
+ * three `history-entries-*` entries).
  */
-export const DIAGNOSTIC_UNITS = ['activity', 'plan', 'baseline', 'history-entry'] as const;
+export const DIAGNOSTIC_UNITS = ['activity', 'plan', 'history-entry'] as const;
 
 export type DiagnosticUnit = (typeof DIAGNOSTIC_UNITS)[number];
 
@@ -107,148 +101,6 @@ export interface DiagnosticEntry {
   /** `SELECT count(*) AS affected, count(DISTINCT …) AS affected_plans, … FROM …` */
   readonly numerator: Prisma.Sql;
 }
-
-/**
- * **D-A — the retrospective count `docs/TECH_DEBT.md` #86's M0-T3 asks for.**
- *
- * An activity whose driving resource sits on a different calendar from the one the activity itself
- * resolves. Before `api-v0.62.0` its `durationDays` was converted on the activity's own calendar
- * while the schedule ran on the driver's, so this counts **whose stored numbers changed meaning**
- * when that release landed — it sizes who to tell, not a live defect.
- *
- * The filters are not decoration and each is load-bearing:
- *
- * - `ra.is_driving` with `ra.deleted_at IS NULL` — the partial unique
- *   `uq_resource_assignments_activity_driving` is `UNIQUE (activity_id) WHERE (is_driving AND
- *   deleted_at IS NULL)`, read from `pg_indexes` on a running database rather than from a migration
- *   file, so at most one driving assignment per activity can exist. That is why there is no
- *   `DISTINCT ON` here: there is nothing to de-duplicate, and an ungrounded `DISTINCT ON` with no
- *   `ORDER BY` would have picked an arbitrary row.
- * - `a.type = 'RESOURCE_DEPENDENT'` — only that type defers to its driver (`day-factor.ts`), so
- *   every other type is outside the question rather than merely unaffected.
- * - `p.deleted_at IS NULL` — redundant by cascade today, and kept because "redundant by cascade" is
- *   a property of `HierarchyLifecycleService` rather than of this query, and it is not this file's
- *   to assume.
- *
- * **Measured cost:** 1.5–2.5 ms at 2,000 activities, 31–35 ms at 102,000, 161–204 ms on a fully
- * resourced 102,000 — see `docs/specs/staff-diagnostics-panel/m0-measurements.md`, which also
- * records why the partial unique cannot serve this shape and why no index was added.
- */
-const DAY_FACTOR_DIVERGENCE: DiagnosticEntry = {
-  id: 'day-factor-divergence',
-  label: 'Day factor divergence (driving resource)',
-  nature: 'retrospective',
-  unit: 'activity',
-  denominator: Prisma.sql`
-    SELECT count(*) AS examined
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL AND a.type = 'RESOURCE_DEPENDENT'
-  `,
-  // soft-delete: any-state — the calendars are the ones activities are bound to, and a soft-deleted
-  // calendar must still be counted or this diagnostic excludes the activities it exists to find.
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM resource_assignments ra
-    JOIN resources r  ON r.id = ra.resource_id AND r.deleted_at IS NULL
-    JOIN activities a ON a.id = ra.activity_id AND a.deleted_at IS NULL
-                     AND a.type = 'RESOURCE_DEPENDENT'
-    JOIN plans p      ON p.id = a.plan_id AND p.deleted_at IS NULL
-    LEFT JOIN calendars oc ON oc.id = COALESCE(a.calendar_id, p.calendar_id)
-    LEFT JOIN calendars sc ON sc.id = COALESCE(r.calendar_id, a.calendar_id, p.calendar_id)
-    WHERE ra.is_driving = true AND ra.deleted_at IS NULL
-      AND COALESCE(oc.hours_per_day_minutes, 1440) <> COALESCE(sc.hours_per_day_minutes, 1440)
-  `,
-};
-
-/**
- * **D-B — the retrospective count for #86's SECOND mechanism, and its framing was corrected.**
- *
- * An activity whose day-denominated float columns fell through to the 24-hour constant while the
- * schedule itself ran on the plan's day. `effectiveOf` returns `null` for an activity that inherits
- * — no calendar of its own, and no driving resource calendar to defer to — the engine reads that
- * `null` correctly as "use the plan's port" through `portFor`, and `resolveDayFactors` read the
- * same `null` as *no calendar at all*. So its float was reported in 24-hour days beside a duration
- * in the plan's, on the same row, both true and neither comparable.
- *
- * **The spec that commissioned this entry called it "the still-live half", and by the time it was
- * built it was not.** ADR-0139 landed the fix the same day, released as `api-v0.63.0`:
- * `schedule.service.ts` now builds `dayFactorCalIdByActivity` beside the engine's port map, with the
- * inherit sentinel resolved. The *population* is unchanged — the same rows — but its **nature**
- * flipped from prospective to retrospective, and the label and description flipped with it.
- * Shipping "these are wrong right now" over a fixed defect would be the failure this whole console
- * exists to remove, one layer in: a confident number that is not true.
- *
- * **Three exclusions, each of which would otherwise report unaffected work as affected.** Every one
- * is a case where the old fallback and the correct answer COINCIDE, so nothing changed meaning:
- *
- * - `a.calendar_id IS NULL` — an activity naming its own calendar never reached the sentinel.
- * - `r.calendar_id IS NULL` — a `RESOURCE_DEPENDENT` activity whose driving resource HAS a calendar
- *   resolved to that calendar in both the old code and the new, because `effectiveOf` returned the
- *   driver rather than `null`. That population is D-A's, not this one. The join is restricted to
- *   `RESOURCE_DEPENDENT` because `effectiveOf` ignores a driver entirely for every other type — a
- *   `TASK` with an assigned resource keeps its own calendar (the A5500 contrast), so counting it
- *   here would follow a rule the engine does not.
- * - the join to `calendars` plus `hours_per_day_minutes <> 1440` — a plan with no calendar, or one
- *   whose calendar row is gone entirely, resolves to 1440 under both rules, and a genuine 24-hour
- *   day is the same number either way.
- *
- * **That third exclusion said "or a soft-deleted one" and carried `AND c.deleted_at IS NULL`, and
- * both were wrong.** `CalendarRepository.findHoursPerDayMinutes` is *deliberately* unfiltered by
- * `deleted_at` and `archived_at` — its own docblock says filtering there "would drop the row and
- * silently reinterpret that activity's duration" — so a soft-deleted calendar resolves to its
- * **stored** `hours_per_day_minutes`, and only an id with no row at all falls to the constant. The
- * filter therefore excluded exactly the activities this diagnostic exists to find, whenever a
- * plan's calendar had been soft-deleted, and it disagreed with the sibling entry above, whose
- * unfiltered `LEFT JOIN calendars` is documented as correct for this same reason (spec §0 F2). The
- * M4 test review found the asymmetry by reading the two queries side by side.
- *
- * The case has **no fixture witness and cannot have one**: the `CALENDAR_IN_USE` guard refuses to
- * delete a calendar an active plan references, so a soft-deleted plan calendar is not reachable
- * through the public API at all. What protects it is the absent clause plus this paragraph, which
- * is weaker than a test and is said out loud rather than implied.
- */
-/**
- * **Measured cost (M4, and it had none until then):** 240–245 ms for this numerator at 102,000
- * activities in the shape that maximises its matched set — three quarters of the whole press, and
- * the more expensive of the two entries under the *ordinary* data shape rather than a pathological
- * one. Its own re-arm trigger, which M0-T3's does not cover, is in `m0-measurements.md`'s M4
- * addendum. The entry shipped uncosted because a planning document described it as joining no
- * resource tables, which the shipped query does.
- */
-const INHERITED_DAY_FACTOR: DiagnosticEntry = {
-  id: 'inherited-day-factor',
-  label: 'Day factor divergence (inherited plan calendar)',
-  nature: 'retrospective',
-  unit: 'activity',
-  denominator: Prisma.sql`
-    SELECT count(*) AS examined
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-  `,
-  // soft-delete: any-state — the calendars are the ones activities are bound to, and a soft-deleted
-  // calendar must still be counted or this diagnostic excludes the activities it exists to find.
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p     ON p.id = a.plan_id AND p.deleted_at IS NULL
-    JOIN calendars c ON c.id = p.calendar_id
-    LEFT JOIN resource_assignments ra ON ra.activity_id = a.id
-                                     AND ra.is_driving = true
-                                     AND ra.deleted_at IS NULL
-                                     AND a.type = 'RESOURCE_DEPENDENT'
-    LEFT JOIN resources r ON r.id = ra.resource_id AND r.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.calendar_id IS NULL
-      AND r.calendar_id IS NULL
-      AND c.hours_per_day_minutes <> 1440
-  `,
-};
 
 // ---------------------------------------------------------------------------------------------
 // The one-planning-surface readings (M0). `nature: 'prospective'`: each counts the installation as
@@ -321,251 +173,6 @@ const VISUAL_PLACEMENT_ACTIVITIES: DiagnosticEntry = {
 };
 
 /**
- * **D-E — baselines taken over a plan that carries a placement.**
- *
- * A baseline freezes the engine's OUTPUT (ADR-0025, ADR-0126) and can never be backfilled. Every
- * baseline counted here was captured while its plan's placements meant what they mean today, and
- * will be compared against plans where they mean something else once the collapse lands. The count
- * decides whether the capture-level discriminator needs a migration or merely a default.
- *
- * Counted at BASELINE grain, so `affected` exceeds `affected_plans` wherever a plan has been
- * baselined more than once — which is the normal case and is the number that matters, because each
- * capture is separately comparable.
- *
- * **THE JOIN IS KEPT, ON A SWEEP RATHER THAN ON ONE DENSITY — AND ITS ESCALATION TRIGGER IS
- * REPLACED** (M-J; `m0/measurements.md`, "M-J re-ran it"). This numerator materialises one row per
- * (baseline × placed activity) pair, so its cost is a **product** that degrades exactly as the
- * estate fills with placements, which is what this epic exists to do. Swept at eight densities on a
- * 102,000-activity / 400-baseline fixture it runs 82 → 314 → 425 ms and touches ADR-0140's 500 ms
- * bar at 90 % (457–523 ms across five runs, 918,360 joined rows, spilling to temp).
- *
- * **The trigger recorded at M0 measured the wrong quantity and is withdrawn.** It said to re-open
- * the shape "when a substantial majority of plans carry at least one placement" — and at **1 %**
- * density all 40 plans already carry one, where the join still wins by 3× (`EXISTS` 355–402 ms
- * against 139–162 ms). It saturates long before the crossover and would have sent a reader to the
- * slower shape. The quantity that decides is the **(baselines × placed activities) product**: ~1 M
- * pairs is where the bar is reached, and the crossover in that fixture is between 2 % and 3 %.
- *
- * **Neither obvious alternative is the answer, which is why this is not a drive-by fix.** A
- * correlated `EXISTS` measures **580 ms at 2 %** — also over the bar, because proving absence means
- * exhausting a plan — and its cost is unstable across sessions on identical data, depending on
- * where placed rows sit in index order. A `DISTINCT` pre-pass over the placed plan ids IS flat
- * (**37–48 ms at 2 %, 50 % and 100 %**, byte-identical numbers), and it **fails gate S-4**: that
- * gate reads the `SELECT` list of EVERY statement in the file, and the CTE projects `a.plan_id`.
- * A review reported the pre-pass as S-4-compliant; it was built and the gate refused it.
- *
- * So shipping it means widening S-4 to inspect only the outermost projection — weakening a rule
- * whose whole value is that it is syntactic and needs no reasoning — which is an ADR-0140-level
- * decision and an ADR-0105 shared-gate trigger, not a fold-in inside a gate pass. **Recorded rather
- * than done**: the deployed host holds 164 activities, so nothing is on fire, and the measurement
- * is on the page for whoever reaches the trigger.
- */
-const BASELINES_OVER_PLACED_PLANS: DiagnosticEntry = {
-  id: 'baselines-over-placed-plans',
-  label: 'Baselines captured over a plan carrying a placement',
-  nature: 'prospective',
-  unit: 'baseline',
-  denominator: Prisma.sql`
-    SELECT count(*) AS examined
-    FROM baselines b
-    JOIN plans p ON p.id = b.plan_id AND p.deleted_at IS NULL
-    WHERE b.deleted_at IS NULL
-  `,
-  numerator: Prisma.sql`
-    SELECT count(DISTINCT b.id) AS affected,
-           count(DISTINCT b.plan_id) AS affected_plans,
-           count(DISTINCT p.organization_id) AS affected_organizations
-    FROM baselines b
-    JOIN plans p      ON p.id = b.plan_id AND p.deleted_at IS NULL
-    JOIN activities a ON a.plan_id = b.plan_id AND a.deleted_at IS NULL
-                     AND a.visual_start IS NOT NULL
-    WHERE b.deleted_at IS NULL
-  `,
-};
-
-/**
- * **D-F, D-G, D-H — the SNET population, split by EFFECT, because provenance is unrecoverable.**
- *
- * Dragging a bar on an `EARLY` plan writes `constraintType: 'SNET'` at the dropped date
- * (`use-plan-workspace-model.ts`), overwriting whatever constraint was there. Setting one in the
- * activity editor writes the identical row. **Nothing in the database distinguishes them** — the
- * activity PATCH route is classified `PLAN_CONTENT` in the audit census
- * (`audit-coverage.structural.spec.ts:264`) and is permanently unaudited under ADR-0073's
- * content-edit exclusion, so there is no history to consult either. These entries therefore do not
- * claim to count drag-created constraints; they count SNETs by what each one currently DOES, which
- * is the only property that can be read.
- *
- * The classes come from the arithmetic and not from a taxonomy. An SNET applies as
- * `Math.max(logicEarlyStart, constraint.startAbs)` (`engine/constraints.ts:155-156`), so:
- *
- * - **binding** (`early_start = constraint_date`) — the constraint is what puts the bar there.
- * - **inert** (`early_start > constraint_date`) — logic already pushed the activity later and the
- *   `max` discards the constraint entirely.
- * - **unclassified** — everything else, and it is two situations rather than one:
- *   `early_start IS NULL` (never scheduled) and `early_start < constraint_date`.
- *
- * **That second case is why this is four classes and not three**, and the plan for this milestone
- * called its three "exhaustive and disjoint". It arises two ways, and the first draft of this
- * paragraph named only the weaker one:
- *
- * - **The stored schedule predates the constraint.** Setting one does not recalculate the plan, so
- *   `early_start` can be older than `constraint_date`. This clears itself on the next
- *   recalculation.
- * - **The activity has started, and it NEVER clears.** `compute.ts:765` is
- *   `started ? activity.actualStart! : workingIndexDate(...)` — an actual start is written
- *   **verbatim**, bypassing `clampForwardStart` altogether ("actuals never move", ADR-0035 §1). So
- *   an activity that began on 2 January under an SNET of 15 January reads
- *   `early_start < constraint_date` in a schedule computed seconds ago, permanently.
- *
- * This docblock asserted the opposite — that `max(...)` makes the case unreachable after a
- * recalculation — until a `database-architect` probe ran it and found the progressed row. The
- * arithmetic was right about the clamp and wrong about which rows reach it, which is why the
- * distinction matters here: anything telling a planner these will resolve on the next
- * recalculation would be false for the second group.
- *
- * Either way such a row is neither binding nor inert, it is unmeasured against its constraint, and
- * a migration cannot know where its bar would land. They are counted here and touched by nothing.
- *
- * The three numerators are disjoint and their union is this shared denominator, which is the
- * cheapest possible guard against a mis-written `WHERE` and is asserted in the repository spec.
- * Only the PRIMARY constraint is considered: the drag writes `constraint_type`, and
- * `secondary_constraint_type` is out of this question's scope rather than merely unexamined.
- */
-const SNET_DENOMINATOR = Prisma.sql`
-  SELECT count(*) AS examined
-  FROM activities a
-  JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-  WHERE a.deleted_at IS NULL
-    AND a.constraint_type = 'SNET'
-    AND a.constraint_date IS NOT NULL
-`;
-
-const SNET_BINDING: DiagnosticEntry = {
-  id: 'snet-binding',
-  label: 'SNETs that currently place their activity',
-  nature: 'prospective',
-  unit: 'activity',
-  denominator: SNET_DENOMINATOR,
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.constraint_type = 'SNET'
-      AND a.constraint_date IS NOT NULL
-      AND a.early_start = a.constraint_date
-  `,
-};
-
-const SNET_INERT: DiagnosticEntry = {
-  id: 'snet-inert',
-  label: 'SNETs logic has already overtaken',
-  nature: 'prospective',
-  unit: 'activity',
-  denominator: SNET_DENOMINATOR,
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.constraint_type = 'SNET'
-      AND a.constraint_date IS NOT NULL
-      AND a.early_start > a.constraint_date
-  `,
-};
-
-const SNET_UNCLASSIFIED: DiagnosticEntry = {
-  id: 'snet-unclassified',
-  label: 'SNETs with no readable effect (unscheduled, or schedule predates the constraint)',
-  nature: 'prospective',
-  unit: 'activity',
-  denominator: SNET_DENOMINATOR,
-  numerator: Prisma.sql`
-    SELECT count(*) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.constraint_type = 'SNET'
-      AND a.constraint_date IS NOT NULL
-      AND (a.early_start IS NULL OR a.early_start < a.constraint_date)
-  `,
-};
-
-/**
- * **D-I — of the binding SNETs, how many could be recovered if a strip went wrong.**
- *
- * ADR-0126 froze `constraint_type` / `constraint_date` on `baseline_activities` at every capture
- * (`revision_snapshot_level` is single-valued since 1.1.0, ADR-0215 D6, so the predicate below is
- * always true and is kept only until this probe is retired with the SNET diagnostics). So this
- * counts the binding set against the ONE historic copy that exists anywhere in the system.
- *
- * **Neither this entry nor D-E uses `EXISTS`, and that is gate S-4 rather than preference.** The
- * natural shape is a semi-join, and its `SELECT 1` is not an aliased `count(...)`, so the gate
- * refuses it; widening a boundary gate to admit a form one file happens to want is the wrong way
- * round, so both are joins with `count(DISTINCT ...)` (the distinct matters because a plan with
- * several FULL baselines produces one row per covering capture).
- *
- * **What that costs depends on the estate, and this docblock asserted otherwise twice before
- * anybody varied the input that decides it.** Measured at three placement densities
- * (`docs/specs/one-planning-surface/m0/measurements.md`, with both plans captured verbatim in
- * `m0/join-vs-exists.sql`): with 8 of 40 plans carrying a placement the join runs at 141 ms and
- * the refused `EXISTS` at 340; with EVERY activity placed the join is 516 ms and the `EXISTS`
- * **2.7**. The cost models are opposite — a semi-join stops at a plan's first placed row, so it is
- * cheapest when placements are dense and worst when a plan has none, since absence can only be
- * proved by exhausting it; the join materialises every (baseline x placed activity) pair, so it is
- * flat in the number of unplaced plans and grows with the product.
- *
- * So the gate's shape is the right one **today** and the wrong one by two orders of magnitude once
- * placement is universal — which is precisely what the one-planning-surface epic exists to make it.
- * Re-open the shape when a substantial majority of plans carry a placement; do not inherit this
- * verdict.
- *
- * The join is `baseline_activities.source_activity_id = activities.id`: a PLAIN correlation UUID
- * with no foreign key (ADR-0025), which is why this is an `EXISTS` over a non-FK column rather than
- * a relation traversal. A low number here does not block anything by itself; it sizes how much of
- * an irreversible migration would be irreversible in practice.
- */
-const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
-  id: 'snet-full-baseline-coverage',
-  label: 'Binding SNETs a FULL baseline could restore',
-  nature: 'prospective',
-  unit: 'activity',
-  denominator: Prisma.sql`
-    SELECT count(*) AS examined
-    FROM activities a
-    JOIN plans p ON p.id = a.plan_id AND p.deleted_at IS NULL
-    WHERE a.deleted_at IS NULL
-      AND a.constraint_type = 'SNET'
-      AND a.constraint_date IS NOT NULL
-      AND a.early_start = a.constraint_date
-  `,
-  // soft-delete: any-state — the snapshot rows are filtered through their baseline's own
-  // `deleted_at`, and a baseline's snapshot is stamped with it (hierarchy-lifecycle,
-  // `softDeleteWithSnapshot`), so an active baseline has active rows.
-  numerator: Prisma.sql`
-    SELECT count(DISTINCT a.id) AS affected,
-           count(DISTINCT a.plan_id) AS affected_plans,
-           count(DISTINCT a.organization_id) AS affected_organizations
-    FROM activities a
-    JOIN plans p               ON p.id = a.plan_id AND p.deleted_at IS NULL
-    JOIN baseline_activities ba ON ba.source_activity_id = a.id
-    JOIN baselines b            ON b.id = ba.baseline_id AND b.deleted_at IS NULL
-                              AND b.plan_id = a.plan_id
-                              AND b.revision_snapshot_level = 'FULL'
-    WHERE a.deleted_at IS NULL
-      AND a.constraint_type = 'SNET'
-      AND a.constraint_date IS NOT NULL
-      AND a.early_start = a.constraint_date
-  `,
-};
-
-/**
  * **D-J, D-K — the conflicted placements, split by the engine's own REASON.**
  *
  * `visual_conflict` says a placement disagrees with the schedule; it does not say which way, and
@@ -615,9 +222,8 @@ const SNET_FULL_BASELINE_COVERAGE: DiagnosticEntry = {
  * | `LATER_THAN_BOUND` numerator               | 40.2     |
  *
  * Comfortably inside the 500 ms bar, and flat rather than estate-dependent: both are single-table
- * scans of `activities` with a join to `plans`, the same shape as D-D, and neither introduces the
- * join product that makes D-I's cost grow with placement density. If a press gets slow these are
- * still not the first entries to suspect — `inherited-day-factor` is, at a measured 240–245 ms.
+ * scans of `activities` with a join to `plans`, the same shape as D-D, and neither introduces a
+ * join product that grows with placement density.
  */
 const VISUAL_CONFLICT_DENOMINATOR = Prisma.sql`
   SELECT count(*) AS examined
@@ -699,7 +305,7 @@ const VISUAL_CONFLICT_LATER: DiagnosticEntry = {
  * or not.
  *
  * **D-M counts `DISTINCT a.id` through a join, never `EXISTS`** — gate S-4 refuses the semi-join's
- * `SELECT 1` (D-I's docblock), and the `DISTINCT` is load-bearing: a task holding two live
+ * `SELECT 1`, and the `DISTINCT` is load-bearing: a task holding two live
  * assignments produces two join rows and must count once, which the e2e fixture also holds.
  *
  * **Measured cost**, 2026-09-26, on a 102,000-activity diluted estate that is **fully resourced**
@@ -892,17 +498,10 @@ const HISTORY_ENTRIES_OVER_512_BYTES: DiagnosticEntry = {
   `,
 };
 
-/** The registry, in the order the panel renders it. D-A first, per CQ-1. */
+/** The registry, in the order the panel renders it. */
 export const DIAGNOSTICS = [
-  DAY_FACTOR_DIVERGENCE,
-  INHERITED_DAY_FACTOR,
   VISUAL_PLACEMENT_PLANS,
   VISUAL_PLACEMENT_ACTIVITIES,
-  BASELINES_OVER_PLACED_PLANS,
-  SNET_BINDING,
-  SNET_INERT,
-  SNET_UNCLASSIFIED,
-  SNET_FULL_BASELINE_COVERAGE,
   VISUAL_CONFLICT_EARLIER,
   VISUAL_CONFLICT_LATER,
   ZERO_DURATION_TASKS,

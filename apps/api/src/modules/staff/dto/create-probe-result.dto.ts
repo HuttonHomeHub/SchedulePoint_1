@@ -315,8 +315,7 @@ export class CreateProbeResultDto {
     nullable: true,
     format: 'uuid',
     description:
-      'Groups several presses into one SITTING. NULL means this reading was a single press — ' +
-      'true of every row written before this column existed and of every future single run. ' +
+      'Groups several presses into one SITTING. NULL means this reading was a single press. ' +
       '**Client-supplied, unlike `runId`**, because only the client knows that four presses were ' +
       'one sitting: the server holds no state across them and cannot observe it. What that grants ' +
       '(grouping rows the operator did not group) is strictly weaker than fabricating the numbers, ' +

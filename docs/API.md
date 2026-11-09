@@ -458,32 +458,16 @@ on `dayFactorMinutes` differs, both sides holding a float; its labels read `floa
 `critical · float 0 d (0 h)` or `float unknown`. A day-length edit that moves no date therefore moves no
 float and lists nothing.
 
-### The placement migration report (one-planning-surface M-I)
+### Removed in 1.1.0: the placement migration report
 
-`GET …/plans/:planId/placement-migration` — **any member** of the organisation
-(`plan:read` + `activity:read`), org-scoped with the uniform anti-IDOR **404**.
-
-A one-time SQL migration converted the constraints a drag had written into hand-placements, on the
-plans that carried them. The act is **irreversible**, and `PATCH …/activities/:activityId` is
-classified `PLAN_CONTENT` in the audit census — permanently excluded under ADR-0073 — so nothing in
-`audit_events` will ever record it. This route is the only thing that can say what happened.
-
-`{ planId, count, rows }`, oldest first. Each row carries the activity's id, its code and name **as
-they stood at migration time** (never refreshed by a rename), the removed `priorConstraintType` /
-`priorConstraintDate`, a `priorVisualStart` that is expected null on every row, and a `migratedAt`
-shared by the whole batch. `activityId` is a plain correlation id with **no foreign key** — the row
-survives the activity being deleted, which is when it is most wanted.
-
-**Deliberately unpaginated**, and the exemption is noted here per the house rule below: the rows are
-written once by a schema migration and by nothing else, so a plan's count is fixed at that instant
-and can never grow. A cursor would be a contract with no subject. `count` is sent anyway, redundant
-with `rows.length` today, so the first cap added cannot silently turn the array's length into a
-different quantity for a client that had been reading it as the total.
-
-It reports only what **changed**. Three classes of start-no-earlier-than constraint were left alone
-— inert, unclassified, and any activity already carrying a placement — and they are absent because
-nothing happened to them. Their estate-wide classification belongs to the ADR-0140 staff diagnostics
-(`snet-inert`, `snet-unclassified`), which are addressed to an operator rather than to a planner.
+`GET …/plans/:planId/placement-migration` **no longer exists** and answers 404 from the router. It
+listed the constraints a one-time SQL migration had converted into hand-placements on a database
+upgraded from before that migration; the 1.1 image starts from a new database
+([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md) D6), so
+there is nothing for it to report, and its table `placement_migrations` is gone. This is a
+**one-time exception** to the 1.0 promise, taken with the same decision as the organisation export's
+format 3.0 (`ORGANISATION_EXPORT_FORMAT.md`), which dropped the `records-placement-migrations` file
+with it. The 1.0 behaviour is at tag `api-v1.0.0`.
 
 ### Cross-plan dependencies (ADR-0045)
 

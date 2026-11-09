@@ -4,18 +4,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 /**
  * **M-A — the placement schema's two UNGATED decisions, asserted against a real database.**
  *
- * One-planning-surface M-A ships dark: three migrations add columns and a table, and nothing
+ * One-planning-surface M-A ships dark: three migrations added columns, and nothing
  * computes or reads any of them. So this file deliberately does not restate the whole shape —
  * **it asserts only what no other gate can see.**
  *
  * **What the drift check already covers, measured rather than assumed** (2026-09-20, against this
- * repository's own `prisma:check-drift` command). A raw-SQL `CREATE INDEX` on `remaining_float` and
- * a raw-SQL `CREATE UNIQUE INDEX` on `placement_migrations(plan_id, activity_id)` were added by
- * hand and `prisma migrate diff --from-url … --to-schema-datamodel --exit-code` reported both
- * (`[-] Removed index on columns (remaining_float)`, `[-] Removed unique index …`) and exited **2**.
- * So the migrations' "no index" and "no unique constraint" decisions are gated, and asserting them
- * here would be decoration. They are named so the next reader does not add them back as though
- * nothing watched.
+ * repository's own `prisma:check-drift` command). A raw-SQL `CREATE INDEX` on `remaining_float`
+ * added by hand was reported (`[-] Removed index on columns (remaining_float)`) and exited **2**, so
+ * the "no index" decision is gated and asserting it here would be decoration. (The table that
+ * shared that run, `placement_migrations`, left the schema in 1.1.0 with ADR-0215 D6.)
  *
  * **What it CANNOT see is a CHECK constraint** — the same run reported the hand-added
  * `ck_probe_rf` **not at all**, which is this repository's documented position (`docs/DATABASE.md`:

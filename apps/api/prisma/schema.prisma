@@ -68,9 +68,11 @@ model Account {
   id                    String    @id
   accountId             String    @map("account_id")
   providerId            String    @map("provider_id")
-  // Better Auth 1.7 scopes account identity by issuer. The value is always written explicitly by
-  // the library (`local:${encodeURIComponent(providerId)}`); the database default exists only so a
-  // rollback to a pre-1.7 image can still INSERT — see 20260823120000_account_issuer.
+  // Added for Better Auth 1.7.0–1.7.2, which scoped account identity by issuer
+  // (20260823120000_account_issuer, ADR-0107). From 1.7.3 the library has no `issuer` field and
+  // never writes it (1.7.14: `linkAccount` in sign-up.mjs passes userId/providerId/accountId/
+  // password only), so the DEFAULT is now what every sign-up INSERT relies on, not a rollback aid.
+  // Do not drop it: fresh-start-1-1 tidy T7 was withdrawn for exactly this reason.
   issuer                String    @default("local:credential")
   userId                String    @map("user_id")
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -125,7 +127,7 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id                   String                  @id @default(uuid(7)) @db.Uuid
+  id                   String                 @id @default(uuid(7)) @db.Uuid
   name                 String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
@@ -133,12 +135,12 @@ model Organization {
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
   slug                 String
-  version              Int                     @default(1)
-  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy            String?                 @map("created_by")
-  updatedBy            String?                 @map("updated_by")
-  deletedAt            DateTime?               @map("deleted_at") @db.Timestamptz(3)
+  version              Int                    @default(1)
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy            String?                @map("created_by")
+  updatedBy            String?                @map("updated_by")
+  deletedAt            DateTime?              @map("deleted_at") @db.Timestamptz(3)
   members              OrgMember[]
   invitations          Invitation[]
   // Audit events scoped to this organisation (ADR-0072). NULLABLE on the child and
@@ -202,21 +204,6 @@ model Organization {
   // never client input — the PlanLock/Note pattern), purely as the tenant scope tag for
   // scoped audit reads; the row itself is owned by its plan.
   planShares           PlanShare[]
-  // The durable record of drag-created constraints converted to hand-placements
-  // (one-planning-surface §4.6). organization_id is denormalised from the plan (copied by
-  // the migration inside its transaction, never client input — the PlanLock/PlanShare
-  // pattern), purely as the tenant scope tag for the plan-scoped report read; the row
-  // itself is owned by its plan and dies with it by ON DELETE CASCADE.
-  placementMigrations  PlacementMigration[]
-  // The record of finish-milestone placements re-encoded for the end-of-day rule
-  // (finish-milestone-date M2-T3). Same ownership as placementMigrations: the tenant scope
-  // tag is copied from the plan, and the row dies with its plan.
-  fmDateMigrations     FmDateMigration[]
-  // The record of cross-plan lags re-encoded from `days × 1440` to working minutes on the
-  // resolved lag calendar (cross-plan-day-boundary M2-T2). The tenant scope tag is copied from
-  // the link; the row dies with the link's home (successor) plan. `xplan` only keeps the field
-  // inside this block's column width, as `fmDateMigrations` does.
-  xplanLagMigrations   CrossPlanLagMigration[]
   // Per-activity change history (ADR-0174). organization_id is copied from the activity row
   // inside the recording transaction, never from the request — the ActivityStep pattern.
   activityHistory      ActivityHistoryEntry[]
@@ -1113,72 +1100,54 @@ model Plan {
   deletedAt                             DateTime?               @map("deleted_at") @db.Timestamptz(3)
   deleteBatchId                         String?                 @map("delete_batch_id") @db.Uuid
 
-  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Restrict)
-  calendar            Calendar?               @relation(fields: [calendarId], references: [id], onDelete: Restrict)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  calendar          Calendar?             @relation(fields: [calendarId], references: [id], onDelete: Restrict)
   // The swimlane-source code type (see swimlaneCodeTypeId). ON DELETE RESTRICT closes a cycle with
   // code_types.plan_id, so every hard-delete path clears this pointer before deleting code types
   // (database-design §5.7; the expiry census exempts Plan→CodeType for that reason). ON UPDATE
   // RESTRICT: plans.id is part of the key. Do NOT `include` it: a to-one include is outside the
   // ADR-0172 gate.
-  swimlaneCodeType    CodeType?               @relation("PlanSwimlaneCodeType", fields: [id, swimlaneCodeTypeId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
+  swimlaneCodeType  CodeType?             @relation("PlanSwimlaneCodeType", fields: [id, swimlaneCodeTypeId], references: [planId, id], onDelete: Restrict, onUpdate: Restrict)
   // This plan's P6 activity code types. RESTRICT; hard-deleted only with the plan (expiry) or by
   // import compensation, after the pointer above is cleared.
-  codeTypes           CodeType[]              @relation("PlanCodeTypes")
-  activities          Activity[]
+  codeTypes         CodeType[]            @relation("PlanCodeTypes")
+  activities        Activity[]
   // Dependencies contained in this plan (denormalised plan_id = both endpoints' plan).
-  dependencies        ActivityDependency[]
+  dependencies      ActivityDependency[]
   // Live cross-plan (inter-project) edges incident on this plan (M2, ADR-0045). Two
   // named relations disambiguate the two plan FKs on CrossPlanDependency:
   // `crossPlanOutgoing` are the edges where this plan is the PREDECESSOR (feeds a
   // downstream plan), `crossPlanIncoming` where it is the SUCCESSOR (gated BY an
   // upstream plan — the edge's home per ADR-0045 CQ-2). Both FKs are RESTRICT: a
   // schedule edge is never cascade-deleted; soft-delete + restore is service-owned.
-  crossPlanOutgoing   CrossPlanDependency[]   @relation("CrossPlanDependencyPredecessorPlan")
-  crossPlanIncoming   CrossPlanDependency[]   @relation("CrossPlanDependencySuccessorPlan")
+  crossPlanOutgoing CrossPlanDependency[] @relation("CrossPlanDependencyPredecessorPlan")
+  crossPlanIncoming CrossPlanDependency[] @relation("CrossPlanDependencySuccessorPlan")
   // Plan-of-record snapshots captured from this plan (M7, ADR-0025). At most one is
   // active at a time (partial unique in the migration). FK is RESTRICT; baseline
   // soft-delete + cascade is service-owned (HierarchyLifecycleService).
-  baselines           Baseline[]
+  baselines         Baseline[]
   // The (optional) edit-lock row for this plan (ADR-0028). 1:1 — PlanLock's PK IS the
   // plan id, so presence = someone holds the pen, absence = free. FK is ON DELETE
   // CASCADE (the lock is ephemeral state owned by the plan, not a soft-deleted domain
   // record), so a plan hard-purge removes it and is never blocked by a stale lock.
-  planLock            PlanLock?
+  planLock          PlanLock?
   // Threaded notes (M1, ADR-0046). Both PLAN notes (parent = this plan) AND ACTIVITY
   // notes (parent = an activity IN this plan) carry this plan_id — the latter as a
   // DENORMALISED cascade key — so the plan-cascade sweep is ONE updateMany by plan_id
   // and no note is double-counted. FK is RESTRICT; note soft-delete/restore is
   // service-owned (HierarchyLifecycleService, Task 1.4).
-  notes               Note[]
+  notes             Note[]
   // External-Guest read-only share links for THIS plan (Stage F, ADR-0051). A plan may
   // have many independently-revocable links. FK is RESTRICT; the plan-cascade soft-delete
   // sweeps its live links into the plan's delete_batch_id (HierarchyLifecycleService,
   // F-M1 Task 4) so a deleted plan's links stop resolving. Read-only / non-scheduling —
   // the CPM engine never reads it.
-  planShares          PlanShare[]
-  // The record of this plan's one-time placement migration — one row per drag-created
-  // SNET constraint that was converted into a `visual_start` (one-planning-surface
-  // §4.6 / US-9). FK is ON DELETE **CASCADE**, unlike every soft-deleted sibling above:
-  // the row is write-once with no `deleted_at`, so it has no soft-delete cascade to join
-  // and nothing to restore, and cascade is the shape the DMMF completeness census in
-  // `hierarchy-expiry.structural.spec.ts` excludes because the database handles it. An
-  // EMPTY list is not "unmigrated" — it means nothing on this plan was converted, which
-  // is also true of every plan created after the migration ran. Non-scheduling: the CPM
-  // engine never reads it.
-  placementMigrations PlacementMigration[]
-  // Finish-milestone placements this plan had re-encoded one day earlier when the engine began
-  // reading a finish milestone's date as the end of that day (finish-milestone-date M2-T3).
-  // ON DELETE CASCADE, for the placementMigrations reason. Non-scheduling.
-  fmDateMigrations    FmDateMigration[]
-  // Cross-plan lags whose home is this plan (the successor activity's plan), re-encoded to
-  // working minutes by cross-plan-day-boundary M2-T2. ON DELETE CASCADE, for the same reason.
-  // Non-scheduling: nothing in the application reads it.
-  xplanLagMigrations  CrossPlanLagMigration[]
+  planShares        PlanShare[]
   // This plan's hand-made swimlanes (swimlanes schema-design §3.4). RESTRICT FK; swimlane
   // soft-delete is service-owned and the plan cascade stamps them into the plan's batch.
   // Hard-deleted only by plan expiry and import compensation, after activities.
-  swimlanes           Swimlane[]
+  swimlanes         Swimlane[]
 
   // Plan name is unique per PROJECT among ACTIVE rows — partial unique
   // (uq_plans_project_name ON (project_id, name) WHERE deleted_at IS NULL), raw
@@ -3224,313 +3193,6 @@ model PlanShare {
   // indexed on its own for its FK + org-scoped audit reads.
   @@index([organizationId])
   @@map("plan_shares")
-}
-
-// ---------------------------------------------------------------------------
-// PlacementMigration — the durable record of ONE drag-created constraint being
-// converted into a hand-placement (one-planning-surface §4.6 / US-2 / US-9,
-// CQ-7 = "strip, on a four-class test"; FC-10 clauses B and D).
-//
-// WHY IT EXISTS. Before this epic a drag in Early mode wrote a binding
-// SNET (`start no earlier than`). The collapse strips those once: where the constraint was
-// BINDING (`early_start = constraint_date`) the row's `visual_start` becomes the
-// constraint's date and the constraint is cleared, so THE BAR DOES NOT MOVE and the
-// downstream float it was never genuinely owed comes back. That is an IRREVERSIBLE
-// edit to customer data, and it is UNAUDITABLE BY CONSTRUCTION: `PATCH …/activities/
-// :activityId` is classified `REASONS.PLAN_CONTENT` (audit-coverage.structural.spec
-// .ts:264), permanently excluded from `audit_events` under ADR-0073 — so nothing in
-// the audit log will ever record a stripped constraint. This table is the only record
-// there will be.
-//
-// ITS SECOND JOB IS DIAGNOSTIC, AND ON A DISPOSABLE ESTATE THAT JOB IS WORTH MORE,
-// NOT LESS. FC-10 clause B's unattended bound was withdrawn (product owner,
-// 2026-09-20: every plan on the deployed installation is a test plan). What survives
-// the withdrawal is this table, because it is how anybody finds out the strip did
-// something nobody predicted — a migration with no record turns a surprising result
-// into a MYSTERY INSTEAD OF A DIFF. Nothing here is safety work that the withdrawal
-// made redundant.
-//
-// WRITE-ONCE: NO `version`, NO `created_at`/`updated_at`, NO `deleted_at`/
-// `delete_batch_id`. Soft delete is this schema's default for customer data, so the
-// omission is stated rather than left to read as an oversight (docs/DATABASE.md
-// "Soft deletes"). The `perf_probe_results` / `mail_events` reasoning applies verbatim:
-// the producer writes each row exactly once inside the migration transaction and
-// nothing ever edits one, so `created_at` would equal `migrated_at` on every row and
-// `version` would guard a concurrent edit that cannot happen. Soft delete is worse than
-// absent here — a record of an irreversible act that the product can make disappear is
-// not a record. Rows die exactly once, with their plan, by the CASCADE below.
-//
-// ORG-SCOPED CUSTOMER CONTENT, READ BY A MEMBER — not operational telemetry, which is
-// why it carries an `organization_id` and sits in this section rather than beside
-// `csp_reports`. Its read is `GET …/plans/:planId/placement-migration` (M-I-T2), the
-// dock notice's source, and the reason this is not a write-only table.
-//
-// IT IS DELIBERATELY OUTSIDE `RETENTION_TABLES` AND TAKES NO WINDOW (CQ-8). That set
-// has never contained organisation-scoped customer content, and
-// `retention-boundary.structural.spec.ts:55-57` asserts it BY EQUALITY — so this is a
-// decision written down, not an omission. The Cascade FK already gives the row the only
-// lifecycle it should have: it lives exactly as long as the plan whose history it
-// describes, and the ADR-0096 expiry that hard-deletes that plan takes it too.
-//
-// NON-SCHEDULING — the CPM engine never reads it, so the ADR-0034 recalculation parity
-// gate is untouched by construction.
-//
-// DARK at M-A: the table exists and is described; M-I writes it and M-I-T2 reads it.
-// ---------------------------------------------------------------------------
-model PlacementMigration {
-  id String @id @default(uuid(7)) @db.Uuid
-
-  // Denormalised tenant scope tag, copied from the plan (never client input) — the
-  // PlanLock/PlanShare/Note pattern. RESTRICT, matching every sibling; inert in
-  // practice because plan → org RESTRICT fires first.
-  organizationId String @map("organization_id") @db.Uuid
-
-  /// The plan whose constraints were stripped. **ON DELETE CASCADE, and the choice is
-  /// derived rather than preferred — it is the one shape that keeps this table out of a
-  /// hand-maintained list.**
-  ///
-  /// `hierarchy-expiry.structural.spec.ts` derives its completeness census FROM THE
-  /// PRISMA DMMF, and it only looks at to-one relations whose `relationOnDelete` is
-  /// `Restrict`. So the three candidate shapes behave differently in a way that is not
-  /// obvious: a RESTRICT FK here would REQUIRE `hierarchy-expiry.runner.ts` to delete
-  /// this table before `plans` (the census would fail until it did — which is the census
-  /// working); NO FK AT ALL would be STRUCTURALLY INVISIBLE to that census while ADR-0096's
-  /// expiry hard-deletes the plan out from under these rows, orphaning org-scoped customer
-  /// content forever with nothing failing anywhere; and CASCADE is the shape the census
-  /// explicitly excludes BECAUSE THE DATABASE ALREADY HANDLES IT — the row dies with its
-  /// plan, and no hand-maintained list grows. `plan_locks` is the shipped precedent
-  /// (`hierarchy-expiry.runner.ts:170-171` names it as going by cascade).
-  ///
-  /// It is a deliberate DEPARTURE from `PlanShare`, whose own docblock explains why its
-  /// plan FK is RESTRICT where `PlanLock`'s is CASCADE: "a link is a preserved domain
-  /// record, a lock is not". The discriminator there is soft-delete participation — a
-  /// share must survive a plan's soft delete and come back with it, so a DB cascade would
-  /// destroy what the restore needs. THIS ROW HAS NO SOFT DELETE TO PARTICIPATE IN: it is
-  /// write-once, it is never restored, and it describes a one-time act on a plan. When the
-  /// plan is permanently gone there is nothing left for the record to be about.
-  planId String @map("plan_id") @db.Uuid
-
-  /// The activity whose constraint was stripped — a PLAIN CORRELATION UUID with NO
-  /// FOREIGN KEY, on ADR-0025's `source_activity_id` leg: a record that referenced a live
-  /// row would either block that row's deletion or rot with it, and **the moment this
-  /// record is most wanted is after the activity is gone** — "what happened to the bar
-  /// that used to be here?" is precisely the question a deleted activity raises.
-  ///
-  /// It stands on that leg ALONE. The RESTRICT-trap justification that used to accompany
-  /// it is WITHDRAWN: `docs/TECH_DEBT.md` #253 records the ADR-0126 breakage it came from
-  /// as TEST TEARDOWN, since fixed by `clearBaselineTree` — never a production hazard, and
-  /// gone. Carrying the stale reason is exactly what would lead a reader to extend non-FK
-  /// to `plan_id` above, which is the defect that docblock exists to prevent.
-  activityId String @map("activity_id") @db.Uuid
-
-  /// The activity's code and name AS THEY STOOD when the constraint was stripped —
-  /// denormalised on the `audit_events.subject_label` rule, because after a hard delete
-  /// an id names nothing and the report could otherwise only say "N activities". Shapes
-  /// copied EXACTLY from the live columns (`code` nullable, `name` not), like
-  /// `baseline_activities.code`/`.name`: a record of a value must be able to hold every
-  /// value its source could. They are a FROZEN COPY, never refreshed — a rename after the
-  /// migration does not reach back, exactly as ADR-0025 intends.
-  activityCode String? @map("activity_code")
-  activityName String  @map("activity_name")
-
-  /// What was there BEFORE the write — the whole point of the record, and the thing
-  /// nothing else in the product will remember.
-  ///
-  /// `priorConstraintType`/`priorConstraintDate` are NOT NULL, and that is structural
-  /// rather than optimistic: A ROW EXISTS ONLY BECAUSE A CONSTRAINT WAS REMOVED, so both
-  /// are known at write time. Being NOT NULL is also what makes the pair CHECK its
-  /// nullable siblings need (`ck_baseline_activities_constraint_pair`) unnecessary here —
-  /// the pair cannot be half-set. The enum rather than TEXT so the database refuses a
-  /// value the live column could not have held; the strip's `WHERE` names `SNET`
-  /// and only that (non-SNET constraints are never touched,
-  /// spec §4.6), but recording the type means a future widening says WHICH kind it took.
-  ///
-  /// `priorVisualStart` IS EXPECTED TO BE NULL ON EVERY ROW, AND A NON-NULL VALUE IS A
-  /// FINDING. The four-class test EXCLUDES any activity already carrying a `visual_start`
-  /// (spec §4.6 "Already placed" → leave, count, report), precisely because `visual_start`
-  /// is accepted regardless of mode (`activities.service.ts:388`, `:526-528`) so a row can
-  /// carry a stale placement AND a binding SNET, and the naive `WHERE` would overwrite the
-  /// placement. This column records the value the write was about to replace WHATEVER IT
-  /// WAS — so if that exclusion ever fails, the destroyed placement is in a row rather
-  /// than gone. It is the diagnostic half of this table doing its job, and a reader who
-  /// finds the column always NULL and deletes it as dead weight has removed the evidence
-  /// for the one failure mode nobody would otherwise be able to reconstruct.
-  ///
-  /// `@db.Date` — calendar days, copying the live `constraint_date`/`visual_start`
-  /// exactly (ADR-0023).
-  priorConstraintType ConstraintType @map("prior_constraint_type")
-  priorConstraintDate DateTime       @map("prior_constraint_date") @db.Date
-  priorVisualStart    DateTime?      @map("prior_visual_start") @db.Date
-
-  /// When the strip ran. `DEFAULT CURRENT_TIMESTAMP` deliberately, NOT a service clock:
-  /// inside a transaction that is the TRANSACTION START time, so every row written by one
-  /// batch shares one instant and the batch is identifiable without a correlation column.
-  /// (The `csp_reports` docblock records the opposite case — two clocks a millisecond
-  /// apart across two branches of one upsert — which is what makes stamping this from a
-  /// single database clock worth stating.) It is also why the index below carries `id`
-  /// rather than this column: `migrated_at` cannot order rows WITHIN a batch.
-  ///
-  /// An instant, so `@db.Timestamptz(3)` — not `@db.Date` like the three frozen values
-  /// above, which are calendar days because the schedule is.
-  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  // TWO indexes, and NO unique constraint anywhere.
-  //
-  //   * (plan_id, id) — the report's read (`GET …/plans/:planId/placement-migration`,
-  //     every row for one plan, deterministically ordered because `id` is UUID v7 and
-  //     `migrated_at` is one instant per batch) AND the plan FK on its leftmost prefix.
-  //     **The FK half is not discretionary**: ON DELETE CASCADE has to FIND the children,
-  //     so without it every plan hard-delete sequentially scans this table — the
-  //     `idx_activities_parent_id_fk` shape, which docs/DATABASE.md records costing 3m47s
-  //     for one plan, and which would land inside the ADR-0096 expiry that catches, logs
-  //     `hierarchy_expiry.permanent_failure` and retries hourly forever.
-  //   * (organization_id) — the org FK (RESTRICT) and org-scoped IDOR loads, like every
-  //     sibling.
-  //
-  // No partial index: there is no soft delete, no nullable leading column and no
-  // `delete_batch_id`, so every row is in the read set and nothing here needs a WHERE.
-  //
-  // **NO UNIQUE ON (plan_id, activity_id), AND THE REFUSAL IS THE POINT.** One activity
-  // is stripped at most once by a one-time migration, so a unique index would be TRUE
-  // today — and a unique index does not assert a fact, it REFUSES A ROW. On a table whose
-  // second job is telling us the strip did something nobody predicted, refusing the
-  // second row turns the surprise this table exists to capture into a failed migration
-  // with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim (a refusal
-  // on that table was "a silent delete … on the one table whose purpose is to tell us
-  // about things we did not anticipate"), and it is why the only constraints here are the
-  // two foreign keys and the primary key.
-  @@index([planId, id])
-  @@index([organizationId])
-  @@map("placement_migrations")
-}
-
-/// The record of one finish milestone whose stored placement was moved one day earlier when the
-/// engine began reading a FINISH_MILESTONE's `visual_start` as the END of that day
-/// (finish-milestone-date M2-T3, spec §4; migration
-/// 20260923120000_finish_milestone_end_of_day_placements). The diamond did not move; only the
-/// stored date did. Written once by that migration and never by the application; there is no
-/// reader. It exists for the compensating reverse (docs/DEPLOYMENT.md) and as the only record of
-/// the rewrite, since activity content edits are excluded from `audit_events` (ADR-0073).
-///
-/// Deliberately NOT a row in `placement_migrations`: that table's rows mean "a constraint was
-/// removed" (its prior constraint columns are NOT NULL for that reason) and its one reader is the
-/// planner-facing dock notice about removed constraints.
-///
-/// Write-once like `placement_migrations`: no `version`, no `created_at`/`updated_at`, no soft
-/// delete — a record of a one-time act that the product could hide would not be a record.
-///
-/// `Fm` = finish milestone. The model name is short only so the back-relation fields on
-/// `Organization` and `Plan` fit their blocks' existing column widths; the table name is the
-/// descriptive one.
-model FmDateMigration {
-  id String @id @default(uuid(7)) @db.Uuid
-
-  /// Tenant scope tag copied from the plan by the migration, never client input. RESTRICT,
-  /// matching every sibling; inert in practice because organisations are never hard-deleted.
-  organizationId String @map("organization_id") @db.Uuid
-
-  /// ON DELETE CASCADE: the row dies with its plan, which keeps this table out of the
-  /// hierarchy-expiry delete list (its census only follows RESTRICT edges). The
-  /// `placement_migrations` reasoning, verbatim.
-  planId String @map("plan_id") @db.Uuid
-
-  /// A plain correlation UUID with no foreign key, on ADR-0025's `source_activity_id` leg: the
-  /// record must outlive the activity it describes.
-  activityId String @map("activity_id") @db.Uuid
-
-  /// The activity's code and name as they stood at migration time — a frozen copy, so the
-  /// record still names something after a hard delete. Shapes copied from the live columns.
-  activityCode String? @map("activity_code")
-  activityName String  @map("activity_name")
-
-  /// The placement before the rewrite. The migration wrote `prior_visual_start - 1`. NOT NULL
-  /// because a row exists only for an activity that had a placement.
-  priorVisualStart DateTime @map("prior_visual_start") @db.Date
-
-  /// Transaction start time (`DEFAULT CURRENT_TIMESTAMP` inside the migration), so every row of
-  /// the run shares one instant.
-  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  // ONE index. (plan_id) is for the CASCADE: a plan hard-delete must find these rows, and without
-  // it every ADR-0096 expiry would sequentially scan this table. There is no application read, so
-  // no second column. No (organization_id) index: organisations are never hard-deleted and their
-  // ids never change, so the RESTRICT check on that FK never runs. No unique constraint, for the
-  // placement_migrations reason: a refusal would fail the migration and the API's boot.
-  @@index([planId])
-  @@map("finish_milestone_date_migrations")
-}
-
-/// The record of one cross-plan link whose `lag_minutes` was re-encoded from the old unit
-/// (`lagDays × 1440`, whatever the calendar) to working minutes on the link's resolved lag calendar
-/// (cross-plan-day-boundary M2-T2, spec §4.4; migration 20260926120000_cross_plan_lag_working_minutes).
-/// Written once by that migration and never by the application; there is no reader. It exists for
-/// three things: the compensating reverse in docs/DEPLOYMENT.md, M2-T3's differential check of the
-/// SQL's factor against the TypeScript resolver's, and as the only record of the rewrite.
-///
-/// **Every link the statement resolved has a row, including links whose value did not change**
-/// (factor 1440, `TWENTY_FOUR_HOUR`, zero lag). Two readers depend on that. The differential exists
-/// to catch an eight-hour link wrongly resolved to 1440, which would be left unchanged and so, if
-/// unchanged links went unrecorded, would leave the check nothing to compare. And the reverse reads
-/// "no row" as "created after the release": a pre-release link skipped here would be converted a
-/// second time.
-///
-/// Write-once like `finish_milestone_date_migrations`: no `version`, no `created_at`/`updated_at`,
-/// no soft delete. `xplanLagMigrations` is the back-relation on `Organization` and `Plan`.
-model CrossPlanLagMigration {
-  id String @id @default(uuid(7)) @db.Uuid
-
-  /// Tenant scope tag copied from the link by the migration, never client input. RESTRICT, matching
-  /// every sibling; inert in practice because organisations are never hard-deleted.
-  organizationId String @map("organization_id") @db.Uuid
-
-  /// The SUCCESSOR ACTIVITY's `plan_id` (the link's home plan, ADR-0045 CQ-2), read through the
-  /// activity and never from the link's denormalised `successor_plan_id` (spec B5). ON DELETE
-  /// CASCADE: the row dies with its plan, which keeps this table out of the hierarchy-expiry delete
-  /// list (its census follows RESTRICT edges only).
-  planId String @map("plan_id") @db.Uuid
-
-  /// The link's id, as a plain correlation UUID with **no foreign key**: the record must outlive a
-  /// hard-deleted link (ADR-0025's `source_activity_id` leg). **UNIQUE**, which diverges from the
-  /// precedent on purpose: the reverse's "no row ⇒ created after the release" selector needs exactly
-  /// one row per link. It cannot fire inside the migration (the table is created empty by the same
-  /// file, the statement runs once, and every join in it is at most one-to-one); the migration
-  /// header states the argument in full.
-  crossPlanDependencyId String @unique @map("cross_plan_dependency_id") @db.Uuid
-
-  /// The link's `lag_calendar` at migration time.
-  lagCalendar LagCalendarSource @map("lag_calendar")
-
-  /// The calendar the lag was resolved on. NULL for `TWENTY_FOUR_HOUR` (pinned at 1440) and for a
-  /// link with no calendar anywhere on its resolution path (1440 by default). No foreign key: the
-  /// record must outlive a deleted calendar.
-  lagCalendarId String? @map("lag_calendar_id") @db.Uuid
-
-  /// The day↔minute factor the conversion used (`calendars.hours_per_day_minutes`, or 1440).
-  dayFactorMinutes Int @map("day_factor_minutes")
-
-  /// `lag_minutes` before and after. Equal for a link the migration did not change.
-  priorLagMinutes Int @map("prior_lag_minutes")
-  newLagMinutes   Int @map("new_lag_minutes")
-
-  /// Transaction start time (`DEFAULT CURRENT_TIMESTAMP` inside the migration), so every row of the
-  /// run shares one instant.
-  migratedAt DateTime @default(now()) @map("migrated_at") @db.Timestamptz(3)
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Cascade)
-
-  // ONE plain index, (plan_id), for the CASCADE: a plan hard-delete must find these rows, and
-  // without it every ADR-0096 expiry would sequentially scan this table. No (organization_id)
-  // index: organisations are never hard-deleted and their ids never change, so the RESTRICT check
-  // on that FK never runs. The UNIQUE on cross_plan_dependency_id is declared on the field above.
-  @@index([planId])
-  @@map("cross_plan_lag_migrations")
 }
 
 // ---------------------------------------------------------------------------

@@ -76,7 +76,6 @@ const NOT_PLAN_AUTHORING = [
   'organizations',
   'overview',
   'perf-probe',
-  'placement-migration',
   'plan-actions',
   'projects',
   'recently-deleted',

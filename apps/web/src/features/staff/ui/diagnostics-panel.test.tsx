@@ -30,8 +30,8 @@ const result: StaffDiagnostics = {
   apiVersion: '0.63.0',
   diagnostics: [
     {
-      id: 'day-factor-divergence',
-      label: 'Day factor divergence (driving resource)',
+      id: 'visual-placement-activities',
+      label: 'Activities placed by hand',
       nature: 'retrospective',
       unit: 'activity',
       examined: 1284,
@@ -109,8 +109,8 @@ describe('DiagnosticsPanel', () => {
         { ...result.diagnostics[0]!, examined: 0, affected: 0, affectedPlans: 0 },
         {
           ...result.diagnostics[0]!,
-          id: 'inherited-day-factor',
-          label: 'Inherited',
+          id: 'zero-duration-tasks',
+          label: 'Zero-duration tasks',
           affected: 0,
           affectedPlans: 0,
         },
@@ -128,7 +128,7 @@ describe('DiagnosticsPanel', () => {
 
   /**
    * **D-12: a check with something to report is shown in full and the rest are one line**, and
-   * Copy still carries all of them. Verified red against the unconditional list of sixteen cards.
+   * Copy still carries all of them. Verified red against the unconditional list of cards.
    */
   it('shows a non-zero check in full and folds the zero ones behind a count', () => {
     queryState.data = {
@@ -142,7 +142,7 @@ describe('DiagnosticsPanel', () => {
 
     expect(screen.getByText('1 check found something')).toBeInTheDocument();
     expect(screen.getByText('1 check found nothing')).toBeInTheDocument();
-    expect(screen.getByText('Day factor divergence (driving resource)')).toBeInTheDocument();
+    expect(screen.getByText('Activities placed by hand')).toBeInTheDocument();
     expect(screen.queryByText('Quiet one')).not.toBeInTheDocument();
 
     const showAll = screen.getByRole('button', { name: 'Show all 2' });

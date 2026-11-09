@@ -13,7 +13,8 @@
   [ADR-0194](0194-an-organisations-export-is-a-promised-format-streamed-on-the-request.md) (the export file and
   columns listed in D6 are removed),
   [ADR-0107](0107-a-migration-a-pristine-database-cannot-test.md) D2 (the migration-proof specs go with the
-  migrations they proved),
+  migrations they proved; and, 2026-11-09, its sentence "1.7 always writes `issuer` explicitly" is corrected
+  — Better Auth never writes it, so the column's `DEFAULT` stays and schema-design T7 is withdrawn),
   [ADR-0025](0025-baselines-snapshot-and-variance.md) (amendments 2–7: "NONE is permanent" is moot on a fresh
   database),
   [ADR-0212](0212-a-plan-keeps-the-instant-beside-the-date.md) D4 (the freshness marker read for an older run goes
@@ -75,8 +76,9 @@ narrowed); variance `basis` value `NETWORK`; revision and cross-plan compare `da
 option this list first named, which is internal: it could only ever be `null`); `NOT_SNAPSHOTTED` as a
 not-assessable reason; `PlanEarnedValue.costPhasingApproximatedCount` and `floatNotComparableCount` on variance,
 revision compare and cross-plan compare (all four became constant `0`; the owner chose to remove them, Q-A); the route
-`GET /api/v1/organizations/:orgSlug/plans/:planId/placement-migration`; the organisation export file
-`records-placement-migrations`; the constant snapshot-level columns of the exported `baselines`; and the "empty
+`GET /api/v1/organizations/:orgSlug/plans/:planId/placement-migration`; the organisation export files
+`records-placement-migrations`, `records-finish-milestone-dates` and `records-cross-plan-lags` (the last two
+informational, their tables dropped with it; export format **3.0**); the constant snapshot-level columns of the exported `baselines`; and the "empty
 when calculated before 2.5" wording of `totalFloatMinutes` (spec §4.6 and the M3 inventory §6 together are the
 complete list). `docs/API.md`, the OpenAPI
 spec and `docs/ORGANISATION_EXPORT_FORMAT.md` (a new format version) change in the PR that removes each. No request

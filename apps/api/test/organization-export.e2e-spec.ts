@@ -22,8 +22,7 @@ import { resetThrottleCounters } from './throttle-reset';
  * ZIP read back with an independent reader (`yauzl`, which also checks every entry's CRC).
  *
  * The fixture is built through the public REST API (ADR-0066) wherever the API can make the row, and
- * directly only for the three `records-*` tables, which are written by one-off migrations and have no
- * route. Each test names the defect it guards: a test that only checked "some files exist" would pass
+ * directly only where no route writes the column. Each test names the defect it guards: a test that only checked "some files exist" would pass
  * for an export that leaked another organisation or dropped a table, so the completeness test compares
  * every file's rows to a count taken from the database by a different path than the export uses.
  */
@@ -444,39 +443,6 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
       },
     });
 
-    // — The three records written by one-off migrations (no route makes them). ---------------------
-    await prisma.placementMigration.create({
-      data: {
-        organizationId,
-        planId: chain.planId,
-        activityId: a.id,
-        activityName: 'Excavate',
-        priorConstraintType: 'SNET',
-        priorConstraintDate: new Date('2026-03-09T00:00:00.000Z'),
-      },
-    });
-    await prisma.fmDateMigration.create({
-      data: {
-        organizationId,
-        planId: chain.planId,
-        activityId: c.id,
-        activityName: 'Frame',
-        priorVisualStart: new Date('2026-03-16T00:00:00.000Z'),
-      },
-    });
-    const cross = await prisma.crossPlanDependency.findFirstOrThrow({ where: { organizationId } });
-    await prisma.crossPlanLagMigration.create({
-      data: {
-        organizationId,
-        planId: chain.planId,
-        crossPlanDependencyId: cross.id,
-        lagCalendar: 'PROJECT_DEFAULT',
-        dayFactorMinutes: 480,
-        priorLagMinutes: 960,
-        newLagMinutes: 960,
-      },
-    });
-
     return {
       admin,
       organizationId,
@@ -683,9 +649,6 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
         where,
       }),
       shares: await prisma.planShare.count({ where }),
-      'records-placement-migrations': await prisma.placementMigration.count({ where }),
-      'records-finish-milestone-dates': await prisma.fmDateMigration.count({ where }),
-      'records-cross-plan-lags': await prisma.crossPlanLagMigration.count({ where }),
       resources: await prisma.resource.count({ where }),
       assignments: await prisma.resourceAssignment.count({ where }),
       'activity-steps': await prisma.activityStep.count({ where }),
@@ -778,8 +741,8 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     ]);
     expect(
       jsonRows(files, 'json/baselines.json')
-        // Every capture now says SWIMLANE_TYPE (M4); only the code-sourced one names a type.
-        .filter((b) => b.codeSnapshotLevel === 'SWIMLANE_TYPE' && b.swimlaneCodeTypeId !== null)
+        // Only the code-sourced baseline names a type.
+        .filter((b) => b.swimlaneCodeTypeId !== null)
         .map((b) => b.swimlaneCodeTypeId),
     ).toEqual([type!.id]);
     expect(
@@ -1056,7 +1019,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(row.changes).toEqual({
       before: {},
       after: {
-        formatVersion: '2.5',
+        formatVersion: '3.0',
         files: EXPORT_FILES.length * 2,
         rows: manifest.files.filter((f) => f.kind === 'json').reduce((n, f) => n + f.rows, 0),
         bytes: raw.length,
@@ -1112,7 +1075,7 @@ describe.skipIf(!hasDatabase)('Organisation export (e2e)', () => {
     expect(rows[0]).toMatchObject({ outcome: 'FAILURE', actorUserId: admin.userId });
     expect((rows[0]!.changes as { after: Json }).after).toMatchObject({
       reason: 'client_aborted',
-      formatVersion: '2.5',
+      formatVersion: '3.0',
     });
 
     // The snapshot and its lock ended with the connection: the next export goes through.

@@ -2,7 +2,7 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 43
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 40
 > models built by 1 baseline migration — is the single source of truth for the data model.
 > The history before 1.1 is the git tag `api-v1.0.0` (ADR-0215).
 > See ADR-0008.
@@ -1903,243 +1903,32 @@ IS NULL OR expires_at > now()`) **AND** the referenced plan is itself active. An
   on create/list/revoke; returning the raw token **once** on create and **never** in the
   list; and the guest guard's uniform-404 resolution + live-plan re-check.
 
-### PlacementMigration: the record of a stripped constraint (one-planning-surface M-A/M-I)
+### Records of one-time data migrations before 1.1 (history)
 
-`placement_migrations` is the durable record of **one drag-created constraint being converted into
-a hand-placement** (one-planning-surface §4.6 / US-2 / US-9; CQ-7 and CQ-8 answered by the product
-owner 2026-09-20). Before that epic a drag in Early mode wrote a binding `SNET`; the collapse strips
-those once, on a four-class test, and where the constraint was **binding**
-(`early_start = constraint_date`) the activity's `visual_start` becomes the constraint's date and
-the constraint is cleared — so **the bar does not move** and the downstream float it was never
-genuinely owed comes back.
+Until 1.0 the schema carried three write-once tables, each the only record of a one-time rewrite of
+customer data that `audit_events` does not cover (activity and link content edits are excluded under
+ADR-0073). The 1.1 baseline (ADR-0215) dropped all three (`docs/specs/fresh-start-1-1/schema-design.md`
+§3 T1, T2): on a database the baseline builds, the rewrite they recorded has nothing to act on, so
+the tables could only ever be empty. Their design, measurements, compensating reverses and tests are
+at git tag `api-v1.0.0` (this file, `docs/DEPLOYMENT.md`, and the three migrations named below).
 
-**It exists because that edit is unauditable by construction.** `PATCH …/activities/:activityId` is
-classified `REASONS.PLAN_CONTENT` (`audit-coverage.structural.spec.ts:264`), permanently excluded
-from `audit_events` under ADR-0073's content-edit rule. **Nothing in the audit log will ever record
-a stripped constraint.** This table is the only record there will be, and its second job —
-diagnostic — is what survived FC-10 clause B's withdrawn bound: it is how anybody finds out the
-strip did something nobody predicted, because a migration with no record turns a surprising result
-into a **mystery instead of a diff**.
+- **`placement_migrations` (`PlacementMigration`)** recorded each drag-created `SNET` constraint that
+  the ADR-0148 collapse (`20260921120000_strip_drag_constraints`) converted into a `visual_start`.
+  Its reader, `GET …/plans/:planId/placement-migration`, and the dock notice it fed were removed with
+  it (one-time exception, ADR-0215 D6), as was the export file `records-placement-migrations`.
+- **`finish_milestone_date_migrations` (`FmDateMigration`)** recorded each finish-milestone placement
+  moved one day earlier by `20260923120000_finish_milestone_end_of_day_placements`. **What still
+  holds:** the engine reads a `FINISH_MILESTONE`'s stored dates as the **end** of the day given
+  (`finishMilestoneDateInstant`, `engine/instants.ts`; ADR-0155, `docs/TECH_DEBT.md` #381).
+- **`cross_plan_lag_migrations` (`CrossPlanLagMigration`)** recorded each cross-plan link whose
+  `lag_minutes` `20260926120000_cross_plan_lag_working_minutes` re-encoded from `days × 1440`.
+  **What still holds:** `cross_plan_dependencies.lag_minutes` means what `dependencies.lag_minutes`
+  means, working minutes on the link's resolved lag calendar (ADR-0068 §4, ADR-0161;
+  `docs/TECH_DEBT.md` #385).
 
-- **Write-once: no `version`, no `created_at`/`updated_at`, no `deleted_at`/`delete_batch_id`.**
-  Soft delete is this schema's default for customer data, so the omission is **said** rather than
-  left to read as an oversight. The `perf_probe_results`/`mail_events` reasoning applies verbatim:
-  the producer writes each row exactly once inside the migration transaction and nothing edits one,
-  so `created_at` would equal `migrated_at` on every row and `version` would guard an edit that
-  cannot happen. Soft delete would be **worse than absent** — a record of an irreversible act that
-  the product can make disappear is not a record.
-- **`plan_id` FK is `ON DELETE CASCADE`**, and the shape is derived rather than preferred.
-  `hierarchy-expiry.structural.spec.ts`'s completeness census reads the **Prisma DMMF** and
-  considers only to-one relations whose `relationOnDelete` is `Restrict`. So `RESTRICT` here would
-  **require** `hierarchy-expiry.runner.ts` to delete this table before `plans` (and the census would
-  fail until it did); **no FK at all** would be structurally **invisible** to that census while
-  ADR-0096's expiry hard-deletes the plan out from under these rows, orphaning org-scoped customer
-  content forever with nothing failing anywhere; and **CASCADE** is the shape the census explicitly
-  excludes _because the database already handles it_ — the row dies with its plan and no
-  hand-maintained list grows (`plan_locks` is the shipped precedent). It is a deliberate departure
-  from `plan_shares`, whose plan FK is `RESTRICT` **because a share participates in the soft-delete
-  cascade and must come back with its plan**. This row has no soft delete to participate in.
-- **`activity_id` has no foreign key** — a plain correlation UUID on ADR-0025's
-  `source_activity_id` leg. The moment this record is most wanted is **after the activity is gone**
-  ("what happened to the bar that used to be here?"), so a reference that either blocked the delete
-  or rotted with it is the wrong shape. It stands on that leg **alone**: the RESTRICT-trap
-  justification is withdrawn — `docs/TECH_DEBT.md` #253 records that ADR-0126 breakage as **test
-  teardown**, since fixed by `clearBaselineTree`, never a production hazard. Carrying the stale
-  reason is what would lead a reader to extend non-FK to `plan_id`.
-- **`organization_id` FK is `RESTRICT`**, denormalised from the plan by the migration inside its own
-  transaction, never client input — the `PlanLock`/`PlanShare`/`Note` pattern, purely as the tenant
-  scope tag for the plan-scoped read. Inert in practice, because plan → org `RESTRICT` fires first.
-- **A denormalised `activity_code` and `activity_name`** — the `audit_events.subject_label` rule:
-  after a hard delete an id names nothing and the report could otherwise only say "N activities".
-  Shapes copied exactly from the live columns (code nullable, name not). A frozen copy, never
-  refreshed.
-- **`prior_visual_start` is expected to be NULL on every row, and a non-NULL value is a finding.**
-  The four-class test **excludes** an activity already carrying a `visual_start`, because
-  `visual_start` is accepted regardless of mode so a row can carry a stale placement **and** a
-  binding `SNET`, and the naive `WHERE` would overwrite the placement. This column records the value
-  the write was about to replace **whatever it was** — so if that exclusion ever fails, the
-  destroyed placement is in a row rather than gone. A reader who finds it always NULL and deletes it
-  as dead weight has removed the evidence for the one failure mode nobody could otherwise
-  reconstruct.
-- **`prior_constraint_type`/`prior_constraint_date` are `NOT NULL`**, structurally rather than
-  optimistically: a row exists **only because a constraint was removed**, so both are known at write
-  time — which is also what makes the pair CHECK its nullable siblings need
-  (`ck_baseline_activities_constraint_pair`) unnecessary here. The pair cannot be half-set.
-- **`migrated_at` takes `DEFAULT CURRENT_TIMESTAMP`, not a service clock.** Inside a transaction
-  that is the **transaction start** time, so every row of one batch shares one instant and the batch
-  is identifiable without a correlation column — measured: 454 rows, one distinct value. It is also
-  why the index carries `id`: `migrated_at` cannot order rows _within_ a batch.
-- **Indexes.** `(plan_id, id)` serves the report read (`GET …/plans/:planId/placement-migration`)
-  and the plan FK on its leftmost prefix. **The FK half is not discretionary**: `ON DELETE CASCADE`
-  has to _find_ the children, so without it every plan hard-delete sequentially scans this table —
-  the `idx_activities_parent_id_fk` shape that cost 3m47s for a single plan, landing inside the
-  ADR-0096 expiry which catches, logs `hierarchy_expiry.permanent_failure` and retries hourly
-  forever. `(organization_id)` backs the org FK and IDOR loads, full rather than partial because
-  every row is in the read set.
-- **No unique constraint anywhere, and the refusal is the point.** `(plan_id, activity_id)` would be
-  true today — a one-time migration strips an activity at most once — and a unique index does not
-  assert a fact, it **refuses a row**. On a table whose second job is telling us the strip did
-  something nobody predicted, refusing the second row turns that surprise into a failed migration
-  with no record of why. That is `csp_reports`' shape-CHECK lesson verbatim.
-- **Outside `RETENTION_TABLES`, with no window** (CQ-8). That set has never contained
-  organisation-scoped customer content, and `retention-boundary.structural.spec.ts:55-57` asserts it
-  **by equality** — so this is a decision written down rather than an omission. The Cascade FK
-  already gives the row the only lifecycle it should have.
-- **The `id` is generated as a UUID v7 in SQL, not `gen_random_uuid()`** (M-I-T1). The column has
-  no database default — Prisma's `@default(uuid(7))` is application-side — and the producer is a
-  raw-SQL migration, so it must supply one. A v4 would make two shipped claims false: the report
-  repository orders on `id` because _"`id` is UUID v7, so it is monotonic by creation"_, and the
-  DTO says **"Oldest first"**. `migrated_at` cannot substitute, because it is the **transaction
-  start** instant and is therefore identical for every row in the batch — which is deliberate (it
-  is how a batch is identified) and is why **the two clocks must not be unified**: the id takes
-  `clock_timestamp()` per row, `migrated_at` takes `now()` once.
-- **The strip bumps `activities.version`, departing from every sibling data migration** (M-I-T1),
-  and the departure is recorded here because a reader comparing migrations will notice it. The
-  convention — no `version`, no `updated_at`, no `updated_by` — comes from ADR-0022 and exists so an
-  **engine** write stays invisible to optimistic locking. The strip writes a **planner-owned input**
-  and wants the opposite: `updateBody` resends `constraintType`/`constraintDate` on every definition
-  save seeded from the row the dialog opened with, and `useBatchPlacements` additionally resends
-  `visualStart`, so without the bump a tab left open across the deploy would silently re-write the
-  stripped constraint — and through the batch route would clear the placement the migration just
-  wrote. `updated_at`/`updated_by` are still left alone, and for a reason of their own: stamping
-  them would put every affected plan at the top of the overview's _Recently changed_ feed
-  (ADR-0098), attributed to `UNKNOWN`, displacing real human work on the day of the deploy.
-- **Non-scheduling.** The CPM engine never reads it.
-
-**Open, and named so it is not mistaken for settled** (see `docs/specs/one-planning-surface/m-a/`):
-the table records the **converted** rows only. The three left classes (inert, unclassified, already
-placed) are counted and reported by M-I from **live** rows, and a plan with **zero** log rows is
-therefore indistinguishable from a plan the migration never examined — the same "a row count cannot
-separate nothing-to-do from nobody-looked" trap the three baseline snapshot levels exist to close.
-That is acceptable while the strip is a **one-time** migration whose answer is global, and if M-I
-needs it per-plan the extension is an `outcome` discriminator with a constant `DEFAULT` that is true
-of every existing row — metadata-only, and honest.
-
-### FmDateMigration: the record of finish-milestone placements re-encoded for the end-of-day rule (finish-milestone-date M2-T3)
-
-From the finish-milestone-date release the CPM engine reads a `FINISH_MILESTONE`'s dates as the
-**end** of the day given, where it used to read the start (`docs/TECH_DEBT.md` #381; spec
-`docs/specs/finish-milestone-date/`). The product owner chose to keep every placed diamond where it
-was (Q1 A), so migration `20260923120000_finish_milestone_end_of_day_placements` rewrites every
-stored placement on a finish milestone one calendar day earlier —
-`visual_start := visual_start - 1` — and records each row in `finish_milestone_date_migrations`
-(Prisma model `FmDateMigration`; the short name only keeps the `Organization` and `Plan`
-back-relations inside their blocks' column widths).
-
-- **Why D − 1 keeps the instant.** The old parse of a placement D is
-  `rollForwardToWorking(cal, D 00:00)`. The new parse (`finishMilestoneDateInstant`,
-  `engine/instants.ts`) is `rollForwardToWorking(cal, date 00:00 + 1 day)` for a bare date, which on
-  D − 1 is the old parse of D — on every calendar, before or after the data date. It relies on the
-  engine receiving a bare `YYYY-MM-DD` (the loader passes `formatCalendarDate`,
-  `schedule.service.ts:2625`); the helper reads a longer string as an instant and adds no day. The
-  migration header records a 1,440-case check with the real helpers and its failing control.
-- **Scope.** `activities.visual_start` on `FINISH_MILESTONE` rows, nothing else: not constraint or
-  external dates (Q2 A moves those deliberately), not actuals, not other types, not
-  `baseline_activities`.
-- **Soft-deleted rows are included**, the opposite of the ADR-0148 strip. Every stored
-  finish-milestone placement was written under the old rule and will be read under the new one when
-  restored, so excluding a recycle-bin row would bring it back a working day later than it was
-  deleted.
-- **A new table rather than `placement_migrations`.** That table's rows mean "a constraint was
-  removed" (`prior_constraint_type`/`prior_constraint_date` are `NOT NULL` for that reason) and its
-  one reader is the planner-facing notice about removed constraints. Reusing it would mean relaxing
-  both columns and filtering the reader, or telling planners their milestones lost constraints they
-  never had.
-- **Same write-once shape and FK reasoning as `PlacementMigration`**: no `version`, timestamps or
-  soft delete; `plan_id` `ON DELETE CASCADE` (out of the hierarchy-expiry census, dies with its
-  plan); `organization_id` `RESTRICT`, copied from the plan; `activity_id` a correlation id with no
-  FK; frozen `activity_code`/`activity_name`; UUID v7 ids generated in SQL; `migrated_at` from
-  `CURRENT_TIMESTAMP`; no unique constraint. Outside `RETENTION_TABLES`.
-- **Indexes: `(plan_id)` only.** It backs the `CASCADE` lookup on a plan hard-delete. There is no
-  application read, so no second column, and no `(organization_id)` index: organisations are never
-  hard-deleted and their ids never change, so that `RESTRICT` check never runs.
-- **`version` is bumped, `updated_at`/`updated_by` are not** — the strip's reasoning. A stale tab
-  resends `visualStart` with its version (`useBatchPlacements`); without the bump the old D would be
-  written back and read as the end of D, a day late.
-- **Not re-applied by a manual re-run.** Re-running the file fails at `CREATE TABLE`; re-running
-  only the statement skips recorded activities (`NOT EXISTS`). Placements written after the release
-  are not in the record, so running the statement by hand after the API has served would move them.
-- **Cost, measured** (PostgreSQL 16.13, all prior migrations replayed, 102,000 activities / 18 MB,
-  2,266 placed finish milestones of which 206 soft-deleted): 113–175 ms over five `EXPLAIN ANALYZE`
-  runs, 121 ms as recorded by `prisma migrate deploy`. Sequential scan of `activities`, anti-join
-  against the empty record, hash join to `plans`, primary-key update per row. No index added on
-  `activities` for a once-ever statement. Verified afterwards: exactly those 2,266 rows changed, only
-  in `visual_start` (−1 day) and `version` (+1); every other activity row and every
-  `baseline_activities` row byte-identical; CI drift check clean on the populated and on an empty
-  database.
-- **Engine-owned dates are not rewritten, and stay in the old rule until each plan is
-  recalculated.** `early_*`/`late_*`/`visual_effective_*`/`leveled_*` on finish milestones still hold
-  the dates the old rule projected. The new projection is not "old date minus one" (a milestone after
-  a Friday task on a Mon–Fri calendar goes from Monday to Friday), so SQL cannot compute it, and those
-  columns belong to the recalculation pass. Until a plan is recalculated, a reader that positions a
-  finish milestone from these columns with the new end-of-day rule shows it one day later than the
-  engine will. This applies to every finish milestone, placed or not.
-- **Reverse (history).** Until 1.0, `docs/DEPLOYMENT.md` "Rolling back past the finish-milestone
-  date release" shifted every finish-milestone placement back one day against this record, then
-  dropped the table and the migration's `_prisma_migrations` row (measured: 2,266 rows restored
-  exactly; a second run failed at the lock). It does not apply to a 1.1 database, where this table
-  is created empty and never written; the procedure is at git tag `api-v1.0.0`.
-- **Non-scheduling.** The CPM engine never reads it.
-
-### CrossPlanLagMigration: the record of cross-plan lags re-encoded to working minutes (cross-plan-day-boundary M2-T2)
-
-**`cross_plan_dependencies.lag_minutes` changes unit in this release.** Until it, the column held
-`lagDays × 1440` whatever the calendar and was read back as `/ 1440`, while the in-plan
-`dependencies.lag_minutes` holds working minutes on the relationship's lag calendar (ADR-0068 §4).
-The schema comment ("working-MINUTE lag") was therefore false for every cross-plan link on a
-calendar shorter than 24 hours. From migration `20260926120000_cross_plan_lag_working_minutes` the
-two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
-`docs/specs/cross-plan-day-boundary/` §4.4, E6). The migration rewrites every stored value as
-`round(lag_minutes::numeric × factor / 1440)` and records each link in `cross_plan_lag_migrations`
-(Prisma model `CrossPlanLagMigration`; back-relation `xplanLagMigrations`, short only to keep the
-`Organization` and `Plan` blocks' column widths).
-
-- **The factor is the lag calendar's `hours_per_day_minutes`**, resolved per link:
-  `TWENTY_FOUR_HOUR` pinned at 1440; `PROJECT_DEFAULT` the **successor activity's** plan's calendar
-  (CQ-2); `PREDECESSOR`/`SUCCESSOR` that endpoint's scheduling calendar (its driving resource's for
-  a live `RESOURCE_DEPENDENT` activity with an active driver, else its own, else **its own** plan's);
-  1440 when no calendar is on the path. Plans are always reached through the endpoint activity's
-  `plan_id`, never through the link's denormalised `*_plan_id` columns. M2-T3's TypeScript function
-  implements the same rule, and the migration test is where the two are compared.
-- **The driving join uses the partial unique index's predicate exactly**
-  (`is_driving AND deleted_at IS NULL`, `uq_resource_assignments_activity_driving`), plus the
-  activity and resource soft-delete guards. A join that fanned out would fail the statement on the
-  record's `UNIQUE` (measured), which on a deployed database is the ADR-0107 restart loop. The
-  calendar join is deliberately unfiltered, matching `findHoursPerDayMinutes`.
-- **`numeric`, never `int4`.** In `int4` the product overflows before the division: from 1,036 days
-  at factor 1440, from 3,107 days at 480, and at the ±3,650-day CHECK bound for any factor ≥ 409
-  (each threshold run in `psql`). The cast back is safe because the factor is at most 1440.
-- **Soft-deleted links are included**, so a restored link does not come back in the old unit.
-- **Every resolved link is recorded, changed or not; only changed links are updated.** The converted
-  set is a strict subset of the recorded set. Two readers need the unchanged rows: M2-T3's
-  differential (a link wrongly resolved to 1440 is left unchanged), and the reverse, which reads
-  "no record" as "created after the release".
-- **`version` is bumped on changed links; `updated_at` is not touched** (the ADR-0148/ADR-0155
-  reasoning). There is no update route for a cross-plan link, so the bump invalidates no edit.
-- **Write-once, like `FmDateMigration`**: no `version`, timestamps pair or soft delete; `plan_id`
-  (the successor activity's plan) `ON DELETE CASCADE` with a plain index for the cascade, which keeps
-  it out of the hierarchy-expiry census; `organization_id` `RESTRICT`, copied from the link, no
-  index; no FK on the link id or the calendar id, so the record outlives both. Outside
-  `RETENTION_TABLES`.
-- **One deliberate divergence from the precedent: `UNIQUE (cross_plan_dependency_id)`.** The
-  precedent has no unique constraint because a refusal would fail the boot. This one cannot refuse
-  inside the migration: the table is created empty by the same file, the statement runs once, and
-  every join is at most one-to-one. It exists because the reverse needs exactly one record per link.
-  It also makes a manual re-run of the statement refuse rather than convert a second time.
-- **Cost, measured** (PostgreSQL 16.13, 100,000 activities, 10,000 links over all four lag calendars):
-  351.7–399.5 ms across five `EXPLAIN ANALYZE` runs, 415 ms as `prisma migrate deploy` recorded it.
-  Only `lag_minutes` and `version` moved (md5 over every other column and every table read); drift
-  clean on the populated database. The full record is
-  `docs/specs/cross-plan-day-boundary/m2/migration-cost.md`.
-- **Engine-owned dates were not rewritten (history).** Until 1.0 a linked plan's stored dates stayed
-  as the old rule computed them until a one-time boot re-derivation, keyed on this migration's
-  `_prisma_migrations.finished_at`, recalculated it. The 1.1 baseline (ADR-0215) has no such
-  migration row and the service is gone (see "Re-derivation markers (history)" below).
-- **Reverse (history).** Until 1.0, `docs/DEPLOYMENT.md` "Rolling back past the cross-plan lag
-  release" re-encoded every link back to `days × 1440` against this record, and an e2e spec ran it
-  as written. Neither applies to a 1.1 database, where this table is created empty and never
-  written; the procedure, its measurement and its test are at git tag `api-v1.0.0`.
-- **Non-scheduling.** Nothing in the application reads it.
+The export files `records-finish-milestone-dates` and `records-cross-plan-lags` went with their
+tables; all three were `stability: 'informational'` (`docs/ORGANISATION_EXPORT_FORMAT.md`
+"Versioning").
 
 ### Re-derivation markers (history)
 

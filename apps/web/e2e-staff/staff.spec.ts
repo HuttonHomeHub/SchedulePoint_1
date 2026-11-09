@@ -1404,20 +1404,18 @@ test('a staff member runs the diagnostics and can paste the result', async ({ br
 
   // **The zero-count checks are folded behind one button** (D-12), so the journey opens them before
   // asking for a heading by name: a check that found nothing is a fact the panel states as a count
-  // and shows on request, and which of the sixteen are folded depends on the database's contents.
+  // and shows on request, and which of the nine are folded depends on the database's contents.
   await expect(staff.locator('[data-diagnostics-result]')).toBeVisible({ timeout: 30_000 });
   const showAllChecks = staff.getByRole('button', { name: /^Show all \d+$/ });
   if (await showAllChecks.isVisible()) await showAllChecks.click();
 
-  // Both registry entries answer. Located by their labels, which are the accessible headings a
+  // The placement entries answer. Located by their labels, which are the accessible headings a
   // reader navigates by — the first test's lesson about locating by role and name rather than by a
   // `data-` hook that says nothing about what anybody sees.
-  await expect(staff.getByRole('heading', { name: /Day factor divergence \(driving/ })).toBeVisible(
-    { timeout: 30_000 },
-  );
   await expect(
-    staff.getByRole('heading', { name: /Day factor divergence \(inherited/ }),
-  ).toBeVisible();
+    staff.getByRole('heading', { name: 'Plans carrying a hand-placed activity' }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(staff.getByRole('heading', { name: /^Activities hand-placed/ })).toBeVisible();
 
   expect(statuses, 'the read must have succeeded, not merely returned').toEqual([200]);
 

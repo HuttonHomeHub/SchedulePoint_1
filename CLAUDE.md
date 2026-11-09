@@ -19,8 +19,8 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 29 API modules
-> (`apps/api/src/modules/`), 43 Prisma models across 1 baseline migration, 1889 web
+> **Current stage: the application is substantially built.** 28 API modules
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1884 web
 > source files with 48 Playwright suites beside the base journey, and
 > 215 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -111,10 +111,10 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   29 feature modules
+│   │   ├── src/modules/      #   28 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (43 models) + 1 baseline migration (pre-1.1 history: tag api-v1.0.0)
+│   │   ├── prisma/           #   Schema (40 models) + 1 baseline migration (pre-1.1 history: tag api-v1.0.0)
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -505,7 +505,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0087** _(Accepted)_ — This application runs scheduled work, and its first job is a retention sweep → [`0087-scheduled-retention-sweep.md`](docs/adr/0087-scheduled-retention-sweep.md)
 - **ADR-0085** _(Accepted)_ — Erasure collides with the audit log, and that collision is the decision → [`0085-privacy-operations.md`](docs/adr/0085-privacy-operations.md)
 - **ADR-0106** _(Accepted)_ — A rule is a scene mark; its label is chrome → [`0106-a-rule-is-a-scene-mark-its-label-is-chrome.md`](docs/adr/0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)
-- **ADR-0107** _(Accepted)_ — A migration a pristine database cannot test → [`0107-a-migration-a-pristine-database-cannot-test.md`](docs/adr/0107-a-migration-a-pristine-database-cannot-test.md)
+- **ADR-0107** _(Accepted; D2 amended by ADR-0215)_ — A migration a pristine database cannot test → [`0107-a-migration-a-pristine-database-cannot-test.md`](docs/adr/0107-a-migration-a-pristine-database-cannot-test.md)
 - **ADR-0108** _(Accepted; D2 amended by ADR-0169)_ — A modal guards the canvas and nothing else → [`0108-a-modal-guards-the-canvas-and-nothing-else.md`](docs/adr/0108-a-modal-guards-the-canvas-and-nothing-else.md)
 - **ADR-0109** _(Accepted; D1 amended by ADR-0185)_ — A command surface wraps, and the leading edge belongs to the work → [`0109-a-command-surface-wraps.md`](docs/adr/0109-a-command-surface-wraps.md)
 - **ADR-0110** _(Accepted; M5's keep overturned by ADR-0185)_ — A gate is verified against the defect it names → [`0110-a-gate-is-verified-against-the-defect-it-names.md`](docs/adr/0110-a-gate-is-verified-against-the-defect-it-names.md)

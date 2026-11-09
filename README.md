@@ -11,7 +11,7 @@
 
 </div>
 
-> **Project status: SchedulePoint is substantially built.** 29 API modules, 43
+> **Project status: SchedulePoint is substantially built.** 28 API modules, 40
 > Prisma models across 1 baseline migration, a React client with 48 Playwright
 > suites beside the base journey, and 215 ADRs — **re-derived by
 > `pnpm check:counts` on every CI run**, so a stale figure here fails a build

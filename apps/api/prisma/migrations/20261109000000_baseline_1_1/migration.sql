@@ -28,8 +28,11 @@
 -- Proof of equivalence: docs/specs/fresh-start-1-1/schema-design.md, "M2-T1 equivalence proof" (a
 -- catalogue comparison against the api-v1.0.0 chain, no differences), and its "M3 tidy" entries: the
 -- chain plus the schema design's §3 tidy, as an executable allow-list, equals this file. Every object
--- the tidy changed says so on its "was:" line. Plain CHECKs, no NOT VALID,
--- no CONCURRENTLY, no INSERT: the file runs in one transaction on empty tables.
+-- the tidy changed says so on its "was:" line; the three tables it removed whole (§3 T1, T2:
+-- placement_migrations, finish_milestone_date_migrations, cross_plan_lag_migrations, the records of
+-- three one-time 1.0 data migrations, empty on any database this file builds) are at the tag.
+-- Plain CHECKs, no NOT VALID, no CONCURRENTLY, no INSERT: the file runs in one transaction on empty
+-- tables.
 
 -- ============================================================================================
 -- 1. Extension
@@ -691,52 +694,6 @@ CREATE TABLE "plan_shares" (
 );
 
 -- CreateTable
-CREATE TABLE "placement_migrations" (
-    "id" UUID NOT NULL,
-    "organization_id" UUID NOT NULL,
-    "plan_id" UUID NOT NULL,
-    "activity_id" UUID NOT NULL,
-    "activity_code" TEXT,
-    "activity_name" TEXT NOT NULL,
-    "prior_constraint_type" "ConstraintType" NOT NULL,
-    "prior_constraint_date" DATE NOT NULL,
-    "prior_visual_start" DATE,
-    "migrated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "placement_migrations_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "finish_milestone_date_migrations" (
-    "id" UUID NOT NULL,
-    "organization_id" UUID NOT NULL,
-    "plan_id" UUID NOT NULL,
-    "activity_id" UUID NOT NULL,
-    "activity_code" TEXT,
-    "activity_name" TEXT NOT NULL,
-    "prior_visual_start" DATE NOT NULL,
-    "migrated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "finish_milestone_date_migrations_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "cross_plan_lag_migrations" (
-    "id" UUID NOT NULL,
-    "organization_id" UUID NOT NULL,
-    "plan_id" UUID NOT NULL,
-    "cross_plan_dependency_id" UUID NOT NULL,
-    "lag_calendar" "LagCalendarSource" NOT NULL,
-    "lag_calendar_id" UUID,
-    "day_factor_minutes" INTEGER NOT NULL,
-    "prior_lag_minutes" INTEGER NOT NULL,
-    "new_lag_minutes" INTEGER NOT NULL,
-    "migrated_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "cross_plan_lag_migrations_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "resources" (
     "id" UUID NOT NULL,
     "organization_id" UUID NOT NULL,
@@ -1188,21 +1145,6 @@ CREATE UNIQUE INDEX "plan_shares_token_hash_key" ON "plan_shares"("token_hash");
 CREATE INDEX "plan_shares_organization_id_idx" ON "plan_shares"("organization_id");
 
 -- CreateIndex
-CREATE INDEX "placement_migrations_plan_id_id_idx" ON "placement_migrations"("plan_id", "id");
-
--- CreateIndex
-CREATE INDEX "placement_migrations_organization_id_idx" ON "placement_migrations"("organization_id");
-
--- CreateIndex
-CREATE INDEX "finish_milestone_date_migrations_plan_id_idx" ON "finish_milestone_date_migrations"("plan_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "cross_plan_lag_migrations_cross_plan_dependency_id_key" ON "cross_plan_lag_migrations"("cross_plan_dependency_id");
-
--- CreateIndex
-CREATE INDEX "cross_plan_lag_migrations_plan_id_idx" ON "cross_plan_lag_migrations"("plan_id");
-
--- CreateIndex
 CREATE INDEX "resources_organization_id_created_at_id_idx" ON "resources"("organization_id", "created_at", "id");
 
 -- CreateIndex
@@ -1430,24 +1372,6 @@ ALTER TABLE "plan_shares" ADD CONSTRAINT "plan_shares_organization_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "plan_shares" ADD CONSTRAINT "plan_shares_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "plans"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "placement_migrations" ADD CONSTRAINT "placement_migrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "placement_migrations" ADD CONSTRAINT "placement_migrations_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "finish_milestone_date_migrations" ADD CONSTRAINT "finish_milestone_date_migrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "finish_milestone_date_migrations" ADD CONSTRAINT "finish_milestone_date_migrations_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cross_plan_lag_migrations" ADD CONSTRAINT "cross_plan_lag_migrations_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "cross_plan_lag_migrations" ADD CONSTRAINT "cross_plan_lag_migrations_plan_id_fkey" FOREIGN KEY ("plan_id") REFERENCES "plans"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "resources" ADD CONSTRAINT "resources_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

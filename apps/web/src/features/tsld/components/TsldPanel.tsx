@@ -348,24 +348,9 @@ export interface TsldPanelProps {
    */
   onUndoLastEdit?: (() => void) | undefined;
   /**
-   * The one-time placement migration's notice for this plan (one-planning-surface M-I), already
-   * rendered by the host — `null`/absent when the migration changed nothing here or the reader has
-   * dismissed it.
-   *
-   * **A node rather than data, and the host owns the query, the dismissal and the account it is
-   * keyed to.** This panel has no org slug and no session, so it could not fetch the report even
-   * if it wanted to; taking the rendered strip is the same shape as {@link onEditActivity}'s
-   * host-owned dialog. The panel's only job is **precedence** — it decides whether this strip is
-   * the one the dock shows, which is a question only it can answer because only it knows what else
-   * is competing for the row.
-   *
-   * It is the dock's LOWEST rung — see `resolveDockStrip`, the one place the ordering is decided.
-   */
-  placementMigrationNotice?: React.ReactNode | null | undefined;
-  /**
    * The one-time touch-gesture tip (`docs/specs/long-press-hint/`), already rendered by the host —
    * `null`/absent until a finger has pressed the workspace, and again once the reader dismisses it.
-   * A node for the migration notice's reason: the host owns the storage and the focus hand-back.
+   * A node because the host owns the storage and the focus hand-back.
    * It is the dock's lowest rung of all — see `resolveDockStrip`.
    */
   touchGestureHint?: React.ReactNode | null | undefined;
@@ -683,7 +668,6 @@ export function TsldPanel({
   onLag,
   onLink,
   onUndoLastEdit,
-  placementMigrationNotice,
   touchGestureHint,
   layoutResolvedNotice,
   historyResultNotice,
@@ -1874,7 +1858,6 @@ export function TsldPanel({
     showDiagram,
     activityCount: activities.length,
     mode,
-    hasPlacementMigrationNotice: placementMigrationNotice != null,
     hasTouchGestureHint: touchGestureHint != null,
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
@@ -3545,7 +3528,7 @@ export function TsldPanel({
               size="sm"
               onClick={() => {
                 // Dismissing UNMOUNTS the strip holding the button being pressed, and the rung
-                // below it (`placement-migration`) may not render at all — so without a
+                // below it (`touch-hint`) may not render at all — so without a
                 // destination focus reverts to <body>. That is WCAG 2.4.3, and on THIS surface it
                 // is also silent: every keyboard accelerator is a React `onKeyDown` on the
                 // workspace root, and <body> is that root's ancestor, so a planner who dismisses
@@ -3564,14 +3547,7 @@ export function TsldPanel({
           </NoticeStrip>
         ) : null}
 
-        {/* What the one-time placement migration changed on this plan (one-planning-surface M-I).
-            The dock's LOWEST rung — see `resolveDockStrip` for why a notice about something that
-            happened on a deploy yields to every strip about what the planner is doing now. It is
-            the only dock strip that is DISMISSIBLE and does not return, which is what makes losing
-            every contest affordable: it waits. */}
-        {dockStrip === 'placement-migration' ? placementMigrationNotice : null}
-
-        {/* The one-time touch tip: the dock's lowest rung, below the migration notice. */}
+        {/* The one-time touch tip: the dock's lowest rung. */}
         {dockStrip === 'touch-hint' ? touchGestureHint : null}
       </CanvasDock>
 

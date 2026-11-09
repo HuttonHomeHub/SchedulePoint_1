@@ -209,14 +209,8 @@ export function buildReadme(): string {
     "  organisations' people, and the IP addresses and browser details of audit events. The",
     '  manifest lists each exclusion with its reason.',
     '',
-    'The three records-* files are informational: they note what the product once did to the data',
-    'and may change or disappear in a later version without notice.',
-    '',
     'FILES',
-    ...EXPORT_FILES.map(
-      (f) =>
-        `  ${jsonPath(f)}, ${csvPath(f)}${f.stability === 'informational' ? '  (informational)' : ''}`,
-    ),
+    ...EXPORT_FILES.map((f) => `  ${jsonPath(f)}, ${csvPath(f)}`),
     '',
     'Readers should ignore files and keys they do not know: a newer format version may add them.',
     'The format is described in full in docs/ORGANISATION_EXPORT_FORMAT.md of the SchedulePoint',

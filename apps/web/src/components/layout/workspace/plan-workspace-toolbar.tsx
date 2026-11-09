@@ -58,7 +58,6 @@ import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
-import { useSession } from '@/features/auth/api/use-session';
 import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
   CodeAssignButton,
@@ -89,9 +88,6 @@ import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editi
 import { useGanttGridPrefs } from '@/features/gantt/model/use-gantt-grid-prefs';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
-import { usePlacementMigration } from '@/features/placement-migration/api/use-placement-migration';
-import { PlacementMigrationNotice } from '@/features/placement-migration/components/PlacementMigrationNotice';
-import { dismiss, isDismissed } from '@/features/placement-migration/model/dismissal';
 import {
   buildSelectionBarContext,
   type SelectionContextInput,
@@ -560,10 +556,9 @@ export function ToolbarPlanWorkspace({
    * Hand focus to whichever plan surface is mounted — the Gantt's grid or the canvas's parallel
    * listbox (ADR-0026 D7).
    *
-   * **One callback rather than one per view**, because its caller is the placement-migration
-   * notice, which renders in BOTH and has no business knowing which. It queries for the same reason
-   * `focusGanttGrid` does — neither panel exposes a handle — and is referentially stable for the
-   * reason that one states.
+   * **One callback rather than one per view**, because its callers render in BOTH views and have no
+   * business knowing which. It queries for the same reason `focusGanttGrid` does — neither panel
+   * exposes a handle — and is referentially stable for the reason that one states.
    *
    * The Gantt first, then the canvas: only one of the two is in the document at a time, so the
    * order is a tie-break that never fires rather than a precedence.
@@ -1184,67 +1179,8 @@ export function ToolbarPlanWorkspace({
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
 
-  /**
-   * What the one-time placement migration changed on this plan (one-planning-surface M-I).
-   *
-   * **The host owns all three parts** — the query, the account the dismissal is keyed to, and the
-   * rendered strip — because `TsldPanel` has no org slug and no session, and takes the finished
-   * node. It decides only precedence.
-   *
-   * **The dismissal is DERIVED, not synchronised, and the state holds the KEY rather than a
-   * boolean.** The obvious shape — an effect that reads `localStorage` into a boolean — is a
-   * `setState` inside an effect (which `react-hooks` refuses here, and rightly: it is a cascading
-   * render for a value that was already available), and it has a second defect the lint rule does
-   * not see. A bare boolean does not reset when the planner switches plans, so dismissing the
-   * notice on one plan would hide it on the next one they opened — and the toolbar does not
-   * remount on a plan change, so nothing would clear it. Storing the key that was dismissed makes
-   * both problems go away at once: it is self-invalidating.
-   */
-
-  const session = useSession();
-  const migrationUserId = session.data?.user.id ?? null;
-  const placementMigration = usePlacementMigration(model.orgSlug, model.planId);
-  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
-  // `planId` is read out of `model` first so the memo depends on the id rather than on the whole
-  // model object. **Not because the rule cannot see through a member expression** — it accepts a
-  // property read like `model.planId` with no further ask (`docs/TECH_DEBT.md` #353 E20; it asks
-  // for the whole object only when a method is CALLED on it, e.g. `model.scheduleRefusal(...)`,
-  // `plan-workspace-toolbar.tsx`'s `scheduleState` memo). The extraction still does real work: it
-  // stops this memo from re-reading `localStorage` on every plan mutation, which is what listing
-  // `model` itself — a new object on every render (E9) — would otherwise force.
-  const migrationPlanId = model.planId;
-  // **The key is never null, and that is a fix rather than a tidy-up.** It was
-  // `migrationUserId === null ? null : …`, which made `dismissedKey !== migrationKey` compare
-  // `null !== null` before the session resolved — so the notice was suppressed in that window, and
-  // permanently on any render where the session is absent. Caught by the host wiring test, which
-  // renders without a session and therefore hit the case head-on. An `'anon'` segment keeps the
-  // comparison honest (the initial `null` can never equal it) while the `localStorage` write below
-  // stays guarded on a real user id, so nothing is ever persisted under a fake one.
-  const migrationKey = `${migrationUserId ?? 'anon'}:${migrationPlanId}`;
-  const storedDismissal = useMemo(
-    () =>
-      migrationUserId === null
-        ? false
-        : isDismissed(window.localStorage, migrationUserId, migrationPlanId),
-    [migrationUserId, migrationPlanId],
-  );
-  const migrationCount = placementMigration.data?.count ?? 0;
-  const placementMigrationNotice =
-    migrationCount > 0 && !storedDismissal && dismissedKey !== migrationKey ? (
-      <PlacementMigrationNotice
-        count={migrationCount}
-        rows={placementMigration.data?.rows ?? []}
-        restoreFocus={focusPlanSurface}
-        onDismiss={() => {
-          setDismissedKey(migrationKey);
-          if (migrationUserId !== null) {
-            dismiss(window.localStorage, migrationUserId, model.planId);
-          }
-        }}
-      />
-    ) : null;
-  // The one-time touch tip (`docs/specs/long-press-hint/`). Built here for the migration notice's
-  // reason: it renders in BOTH views' docks. Dismissal is per device, not per plan or account.
+  // The one-time touch tip (`docs/specs/long-press-hint/`). Built here because it renders in BOTH
+  // views' docks. Dismissal is per device, not per plan or account.
   const touchHint = useTouchGestureHint();
   const touchGestureHint = touchHint.due ? (
     <TouchGestureHint
@@ -1254,7 +1190,7 @@ export function ToolbarPlanWorkspace({
     />
   ) : null;
   // What an edit's automatic overlap resolution did (NetPoint-layout M3, ADR-0153). Built here, not
-  // in the canvas, for the migration notice's reason: it renders in BOTH views' docks, and a table
+  // in the canvas: it renders in BOTH views' docks, and a table
   // or Gantt edit can resolve an overlap as readily as a canvas drag. Focus goes to the plan
   // surface first, because both buttons unmount the strip that holds them.
   const layoutResolvedNotice =
@@ -1570,7 +1506,6 @@ export function ToolbarPlanWorkspace({
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
       hasRevisionPair={hasRevisionPair}
-      placementMigrationNotice={placementMigrationNotice}
       touchGestureHint={touchGestureHint}
       layoutResolvedNotice={layoutResolvedNotice}
       historyResultNotice={historyResultNotice}
@@ -2034,34 +1969,12 @@ export function ToolbarPlanWorkspace({
         */}
         <CanvasDock>
           <SelectionActionsBar context={ganttSelectionCtx} restoreFocus={focusGanttGrid} />
-          {/*
-            The placement-migration notice (one-planning-surface M-I), in the Gantt **as well as**
-            the diagram — and it is here because the first version of M-I passed it to `TsldPanel`
-            alone, which is verbatim the one-host-and-not-its-neighbour shape this register records
-            at ADR-0080 (`bulk` wired into one layout and not the one its flag selects), ADR-0064 §7
-            and ADR-0067 M4. Found by reading this file rather than by anything failing.
-
-            A planner who works in the Gantt would otherwise never be told that the constraints on
-            their plan had been converted — and the Gantt is where the consequence is most visible,
-            because its Float column shows the number that moves.
-
-            Beside the selection bar it needed no precedence decision until NetPoint-layout M3 gave
-            the Gantt a second transient strip; the two now follow the canvas ladder's order, below.
-
-            Dismissal is per plan per user rather than per view, so dismissing it here dismisses it
-            on the diagram too — which is right: it is one fact about one plan, not two notices.
-          */}
           {/* **One transient strip at a time, in the canvas's order** (`resolveDockStrip`): an
-              overlap resolved by the planner's last edit outranks the migration notice, which is a
-              standing fact and waits. Stacking them, as the first version did, gave the same
-              facts one strip on the diagram and several on the Gantt (component review). The
-              undo/redo result is the newest of the four candidates — it describes the step just
+              overlap resolved by the planner's last edit outranks the touch tip, which waits. The
+              undo/redo result is the newest of the candidates — it describes the step just
               taken, and replaces the overlap notice it would otherwise contradict. The touch tip
               is last of all: it teaches a gesture and describes nothing about the plan. */}
-          {historyResultNotice?.node ??
-            layoutResolvedNotice ??
-            placementMigrationNotice ??
-            touchGestureHint}
+          {historyResultNotice?.node ?? layoutResolvedNotice ?? touchGestureHint}
         </CanvasDock>
       </>
     ) : (

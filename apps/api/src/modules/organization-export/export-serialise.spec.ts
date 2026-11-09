@@ -174,7 +174,7 @@ describe('manifest and README', () => {
     ]);
     expect(manifest).toMatchObject({
       format: 'schedulepoint.organisation-export',
-      formatVersion: '2.5',
+      formatVersion: '3.0',
       generatedAt: '2026-10-14T09:30:00.000Z',
       snapshot: 'consistent',
       includesDeleted: true,
@@ -213,7 +213,7 @@ describe('manifest and README', () => {
     expect(JSON.stringify(manifest)).not.toMatch(/"table"/);
   });
 
-  it('carries each file’s stability, with the migration records informational', () => {
+  it('carries each file’s stability', () => {
     const entry = (manifest['files'] as Record<string, unknown>[])[0];
     expect(entry).toEqual({
       path: 'json/clients.json',
@@ -224,25 +224,6 @@ describe('manifest and README', () => {
       sha256: 'ab',
       stability: 'promised',
     });
-    const informational = JSON.parse(
-      buildManifest({
-        generatedAt: new Date(0),
-        apiVersion: '0',
-        organization: { id: 'o', slug: 's', name: 'n' },
-        exportedBy: { userId: 'u', name: 'n' },
-        files: [
-          {
-            path: 'json/records-cross-plan-lags.json',
-            file: 'records-cross-plan-lags',
-            kind: 'json',
-            rows: 0,
-            bytes: 0,
-            sha256: '',
-          },
-        ],
-      }),
-    ) as { files: { stability: string }[] };
-    expect(informational.files[0]?.stability).toBe('informational');
   });
 
   it('writes a README that names every file and is stable between calls', () => {
