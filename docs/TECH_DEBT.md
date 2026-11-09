@@ -1207,6 +1207,12 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
     60.0, and the only recorded difference is power, so it is the first evidence for #283's
     hypothesis rather than a regression. One sitting does not establish it.
 
+13. **Item 13 — a comparability note, 2026-11-09.** From commit `e82bf48a` the perf probe and bench
+    scenes paint the tiered grid the product always painted (about two more stroke batches per
+    frame) instead of the flat grid the retired flag left them. Every reading above this item was
+    taken before that commit, so a reading after it is marginally not like-for-like with them. The
+    size of the difference has not been measured; it is a note, not a re-baseline.
+
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
 **Status:** deferred · **Verified:** 2026-09-11
@@ -9325,3 +9331,11 @@ At 100 % text the landing's content runs past the bottom of the shell in a short
 Pre-existing and unchanged by #569: the controls are reachable (their centres hit), but a finger landing on the covered corner presses the neighbour. The #569 journey therefore probes each control's own centre and corners after scrolling it into view and records this exception rather than asserting all 55.
 
 **Next:** identify the covering element from the readings and decide whether the bar's gap or the neighbour's box should change. **Trigger:** a report of a mis-pressed selection-bar control on a touch screen, or the next change to the selection bar's layout.
+
+### 575. Legacy painter and gesture modes left after the flag retirement
+
+**Status:** open · **Verified:** 2026-11-09, by reading `TsldCanvas.tsx` and the files listed below after the web flags were retired (ADR-0215 D8) · **Raised:** 2026-11-09 (flag retirement, M1-T9) · **Size:** M · **Owner:** web
+
+The scene and overlay fields `visualRefresh`, `timeTrueLinks` and `linkRouting` are now constant `true` in production (`TsldCanvas.tsx`), but their `false` branches remain, reachable only from tests and fixtures: `render/paint.ts`, `render/route-frame.ts`, `render/row-text-layout.ts`, `render/layout-objective.ts`, `render/link-facts.ts`, `render/link-routing.ts`, `render/scene-layers.ts`, `toolbar/commands/use-diagram-image.ts`, `export/render-export-image.ts`, `perf-probe/scenes/canvas-draw.ts` and `perf-probe/scenes/revision-diff.ts`. Separately, `interaction/gesture-machine.ts`'s handle-origin linking path (`startHandle` / `finishHandle` into `linking`, about line 481, with `sourceHandle` and `modifiersToLinkType`) is unreachable, because `TsldCanvas` downgrades every handle hit to a body hit. Removing either touches golden snapshots, which is why it was not folded into the retirement. Until it lands, a reader can mistake a dead branch for a supported mode.
+
+**Next:** delete the three fields' `false` branches and the handle-origin linking path together, regenerating the golden snapshots in the same change. **Trigger:** the next painter change, or the 1.1.x follow-up.

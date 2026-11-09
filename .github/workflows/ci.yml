@@ -660,8 +660,8 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:authoring
 
       # Flag-ON live cross-plan / programme scheduling journey (playwright.programme.config.ts) serving
-      # the app with VITE_PROGRAMME_SCHEDULING on (plus VITE_INTER_PROJECT_DATES, on the legacy stacked
-      # plan-detail page with the pen off), so drawing a live cross-plan link and running a programme
+      # the app (the programme-scheduling and inter-project-date flags it once pinned are retired,
+      # ADR-0215 D8), so drawing a live cross-plan link and running a programme
       # recalculate — the result panel, the driven "External" badge, and the staleness cycle — is
       # exercised end to end (ADR-0045 F8). Runs last, after the prior runs tear down their servers.
       - name: Web end-to-end tests (programme scheduling flag on)
@@ -694,8 +694,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:loe
 
       # Flag-ON canvas resource view journey (playwright.resource-view.config.ts) serving the app with
-      # VITE_CANVAS_RESOURCE_VIEW on (plus VITE_RESOURCES + VITE_RESOURCE_CURVES for the data source,
-      # layered on the canvas authoring + editing/pen flags), so the axis-aligned demand
+      # the resource view always on (its flags are retired, ADR-0215 D8), so the axis-aligned demand
       # strip — reveal, resource/bucket pickers, the accessible data table, and the on-bar
       # over-allocation highlight — is exercised end to end (Stage E). Runs last, after the prior runs
       # tear down their servers, reusing the ports.
@@ -714,7 +713,7 @@ jobs:
         run: pnpm --filter @repo/web test:e2e:interchange
 
       # Flag-ON External-Guest share links journey (playwright.share.config.ts) serving the app with
-      # VITE_GUEST_SHARE_LINKS on (layered on the canvas authoring + editing/pen flags),
+      # share links always on (the flag is retired, ADR-0215 D8),
       # so the whole share loop — the member Share… toolbar item opening ShareLinksDialog (create/list/
       # revoke), the one-time guest URL, and the public session-less `/share#<token>` read-only view
       # across a second, cookie-free browser context (with immediate revocation) — is exercised end to
@@ -818,7 +817,7 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:revision-compare
 
-      # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
+      # Search that navigates (flag retired, ADR-0215 D8) against a real API with the pen enforced.
       # What a mocked fetch and a mounted-in-isolation toolbar structurally cannot prove: that Enter
       # reaches the handler through the PORTALLED chrome band (React events follow the React tree,
       # the canvas's key listener is a native `window` one); that a full cycle leaves focus in the
@@ -830,7 +829,7 @@ jobs:
         if: ${{ matrix.shard == 4 }}
         run: pnpm --filter @repo/web test:e2e:search-nav
 
-      # The canvas plural selection (`VITE_CANVAS_MULTI_SELECT`) against a real API with the pen
+      # The canvas plural selection (flag retired, ADR-0215 D8) against a real API with the pen
       # enforced. What no mocked test can reach: the optimistic-`version` trap (a mocked fetch
       # accepts any version, so a bulk batch's version threading is only testable here); and that a
       # bulk delete's undo brings the LINKS back, which is the CQ-4 answer — a re-create would
@@ -840,7 +839,7 @@ jobs:
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:multi-select
 
-      # Activity copy / paste / duplicate (`VITE_ACTIVITY_COPY_PASTE`) against a real API with the
+      # Activity copy / paste / duplicate (flag retired, ADR-0215 D8) against a real API with the
       # pen enforced. What no mocked test can reach: that a copy carries what the census says, read
       # back from the API rather than from the DOM under test (ADR-0070 M6); that the internal-edge
       # rule holds against a real graph, with zero links from a clone to an original; that one
@@ -869,11 +868,10 @@ jobs:
         if: ${{ matrix.shard == 1 }}
         run: pnpm --filter @repo/web test:e2e:designed-ui
 
-      # The chrome band with VITE_DESIGNED_CHROME on (ADR-0055 S2) — the header and a plan's two
+      # The chrome band (ADR-0055 S2; its flag is retired, ADR-0215 D8) — the header and a plan's two
       # toolbar rows rendered as ONE surface, the tab order that follows from the new DOM order,
-      # and axe over the band itself. Since the S5-T4 flip this is the SHIPPED DEFAULT; the
-      # sibling step above pins the flags off and is now the rollback-parity side. Both are kept:
-      # dropping either would leave one half of the rollback contract unproven.
+      # and axe over the band itself. This is the shipped chrome; the sibling step above no
+      # longer pins a flag either.
       - name: Web end-to-end tests (designed chrome band, flag on — the shipped default)
         if: ${{ matrix.shard == 2 }}
         run: pnpm --filter @repo/web test:e2e:designed-chrome
@@ -1003,8 +1001,8 @@ jobs:
 
       # Visual placement (playwright.workspace-chrome.config.ts, workspace-chrome M2) with the pen
       # enforced at the API. **The first journey in this repository to run in Visual mode at all** —
-      # the other fourteen canvas configs pin VITE_SCHEDULING_MODES off, each for a good local
-      # reason, and the unrecorded consequence was that the one placement rule a planner exercises
+      # the other fourteen canvas configs once pinned VITE_SCHEDULING_MODES off (no config pins it
+      # now: the flag is retired), each for a good local reason, and the unrecorded consequence was that the one placement rule a planner exercises
       # by dragging a bar had no end-to-end coverage. That is exactly where a defect had been
       # sitting: a `Snap to grid` toggle that appeared to do the snapping while the engine did it
       # unconditionally, and whose own contribution was to write a Saturday drop back as Friday —

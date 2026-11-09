@@ -75,7 +75,7 @@ apps/web/src/
 ├── config/                 # Runtime config (env access, constants)
 ├── styles/                 # globals.css (design tokens) + any base styles
 └── test/                   # Test setup and utilities
-e2e*/                       # Playwright specs (one directory per feature flag)
+e2e*/                       # Playwright specs (one directory per surface)
 ```
 
 **Why:** feature-first modules keep related code together, make ownership and
@@ -109,7 +109,8 @@ and components. Deleting a feature should mean deleting one folder.
   under `routes/`" until 2026-08-05, which is a different TanStack Router mode
   and would send a reader looking for a generated route tree that does not exist.
   The single tree is also what makes a **conditionally-registered** route legible
-  (`...(FLAG ? [route] : [])`, ADR-0074), and it is why the flag structure has to
+  (`...(FLAG ? [route] : [])`, ADR-0074; no route is flag-gated since the 1.1
+  retirement of the web flags, ADR-0215 D8), and it is why a flag structure would have to
   be the gate: that spread widens the registered-route union to contain the route
   in **both** branches, so `pnpm typecheck` cannot catch a link to a route the
   build did not register. Nested **layout routes** model the app shell once:

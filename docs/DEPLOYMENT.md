@@ -1009,12 +1009,11 @@ container start). Edit the stack's `.env`, `docker compose up -d`, done — no r
 image. That is the property worth having: a rollback that needs a release is slower than the
 incident.
 
-**`VITE_` feature flags are not.** Vite inlines `import.meta.env.VITE_*` as a literal when the
-bundle is built, so there is no runtime lookup left to override. Nor is there a build path that
-sets them: `apps/web/Dockerfile` declares one `VITE_` build arg (`VITE_API_URL`),
-`docker-publish.yml` passes none at all, and `.dockerignore` strips `**/.env` from the build
-context. **Every image you pull has every feature flag at its in-source default, which is on.**
-Setting one in your compose stack changes nothing.
+**There are no web feature flags.** All 48 `VITE_` flags were retired in 1.1 (ADR-0215 D8), so
+every capability the client has is always on. Vite inlines `import.meta.env.VITE_*` as a literal
+when the bundle is built, and the one build arg `apps/web/Dockerfile` declares is `VITE_API_URL`
+(`docker-publish.yml` passes none; `.dockerignore` strips `**/.env`), so nothing in a compose
+stack could switch a client behaviour at runtime in any case.
 
 So **your per-feature rollback is image-tag pinning**, described under
 "[Deploying a release](#deploying-a-release-to-a-self-hosted-host-docker-compose--dockge)".
@@ -1022,13 +1021,6 @@ So **your per-feature rollback is image-tag pinning**, described under
 the client back **without touching the API or the schema** — which matters, because migrations
 are forward-only (ADR-0018). And it holds: Watchtower only updates a container whose `:latest`
 digest has moved (ADR-0047), so a pinned semver tag is never silently re-pulled.
-
-> The per-flag "Set to `false` to fall back to…" notes in `.env.example` are **development and
-> CI instructions**. They work under `pnpm dev`, a local `pnpm build`, and the flag-off
-> Playwright configs. They have never worked against a published image, and they read as
-> operator guidance because nobody had checked — found while deciding ADR-0084's retirement
-> schedule, which had been arguing about these flags as _your_ rollback contract when they have
-> only ever been the developers'.
 
 ## Deploying a release to a self-hosted host (Docker Compose / Dockge)
 

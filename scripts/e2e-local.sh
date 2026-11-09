@@ -209,9 +209,8 @@ for t in "${targets[@]}"; do [ "$t" = "--db-only" ] && exit 0; done
 #
 # **A dev server you already started is a silent, wrong pass or a silent, wrong FAIL.**
 # Every `playwright.*.config.ts` here sets `reuseExistingServer: !process.env.CI`, and the whole
-# point of these configs is the environment they hand their servers: the base journey pins
-# `VITE_PLAN_EDIT_LOCK=false`, thirteen flag-on configs set `PLAN_EDIT_LOCK_ENFORCED=true`, and
-# each suite pins its own `VITE_` flags. Reuse takes a server that carries somebody else's
+# point of these configs is the environment they hand their servers: several configs set
+# `PLAN_EDIT_LOCK_ENFORCED=true`, and each suite hands its servers its own environment. Reuse takes a server that carries somebody else's
 # environment and runs the suite against it anyway, reporting nothing.
 #
 # On 2026-08-19 that produced three consecutive false diagnoses in one session — 7 base-journey

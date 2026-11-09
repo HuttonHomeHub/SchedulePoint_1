@@ -3230,9 +3230,7 @@ export function TsldPanel({
               ? 'Recalculate the schedule to plot the activities on the timeline.'
               : editingEnabled && mode === 'add-activity'
                 ? 'Drag on the timeline to add an activity. Esc cancels.'
-                : editingEnabled
-                  ? 'Drag a bar to move it in time or to another lane, or drag from a bar’s edge to link it (Shift = SS, Alt = FF); drag empty space to pan.'
-                  : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
+                : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
           </p>
           {editingEnabled ? (
             <TsldToolbar

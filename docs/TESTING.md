@@ -99,10 +99,10 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
 - Component tests use Testing Library with the jsdom environment (see
   `apps/web/src/test/setup.ts`).
 - Query by accessible role/name to keep tests aligned with accessibility.
-- **Flag-off parity suites are the rollback contract.** A feature behind a flag
-  keeps a suite that mocks `@/config/env` with the flag off and asserts the prior
-  surface. Never weaken one to make a change pass — the day it matters is the day
-  you need it to be strict.
+- **A flag, if one is ever added, keeps a flag-off parity suite.** There are no web
+  feature flags today (all 48 were retired in 1.1, ADR-0215 D8); under ADR-0084 a new
+  one keeps a suite that mocks `@/config/env` with the flag off and asserts the prior
+  surface. Never weaken one to make a change pass.
 - **Structural tests pin invariants a reviewer cannot see.**
   `surface-seams.structural.test.ts` asserts the surface-scope families have no
   Tailwind utilities, so `<Surface>` stays the only route in. Reach for this
@@ -149,20 +149,18 @@ deploy`). Each spec sets up and tears down its own data; no cross-test coupling.
 
 ## End-to-end (Playwright)
 
-The default suite lives in `apps/web/e2e/`. **Each feature flag also has its own
-directory and script**, run with that flag forced on — `pnpm test:e2e` alone does
-not cover them:
+The default suite lives in `apps/web/e2e/`. **Each surface also has its own
+directory and script** — `pnpm test:e2e` alone does not cover them:
 
 ```bash
-pnpm --filter @repo/web test:e2e            # the default (flag-off) journeys
+pnpm --filter @repo/web test:e2e            # the default journeys
 pnpm --filter @repo/web test:e2e:library    # e.g. the library-scoping journey
 ```
 
 `ls apps/web/e2e*` is the authoritative list; `apps/web/package.json` maps each
-directory to its script and forced flags, and `.github/workflows/ci.yml` runs
-each as its own step. **A flag with no flag-on journey is untested in the state
-users actually see** — add the suite and the CI step in the same pull request as
-the flag.
+directory to its script, and `.github/workflows/ci.yml` runs each as its own step.
+No suite pins a retired `VITE_` flag any more (ADR-0215 D8); a config still sets
+the environment its journey needs (ports, API URL, server-side variables).
 
 **Run a journey when the PRODUCT it drives changes, not only when the journey file changes.** The
 distinction is not pedantry — it is how a regression reached `main` on 2026-09-06. The revision
@@ -450,7 +448,7 @@ the component. Treat this as the weak instrument it is — it is cheap, and noth
 **And the e2e half is where a reused server quietly invalidates the result.** `scripts/e2e-local.sh`
 refuses to run while anything answers on 3000 or 5173, because `reuseExistingServer` is true outside
 CI: Playwright adopts whatever is already there instead of starting one with the suite's own
-environment, so the config's flag pins never apply and the run means nothing whichever way it goes.
+environment, so the config's environment never applies and the run means nothing whichever way it goes.
 That refusal fired twice in one session — a `pnpm --filter @repo/api start` left over from a
 screenshot run held the port, and `pkill` did not reach it because the task supervisor restarted it.
 Stop the background task, not just the process. The tell is the clock: the export journey takes ~20s
@@ -474,7 +472,7 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 2   | `pnpm test`                                                 | always                                                                                            |
 | 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                            |
 | 3a  | `scripts/e2e-local.sh api backup`                           | you touched `apps/api/backup/`, either compose file's `backup` block, or a migration (ADR-0192)   |
-| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives              |
+| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a Playwright suite, or changed a surface one drives                      |
 | 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                            |
 | 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))              |
 | 4c  | `scripts/e2e-sweep.sh`                                      | you replaced a **screen every journey signs in through**, or moved a control every journey clicks |
@@ -556,7 +554,7 @@ sweep for the changed _label_ found nothing; the changed _screen_ had a journey 
 nobody could run. Change a screen, run the base journey.
 
 **Step 4c — when the change is under every journey, sweep every journey.** `scripts/e2e-sweep.sh`
-runs every flag-on suite in series, each against its own freshly-started servers.
+runs every suite in series, each against its own freshly-started servers.
 
 **Read its last line, not its forty.** Since 2026-09-02 (ADR-0124 D5) the sweep ends with a verdict
 — `SWEEP: N/M suites passed`, or the **names** of the failures and the log to read for each — and
@@ -576,7 +574,7 @@ the one a layout change is most likely to break. A sweep whose whole argument is
 scoped by whichever directories you remember was itself scoped by whichever suites somebody
 remembered. The default is now every `test:e2e:*` script the package declares, so a suite added
 tomorrow is swept tomorrow. A count in prose is the same defect one file along (ADR-0076 Class 1).
-Restarting between suites is load-bearing rather than tidy: the `VITE_` flags bake at `webServer`
+Restarting between suites is load-bearing rather than tidy: a config's `VITE_` environment bakes at `webServer`
 start and `reuseExistingServer` is true outside CI, so a suite that inherits the previous one's
 servers silently runs against the previous one's configuration.
 
@@ -679,11 +677,11 @@ database if you want to drive the suites yourself.
 
 ```bash
 scripts/e2e-local.sh                 # database + API e2e (the default gate)
-scripts/e2e-local.sh web:wbs         # one flag-on suite, from cold, ~30s
+scripts/e2e-local.sh web:wbs         # one suite, from cold, ~30s
 scripts/e2e-local.sh api web:gantt   # both
 ```
 
-**Step 4 is not optional for a new suite.** A flag-on journey is written against
+**Step 4 is not optional for a new suite.** A journey is written against
 a real browser and a real API, so nothing in steps 1–3 can tell you a locator is
 wrong, a control's accessible name is different from what you assumed, or a
 panel you are querying is collapsed. This is not hypothetical: the ADR-0063
@@ -835,7 +833,7 @@ Three kinds of job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   applies migrations (`prisma migrate deploy`), checks for schema/migration
   drift, runs the API Supertest suite and then the pairwise differential.
 - **e2e-web** — the same setup plus a Playwright browser install, then each web
-  suite as its own step (default, plus one per feature flag), **spread across
+  suite as its own step (default, plus one per surface), **spread across
   four shard jobs** (ADR-0138). Each shard gets its own disposable Postgres, so
   there is nothing between them to race.
 
@@ -860,6 +858,6 @@ against one database; the round trip the sharding is about is CI's.
 - [ ] New behaviour has unit tests; endpoints have integration tests
 - [ ] Bug fixes include a test **verified to fail without the fix**
 - [ ] Endpoints assert cross-organisation access returns 404
-- [ ] Critical journeys covered by an e2e test; a new flag has a flag-on suite
+- [ ] Critical journeys covered by an e2e test; a new flag (if one is ever added) has a flag-on suite
 - [ ] Engine changes argue the recalc parity gate
 - [ ] No skipped/`.only` tests committed

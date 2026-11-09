@@ -195,16 +195,16 @@ smallest first so the first batch proves the method cheaply.
   `SUB_DAY_DURATIONS`, `DURATION_TYPES`, `FLOAT_PATHS`, `GANTT_VIEW`, `SCHEDULE_INTERCHANGE`,
   `PROGRAMME_SCHEDULING`, `AUDIT_LOG`, `ACTIVITY_CALENDAR`, `ENTRY_ROUTES`, `CANVAS_LIVE_FEEDBACK`,
   `ACTIVITY_COPY_PASTE`, `ADVANCED_CONSTRAINTS`.
-- **T7 — batch C (11 flags, two families, ~58 files):** `RESOURCE_CURVES` + `CANVAS_RESOURCE_VIEW`,
+- **T7 — batch C (12 flags, two families, ~58 files):** `RESOURCE_CURVES` + `CANVAS_RESOURCE_VIEW`,
   `CANVAS_LENSES` + `CANVAS_SEARCH_NAV`, `CANVAS_NAV`, `CANVAS_TIME_AXIS`, `INTER_PROJECT_DATES`,
   `ACTIVITY_EDITOR_CONVERGENCE`, `GUEST_SHARE_LINKS`, `ADVANCED_ACTIVITY_TYPES`, `RESOURCE_LEVELLING`,
   `RESOURCES`.
-- **T8 — batch D (10 flags, the two largest families, ~64 files):** `CANVAS_DIRECT_MANIPULATION` +
+- **T8 — batch D (9 flags, the two largest families, ~64 files):** `CANVAS_DIRECT_MANIPULATION` +
   `CANVAS_LINK_ROUTING` + `CANVAS_MULTI_SELECT`, `CANVAS_AUTHORING` + `CANVAS_AUTHORING_FLOW`,
   `CANVAS_DATA_DATE`, `NOTES`, `WBS_IMPROVEMENTS`, `EARNED_VALUE`. The ux-reviewer sweep follows this
   batch.
 
-14 + 13 + 11 + 10 = 48. Each name above drops its `_ENABLED` suffix and is `VITE_<NAME>` in the register.
+14 + 13 + 12 + 9 = 48. Each name above drops its `_ENABLED` suffix and is `VITE_<NAME>` in the register.
 
 ##### Task M1-T5 … T8 — Delete flags, batch by batch (≈ one PR each)
 
