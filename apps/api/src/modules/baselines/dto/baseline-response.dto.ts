@@ -48,19 +48,17 @@ export class BaselineResponseDto implements BaselineSummary {
 
   @ApiProperty({
     format: 'date',
-    nullable: true,
     type: String,
-    description: "The plan's start (YYYY-MM-DD) at capture, or null.",
+    description: "The plan's start (YYYY-MM-DD) at capture.",
   })
-  dataDate!: string | null;
+  dataDate!: string;
 
   @ApiProperty({
     format: 'date',
-    nullable: true,
     type: String,
-    description: "The plan's latest inclusive finish (YYYY-MM-DD) at capture, or null.",
+    description: "The plan's latest inclusive finish (YYYY-MM-DD) at capture.",
   })
-  capturedProjectFinish!: string | null;
+  capturedProjectFinish!: string;
 
   @ApiProperty({ description: 'How many activity snapshots the baseline froze.' })
   activityCount!: number;
@@ -102,10 +100,8 @@ export class BaselineResponseDto implements BaselineSummary {
       name: entity.name,
       isActive: entity.isActive,
       capturedAt: entity.capturedAt.toISOString(),
-      dataDate: entity.dataDate ? formatCalendarDate(entity.dataDate) : null,
-      capturedProjectFinish: entity.capturedProjectFinish
-        ? formatCalendarDate(entity.capturedProjectFinish)
-        : null,
+      dataDate: formatCalendarDate(entity.dataDate),
+      capturedProjectFinish: formatCalendarDate(entity.capturedProjectFinish),
       activityCount,
       placementSnapshotLevel: entity.placementSnapshotLevel,
       swimlaneSnapshotLevel: entity.swimlaneSnapshotLevel,

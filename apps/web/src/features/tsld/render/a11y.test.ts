@@ -993,13 +993,13 @@ describe('the comparison overlay’s spoken summary', () => {
       const summary = compareOverlaySummary([ghost('Piling')], 3, { drawn: 0, undrawable: 1 });
       expect(summary?.undrawn).toBe(4);
       expect(summary?.undrawnLabel).toBe(
-        '4 changes are not shown — there is no matching bar on this diagram to draw them against. ' +
+        '4 changes are not shown — there is nothing on this diagram to draw them against. ' +
           'They are listed under Changes.',
       );
       expect(summary?.undrawnLabel).not.toContain('did not record');
       const one = compareOverlaySummary([], 0, { drawn: 0, undrawable: 1 });
       expect(one?.undrawnLabel).toBe(
-        '1 change is not shown — there is no matching bar on this diagram to draw it against. ' +
+        '1 change is not shown — there is nothing on this diagram to draw it against. ' +
           'It is listed under Changes.',
       );
     });
@@ -1028,7 +1028,7 @@ describe('the comparison overlay’s spoken summary', () => {
       );
       expect(summary?.undrawn).toBe(4);
       expect(summary?.undrawnLabel).toBe(
-        '3 changes are not shown — there is no matching bar on this diagram to draw them against. ' +
+        '3 changes are not shown — there is nothing on this diagram to draw them against. ' +
           'They are listed under Changes. ' +
           '1 change is not shown — their swimlane or row can no longer be matched.',
       );

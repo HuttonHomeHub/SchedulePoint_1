@@ -692,8 +692,6 @@ export class BaselineRepository {
       isCritical: boolean;
       totalFloat: number | null;
       totalFloatMinutes: number | null;
-      baselineStart: Date | null;
-      baselineFinish: Date | null;
       placedStart: Date | null;
       placedFinish: Date | null;
       laneIndex: number;
@@ -720,8 +718,6 @@ export class BaselineRepository {
         isCritical: true,
         totalFloat: true,
         totalFloatMinutes: true,
-        baselineStart: true,
-        baselineFinish: true,
         // The frozen placed span (placement-baseline-variance).
         placedStart: true,
         placedFinish: true,

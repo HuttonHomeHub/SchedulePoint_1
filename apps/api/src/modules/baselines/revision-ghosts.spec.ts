@@ -97,6 +97,22 @@ describe('the revision ghost builder', () => {
     expect(result.ghosts).toEqual([]);
   });
 
+  it('never reports undrawable ghosts for a same-plan comparison', () => {
+    // The web sentence for `undrawable` says "the two plans lay their activities out independently"
+    // unconditionally, which is only true because a same-plan ghost always has a recorded lane: it
+    // is placed at its own frozen index, moved or removed. If this fails, that sentence is false.
+    const from = [
+      row({ activityId: 'moved', laneIndex: 1 }),
+      row({ activityId: 'gone', laneIndex: 3 }),
+    ];
+    const to = [row({ activityId: 'moved', laneIndex: 2 })];
+
+    const result = buildRevisionGhosts(from, to, CAP, 'SAME_PLAN');
+
+    expect(result.ghosts.map((g) => g.activityId).sort()).toEqual(['gone', 'moved']);
+    expect(result.undrawable).toBe(0);
+  });
+
   it('draws both milestone types as milestones', () => {
     for (const type of ['START_MILESTONE', 'FINISH_MILESTONE'] as const) {
       const { ghosts } = buildRevisionGhosts([row({ activityId: 'm', type })], [], CAP);

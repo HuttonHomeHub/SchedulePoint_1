@@ -1426,6 +1426,8 @@ export class ScheduleService {
       costBaselineMissing: result.costBaselineMissing,
       costWarningCount: result.costWarningCount,
       costPhasingLaggedCount: result.costPhasingLaggedCount,
+      // The engine still returns `costPhasingApproximatedCount`; it is not published since 1.1.0
+      // (ADR-0215 D6), and the engine is deliberately untouched (ADR-0034 / `check:engine-parity`).
       // N27 (ADR-0044 §33): leaf activities whose steps are all zero-weight, so the manual physical %
       // fallback was used — a read-time data-quality warning, mirroring costWarningCount.
       stepWeightZeroCount: result.stepWeightZeroCount,

@@ -478,7 +478,7 @@ export function compareOverlaySummary(
       unanchored === 0
         ? ''
         : `${String(unanchored)} ${unanchored === 1 ? 'change is' : 'changes are'} not shown — ` +
-          `there is no matching bar on this diagram to draw ${unanchored === 1 ? 'it' : 'them'} ` +
+          `there is nothing on this diagram to draw ${unanchored === 1 ? 'it' : 'them'} ` +
           `against. ${unanchored === 1 ? 'It is' : 'They are'} listed under Changes.`,
       unplaced === 0
         ? ''

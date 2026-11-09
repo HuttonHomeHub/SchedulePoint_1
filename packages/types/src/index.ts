@@ -1859,10 +1859,10 @@ export interface BaselineSummary {
   isActive: boolean;
   /** ISO instant the snapshot was frozen. */
   capturedAt: string;
-  /** The plan's `plannedStart` at capture (`YYYY-MM-DD`), or null if it had none. */
-  dataDate: string | null;
-  /** The plan's latest inclusive finish at capture (`YYYY-MM-DD`), or null. */
-  capturedProjectFinish: string | null;
+  /** The plan's `plannedStart` at capture (`YYYY-MM-DD`). */
+  dataDate: string;
+  /** The plan's latest inclusive finish at capture (`YYYY-MM-DD`). */
+  capturedProjectFinish: string;
   /** How many activity snapshots the baseline froze. */
   activityCount: number;
   /**

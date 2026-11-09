@@ -184,8 +184,6 @@ export interface EarnedValueActivityRow {
   steps: { weight: Prisma.Decimal; percentComplete: number }[];
   budgetedExpense: bigint | null;
   actualExpense: bigint | null;
-  earlyStart: Date | null;
-  earlyFinish: Date | null;
   /** The span as drawn (ADR-0148): where the bar is placed. Equal to the early span on an unplaced plan. */
   visualEffectiveStart: Date | null;
   visualEffectiveFinish: Date | null;
@@ -676,8 +674,6 @@ export class ScheduleRepository {
         },
         budgetedExpense: true,
         actualExpense: true,
-        earlyStart: true,
-        earlyFinish: true,
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
         assignments: {
