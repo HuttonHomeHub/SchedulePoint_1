@@ -30,8 +30,10 @@ Part 5, 30 days after you are happy.
 
 ## Part 1: Before you merge the 1.1.0 release (about 15 minutes)
 
-Do this while SchedulePoint is still on 1.0.x. **Order matters:** a 1.1.0 backup tool will not check a copy made
-by 1.0.
+Do this while SchedulePoint is still on 1.0.x. **Order matters:** the 1.1.0 backup tool can still check a copy made
+by 1.0 (it prints a note that only 1.0 can restore it), but checking it now, with the 1.0 tool that made it, is the
+simplest test that the copy can really be used to go back. After the switch you would be testing it with a newer
+tool than the one that wrote it.
 
 1. Check everything is healthy (1 minute):
 
@@ -65,6 +67,18 @@ by 1.0.
 
    The newest name is the one you just made, for example `schedulepoint-2026-11-20T0930Z.dump`.
 
+   The backups folder belongs to another user on the server (number 1000) and is private, so copying out needs
+   `sudo`, and the copy you make then belongs to the administrator. Take both files in one go, then give them to
+   yourself:
+
+   ```bash
+   sudo cp backups/<COPY-NAME> backups/<COPY-NAME>.sha256 ~/
+   sudo chown "$USER" ~/<COPY-NAME> ~/<COPY-NAME>.sha256
+   ```
+
+   (Use the folder you set up in the back-up guide if it is not called `backups`. Then move those two files off the
+   server.) If your terminal prompt starts with `root@`, leave `sudo` out.
+
 5. **Optional: stop the automatic update first.** Normally you do nothing here. If you want to merge the release
    now and switch later, put these two lines in `.env` (in Dockge, the stack's "Env" box), then apply them
    (`docker compose up -d`, or **Deploy** in Dockge):
@@ -84,16 +98,25 @@ by 1.0.
    `web-v1.1.0`. (about 10 minutes)
 
 2. **If you did not pin the versions:** within about five minutes SchedulePoint fetches 1.1.0 and **the app stops
-   working**. That is expected. Confirm it with:
+   working** (the page shows an error, usually a 502, rather than a blank screen). That is expected. Confirm it
+   with:
 
    ```bash
    docker compose logs --tail 20 api
    ```
 
-   **You should see:** "SchedulePoint 1.1 needs a new, empty database. This database was made by SchedulePoint
-   1.0 or earlier. Nothing has been changed." **Your old data is untouched.**
+   **You should see:** a first line starting `DATABASE REFUSED — SchedulePoint has not started and has not changed
+the database, which was made by SchedulePoint 1.0 or earlier.`, then `Keep a copy of it and point SchedulePoint
+at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the release compose) to go back to
+1.0.`, then `See docs/guides/start-fresh-on-1-1.md.` Look also for a line containing `boot.database_refused`.
+   **Your old data is untouched.**
 
-3. Stop SchedulePoint. In Dockge click **Stop**. Or:
+3. **Before you stop:** the `backup` service is not stopped by this refusal. It is deliberately not checked at
+   boot, so on the old volume it keeps taking nightly copies of the 1.0 database. Stopping the stack in this step
+   stops those backups too, and they stay stopped until step 7 starts the new stack. That is fine for a few
+   minutes, but do not leave the stack stopped for days.
+
+   Stop SchedulePoint. In Dockge click **Stop**. Or:
 
    ```bash
    docker compose stop
@@ -132,11 +155,15 @@ by 1.0.
 5. If you pinned the versions in Part 1, remove the two `API_IMAGE_TAG` and `WEB_IMAGE_TAG` lines from `.env`
    now.
 
-   **The `backup` service is not stopped by this refusal.** It is deliberately not checked at boot, so on the old
-   volume it keeps taking nightly copies of the 1.0 database until you switch the stack to the new volume in
-   step 4. Only the API refuses to start on a database from before 1.1.
+6. Fetch 1.1.0 and **confirm the version before you start it** (2 minutes). The images are private, so if the
+   server is not signed in to GitHub's registry (or `docker compose pull` says `unauthorized` or `denied`), sign
+   in first, as the top of `docker-compose.release.yml` describes (the token needs `read:packages`):
 
-6. Fetch 1.1.0 and **confirm the version before you start it** (2 minutes):
+   ```bash
+   echo $GHCR_PAT | docker login ghcr.io -u <github-user> --password-stdin
+   ```
+
+   Then:
 
    ```bash
    docker compose pull
@@ -153,8 +180,35 @@ by 1.0.
    ```
 
    **You should see:** the log reports the first database set-up being applied, then the API starting
-   (`docker compose logs --tail 30 api`). **Success is** that the SchedulePoint sign-in page loads. (about 3
-   minutes)
+   (`docker compose logs --tail 30 api`). **Success is** that the SchedulePoint sign-in page loads. The first start
+   on an empty database takes a few minutes: the web container waits for the API to report healthy, which can take
+   up to 5 minutes. (about 3 to 5 minutes)
+
+   **Check it worked:**
+
+   ```bash
+   docker volume ls
+   docker compose ps
+   ```
+
+   `docker volume ls` should list a volume ending `_db-data-1-1` (your stack's name first, for example
+   `mystack_db-data-1-1`), and the old `_db-data` beside it. `docker compose ps` should show `db`, `api` and
+   `backup` as `(healthy)` and `web` as `Up`. (`backup` can read `starting` for up to 10 minutes after a start;
+   that is normal.) The database password for the new volume is the one in your `.env`, so nothing needs
+   typing.
+
+   **If the page does not load** after 5 minutes:
+
+   ```bash
+   docker compose logs --tail 50 db api
+   ```
+
+   and send the maintainers what it prints.
+
+   **Optional: pause the automatic update around the day.** Instead of pinning versions (Part 1 step 5), you can
+   put `WATCHTOWER_MONITOR_ONLY=true` in `.env` and apply it. The updater then only reports that a new version
+   exists and fetches nothing. Take the line out again afterwards. The pinning in Part 1 step 5 is still the
+   method this guide uses.
 
 ---
 
@@ -186,17 +240,45 @@ SchedulePoint started on the new volume would try to build an old-style database
 
 1. Stop SchedulePoint (Dockge **Stop**, or `docker compose stop`).
 2. In the compose file, put the volume name back to `db-data` in both places.
-3. In `.env`, add:
+3. **Switch the 90-day clear-out off before 1.0 starts.** In `.env` set:
+
+   ```text
+   RETENTION_HIERARCHY_ENABLED=false
+   ```
+
+   Why: the clear-out is on for your server, and on start-up it permanently deletes anything that has sat in the
+   recycle bin for more than 90 days. The old database may hold such items, and 1.0 would remove them the moment it
+   starts. Turn it back on (`true`) only when you have decided to stay on 1.0 on purpose.
+
+4. In `.env`, add:
 
    ```text
    API_IMAGE_TAG=1.0.0
    WEB_IMAGE_TAG=1.0.0
    ```
 
-4. Pull and start (`docker compose pull`, then `docker compose up -d`, or **Deploy** in Dockge). Sign in as you
-   did before: your old plans are there.
-5. Pinned versions stop automatic updates. Remove the two lines when you want to move forward again.
-6. You need the backup file from Part 1 only if the old volume has been lost. A copy made by 1.0 is restored with
+5. Pull and start (`docker compose pull`, then `docker compose up -d`, or **Deploy** in Dockge). If the pull says
+   `unauthorized` or `denied`, sign in first with the `docker login ghcr.io` command from Part 2 step 6. Then
+   check it worked:
+
+   ```bash
+   docker compose ps
+   ```
+
+   `db`, `api` and `backup` should read `(healthy)` and `web` `Up`. Open SchedulePoint and sign in as you did
+   before: your old plans are there.
+
+6. Check the 1.0 copy with its own name. Do not leave the name out: with no name the tool takes the **newest**
+   copy, which may be one made by 1.1, and says it "was made by a newer version" and fails.
+
+   ```bash
+   docker compose run --rm backup check <COPY-NAME-FROM-PART-1>
+   ```
+
+   **You should see:** `CHECK PASSED`.
+
+7. Pinned versions stop automatic updates. Remove the two lines when you want to move forward again.
+8. You need the backup file from Part 1 only if the old volume has been lost. A copy made by 1.0 is restored with
    the 1.0.0 image (`backup restore <file>`, in [`back-up-and-restore.md`](./back-up-and-restore.md), Part 3).
 
 The rollback to 0.106.0 and 0.202.0 described in [`docs/RELEASE_1_0.md`](../RELEASE_1_0.md) does **not** apply
@@ -213,7 +295,14 @@ Your file from Part 1 is then the only copy.
 docker volume ls
 ```
 
-Find the old volume. Its name ends in `db-data` (for example `mystack_db-data`), not `db-data-1-1`. Then:
+Find the old volume. Its name ends in `db-data` (for example `mystack_db-data`), not `db-data-1-1`. Check that
+nothing is using it (this should print only the heading line, with no containers under it):
+
+```bash
+docker ps -a --filter volume=<OLD-VOLUME-NAME>
+```
+
+Then:
 
 ```bash
 docker volume rm <OLD-VOLUME-NAME>
