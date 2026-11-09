@@ -83,9 +83,6 @@ function paint(
     edges,
     dataDate: DATA_DATE,
     view: { ...DEFAULT_VIEW_TOGGLES, labels: true, ...toggles },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
   const view: Viewport = { pxPerDay, originX: 40, originY: 40 };

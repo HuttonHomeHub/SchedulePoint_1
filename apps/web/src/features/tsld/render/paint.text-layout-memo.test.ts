@@ -59,8 +59,6 @@ const SCENE: TsldScene = {
     },
   ],
   dataDate: '2026-01-01',
-  visualRefresh: true,
-  timeTrueLinks: true,
   view: { ...DEFAULT_VIEW_TOGGLES, dates: true, centreItem: true },
 };
 

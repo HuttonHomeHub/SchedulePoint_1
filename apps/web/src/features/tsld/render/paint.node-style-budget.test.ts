@@ -140,9 +140,6 @@ function paint(): string[] {
       dayGrid: false,
       monthGrid: false,
     },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
   paintScene(ctx as never, scene, view, SIZE, PALETTE, 1);

@@ -37,7 +37,7 @@ export function drawPolyline(ctx: Ctx2D, points: Point[]): void {
  * pure {@link elbowRadius} (clamped to half its adjoining segments; 0 = a hard corner) via the
  * optional `arcTo` — degrading to the plain hard-cornered {@link drawPolyline} on contexts
  * without it (older browsers / minimal test mocks), like the M4 `roundRect` guard. Rect/line/arc
- * primitives only; called only on the refreshed (flag-on) path.
+ * primitives only.
  */
 export function drawRoundedPolyline(ctx: Ctx2D, points: Point[]): void {
   if (points.length < 3 || typeof ctx.arcTo !== 'function') {
@@ -73,43 +73,4 @@ export function traceMilestoneTriangle(
   ctx.lineTo(cx + r, cy - 0.7 * r);
   ctx.lineTo(cx, cy + r);
   if (close) ctx.lineTo(cx - r, cy - 0.7 * r);
-}
-
-/**
- * The milestone glyph for the path in use: the triangle on the refreshed canvas, the diamond on the
- * legacy path. **Every milestone caller goes through this one dispatch** (the refreshed bar, the
- * baseline ghost and the legacy bar layer), so the choice of shape is made in one place and the
- * callers cannot drift apart. It replaced a single diamond tracer that this file described as "the
- * ONE tracing"; there are two tracers now, and this is the one place that picks between them.
- */
-export function traceMilestoneGlyph(
-  ctx: Ctx2D,
-  cx: number,
-  cy: number,
-  r: number,
-  close: boolean,
-  triangle: boolean,
-): void {
-  if (triangle) traceMilestoneTriangle(ctx, cx, cy, r, close);
-  else traceMilestoneDiamond(ctx, cx, cy, r, close);
-}
-
-/**
- * Begin the 4-vertex milestone diamond path centred on (`cx`, `cy`), the legacy path's glyph.
- * Left open by default (a `fill` closes it implicitly); `close` traces the final segment back to
- * the top vertex for stroke-only callers (the Ctx2D surface has no closePath).
- */
-export function traceMilestoneDiamond(
-  ctx: Ctx2D,
-  cx: number,
-  cy: number,
-  r: number,
-  close = false,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r);
-  ctx.lineTo(cx + r, cy);
-  ctx.lineTo(cx, cy + r);
-  ctx.lineTo(cx - r, cy);
-  if (close) ctx.lineTo(cx, cy - r);
 }

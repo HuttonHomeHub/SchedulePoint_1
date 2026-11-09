@@ -26,7 +26,6 @@ import { axisMarkers, clampMarkLeft } from '../render/axis-markers';
 import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar, LevelledGhost } from '../render/lenses';
-import { linkLegality } from '../render/link-legality';
 import { buildMinimapBitmap, sceneWindowRect, type MinimapMapping } from '../render/minimap';
 import {
   paintInteractionLayer,
@@ -38,7 +37,6 @@ import {
   type GhostDetail,
   type InteractionOverlay,
   type LagOverlay,
-  type LinkOverlay,
   type ResizeOverlay,
   type ResourceStripPalette,
   type SwimlaneMarks,
@@ -59,7 +57,6 @@ import {
   dayCellRect,
   axisDayOf,
   DEFAULT_VIEWPORT,
-  edgeAnchor,
   fitToContent,
   hitTest,
   idsIntersecting,
@@ -712,33 +709,6 @@ function lagGrabOf(
   };
 }
 
-/** The live dependency rubber-band (anchor → pointer + target highlight), or null when not linking.
- * When a target is hovered, its ring reflects link legality (ADR-0026 D5) computed from `edges`. */
-function liveLink(
-  state: GestureState,
-  view: Viewport,
-  activities: readonly RenderActivity[],
-  dataDate: string,
-  edges: readonly RenderEdge[],
-): LinkOverlay | null {
-  if (state.kind !== 'linking') return null;
-  const source = activities.find((a) => a.id === state.sourceId);
-  const sourceRect = source && activityRect(source, view, dataDate);
-  if (!sourceRect) return null;
-  const target = state.targetId ? activities.find((a) => a.id === state.targetId) : undefined;
-  const targetRect = (target && activityRect(target, view, dataDate)) || null;
-  const targetLegal =
-    state.targetId === null
-      ? true
-      : linkLegality(state.sourceId, state.targetId, state.type, edges) === null;
-  return {
-    from: edgeAnchor(sourceRect, state.sourceHandle),
-    to: state.point,
-    targetRect,
-    targetLegal,
-  };
-}
-
 /** The picked-first-endpoint rect while a two-click tool waits for the second click — the `link` tool's
  * predecessor (M5) or the LOE tool's start driver (Stage D) — or null when not mid-pick. Drawn as a
  * highlight ring so the "now pick the second endpoint" step reads on the canvas. */
@@ -1164,13 +1134,7 @@ export function TsldCanvas({
   // frame budget would simply double. Destructured to primitives so the dep arrays stay stable
   // whatever the memo does.
   const layers = useMemo(() => sceneLayers(view), [view]);
-  const {
-    monthBands: monthBandsEnabled,
-    dataDateLine: dataDateLineEnabled,
-    timeTrueLinks,
-    visualRefresh,
-    linkRouting,
-  } = layers;
+  const { monthBands: monthBandsEnabled, dataDateLine: dataDateLineEnabled } = layers;
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -1193,13 +1157,6 @@ export function TsldCanvas({
     compareLinks,
     flaggedIds,
     swimlaneMarks,
-    // Time-true link anchoring + arrowheads (ADR-0052 M1), the M4 bar visual refresh and the
-    // obstacle-aware link corridors (ADR-0064 M2). Constants, so they never re-trigger the scene
-    // effect; each is its own scene field so the painter's render changes stay independently
-    // testable.
-    timeTrueLinks: true,
-    visualRefresh: true,
-    linkRouting: true,
     // M5 hover-driven incident-link highlight — null until the idle-hover branch publishes.
     hoverId: null,
     // The visible lag-anchor handles ride the SAME gate as their grab zones (`lagArmed`), so the
@@ -1324,9 +1281,6 @@ export function TsldCanvas({
       compareLinks,
       flaggedIds,
       swimlaneMarks,
-      timeTrueLinks,
-      visualRefresh,
-      linkRouting,
       // Preserve the live hover highlight across a data/selection rebuild (M5) — the pointer
       // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
       // always null (the branch that writes it never runs), keeping the scene byte-identical.
@@ -1349,9 +1303,6 @@ export function TsldCanvas({
     // inline as build-time constants. They are booleans off a `useMemo` keyed on `view`, so they
     // are referentially stable and adding them cannot make this effect run more often — which is
     // the whole reason `layers` is destructured rather than listed as an object.
-    timeTrueLinks,
-    visualRefresh,
-    linkRouting,
     selectedId,
     selectedIds,
     showEdgeHandles,
@@ -2234,13 +2185,6 @@ export function TsldCanvas({
         const overlay: InteractionOverlay = {
           live: liveGhostRect(gestureRef.current, viewRef.current),
           pending: p ? dayCellRect(p.startDay, p.endDay, p.laneIndex, viewRef.current) : null,
-          link: liveLink(
-            gestureRef.current,
-            viewRef.current,
-            sceneRef.current.activities,
-            sceneRef.current.dataDate,
-            sceneRef.current.edges,
-          ),
           linkPick: linkPickRect(
             gestureRef.current,
             viewRef.current,
@@ -2257,9 +2201,8 @@ export function TsldCanvas({
             sceneRef.current.isWorkingDay,
           ),
           lag: liveLag(gestureRef.current, viewRef.current),
-          // M4 refresh: restyled ghosts + the idle-hover ring (suppressed while a gesture is in
-          // flight — the ghost is the live affordance then).
-          visualRefresh: true,
+          // The idle-hover ring (M4), suppressed while a gesture is in flight — the ghost is the
+          // live affordance then.
           hover: gestureActiveRef.current ? null : hoverRef.current,
           // Live feedback (ADR-0054 §1): the ghost carries the dragged bar's own label, progress
           // and glyph. Null whenever no bar is being manipulated (a create has none), so the
@@ -2619,8 +2562,6 @@ export function TsldCanvas({
   // `ctrl` folds Ctrl and Cmd into one field on purpose (M2-T1): they are the same intent on two
   // platforms, and a downstream consumer that had to check both would eventually check one.
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({
-    shift: e.shiftKey,
-    alt: e.altKey,
     ctrl: e.ctrlKey || e.metaKey,
   });
   /**
@@ -2856,9 +2797,9 @@ export function TsldCanvas({
             const p = localPoint(e);
             const rawHit = classifyAt(p, resizeArmed, lagArmed);
             const isHandle = rawHit.kind === 'startHandle' || rawHit.kind === 'finishHandle';
-            // Downgrade a handle to a body hit (ADR-0052 §1: there is no edge-drag link; linking is
-            // the two-click tool) so it never starts a dangling rubber-band and falls through to
-            // reposition (if wired) or M1 select.
+            // Downgrade an unarmed edge zone to a body hit (ADR-0052 §1: there is no edge-drag
+            // link; linking is the two-click tool) so a press there repositions (if wired) or
+            // selects, as a press anywhere else on the bar does.
             const hit: HitZone = isHandle && rawHit.id ? { kind: 'body', id: rawHit.id } : rawHit;
             // A body grab in select mode needs the activity's current geometry to reposition it —
             // but only when a reposition handler is wired, else it falls through to M1 select. A
@@ -2934,14 +2875,9 @@ export function TsldCanvas({
           }
           if (gestureActiveRef.current) {
             const p = localPoint(e);
-            // Only a link drag needs the hovered target + live modifiers (a per-move hit-test);
-            // create/reposition track by point alone, so we skip the classify for them.
-            const linking = gestureRef.current.kind === 'linking';
             const { state } = reduce(
               gestureRef.current,
-              linking
-                ? { type: 'pointerMove', point: p, hit: classifyAt(p), modifiers: modifiersOf(e) }
-                : { type: 'pointerMove', point: p },
+              { type: 'pointerMove', point: p },
               machineCtx(),
             );
             gestureRef.current = state;
@@ -3031,14 +2967,9 @@ export function TsldCanvas({
             // check until the surface has a real measured size (avoids a degenerate 1×1).
             const measured = width > 1 && height > 1;
             const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
-            const linking = gestureRef.current.kind === 'linking';
             const { state, intent, select } = reduce(
               gestureRef.current,
-              outOfBounds
-                ? { type: 'escape' }
-                : linking
-                  ? { type: 'pointerUp', hit: classifyAt(p), modifiers: modifiersOf(e) }
-                  : { type: 'pointerUp' },
+              outOfBounds ? { type: 'escape' } : { type: 'pointerUp' },
               machineCtx(),
             );
             gestureRef.current = state;

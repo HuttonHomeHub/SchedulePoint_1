@@ -41,9 +41,6 @@ function run(
     activities: source.activities,
     edges: source.edges,
     dataDate: '2026-01-01',
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     view: { ...DEFAULT_VIEW_TOGGLES, labels: text, dates: text },
   };
   const size = { width: canvas.width, height: canvas.height };

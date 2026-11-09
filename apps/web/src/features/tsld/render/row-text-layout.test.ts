@@ -66,7 +66,6 @@ function input(
       view: VIEW,
       size: SIZE,
       toggles: { ...DEFAULT_VIEW_TOGGLES, dates: true, ...toggles },
-      visualRefresh: true,
       reservesTextRows: rowReservesTextRows(),
       measure: (text, font) => {
         calls.push({ text, font });

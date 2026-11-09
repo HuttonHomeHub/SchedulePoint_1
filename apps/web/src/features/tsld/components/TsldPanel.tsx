@@ -221,7 +221,7 @@ export interface TsldLagInput {
 
 export type TsldLagOutcome = TsldEditOutcome;
 
-/** A committed dependency-draw — predecessor → successor with the modifier-chosen type. */
+/** A committed dependency-draw — predecessor → successor with the Link tool's type. */
 export interface TsldLinkInput {
   predecessorId: string;
   successorId: string;

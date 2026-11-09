@@ -120,9 +120,6 @@ function paint(count: number, only?: (e: RenderEdge) => boolean) {
     edges,
     dataDate: '2026-01-01',
     view: { ...DEFAULT_VIEW_TOGGLES, labels: true, linkSlack: true },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);

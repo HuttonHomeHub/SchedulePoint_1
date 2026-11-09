@@ -82,9 +82,6 @@ for (const [name, lanes] of layouts) {
     activities: plan.activities.map((a) => ({ ...a, laneIndex: lanes.get(a.id) ?? a.laneIndex })),
     edges: plan.edges,
     dataDate: plan.dataDate,
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
   };
   const page = await browser.newPage({
     viewport: { width: WIDTH, height },

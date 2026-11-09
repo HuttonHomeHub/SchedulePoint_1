@@ -104,7 +104,7 @@ describe('textWidthKeys', () => {
             for (const originX of [0, -200]) {
               const view: Viewport = { pxPerDay, originX, originY: 0 };
               sceneRowText(
-                { activities, dataDate: '2026-01-01', visualRefresh: true },
+                { activities, dataDate: '2026-01-01' },
                 view,
                 { width, height: 0 },
                 toggles,
@@ -148,7 +148,6 @@ describe('textWidthKeys', () => {
               view,
               size: { width: 1200, height: 0 },
               toggles,
-              visualRefresh: true,
               reservesTextRows: rowReservesTextRows(),
               measure: (t) => t.length * 6,
               labelOf: (a) =>
@@ -185,7 +184,7 @@ describe('textWidthKeys', () => {
       for (const toggles of TOGGLES) {
         for (const pxPerDay of [1, 4, 12]) {
           const view: Viewport = { pxPerDay, originX: 0, originY: 0 };
-          const scene = { activities, dataDate: '2026-01-01', visualRefresh: true };
+          const scene = { activities, dataDate: '2026-01-01' };
           const measure = (t: string): number => t.length * 6;
           const whole = sorted(allItems(sceneRowText(scene, view, size, toggles, measure)));
           expect(sorted(sceneRowTextItems(scene, view, size, toggles, measure))).toEqual(whole);

@@ -142,7 +142,7 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
     const ctx = mockCtx();
     paintInteractionLayer(
       ctx,
-      { live: GHOST, visualRefresh: true, ghost: { label: 'A100 Excavate · 4d' } },
+      { live: GHOST, ghost: { label: 'A100 Excavate · 4d' } },
       SIZE,
       PALETTE,
     );
@@ -155,16 +155,11 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
 
   it('draws a progress band when the dragged bar has progress', () => {
     const bare = mockCtx();
-    paintInteractionLayer(
-      bare,
-      { live: GHOST, visualRefresh: true, ghost: { label: 'x' } },
-      SIZE,
-      PALETTE,
-    );
+    paintInteractionLayer(bare, { live: GHOST, ghost: { label: 'x' } }, SIZE, PALETTE);
     const withProgress = mockCtx();
     paintInteractionLayer(
       withProgress,
-      { live: GHOST, visualRefresh: true, ghost: { label: 'x', percentComplete: 50 } },
+      { live: GHOST, ghost: { label: 'x', percentComplete: 50 } },
       SIZE,
       PALETTE,
     );
@@ -177,7 +172,7 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
     const ctx = mockCtx();
     paintInteractionLayer(
       ctx,
-      { live: GHOST, visualRefresh: true, ghost: { label: 'M1', milestone: true } },
+      { live: GHOST, ghost: { label: 'M1', milestone: true } },
       SIZE,
       PALETTE,
     );
@@ -191,13 +186,8 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
   it('is a no-op without ghost detail — the flag-off parity contract', () => {
     const withField = mockCtx();
     const withoutField = mockCtx();
-    paintInteractionLayer(
-      withField,
-      { live: GHOST, visualRefresh: true, ghost: null },
-      SIZE,
-      PALETTE,
-    );
-    paintInteractionLayer(withoutField, { live: GHOST, visualRefresh: true }, SIZE, PALETTE);
+    paintInteractionLayer(withField, { live: GHOST, ghost: null }, SIZE, PALETTE);
+    paintInteractionLayer(withoutField, { live: GHOST }, SIZE, PALETTE);
     expect(withField.fillRect.mock.calls).toEqual(withoutField.fillRect.mock.calls);
     expect(withField.strokeRect.mock.calls).toEqual(withoutField.strokeRect.mock.calls);
     expect(withField.fillText).not.toHaveBeenCalled();
@@ -209,7 +199,6 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
       ctx,
       {
         resize: { rect: GHOST, label: '7d' },
-        visualRefresh: true,
         ghost: { label: 'A100 Excavate · 4d' },
       },
       SIZE,
@@ -373,14 +362,15 @@ describe("the feasible window (one-planning-surface M-E, replacing ADR-0054 §4'
   });
 });
 
-describe('relationship slack on the selection (ADR-0054 §5)', () => {
+describe('relationship slack on the link (ADR-0054 §5, carried by the link language since NetPoint grammar M3-T3)', () => {
   const pred = task({ id: 'p', drawnStart: '2026-01-02', drawnFinish: '2026-01-05' });
-  // Starts 5 days after the predecessor finishes, so this FS tie carries 5 days of slack.
+  // Starts 10 days after the predecessor finishes, so this FS tie carries 10 days of slack — wide
+  // enough to hold its label between the two nodes.
   const succ = task({
     id: 's',
     laneIndex: 1,
-    drawnStart: '2026-01-11',
-    drawnFinish: '2026-01-14',
+    drawnStart: '2026-01-16',
+    drawnFinish: '2026-01-19',
   });
   const edges = [
     { predecessorId: 'p', successorId: 's', type: 'FS' as const, isDriving: false, lagDays: 0 },
@@ -395,6 +385,8 @@ describe('relationship slack on the selection (ADR-0054 §5)', () => {
         dataDate: DATA_DATE,
         selectedId,
         view: { ...ALL_ON, linkSlack },
+        // Without a calendar the gap reads in elapsed days (`10 cal d`); every day working here.
+        isWorkingDay: () => true,
       },
       VIEW,
       SIZE,
@@ -404,19 +396,20 @@ describe('relationship slack on the selection (ADR-0054 §5)', () => {
     return ctx.fillText.mock.calls.map((c) => c[0]);
   };
 
-  it('annotates the gap on the selected activity’s own tie', () => {
-    expect(paintWith('p')).toContain('5d');
+  // The gap used to be a chip drawn on the SELECTED activity's ties only. The link language labels
+  // every waiting link, so the gap no longer depends on the selection and there is one mark for
+  // one fact (ADR-0093), not two.
+  it('labels the gap on a waiting tie, whatever is selected', () => {
+    expect(paintWith(null)).toContain('10d');
+    expect(paintWith('p')).toContain('10d');
+    expect(paintWith('s')).toContain('10d');
   });
 
-  it('annotates it from either end of the tie', () => {
-    expect(paintWith('s')).toContain('5d');
+  it('draws the gap once, not as a second chip on the selection', () => {
+    expect(paintWith('p').filter((text) => text === '10d')).toHaveLength(1);
   });
 
-  it('annotates nothing without a selection — it is an inspection affordance', () => {
-    expect(paintWith(null)).not.toContain('5d');
-  });
-
-  it('is a no-op without the toggle — the flag-off parity contract', () => {
-    expect(paintWith('p', false)).not.toContain('5d');
+  it('withholds the gap without the Link gaps toggle', () => {
+    expect(paintWith('p', false)).not.toContain('10d');
   });
 });

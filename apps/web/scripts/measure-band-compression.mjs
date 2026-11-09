@@ -183,28 +183,13 @@ if (decisionWorse > 0 !== mechanismWorse > 0) {
 // without them, the obstacle half of the router did nothing on this plan, and that is a finding
 // about the router rather than about the band.
 console.log('\n  OBSTACLE AWARENESS — do the 18 summary bars move any line?\n');
-const off = (prefix, px) =>
-  result.routingOff.find((r) => r.layout.startsWith(prefix) && r.pxPerDay === px) ?? null;
 for (const px of result.zooms) {
   const b = at('B ', px);
   const e = at('E ', px);
-  const bOff = off('B ', px);
-  if (b === null || e === null || bOff === null) continue;
-  // The discriminator FIRST: `linkRouting: false` is the pre-ADR-0065 route, so if it fingerprints
-  // the same as `true` the obstacle-aware branch was never taken and any identity below is a fact
-  // about this harness rather than about the plan.
-  if (b.fingerprint === bOff.fingerprint) {
-    throw new Error(
-      `M-C0-T3 INDETERMINATE at ${px}px/d: painting with scene.linkRouting OFF produced the same ` +
-        `routes as ON. The obstacle-aware branch (paint.ts:1091-1098, :1184-1189) is not being ` +
-        `exercised, so "the summary bars move no line" would be a statement about the harness. ` +
-        `Refusing to judge.`,
-    );
-  }
+  if (b === null || e === null) continue;
   const same = b.fingerprint === e.fingerprint;
   console.log(
-    `    ${String(px).padStart(2)}px/d  routing off ${bOff.fingerprint}  ·  on, band off ` +
-      `${b.fingerprint}  ·  on, band on ${e.fingerprint}   ` +
+    `    ${String(px).padStart(2)}px/d  band off ${b.fingerprint}  ·  band on ${e.fingerprint}   ` +
       `${same ? 'the 18 summary bars move NO line' : 'the summary bars move lines'}`,
   );
 }

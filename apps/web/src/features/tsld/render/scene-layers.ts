@@ -21,9 +21,6 @@ import type { TsldViewToggles } from '@/features/tsld/render/paint';
  */
 export interface SceneLayers {
   monthBands: boolean;
-  timeTrueLinks: boolean;
-  visualRefresh: boolean;
-  linkRouting: boolean;
   dataDateLine: boolean;
 }
 
@@ -31,9 +28,6 @@ export function sceneLayers(view: TsldViewToggles | undefined): SceneLayers {
   return {
     // The reader's `View ▾` preference decides. The painter stays flag-free, as every other layer does.
     monthBands: view?.monthBands ?? false,
-    timeTrueLinks: true,
-    visualRefresh: true,
-    linkRouting: true,
     dataDateLine: view?.dataDate ?? true,
   };
 }

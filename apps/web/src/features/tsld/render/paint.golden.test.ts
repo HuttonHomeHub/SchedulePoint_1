@@ -261,12 +261,9 @@ const MAXIMAL: TsldScene = {
     },
   ],
   flaggedIds: new Set(['flagged']),
-  timeTrueLinks: true,
-  visualRefresh: true,
   hoverId: 'near',
   lagHandles: true,
   activeLagId: 'e2',
-  linkRouting: true,
 };
 
 /** The minimal shape: every optional field absent. */

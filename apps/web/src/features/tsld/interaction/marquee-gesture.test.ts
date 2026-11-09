@@ -24,7 +24,7 @@ const press = (x: number, y: number, ctrl = false) => ({
   type: 'pointerDown' as const,
   point: { x, y },
   hit: EMPTY,
-  modifiers: { shift: false, alt: false, ctrl },
+  modifiers: { ctrl },
 });
 
 describe('arming', () => {
@@ -48,7 +48,7 @@ describe('arming', () => {
       type: 'pointerDown' as const,
       point: { x: 10, y: 10 },
       hit: { kind: 'body' as const, id: 'a' },
-      modifiers: { shift: false, alt: false, ctrl: true },
+      modifiers: { ctrl: true },
     };
     const { state } = reduce(IDLE, onBar, ctx('select'));
     expect(state.kind).not.toBe('marqueeing');
@@ -58,7 +58,7 @@ describe('arming', () => {
     const armed = reduce(IDLE, press(10, 10, true), ctx('select')).state;
     const moved = reduce(
       armed,
-      { type: 'pointerMove', point: { x: 90, y: 90 }, modifiers: { shift: false, alt: false } },
+      { type: 'pointerMove', point: { x: 90, y: 90 } },
       ctx('select'),
     ).state;
     const { intent } = reduce(moved, { type: 'pointerUp' }, ctx('select'));

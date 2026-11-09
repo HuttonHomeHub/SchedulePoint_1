@@ -60,9 +60,6 @@ function dotInks(activities: RenderActivity[]): string[] {
     edges: [],
     dataDate: '2026-01-01',
     view: { ...DEFAULT_VIEW_TOGGLES },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
   const view: Viewport = { pxPerDay: 12, originX: 40, originY: 40 };

@@ -361,7 +361,6 @@ export function moduleLayout(
     view,
     size,
     toggles: frame.toggles,
-    visualRefresh: scene.visualRefresh === true,
     reservesTextRows: rowReservesTextRows(),
     measure: (t) => t.length * 6,
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
@@ -1117,9 +1116,6 @@ export function briefScene(): TsldScene {
     ],
     dataDate: '2026-01-01',
     view: { ...DEFAULT_VIEW_TOGGLES },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
 }

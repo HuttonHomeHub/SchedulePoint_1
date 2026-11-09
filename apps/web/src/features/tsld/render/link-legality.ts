@@ -1,9 +1,8 @@
 import { DEPENDENCY_CONFLICT_MESSAGES, type DependencyType } from '@repo/types';
 
 /**
- * Client-side link-draw legality pre-check (ADR-0026 D5). Pure, so the canvas can ring only
- * **legal** drop targets during a dependency-draw — the user learns a link is illegal *before*
- * release, rather than only when the API rejects it on drop. It mirrors the server's invariants
+ * Client-side link-draw legality pre-check (ADR-0026 D5). Pure, so the Link tool can refuse an
+ * illegal second click — the user learns a link is illegal *before* the API rejects it. It mirrors the server's invariants
  * (self-loop, duplicate per `(predecessor, successor, type)`, and the DAG/cycle guard, ADR-0021),
  * but the server stays authoritative: this only pre-empts drops the loaded graph already proves
  * illegal — it never authorises one.

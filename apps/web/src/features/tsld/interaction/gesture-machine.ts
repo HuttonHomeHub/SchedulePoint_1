@@ -22,8 +22,8 @@ import {
  * shell (`TsldCanvas`) feeds it events, paints the transient state, and hands each intent
  * to `TsldPanel`, which owns the mutation + recalc (the canvas never mutates — ADR-0026 §8).
  *
- * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **dependency-draw** (2.3),
- * **free-2D drag** (M4 4.2 — a body drag moves in time *and* lane at once), **duration resize**
+ * Slices: **create-by-drag** (2.1), **reposition-in-time** (2.2), **free-2D drag** (M4 4.2 — a
+ * body drag moves in time *and* lane at once), **duration resize**
  * (ADR-0052 M2 finish edge, M3 start edge — the repurposed bar-end handles), and the
  * **lag-anchor drag** (ADR-0052 M3 — a link's drawn lag anchor slides along the time axis).
  */
@@ -31,7 +31,7 @@ import {
 /**
  * The active editing tool. `select` behaves like M1 (pan/select) + hit-zone reposition;
  * `add-activity` draws bars; `link` is the two-click dependency tool (ADR-0032 M5): click a
- * predecessor, then a successor — replacing the flag-off edge-drag rubber-band. `loe` is the
+ * predecessor, then a successor. `loe` is the
  * two-click **Level of Effort (hammock)** endpoint-pick tool (Stage D,
  * `docs/specs/canvas-activity-types/`): click a start driver,
  * then a finish driver — the shell composes a `LEVEL_OF_EFFORT` span (SS + FF) from the pair. A single
@@ -80,29 +80,12 @@ function isMilestoneType(type: ActivityType): boolean {
 
 /** The keyboard modifiers held during a pointer gesture. */
 export interface Modifiers {
-  shift: boolean;
-  alt: boolean;
   /**
    * Ctrl **or** Cmd — one field, because they are the same intent on two platforms and a consumer
    * that had to remember to check both would eventually check one (`docs/specs/canvas-multi-select/`
    * M2-T1). The shell sets it from `e.ctrlKey || e.metaKey`; nothing downstream can tell which.
-   *
-   * Optional so every pre-existing `Modifiers` literal — the link-drag chords — still type-checks
-   * and still means exactly what it meant.
    */
   ctrl?: boolean;
-}
-
-/**
- * Map the held modifiers to a dependency type while drawing a link (ADR-0026 D5): plain drag
- * is **FS** (finish→start, the overwhelmingly common case), **Shift** is **SS**, **Alt** is
- * **FF**. **SF** has no chord — it's the rare inverse and is created through the existing
- * dependency dialog instead. Shift wins if both are held (an arbitrary but stable tiebreak).
- */
-export function modifiersToLinkType(mods: Modifiers | undefined): DependencyType {
-  if (mods?.shift) return 'SS';
-  if (mods?.alt) return 'FF';
-  return 'FS';
 }
 
 /** The grabbed activity's current geometry, supplied by the shell on a body pointer-down. */
@@ -147,8 +130,8 @@ export type GestureEvent =
       lag?: LagGrab;
       modifiers?: Modifiers;
     }
-  | { type: 'pointerMove'; point: Point; hit?: HitZone; modifiers?: Modifiers }
-  | { type: 'pointerUp'; hit?: HitZone; modifiers?: Modifiers }
+  | { type: 'pointerMove'; point: Point }
+  | { type: 'pointerUp' }
   /** A discrete click (press-release without a drag) — the two-click `link` tool's input (M5). */
   | { type: 'click'; hit: HitZone }
   | { type: 'escape' };
@@ -226,11 +209,11 @@ export type EditIntent =
     }
   | {
       kind: 'link';
-      /** The activity the drag started from (its edge handle). */
+      /** The activity the first click picked. */
       predecessorId: string;
-      /** The activity the drag was released over. */
+      /** The activity the second click landed on. */
       successorId: string;
-      /** Chosen by the held modifiers at release (see {@link modifiersToLinkType}). */
+      /** The type the Link tool had selected (`GestureCtx.linkType`, `FS` when absent). */
       type: DependencyType;
     }
   | {
@@ -338,19 +321,6 @@ export type GestureState =
       anchorY: number;
     }
   | {
-      kind: 'linking';
-      /** The activity whose edge handle was grabbed (the link's predecessor). */
-      sourceId: string;
-      /** Which end the drag sprang from, so the shell anchors the rubber-band correctly. */
-      sourceHandle: 'startHandle' | 'finishHandle';
-      /** The live pointer position — the rubber-band's free end. */
-      point: Point;
-      /** The activity currently hovered as the drop target, or null (over empty/self). */
-      targetId: string | null;
-      /** The type the current modifiers would create, for a live affordance. */
-      type: DependencyType;
-    }
-  | {
       /** The two-click `link` tool (M5) after the first click: a predecessor is picked and the next
        * click on another activity commits the link. Persists between clicks (it isn't a drag). */
       kind: 'linkPicking';
@@ -409,8 +379,7 @@ export interface Reduction {
  * In `select` mode, a `pointerDown` on empty space returns `idle` (the canvas keeps its M1
  * pan/select path); on a bar **body** it starts a reposition ghost that tracks the pointer by
  * whole-day columns and commits an SNET move on release — or, if it never moved, selects the
- * bar; on an **edge handle** it starts a dependency rubber-band that commits a `link` intent
- * when released over another activity (type from the held modifiers). In `add-activity` mode a
+ * bar. In `add-activity` mode a
  * drag draws a create ghost. `escape` (or a release with no target) resets to `idle`, no intent.
  */
 export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx): Reduction {
@@ -474,19 +443,6 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
         };
       }
       if (event.hit.kind === 'lagAnchor') return { state: IDLE };
-      if ((event.hit.kind === 'startHandle' || event.hit.kind === 'finishHandle') && event.hit.id) {
-        // Grab an edge handle → start a dependency rubber-band from that activity.
-        return {
-          state: {
-            kind: 'linking',
-            sourceId: event.hit.id,
-            sourceHandle: event.hit.kind,
-            point: event.point,
-            targetId: null,
-            type: modifiersToLinkType(event.modifiers),
-          },
-        };
-      }
       if (event.hit.kind === 'body' && event.body) {
         const { id, startDay, endDay, laneIndex, startFrozen } = event.body;
         return {
@@ -633,19 +589,6 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           return { state };
         return { state: { ...state, currentLagDays, movedPastThreshold } };
       }
-      if (state.kind === 'linking') {
-        // Track the free end + the hovered drop target (a different activity) + the live type.
-        // NB: any other activity is highlighted as a target; a client-side cycle *pre-check*
-        // (ADR-0026 D5's "live legality feedback") is deferred — the API still rejects a cycle on
-        // drop and the conflict banner surfaces it (see docs/DECISIONS.md). Tracked for a later slice.
-        const hovered = event.hit;
-        const targetId =
-          hovered && hovered.kind !== 'empty' && hovered.id && hovered.id !== state.sourceId
-            ? hovered.id
-            : null;
-        const type = event.modifiers ? modifiersToLinkType(event.modifiers) : state.type;
-        return { state: { ...state, point: event.point, targetId, type } };
-      }
       return { state };
     }
     case 'pointerUp': {
@@ -754,22 +697,6 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             kind: 'lag',
             dependencyId: state.dependencyId,
             newLagDays: state.currentLagDays,
-          },
-        };
-      }
-      if (state.kind === 'linking') {
-        // Prefer the hit under the release point; fall back to the last-hovered target.
-        const dropId =
-          event.hit && event.hit.kind !== 'empty' && event.hit.id ? event.hit.id : state.targetId;
-        // No target, or dropped back on the source → cancel with no link.
-        if (!dropId || dropId === state.sourceId) return { state: IDLE };
-        return {
-          state: IDLE,
-          intent: {
-            kind: 'link',
-            predecessorId: state.sourceId,
-            successorId: dropId,
-            type: event.modifiers ? modifiersToLinkType(event.modifiers) : state.type,
           },
         };
       }

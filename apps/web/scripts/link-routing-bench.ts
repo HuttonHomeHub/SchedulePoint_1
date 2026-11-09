@@ -8,8 +8,7 @@
  * closing it, and reports what it actually measured rather than what it wishes it had.
  *
  * Bundled by `scripts/measure-link-routing.mjs` and driven in Chromium. It paints the SAME scene
- * twice — routing off, routing on — against the same canvas, and reports the per-frame distribution
- * of each.
+ * across two zooms against the same canvas, and reports the per-frame distribution of each.
  */
 import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
@@ -130,7 +129,6 @@ export type SceneName = keyof typeof SCENES;
 
 function run(
   canvas: HTMLCanvasElement,
-  linkRouting: boolean,
   frames: number,
   pxPerDay: number,
   source: { activities: RenderActivity[]; edges: RenderEdge[] },
@@ -141,9 +139,6 @@ function run(
     activities: source.activities,
     edges: source.edges,
     dataDate: '2026-01-01',
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting,
   };
   const size = { width: canvas.width, height: canvas.height };
   const samples: number[] = [];
@@ -185,7 +180,7 @@ declare global {
     ) => {
       edges: number;
       scene: string;
-      results: { zoom: Zoom; pxPerDay: number; off: BenchResult; on: BenchResult }[];
+      results: { zoom: Zoom; pxPerDay: number; result: BenchResult }[];
     };
   }
 }
@@ -199,14 +194,8 @@ window.__benchLinkRouting = (frames: number, sceneName: SceneName) => {
   const results = (Object.keys(ZOOMS) as Zoom[]).map((zoom) => {
     const pxPerDay = ZOOMS[zoom];
     // Warm-up, discarded: the first paint pays for font resolution and the label width memo.
-    run(canvas, false, 20, pxPerDay, source);
-    run(canvas, true, 20, pxPerDay, source);
-    return {
-      zoom,
-      pxPerDay,
-      off: run(canvas, false, frames, pxPerDay, source),
-      on: run(canvas, true, frames, pxPerDay, source),
-    };
+    run(canvas, 20, pxPerDay, source);
+    return { zoom, pxPerDay, result: run(canvas, frames, pxPerDay, source) };
   });
   return { edges: source.edges.length, scene: source.summary, results };
 };

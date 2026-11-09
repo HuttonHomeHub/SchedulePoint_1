@@ -49,8 +49,8 @@ Nothing is approved. Candidates, each needing the owner's say:
    2026-11-09 and still hold word for word at the same lines**; 48 of the 56 better-auth claims hold, 8 have
    moved lines and one anchor's text changed (`sign-in.mjs`, `createEmailVerificationToken` gained a
    `{ userId }` argument). #1286 (`@hookform/resolvers` 6 → 7) is a major bump.
-2. **#575** (dead painter and gesture branches; trigger: the next painter change) and **#576** (project delete
-   racing an import; trigger: any change to project delete or import commit). Both still accurate on `main`.
+2. **#576** (project delete racing an import; trigger: any change to project delete or import commit), still
+   accurate on `main`. #575 (dead painter and gesture branches) is closed.
 3. A **reconciliation pass** (`docs/RECONCILE.md`) is due at this epic boundary.
 
 ## Watch list

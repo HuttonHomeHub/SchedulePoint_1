@@ -5,7 +5,6 @@ import {
   activityRect,
   isMilestone,
   type Point,
-  type Rect,
   type RenderActivity,
   type RenderEdge,
   type Viewport,
@@ -57,7 +56,8 @@ export function hitTest(
 }
 
 /**
- * Width of the grab-zone at each end of a bar, for dependency-draw (ADR-0026 D5). Kept small and
+ * Width of the grab-zone at each end of a bar (ADR-0026 D5; the resize handles, ADR-0052 M2). Kept
+ * small and
  * capped at half the bar (see {@link classifyHit}) so it never swallows the body's reposition
  * zone on short bars. It is intentionally below the ≥24px target-size guideline: the same
  * link-creation capability is available through the ≥36px buttons in the dependency dialog
@@ -326,16 +326,4 @@ export function classifyHit(
     return { kind: 'body', id: activity.id };
   }
   return { kind: 'empty' };
-}
-
-/**
- * The screen point at a bar's start (left) or finish (right) edge, vertically centred — the
- * anchor a dependency rubber-band springs from (ADR-0026 D5). Pure over the same rect geometry
- * hit-testing uses, so the drawn line begins exactly where {@link classifyHit} reports the handle.
- */
-export function edgeAnchor(rect: Rect, handle: 'startHandle' | 'finishHandle'): Point {
-  return {
-    x: handle === 'startHandle' ? rect.x : rect.x + rect.w,
-    y: rect.y + rect.h / 2,
-  };
 }

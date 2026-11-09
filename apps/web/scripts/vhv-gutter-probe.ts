@@ -226,9 +226,6 @@ export function probe(counts: number[]): ProbeResult {
       activities: source.activities,
       edges: source.edges,
       dataDate: '2026-01-01',
-      visualRefresh: true,
-      timeTrueLinks: true,
-      linkRouting: true,
     };
 
     for (const vp of VIEWPORTS) {

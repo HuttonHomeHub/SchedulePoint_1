@@ -161,7 +161,6 @@ export interface RowTextInput {
   view: Viewport;
   size: { width: number; height: number };
   toggles: TsldViewToggles;
-  visualRefresh: boolean;
   reservesTextRows: boolean;
   measure: (text: string, font?: string) => number;
   labelOf: (a: RenderActivity) => string;
@@ -228,7 +227,6 @@ export function layoutRowText({
   view,
   size,
   toggles,
-  visualRefresh,
   reservesTextRows,
   measure,
   labelOf,
@@ -251,11 +249,10 @@ export function layoutRowText({
   let names: RowTextLayout['names'] = null;
   if ((toggles.labels ?? true) && (reservesTextRows || view.pxPerDay >= LABEL_MIN_PX_PER_DAY)) {
     const regular = (s: string): number => measure(s);
-    // Placement polish (M4): an inside label clears the refreshed bar's rounded corner with a
-    // little extra pad. Flag-off the extra is 0, so the arithmetic (and the paint log) is
-    // byte-for-byte today's. The font is deliberately unchanged — the module-scope width memo is
-    // keyed by text alone, so a metric change would poison it across palettes (export path).
-    const insidePad = LABEL_PAD_PX + (visualRefresh ? 2 : 0);
+    // Placement polish (M4): an inside label clears the bar's rounded corner with a little extra
+    // pad. The font is deliberately unchanged — the module-scope width memo is keyed by text
+    // alone, so a metric change would poison it across palettes (export path).
+    const insidePad = LABEL_PAD_PX + 2;
     const steps: NameStep[] = [];
     const legacy: PlacedText[] = [];
     const order: ({ step: number } | { legacy: number })[] = [];
@@ -502,11 +499,11 @@ export function layoutRowText({
   /**
    * How far text under a bar keeps from each of its ends: clear of the node disc there (NetPoint
    * grammar M2-T3, spec §4.13 A3). A 15 px disc on a 6 px bar reaches into the date row, so a date
-   * written at the bar's own end would print over it. Only a task bar on the refreshed path has
-   * nodes; a milestone, a span and the legacy path keep today's placement exactly.
+   * written at the bar's own end would print over it. Only a task bar has nodes; a milestone and a
+   * span keep their own ends.
    */
   const nodeTextInset = (activity: RenderActivity): number =>
-    visualRefresh && barGlyphKind(activity.type) === 'bar' ? NODE_TEXT_CLEAR_PX : 0;
+    barGlyphKind(activity.type) === 'bar' ? NODE_TEXT_CLEAR_PX : 0;
 
   /**
    * The x-range text under bar `i` may use: its own ends, less its own nodes' clearance, and never
@@ -893,7 +890,6 @@ export function sceneRowText(
   scene: {
     activities: readonly RenderActivity[];
     dataDate: string;
-    visualRefresh?: boolean | undefined;
   },
   view: Viewport,
   size: { width: number; height: number },
@@ -914,7 +910,6 @@ export function sceneRowText(
     view,
     size,
     toggles,
-    visualRefresh: scene.visualRefresh === true,
     reservesTextRows: rowReservesTextRows(),
     measure,
     labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),
@@ -938,7 +933,6 @@ export function sceneRowTextItems(
   scene: {
     activities: readonly RenderActivity[];
     dataDate: string;
-    visualRefresh?: boolean | undefined;
   },
   view: Viewport,
   size: { width: number; height: number },
@@ -969,7 +963,6 @@ export function sceneRowTextItems(
         view,
         size,
         toggles,
-        visualRefresh: scene.visualRefresh === true,
         reservesTextRows,
         measure,
         labelOf: (a) => canvasLabel({ code: a.code ?? null, name: a.label }, withCodes),

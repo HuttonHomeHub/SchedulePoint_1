@@ -71,9 +71,6 @@ function scene(): TsldScene {
     ],
     dataDate: '2026-03-30',
     view: { ...DEFAULT_VIEW_TOGGLES },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: (day: string) => {
       const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
       return weekday !== 0 && weekday !== 6;

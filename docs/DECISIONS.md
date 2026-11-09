@@ -31,6 +31,36 @@ list, stamping it is safer than leaving it active under a deleted project. The B
 nullable: a plan never recalculated has no mirror, and making them NOT NULL is a schema decision that remains the
 owner's. Three comments that cited the race as live were corrected.
 
+## 2026-11-09 — The retired painter and gesture modes are deleted with what only they reached (#575)
+
+**What was decided.** `visualRefresh`, `timeTrueLinks` and `linkRouting` are removed from the scene and the
+overlay outright rather than left always-true, and the handle-origin `linking` gesture is removed with
+everything that only it reached. Each was checked against every producer first: `TsldCanvas` and the export
+(through `sceneLayers`) set all three `true`, the two perf-probe scenes and the layout objective set them `true`,
+and the only `false` callers were tests and two hand-run A/B harnesses.
+
+**Judgement calls, because the row did not name them.**
+
+- **The `link` rubber-band overlay, `liveLink` and `edgeAnchor` go too.** `linking` was entered only by a handle
+  press, so they were unreachable the moment that path went; keeping them would have left the same trap the row
+  complains about.
+- **The selected-link slack chip is deleted, not kept.** It ran only on the legacy path and the link language
+  already labels every waiting link, so the row's own comment called it "two marks for one fact".
+- **`startHandle` / `finishHandle` stay as hit kinds.** The Link tool's click reads only `body` hits, so an edge
+  zone press is ignored in link mode; collapsing the two kinds into `body` would make that press pick a
+  predecessor. That is a behaviour change, not a deletion, so it is left for a decision. `TsldCanvas` keeps
+  downgrading an unarmed edge zone to a body hit, which is what lets a press there reposition.
+- **The routing A/B harnesses report one number.** `link-routing-bench.ts` and `crossing-probe.ts` compared
+  routing off against on; there is no off any more, so they print the single remaining route.
+
+**Evidence the shipped picture did not move.** The pre-change painter, given the three flags `true`, and the new
+painter produce byte-identical call logs for the golden's maximal and minimal scenes. The maximal snapshot did
+not change; the minimal snapshot did, because that scene had been painting the legacy mode.
+
+**No changeset**: nothing a user sees changes.
+
+---
+
 ## 2026-11-09 — The ten Dependabot bumps (#1282–#1291) are taken together
 
 **What was decided.** #1282–#1291 land as one change off `main`, as #1262 did on 2026-11-07, at the

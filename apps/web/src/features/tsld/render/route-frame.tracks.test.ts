@@ -73,9 +73,6 @@ function scene(): TsldScene {
     ],
     dataDate: '2026-01-05',
     view: { ...DEFAULT_VIEW_TOGGLES },
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     isWorkingDay: () => true,
   };
 }

@@ -49,9 +49,6 @@ export function swimlaneScene(): {
     activities: c.activities.map((a) => ({ ...a, laneIndex: display.get(a.id) ?? a.laneIndex })),
     edges: c.edges,
     dataDate: c.dataDate,
-    visualRefresh: true,
-    timeTrueLinks: true,
-    linkRouting: true,
     monthBands: true,
   };
 

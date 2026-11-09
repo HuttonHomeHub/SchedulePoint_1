@@ -418,7 +418,6 @@ export interface Layout {
 export function sceneFor(
   asap: ReturnType<typeof unit300Asap>,
   layout: Layout,
-  options: { linkRouting?: boolean } = {},
 ): { scene: TsldScene; edges: number } {
   const painted = (asap.activities as { key: string; type: string }[]).filter(
     (a) => layout.sceneIds === undefined || layout.sceneIds.has(a.key),
@@ -454,13 +453,6 @@ export function sceneFor(
       activities,
       edges,
       dataDate: DATA_DATE,
-      visualRefresh: true,
-      timeTrueLinks: true,
-      // `scene.linkRouting` is the ONE gate on the obstacle index and the corridor bundler
-      // (`paint.ts:1091-1098`, `:1184-1189`, `:1211`): false takes the pre-ADR-0065 route. Exposed
-      // so a reading can establish that the obstacle-aware branch is the one being measured,
-      // rather than assuming it from the flag being set.
-      linkRouting: options.linkRouting ?? true,
     },
     edges: edges.length,
   };
@@ -906,16 +898,6 @@ export interface T3Result {
   configs: BandConfig[];
   /** Whole-plan readings, one per configuration per zoom. Nothing is culled at any of them. */
   readings: T3Reading[];
-  /**
-   * The same configurations painted with `scene.linkRouting` **off** — the pre-ADR-0065 route.
-   *
-   * This is the discriminator the band readings need. If band on and band off produce identical
-   * routes, there are two explanations — the obstacle index is inert on this plan, or it was never
-   * consulted — and only a reading with the gate deliberately off can tell them apart. Without it
-   * a harness that had silently lost obstacle awareness would report exactly the same identity and
-   * read as a finding about the band.
-   */
-  routingOff: T3Reading[];
   zooms: number[];
 }
 
@@ -933,9 +915,8 @@ export function t3(path: string, options: { rollUpSummaries?: boolean } = {}): T
   const { asap, configs, maxDay } = unit300BandConfigs(path, options);
   const zooms = [1, 4, 12];
   const readings: T3Reading[] = [];
-  const routingOff: T3Reading[] = [];
-  const sweep = (into: T3Reading[], config: BandConfig, linkRouting: boolean): void => {
-    const { scene } = sceneFor(asap, config.layout, { linkRouting });
+  const sweep = (into: T3Reading[], config: BandConfig): void => {
+    const { scene } = sceneFor(asap, config.layout);
     for (const pxPerDay of zooms) {
       // Wide and tall enough for the WORST case at this zoom, so nothing is culled in any
       // configuration and every reading carries the same 188 links.
@@ -953,9 +934,8 @@ export function t3(path: string, options: { rollUpSummaries?: boolean } = {}): T
       });
     }
   };
-  for (const config of configs) sweep(readings, config, true);
-  for (const config of configs) sweep(routingOff, config, false);
-  return { edges: (asap.dependencies as unknown[]).length, configs, readings, routingOff, zooms };
+  for (const config of configs) sweep(readings, config);
+  return { edges: (asap.dependencies as unknown[]).length, configs, readings, zooms };
 }
 
 // ── M-C0-T4: is the inter-lane gutter the term? (FC-C3) ──────────────────────────────────────────
@@ -2095,9 +2075,6 @@ export function rowCosts(
       activities: source.activities,
       edges: source.edges,
       dataDate: '2026-01-01',
-      visualRefresh: true,
-      timeTrueLinks: true,
-      linkRouting: true,
     };
   }
   /** The product owner's own display (FC-C7), and the viewport ADR-0091 M7 made permanent. */
