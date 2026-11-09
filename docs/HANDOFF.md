@@ -19,14 +19,18 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
   Dependabot proposed, with `@hookform/resolvers` 7 included on the owner's say. All ten checks green on the head
   that merged, after one whole-workflow re-run (the first run was marked failed with its API-test and image jobs
   missing; cause not established).
-- **#576 closed as not a race, #575 done, and the reconciliation pass run** — one pull request from the branch
-  `claude/vibrant-dijkstra-tmdl7x`, **open and not merged: the owner decides**. #576's premise was wrong (the import
-  holds the project `FOR SHARE`, and the project delete takes its conflicting lock before it reads its plans), so it
-  closed with a test assertion and corrected comments instead of a code change. #575 deleted the legacy painter modes
-  (`visualRefresh`, `timeTrueLinks`, `linkRouting`) and the handle-origin linking path, 59 files, with the live-mode
-  paint output shown byte-identical before and after. The 2026-11-09 pass found the agent files, about a dozen
-  documents and a dozen register rows still describing retired flags or 1.0 shapes; see `docs/DECISIONS.md`
-  (2026-11-09, "The reconciliation pass at the 1.1.0 boundary") for the findings and what it did not establish.
+- **#576 closed as not a race, #575 done, and the reconciliation pass run** — PR #1296 (merge `d4599293`).
+  #576's premise was wrong (the import holds the project `FOR SHARE`, and the project delete takes its conflicting
+  lock before it reads its plans), so it closed with a test assertion and corrected comments instead of a code
+  change. #575 deleted the legacy painter modes (`visualRefresh`, `timeTrueLinks`, `linkRouting`) and the
+  handle-origin linking path, 59 files, with the live-mode paint output shown byte-identical before and after. The
+  2026-11-09 pass found the agent files, about a dozen documents and a dozen register rows still describing retired
+  flags or 1.0 shapes; see `docs/DECISIONS.md` (2026-11-09, "The reconciliation pass at the 1.1.0 boundary").
+- **Two hardening fixes the pass suggested** — PR #1297 (merge `8ee9c0a4`): `pnpm.overrides` for `dompurify`,
+  `fast-uri`, `qs` and `seroval` (`pnpm audit --prod` 37 to 16 advisories, none critical; the 16 left are dev-time
+  tooling, the unused `mysql2` adapter and Prisma's config loader), and a new boot refusal, `other_schema`, for a
+  `DATABASE_URL` that names a schema other than `public` (`docs/DECISIONS.md`, "Four dependency overrides…"). It
+  carries a patch changeset for `@repo/api`, so the Release workflow will open a **Version Packages** PR.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -39,18 +43,18 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-Nothing is approved beyond the open pull request above. Candidates, each needing the owner's say:
+Nothing is approved. Candidates, each needing the owner's say:
 
-1. **Merge the open pull request** once its checks are read on the current head (`CLAUDE.md` §19.9). Check its roster
-   against the run itself: one run this session read as failed with two jobs missing from the job list.
+1. **The Version Packages PR** that #1297's changeset opens (an `@repo/api` patch). Its checks read
+   `action_required` or `failure` with no job body run, which is expected (`CLAUDE.md` §11); merging it publishes the
+   API image and Watchtower pulls it on the owner's host, so it is the owner's call, and the web image does not move.
 2. **`docs/TECH_DEBT.md` #577** (13 dead test mocks for a retired flag, and two unused flag helpers; trigger: the next
    change to those tests or the next proposed flag).
-3. **Hardening the reconciliation suggested, the owner's call:** override `dompurify` (under `jspdf`), `fast-uri` and
-   `seroval` to patched versions (the production audit is 37 advisories, 1 critical, none reachable as the product
-   uses them); and make the boot `preflight` refuse a `?schema=` other than `public`.
-4. **Whether to make the Baseline criticality columns NOT NULL.** #576 was the stated reason they stayed nullable and it
-   is closed; the remaining cause is a plan never recalculated. A schema change, so `database-architect` first, and an
-   owner decision.
+3. **Whether to make the Baseline criticality columns NOT NULL.** #576 was the stated reason they stayed nullable and
+   it is closed; the remaining cause is a plan never recalculated. A schema change, so `database-architect` first, and
+   an owner decision.
+4. The remaining audit entries (`brace-expansion`, `browserslist`, `minimatch`, `baseline-browser-mapping`,
+   `mysql2`, `deepmerge-ts`) are dev-time or unused; overrides for them are optional tidiness.
 5. The **perf-probe** and **`providers.tsx`** notes in the watch list.
 
 ## Watch list
