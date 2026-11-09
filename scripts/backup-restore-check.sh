@@ -806,11 +806,19 @@ expect "preflight: the baseline plus a failed later migration is refused as fail
 expect "...naming the failed row" out_has "prisma migrate resolve --rolled-back $LATER_NAME"
 expect "...and wrote no file" no_file_written
 
+pf_db oddname "$BASELINE:finished" "x;touch_pwned:unfinished"
+pf "$PF_DB"
+expect "preflight: an unfinished row with an odd name is refused as failed_migration" refused_with failed_migration
+expect "...and no resolve command is printed for it" test "$(grep -c 'migrate resolve' <<<"$OUT")" -eq 0
+expect "...but the row is flagged for inspection by hand" out_has "unexpected name"
+
 PF_UNKNOWN="bkt_pf_unknown_$$"
 make_db "$PF_UNKNOWN"
 dbq "$PF_UNKNOWN" "CREATE TABLE somebody_elses_table (id int)" >/dev/null
 pf "$PF_UNKNOWN"
 expect "preflight: tables but no migrations table is refused" refused_with unknown_database
+expect "...and offers no return to 1.0 for a database SchedulePoint never made" test "$(grep -c API_IMAGE_TAG <<<"$OUT")" -eq 0
+expect "...and says it was not made by SchedulePoint" out_has "not made by SchedulePoint"
 expect "...and wrote no file" no_file_written
 
 PF_STRANGE="bkt_pf_strange_$$"

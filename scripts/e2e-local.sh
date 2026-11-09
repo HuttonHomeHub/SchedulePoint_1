@@ -136,7 +136,11 @@ as_super "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='app'\"" | grep -q 1 
 as_super "psql -qc \"ALTER ROLE app SUPERUSER;\"" >/dev/null
 as_super "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='app_test'\"" | grep -q 1 \
   || as_super "psql -qc \"CREATE DATABASE app_test OWNER app;\""
-echo "ready: $(printf '%s' "$DATABASE_URL" | sed 's#://[^@/ ]*@#://[redacted]@#')"
+# One redaction for every line that echoes a connection string. Greedy to the LAST `@`, because a
+# password may itself contain `@` or `/`; over-masking is the safe direction. A `password=` query
+# parameter is masked too.
+redact_url() { printf '%s' "$1" | sed -e 's#://.*@#://[redacted]@#' -e 's#\([?&;]password=\)[^&; ]*#\1[redacted]#g'; }
+echo "ready: $(redact_url "$DATABASE_URL")"
 
 # --- 2. One run per database ------------------------------------------------
 #
@@ -197,7 +201,7 @@ product, not with an error that names the contention. Wait for it to finish, or 
 at a database of your own, then re-run.
 EOF
   else
-    echo "Could not take the run lock for ${lock_db_name} (via ${lock_conninfo}; no answer from psql); refusing to run unguarded." >&2
+    echo "Could not take the run lock for ${lock_db_name} (via $(redact_url "$lock_conninfo"); no answer from psql); refusing to run unguarded." >&2
   fi
   exit 1
 fi
@@ -234,8 +238,22 @@ case "$lineage" in
       \[*) db_host="${db_host#\[}"; db_host="${db_host%%\]*}" ;;
       *) db_host="${db_host%%:*}" ;;
     esac
+    # A comma makes the authority a multi-host list, which libpq tries in turn and may fail over to a
+    # non-local host, so the host test below would be answering for only the first of them.
+    case "$db_authority" in
+      *,*)
+        echo "DATABASE_URL lists more than one host; refusing to run, because the reset guard cannot say where it would connect." >&2
+        exit 1
+        ;;
+    esac
+    # An empty host means the socket, unless the environment points libpq at somewhere else.
+    # (A localhost SSH tunnel to a remote database still passes this guard; that is accepted.)
+    env_host_local=1
+    for env_host in "${PGHOST:-}" "${PGHOSTADDR:-}"; do
+      case "$env_host" in '' | localhost | 127.0.0.1 | ::1 | /*) ;; *) env_host_local=0 ;; esac
+    done
     reset_ok=0
-    case "$lock_db_name" in app_test | *_test) case "$db_host" in '' | localhost | 127.0.0.1 | ::1 | /* | %2[Ff]*) reset_ok=1 ;; esac ;; esac
+    case "$lock_db_name" in app_test | *_test) case "$db_host" in '') [ "$env_host_local" = 1 ] && reset_ok=1 ;; localhost | 127.0.0.1 | ::1 | /* | %2[Ff]*) reset_ok=1 ;; esac ;; esac
     if [ "$reset_ok" != 1 ] && [ "${E2E_ALLOW_RESET:-}" != 1 ]; then
       echo "${lock_db_name} (host '${db_host:-local socket}') has lineage ${lineage}, and the run will not drop it:" >&2
       echo "only app_test or *_test on localhost is reset automatically. Reset it by hand, or set E2E_ALLOW_RESET=1." >&2

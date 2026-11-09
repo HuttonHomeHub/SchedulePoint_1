@@ -922,6 +922,19 @@ cmd_pre_migrate() {
 
 # --- the refusal at boot (ADR-0215) -------------------------------------------
 
+# Prints one copy-paste resolve command per unfinished migration row. A name goes into a command a
+# person pastes into a shell, so only the shape Prisma's own directories have is printed; anything
+# else is reported for inspection by hand, with no command.
+print_resolve_commands() {
+  printf '%s\n' "$UNFINISHED_ROWS" | while IFS= read -r n; do
+    [ -z "$n" ] && continue
+    case "$n" in
+      *[!A-Za-z0-9_]*) printf '  A migration row with an unexpected name exists and must be inspected by hand; no command is offered for it.\n' ;;
+      *) printf '  prisma migrate resolve --rolled-back %s\n' "$n" ;;
+    esac
+  done
+}
+
 # cmd_preflight — exit 0 for a database 1.1 may start on, else say so in three lines and one event and
 # exit 1. Nothing here writes: the session is read-only and no file is created.
 cmd_preflight() {
@@ -947,18 +960,17 @@ cmd_preflight() {
       finished_older=$((OLDER - OLDER_UNFINISHED))
       if [ "$finished_older" -eq 0 ]; then
         printf 'Every 1.0 row is one that never finished. Once you have a copy of the database, mark each as rolled back and restart:\n'
-        printf '%s\n' "$UNFINISHED_ROWS" | while IFS= read -r n; do
-          [ -z "$n" ] || printf '  prisma migrate resolve --rolled-back %s\n' "$n"
-        done
+        print_resolve_commands
       else
         printf '%s of the 1.0 migrations finished beside the baseline, so this database is damaged: keep a copy of it and restore a 1.1 backup into an empty database.\n' "$finished_older"
       fi
       ;;
     failed_migration)
       printf 'Keep a copy of the database, then mark each as rolled back and restart (Prisma runs it again):\n'
-      printf '%s\n' "$UNFINISHED_ROWS" | while IFS= read -r n; do
-        [ -z "$n" ] || printf '  prisma migrate resolve --rolled-back %s\n' "$n"
-      done
+      print_resolve_commands
+      ;;
+    unknown_database)
+      printf 'This database was not made by SchedulePoint, so it is left alone. Point SchedulePoint at a new, empty database.\n'
       ;;
     *)
       printf 'Keep a copy of it and point SchedulePoint at a new, empty database, or pin API_IMAGE_TAG and WEB_IMAGE_TAG to 1.0.0 (the release compose) to go back to 1.0.\n'
