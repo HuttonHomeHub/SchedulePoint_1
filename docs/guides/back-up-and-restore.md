@@ -22,7 +22,11 @@ data, except the two places that say so plainly: Part 3 step 9 and Part 4 step 2
 
 **Words used here**
 
-- **Database:** where SchedulePoint keeps everything: organisations, users, plans and activities.
+- **Database:** where SchedulePoint keeps everything: organisations, users, plans and activities. On the
+  server it lives either in a Docker **named volume** (the `db:` service has a line like
+  `- db-data:/var/lib/postgresql/data`; this is what `docker-compose.release.yml` ships with) or in an ordinary
+  **folder** (a line like `- /apps/schedulepoint/db:/var/lib/postgresql/data`, called a "bind mount"; the owner's
+  server uses this). Nothing in this guide depends on which, except where it says so.
 - **Copy:** one file that holds the whole database as it was at one moment. Its name ends in `.dump`.
 - **Restore:** replace the live database with a copy.
 - **Container:** a running part of SchedulePoint. The set-up adds one, called `backup`.
@@ -43,7 +47,8 @@ data, except the two places that say so plainly: Part 3 step 9 and Part 4 step 2
 - **`sudo`:** a word you put in front of a command to run it as the administrator. It may ask for the
   server's password. Nothing shows on screen while you type it; that is normal. Press Enter when done.
   If a Docker command says `permission denied`, put `sudo` in front of it and run it again. If your
-  terminal's prompt starts with `root@`, you are already the administrator: leave `sudo` out.
+  terminal's prompt starts with `root@`, you are already the administrator: leave `sudo` out. (On the owner's
+  server the terminal is root inside a container and has no `sudo` at all: leave it out of every command here.)
 - **`--` (two hyphens):** several commands contain two hyphens together, as in `--rm`. Some phones and
   chat apps join them into one dash when you copy. If a command answers `unknown shorthand flag`,
   retype it with two hyphens.
@@ -51,7 +56,7 @@ data, except the two places that say so plainly: Part 3 step 9 and Part 4 step 2
 **How to open a terminal.** Sign in to the server by SSH, or at the server's own screen and keyboard.
 Dockge's own terminal works too. If you are not sure how, ask whoever set the server up. Then run these
 two commands, with your stack's name in place of `YOUR-STACK-NAME`. `/opt/stacks` is Dockge's usual
-stacks folder; some servers keep stacks somewhere else (one keeps them in `/apps`), so use yours:
+stacks folder; some servers keep stacks somewhere else (the owner's is `/apps/schedulepoint`), so use yours:
 
 ```bash
 cd /opt/stacks/YOUR-STACK-NAME
@@ -96,8 +101,8 @@ sudo install -d -o 1000 -g 1000 -m 700 backups
 ```
 
 **You should see:** nothing printed. Then `ls -ld backups` shows a line that starts with `drwx------` and
-has `1000 1000` in it. Some servers show a name there instead, such as `node node`: that is the same
-user, number 1000, and is correct.
+has `1000 1000` in it. Some terminals show a name there instead, such as `node node` (the owner's does): that
+is the same user, number 1000, and is correct.
 
 **If not:** if it says `sudo: command not found`, you are probably signed in as the administrator
 (root). Run the same command without the word `sudo`.
@@ -448,6 +453,15 @@ restarting. Nothing is lost.
    ```
 
    The same text is in `backups/UPDATE-HELD.txt`.
+
+   **A leftover `UPDATE-HELD.txt` while SchedulePoint is working normally** is an old note, not a held
+   update: the API is running and its log has no `UPDATE HELD` line. Read it for the date and the reason, then
+   delete it (`rm backups/UPDATE-HELD.txt`, with `sudo` unless you are root). Why one can be left behind: the
+   note is removed only when SchedulePoint goes on to take the copy before an update, so a hold that clears on a
+   start with no database change waiting leaves it in place. The owner found one dated 2026-10-26 whose reason
+   was that the database could not yet be reached by name (`db`) during start-up, a timing problem that cleared
+   by itself. Since 1.1.0 an unreachable database is caught by the start-up check that runs first, which retries
+   without writing this file, so that particular leftover should not recur.
 
 2. **If the disk is nearly full**, make room (5 to 15 minutes). Start with old Docker leftovers:
 

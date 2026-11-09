@@ -1,7 +1,7 @@
 # Implementation Plan: SchedulePoint 1.1.0 — the fresh start
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved — by the product owner, 2026-11-08 (answers recorded in the spec's header and §1). **Implemented M0–M3 2026-11-09; M4 in progress** (documentation sweep done; rehearsal M4-T2 and the changeset M4-T3 to come).
+- **Status:** Approved — by the product owner, 2026-11-08 (answers recorded in the spec's header and §1). **Implemented and released 2026-11-09** as `api` and `web` 1.1.0 (PR #1292, Version Packages #1293). M4-T2, the rehearsal, was **not run**: the owner skipped it and switched their server the same day, discarding the 1.0 data ([`m4-rehearsal.md`](./m4-rehearsal.md); `docs/DECISIONS.md`, 2026-11-09).
 - **Owner:** product owner; built by the **builder** agent, schema by the **database-architect**
 
 ## Breakdown
@@ -424,6 +424,9 @@ and `docs/RELEASE_1_0.md`.
 - **Reviews:** devops-reviewer (deployment and guide).
 
 ##### Task M4-T2 — Dress rehearsal on a throwaway stack (no code; record in `m4-rehearsal.md`)
+
+> **Not run (2026-11-09).** The owner skipped the rehearsal and switched their server directly, discarding the 1.0
+> data (`docs/DECISIONS.md`, 2026-11-09). The release went out without it; nothing in this task was done.
 
 - **Description:** with `docker-compose.release.yml` on a scratch host or CI runner: run 1.0.0, seed one organisation
   through the REST API, `backup now` + `check`; start a 1.1.0 **candidate** image (`sha-…` tag from `main`) → confirm the

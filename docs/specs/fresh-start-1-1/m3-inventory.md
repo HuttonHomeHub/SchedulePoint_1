@@ -1,7 +1,7 @@
 # Fresh start 1.1 — M3 inventory (task M3-T0)
 
 - **Author:** database-architect, 2026-11-09
-- **Status:** Complete for M3-T0. Documents only: no code, schema or migration was changed. Its decisions were built in M3 (2026-11-09); M4 is in progress.
+- **Status:** Complete for M3-T0. Documents only: no code, schema or migration was changed. Its decisions were built in M3 (2026-11-09) and released in 1.1.0 the same day.
 - **Branch state read:** `316763d7` (M2-T2 preflight) on `df7e2018` (M2-T1 baseline
   `apps/api/prisma/migrations/20261109000000_baseline_1_1/`, exact equivalent, `tidy.sql` empty). The eleven
   migration-proof e2e specs are already gone (`ls apps/api/test | grep -iE "rederive|strip|migration"` → only

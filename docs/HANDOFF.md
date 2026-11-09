@@ -3,51 +3,74 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, at the end of the 1.1.0 build (M0 to M3 and the M4-T1 documentation sweep), on branch
-`claude/backwards-compat-review-7oczdw`, not yet pushed or merged. Goal: **1.1.0, the fresh start**
-([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), Accepted 2026-11-09;
-spec and plan in [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)). The owner's **hard rule**
-still stands: nothing that needs the owner to run or check anything on their server or devices (a decision question
-is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
+**Written:** 2026-11-09, after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
+epic ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
+[`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
+still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
+question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
 
-## What shipped on the branch
+## What shipped
 
-- **M0:** spec, plan, schema design, ADR-0215 (drafted) and the start-fresh guide (a draft).
-- **M1:** the 48 web feature flags retired in four batches (A to D), the flag-off suites removed, the pen taken
-  through the UI in the Playwright suites (#121 closed).
-- **M2:** one 1.1 baseline migration replacing the migration history (exact equivalent, `tidy.sql` empty), and the
-  entrypoint's `schedulepoint-backup preflight`, which refuses a pre-1.1 database and logs `boot.database_refused`.
-- **M3:** the boot re-derivation services, the placement-migration report and the pre-1.1 record tables removed;
-  baseline snapshot levels narrowed; a plan's recalculation stamp made one fact. Inventory:
-  [`m3-inventory.md`](specs/fresh-start-1-1/m3-inventory.md).
-- **M4-T1 (this commit):** operating docs describe 1.1.0 (`CLAUDE.md`, `RELEASE_1_0.md` with a "1.1.0 — the fresh
-  start" section, `DEPLOYMENT.md`, `OBSERVABILITY.md`, `ROADMAP.md`), ADR-0215 Accepted with amendment notes on
-  the ADRs it amends, TECH_DEBT #571 closed, stale `VITE_*` flag comments in `ci.yml` reworded.
+- **1.1.0, "the fresh start"** — PR #1292 (`feat(release)!`, merge `1deffb7e`) and the Version Packages PR #1293
+  (merge `bad52e5b`), both merged 2026-11-09. Tags `api-v1.1.0` and `web-v1.1.0`; Release run `42629151456`
+  green on all three jobs (version and tag, publish api, publish web).
+- **What 1.1.0 is:** one baseline migration (`20261109000000_baseline_1_1`) and a boot `preflight` that refuses a
+  pre-1.1 database without touching it; code and published shapes that only served old rows removed (the
+  one-time ADR-0190 exception, organisation export format **3.0**); all 48 web feature flags retired.
+  Schema tidy **T7** (`accounts.issuer` default) was **withdrawn**: Better Auth never writes `issuer`, so the
+  column keeps its `DEFAULT` (ADR-0107 D2 as amended).
+- **The live switch, 2026-11-09** (`docs/DECISIONS.md`, same date). The owner **skipped the practice run** (M4-T2,
+  [`m4-rehearsal.md`](specs/fresh-start-1-1/m4-rehearsal.md), recorded as not run) and **discarded all 1.0 data
+  by choice**: stack stopped, the database folder moved aside, Dockge **Update**, 1.1.0 started on an empty
+  folder, owner signed up and created the organisation again. The old folder has since been **deleted**, so
+  **there is no way back to 1.0 data** short of the 1.0 nightly copies still in the backups folder, which only
+  the 1.0.0 image can restore and which the 30-day tidy-up removes in time. The owner does not want them back.
+- **After the switch:** staff console reachable (once the owner's address was confirmed), mail sending,
+  first 1.1 backup `BACKUP FINISHED` then `CHECK PASSED` (1 organisation, 1 user), retention hierarchy expiry
+  armed as before.
 
-## What remains
+## The owner's deployment (canonical until the product scales)
 
-1. **M4-T2, the dress rehearsal** (`docs/specs/fresh-start-1-1/m4-rehearsal.md` to be written). It needs a Docker
-   host; the cloud container has none. Run 1.0.0, seed an organisation, `backup now` and `check`; start a 1.1.0
-   candidate image and confirm the refusal leaves the database unchanged; follow the guide verbatim; follow "if you
-   need to go back". Fix the guide where reality differs, then remove its DRAFT banner. devops-reviewer is blocking.
-2. **M4-T3, the changeset** (one PR, last): both apps, a **minor** bump to 1.1.0 (the one-time exception to
-   ADR-0190, recorded in ADR-0215 D7), breaking-change footer in the commit.
-3. **The owner's steps**, from [`guides/start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md): Part 1 before the
-   release is merged, Parts 2 and 3 on the day, Part 5 thirty days later. Merging the Version Packages PR is the
-   production deploy (ADR-0047); do not merge it before the owner has done Part 1.
+The full description is [`docs/DEPLOYMENT.md`](DEPLOYMENT.md), "The owner's deployment". In short: Dockge, stack
+folder `/apps/schedulepoint`, project `schedulepoint`, services `db` / `api` / `web` / `backup` / `watchtower`
+(containers `schedulepoint-*`), **bind-mount folders** `/apps/schedulepoint/db` and `/apps/schedulepoint/backups`
+(not named volumes), web on 8080 behind a reverse proxy at `https://schedulepoint.huttonhomehub.co.uk`, and a
+terminal that is **root inside a container** (no `sudo`). Do not write down the values of `MAIL_ALERT_URL`,
+`HEARTBEAT_URL` or any secret; ask the owner if one matters.
 
-## Open items
+## What is next
 
-- **#575** (legacy painter and gesture modes) and **#576** (a project delete racing an import) are open by design.
-- **Perf-probe readings** taken before `e82bf48a` are not like for like with later ones: that commit retired the
-  flags that changed what the probe scenes draw. Do not compare across it.
-- **CI's "Refuse a pre-1.1 database" step has never run in real Docker.** The first CI run on this branch is its
-  first test; read that step's log, not just its colour.
+Nothing is approved. Candidates, each needing the owner's say:
+
+1. **Dependabot PRs** (ten open, all opened before 1.1.0 merged, so each needs a rebase first). Six are green.
+   Four fail only `check:claims`, which refuses a version bump until the cited lines are re-read:
+   #1289 better-auth 1.7.14 → 1.7.18, #1291 lucide-react, #1284 dev group (tailwindcss), #1282 nestjs group.
+   For #1289 the two `issuer` claims (ADR-0107 D2, schema-design T7) **were checked against 1.7.18 on
+   2026-11-09 and still hold word for word at the same lines**; 48 of the 56 better-auth claims hold, 8 have
+   moved lines and one anchor's text changed (`sign-in.mjs`, `createEmailVerificationToken` gained a
+   `{ userId }` argument). #1286 (`@hookform/resolvers` 6 → 7) is a major bump.
+2. **#575** (dead painter and gesture branches; trigger: the next painter change) and **#576** (project delete
+   racing an import; trigger: any change to project delete or import commit). Both still accurate on `main`.
+3. A **reconciliation pass** (`docs/RECONCILE.md`) is due at this epic boundary.
+
+## Watch list
+
+- **Mail at first boot:** the first 1.1.0 boot logged "mail transport is NOT reachable — SMTP verification timed
+  out" (`smtp.resend.com:465`); after a stack restart it logged "mail transport reachable". Treated as a
+  transient first-boot timeout. If it recurs, it becomes a `docs/TECH_DEBT.md` row.
+- **A stale `backups/UPDATE-HELD.txt` dated 2026-10-26** was found on the host (psql could not resolve host `db`,
+  a start-up timing issue, not permissions or disk). It is safe to delete. Why it outlived the hold: the script
+  removes it only after taking a pre-update copy (`apps/api/backup/schedulepoint-backup.sh`, `cmd_pre_migrate`),
+  so a hold that clears on a start with nothing pending leaves it behind. Since 1.1.0 `preflight` runs first and
+  refuses an unreachable database (`cannot_read`) without writing the file, so this cause should not recur; a
+  database lost between `preflight` and `pre-migrate` still could. Not a register row unless seen again.
+- **Perf-probe readings** taken before `e82bf48a` are not like for like with later ones (the flag retirement
+  changed what the probe scenes draw).
 
 ## Environment notes
 
-- `pnpm --filter @repo/web lint` needs `NODE_OPTIONS=--max-old-space-size=8192`; so does `pnpm prepush`.
-- Playwright in the cloud container: `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`.
-- The Prisma client must be regenerated (`pnpm --filter @repo/api exec prisma generate`) after any schema change,
-  or after switching to this branch, before typecheck or tests mean anything.
+- Cloud container: `pnpm install`, then `pnpm --filter @repo/api exec prisma generate`, before any gate.
+- `NODE_OPTIONS=--max-old-space-size=8192 pnpm prepush` (web lint needs the bigger heap).
+- Playwright: `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome`.
+- Docker is not available in the cloud container.
 - Do not run Playwright or `scripts/e2e-local.sh` from more than one agent at once: one database, fixed ports.
