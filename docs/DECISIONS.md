@@ -10,6 +10,66 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-09 — The reconciliation pass at the 1.1.0 boundary (last full pass 2026-11-07)
+
+**Why now.** The fresh-start epic (ADR-0215) closed with 1.1.0 on 2026-11-09 and the owner asked for the pass
+the same day. `check:reconcile-due` did not fire on its own: on the full clone, which this pass fetched with
+`git fetch --unshallow`, it reads "2 of 215 ADRs since, threshold 8", so the epic boundary was the trigger,
+as on 2026-10-26 and 2026-10-31. The pass ran over `5ab4811c..HEAD` (798 files: 1.0.0, 1.1.0, the 48-flag
+retirement, one baseline migration) with four read-only reviewers (docs, register, agents and policy files,
+security) whose findings were verified before they were applied. `pnpm check:counts`, `check:claims`,
+`check:doc-links`, `check:flags`, `check:adr-coverage`, `check:spec-status` and `check:debt-status` were green
+throughout.
+
+**Found wrong, and corrected in place.**
+
+- **`CLAUDE.md` §17 said the backup service exists "only in a compose file the operator edits by hand".**
+  `docker-compose.release.yml` ships the service, the `/backups` mount and the closed database port
+  (`backup:` at line 191, mount at 180, no `5432` published); only a host on an older copy of that file needs the
+  hand edit. Two more lines (`VITE_GANTT_VIEW` "default-on", `VITE_PASSWORD_RESET`) described retired flags as live.
+- **The agents still briefed reviewers on flags that no longer exist** (`test-engineer.md` told its reader never to
+  weaken "flag-off parity suites"; `devops-reviewer.md`, `ux-reviewer.md`, `component-reviewer.md`,
+  `performance-reviewer.md` and `ui-architect.md` repeated it), **listed `invitation-accept` as a public route**
+  (only `POST invitations/preview` is `@Public()`; accept needs a session), and **said nothing of the boot
+  `preflight`** or the single baseline migration (`devops-reviewer.md`, `database-architect.md`).
+- **About a dozen documents described flags as live or the 1.0 shapes as current**: `ARCHITECTURE.md` §8,
+  `DEVELOPMENT.md`, `apps/web/README.md` (which also still said the routes are file-based), the edit-lock
+  runbook, `TOOLBAR_ROADMAP.md` (a rollback path to a placeholder bar that no longer exists), `DEPLOYMENT.md`,
+  `TESTING.md`, `PROCESS.md`, the PR template, `DESIGN_SYSTEM.md`, `API.md` (export format "2.3") and three
+  nullability claims in `DATABASE.md` that 1.1 made NOT NULL. Code comments that said the same were corrected
+  (`env.ts`, `share-token.guard.ts`, `scripts/check-flags.mjs`).
+- **The register had drifted by line number and by premise.** 62 cites in 15 rows were re-pointed, each only after
+  the text at the old line in `5ab4811c` was shown identical to the text at the new line. Rows whose facts 1.1.0
+  changed were rewritten: #118, #118a and #256 (migrations that no longer exist), #120 and #401 (the host's tables
+  and plans were recreated or discarded), #507 (1.0 has shipped), #298 (the chain is 18 suites, so its trigger
+  fired), #366 and #374 (the placement-migration precedent was deleted), #264 (50 suites, not 51), #502, #100,
+  #204, #75 and #373.
+
+**Recorded, not fixed.**
+
+- **`docs/TECH_DEBT.md` #577** is new: 13 test files still mock `LIBRARY_SCOPING_ENABLED`, which `env.ts` no
+  longer exports, and `flagDefaultOn`/`flagDefaultOff` have no caller.
+- **`pnpm audit --prod` reports 37 advisories** (1 critical, 20 high, 11 moderate, 5 low; 38 on 2026-11-07),
+  re-read by reachability. The one that sat on the API's request path, `body-parser` `GHSA-27r3-jxmh-p828`, is
+  closed: the lockfile holds only `body-parser@2.4.0`. What remains on the request path is `qs` under Express
+  (`GHSA-6pq8-jxhm2-2vcw`, `qs.stringify` with `arrayFormat: 'comma'`), which nothing in `apps/api/src` calls. The
+  critical is still `dompurify` under `jspdf`, reachable only through jsPDF's `html()`, which the product never
+  calls. Overrides for `jspdf`/`dompurify`, `fast-uri` and `seroval` are a cheap hardening and are the owner's call.
+- **Security review of the 1.1.0 API changes: no blocking findings.** The boot `preflight` never writes (every
+  probe runs read-only), fails closed, never prints the password and cannot be injected. One suggestion stands: it
+  reads `public.` only and drops Prisma's `?schema=`, so a pre-1.1 database in another schema would read as fresh.
+  The shipped compose files use `schema=public`, so the supported deployment is unaffected.
+- **`providers.tsx` nests the error boundary inside the query and theme providers**, so a throw in either is not
+  caught; both are trivial today, noted in #577.
+
+**What the pass did not find.** Counts (28 modules, 40 models, 1 migration, 1,884 web files, 48 suites, 215 ADRs) and
+all 11 manifest descriptions were right; the three exemplars exist; `ARCHITECTURE.md` §10's four unbuilt ADRs are
+still unbuilt.
+
+**Two things it did not establish.** `docs/DATABASE.md` was spot-checked for nullability rather than read
+end to end (about 1,950 lines), and the register rows in the compact table were out of the register reviewer's
+method, so they were not re-read.
+
 ## 2026-11-09 — #576 is closed as not a race, and why a register row's trace was wrong
 
 **What was decided.** `docs/TECH_DEBT.md` #576 (a project delete soft-deleting a plan an import committed in
