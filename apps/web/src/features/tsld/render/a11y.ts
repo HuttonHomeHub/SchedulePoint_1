@@ -170,9 +170,9 @@ export function describeActivity(
    * basis, which is the defect this fix removes.
    *
    * **And there is deliberately NO fallback to `earlyStart` when the placed date is null**, though
-   * that state is reachable: a plan that was never calculated has neither, and a placed date can be
-   * null where an early one is not. Such a bar is **not
-   * drawn at all** — `to-render-model.ts` passes `barDatesFor`'s answer straight through and
+   * that state is reachable: a plan that was never calculated has neither. (Before 1.1 a placed date
+   * could also be null where an early one was not, on rows written before the placed columns existed;
+   * a 1.1 database has no such rows, ADR-0215.) Such a bar is **not drawn at all** — `to-render-model.ts` passes `barDatesFor`'s answer straight through and
    * `activityRect` returns null for a null start — so "not yet scheduled" is what the picture
    * shows. A fallback here would describe a bar that is not there, which is the disagreement this
    * whole fix removes, pointing the other way.
