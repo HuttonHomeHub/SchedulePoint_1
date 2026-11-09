@@ -31,7 +31,8 @@
 #      and a real `restore` swaps in a copy identical to the source and keeps the old database;
 #   7. `preflight` (ADR-0215) decides correctly for each lineage — fresh, empty migrations table, 1.1
 #      baseline, baseline plus a later migration, 1.0, mixed (with and without a finished 1.0 row), failed
-#      or rolled-back rows, unknown, unreadable, unreachable — writing nothing; and a
+#      or rolled-back rows, unknown, unreadable, unreachable, and a URL naming a schema other than
+#      `public` — writing nothing; and a
 #      1.0 copy is counted by `check` with a note and refused by `restore`.
 #
 # The script's exit status is the only result. It creates and drops databases named bkt_*/…_check_*/
@@ -857,6 +858,23 @@ old_url="postgresql://$PGUSER:%61pp@$PGHOST:$PGPORT/$PF_OLD?schema=public"
 RC=0
 OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$old_url"; bk preflight) 2>&1)" || RC=$?
 expect "preflight: connects through DATABASE_URL as the API container does, and refuses a 1.0 database" refused_with pre_1_1_lineage
+
+# A schema other than `public` is refused before anything is read: the classifier reads `public` only, so
+# a pre-1.1 database living in another schema would otherwise read as an empty `public` and pass as fresh.
+# The database named here IS fresh, so an accept would be the wrong answer reached the easy way.
+other_url="postgresql://$PGUSER:%61pp@$PGHOST:$PGPORT/$PF_FRESH?schema=archive"
+BK_DIR="$(newdir)"
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$other_url"; bk preflight) 2>&1)" || RC=$?
+expect "preflight: a DATABASE_URL naming another schema is refused, even on a database that reads as fresh" refused_with other_schema
+expect "...and wrote no file" no_file_written
+expect "...(no credential in the output)" test "$(grep -c '%61pp\|app:app' <<<"$OUT")" -eq 0
+
+public_url="postgresql://$PGUSER:%61pp@$PGHOST:$PGPORT/$PF_FRESH?schema=public"
+BK_DIR="$(newdir)"
+RC=0
+OUT="$( (unset PGHOST PGUSER PGPASSWORD PGPORT PGDATABASE; export DATABASE_URL="$public_url"; bk preflight) 2>&1)" || RC=$?
+expect "preflight: schema=public is the same as none, and a fresh database proceeds" accepted_as fresh
 
 # --- 6. a 1.0 copy: check counts it with a note, restore refuses it -----------------------------------
 

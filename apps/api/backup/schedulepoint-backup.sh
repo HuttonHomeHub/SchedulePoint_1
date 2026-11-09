@@ -24,7 +24,8 @@
 #                 proceed, including a 1.1 database a later 1.1.x has migrated (a rollback by image tag). It
 #                 runs whether or not /backups is mounted, reads the database in a read-only session and
 #                 writes no file: it must precede pre-migrate, which would otherwise copy the refused
-#                 database on every restart of the container. It inspects the `public` schema only, and
+#                 database on every restart of the container. It inspects the `public` schema only, so it
+#                 refuses a DATABASE_URL whose `schema` parameter names any other (reason other_schema), and
 #                 the `options` startup parameter that makes its session read-only and bounded may be
 #                 refused by PgBouncer, which reads as cannot_read: a refusal, safe, and the reason to point
 #                 DATABASE_URL at the database itself. The `backup` service is deliberately NOT preflighted:
@@ -198,6 +199,11 @@ urldecode() {
       printf "%s", out s }'
 }
 
+# URL_SCHEMA is the `schema` parameter of DATABASE_URL, empty when there is none. Prisma reads it to choose where
+# its tables live, but libpq has no such parameter, so it is not passed on: it is kept only so `preflight`
+# can refuse a schema it does not inspect.
+URL_SCHEMA=""
+
 # parse_database_url — DATABASE_URL into PG* variables. Nothing here puts the credential on a command
 # line, and a query parameter is passed on only when it is a libpq one: Prisma's own (`schema`,
 # `connection_limit`, `pool_timeout`, `pgbouncer`, …) are dropped, `sslmode` and its siblings are not.
@@ -237,6 +243,7 @@ parse_database_url() {
       sslcert) export PGSSLCERT="$val" ;;
       sslkey) export PGSSLKEY="$val" ;;
       connect_timeout) export PGCONNECT_TIMEOUT="$val" ;;
+      schema) URL_SCHEMA="$val" ;;
     esac
   done
   IFS=$oldifs
@@ -938,6 +945,18 @@ print_resolve_commands() {
 # cmd_preflight — exit 0 for a database 1.1 may start on, else say so in three lines and one event and
 # exit 1. Nothing here writes: the session is read-only and no file is created.
 cmd_preflight() {
+  # The classifier reads the `public` schema only, so a URL that names another one would be classified
+  # from the wrong tables: a pre-1.1 database living in `archive` reads as an empty `public` and is
+  # waved through as fresh. Refused before anything is read, because the answer would not be about the
+  # database the API is about to open.
+  if [ -n "$URL_SCHEMA" ] && [ "$URL_SCHEMA" != public ]; then
+    why=$(printf 'is reached through the schema "%s" in DATABASE_URL, and SchedulePoint checks the public schema only, so it cannot tell what that database holds' "$URL_SCHEMA" | redact)
+    printf 'DATABASE REFUSED — SchedulePoint has not started and has not changed the database, which %s.\n' "$why"
+    printf 'Remove the schema parameter (or set schema=public) and use a database of its own; SchedulePoint keeps its tables in the public schema.\n'
+    printf 'See %s.\n' "$GUIDE"
+    emit boot.database_refused reason other_schema detail "$why" guide "$GUIDE"
+    exit 1
+  fi
   classify_database "$DBNAME"
   case $LINEAGE in
     fresh | current)

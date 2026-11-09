@@ -44,7 +44,7 @@ reconstruct afterwards:
 - **Boot database check** (ADR-0215): the entrypoint's `schedulepoint-backup preflight` writes one JSON line
   and nothing else to the database. `boot.database_accepted` carries `state` (`fresh` or `current`);
   `boot.database_refused` (the API exits 1) carries `reason` (`pre_1_1_lineage`, `mixed_lineage`,
-  `failed_migration`, `cannot_read` or `unknown_database`), a redacted `detail` and the guide's path. Neither
+  `failed_migration`, `cannot_read`, `unknown_database` or `other_schema`), a redacted `detail` and the guide's path. Neither
   carries the connection string. The five `*_rederive` boot events of 1.0 no longer exist.
 - **CPM recalculation** (ADR-0022): every recalculation emits
   `'schedule recalculated'` with `{ organizationId, planId, userId,
