@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-09 — Four dependency overrides, and the boot check refuses a schema it does not read
+
+**What was decided** (owner's yes to the two hardening suggestions of the reconciliation pass, same day).
+
+**Overrides.** `package.json`'s `pnpm.overrides` (the first the repo has) pins `dompurify` `^3.4.17`, `fast-uri`
+`^3.1.9`, `qs` `^6.16.1` and `seroval` `~1.6.11`. Each parent's own range already admits the patched version
+(`jspdf` optional `^3.3.1`, `ajv` `^3.0.1`, `express` `^6.16.0`, `router-core` `^1.6.7`), so the override only
+chooses within a range the parent accepts; resolved to `3.4.17`, `3.1.9`, `6.17.1` and `1.6.12`. `pnpm audit --prod`
+went from **37 advisories (1 critical, 20 high, 11 moderate, 5 low) to 16 (11 high, 5 moderate, none critical)**.
+The 16 left are `brace-expansion` (9), `browserslist` (2), `minimatch` (1), `baseline-browser-mapping` (1), all
+dev-time under ESLint and Babel; `mysql2` (2), a MySQL adapter the product never loads; and `deepmerge-ts` (1), Prisma's
+CLI config loader. The `dompurify` critical was never reachable (jsPDF's `html()` is not called), so this is
+tidiness for the audit and for whoever reads it, not an exposure closed. The overrides must be removed when the
+parents' own ranges move past them; `check:claims` and `check:licenses` are unaffected.
+
+**Preflight.** `parse_database_url` dropped Prisma's `schema` parameter, and `classify_database` reads `public.`
+only, so a pre-1.1 database living in another schema read as an empty `public` and was accepted as fresh. The
+check now refuses first (`boot.database_refused`, reason **`other_schema`**, the usual three lines, nothing read
+and nothing written) when `DATABASE_URL` names a schema other than `public`; `schema=public`, an empty value and no
+parameter behave as before. **This is a small amendment to ADR-0215 D2's list of refusal states**, recorded here
+rather than by editing the ADR (CLAUDE.md §6). It does refuse a fresh database someone placed in another schema on
+purpose; the shipped compose files all use `schema=public`, so the supported deployment is unaffected, and the
+message says what to change. Two cases were added to `scripts/backup-restore-check.sh` (a fresh database behind
+`schema=archive` is refused with no file written and no credential in the output; `schema=public` proceeds), and
+`docs/DEPLOYMENT.md` and `docs/OBSERVABILITY.md` list the new reason.
+
 ## 2026-11-09 — The reconciliation pass at the 1.1.0 boundary (last full pass 2026-11-07)
 
 **Why now.** The fresh-start epic (ADR-0215) closed with 1.1.0 on 2026-11-09 and the owner asked for the pass

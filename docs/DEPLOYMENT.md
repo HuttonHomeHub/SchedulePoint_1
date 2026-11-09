@@ -492,7 +492,9 @@ secret manager — never baked into images or committed. See
   has migrated still passes, so rolling back by image tag works inside 1.1.
   The refusal states are `pre_1_1_lineage`, `mixed_lineage` (a 1.0 image was started on a 1.1 database),
   `failed_migration`, `cannot_read` (the database is down or `DATABASE_URL` is wrong; the container retries)
-  and `unknown_database`; an empty database (`fresh`) and a 1.1 one (`current`) are accepted. Each refusal
+  `unknown_database`, and `other_schema` (`DATABASE_URL` carries a `schema` other than `public`; the check reads
+  the `public` schema only, so it refuses before reading anything rather than classify from the wrong tables);
+  an empty database (`fresh`) and a 1.1 one (`current`) are accepted. Each refusal
   prints three plain lines and writes nothing. The one-time move to 1.1.0 is the guide's procedure, and
   going back to 1.0 is the old volume with `API_IMAGE_TAG` and `WEB_IMAGE_TAG` pinned to `1.0.0`, never a tag alone.
 - Migrations are backward-compatible where feasible (expand/contract) so a
