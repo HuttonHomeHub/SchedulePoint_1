@@ -3,7 +3,7 @@
  *
  * **This is a correctness requirement, not a cosmetic one.** An activity's `name` is UNIQUE per
  * plan among live rows —
- * `apps/api/prisma/migrations/20260710092048_add_activities/migration.sql:78`,
+ * `20260710092048_add_activities/migration.sql:78` at api-v1.0.0 (now in the 1.1 baseline),
  * `CREATE UNIQUE INDEX "uq_activities_plan_name" … WHERE "deleted_at" IS NULL` — and nothing in
  * `ActivitiesService.create` catches the violation, so a duplicate name surfaces as a Prisma
  * `P2002` mapped to a **409 with a deliberately noun-free message**

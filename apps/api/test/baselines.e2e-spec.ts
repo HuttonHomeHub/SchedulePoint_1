@@ -992,7 +992,7 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
   // BINDING SNET nine calendar days after the data date; B is its FS successor. After
   // capture, PATCH A the way ADR-0148's strip converted a binding constraint into a
   // placement — through the public PATCH, not the migration SQL (that row transformation
-  // is already covered by strip-drag-constraints-migration.e2e-spec.ts, and running the SQL
+  // was covered by strip-drag-constraints-migration.e2e-spec.ts at api-v1.0.0, and running the SQL
   // here would convert other tests' rows too, since it is not plan-scoped).
   it('R1: a stripped activity reads as ahead of baseline while its bar has not moved', async () => {
     const { actor } = await adminWithOrg();

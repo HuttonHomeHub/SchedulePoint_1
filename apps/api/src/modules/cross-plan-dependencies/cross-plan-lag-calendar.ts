@@ -15,8 +15,9 @@ import type { PlanRepository } from '../plans/plan.repository';
  * `planCalendarId`. This function carries **each endpoint's own plan calendar**, and is the only
  * place a cross-plan lag's calendar is decided. The write path (`lagDays` → working minutes), the
  * read path (working minutes → `lagDays`) and the derivation (the port the lag is walked on) all call
- * it, and the migration's SQL (`20260926120000_cross_plan_lag_working_minutes`) is the same rule in
- * the other language; `cross-plan-lag-migration.e2e-spec.ts` compares the two row by row (B2).
+ * it, and the migration's SQL (`20260926120000_cross_plan_lag_working_minutes` at api-v1.0.0) was the
+ * same rule in the other language; `cross-plan-lag-migration.e2e-spec.ts` (at api-v1.0.0) compared the
+ * two row by row (B2).
  *
  * - `TWENTY_FOUR_HOUR`: no calendar. The lag is elapsed time and its factor is pinned at 1440.
  * - `PROJECT_DEFAULT`: **the successor activity's plan's calendar**, in both directions (CQ-2). The
@@ -133,8 +134,8 @@ export interface CrossPlanLagFactorSources {
  * None of those grows with the page's length, which `cross-plan-dependencies.service.spec.ts` pins
  * with a counting stub (spec FC-6, its CRUD limb). An empty page issues nothing.
  *
- * The migration test (`cross-plan-lag-migration.e2e-spec.ts`) calls this on the seeded links, so
- * the differential it runs against the SQL covers this assembly and not only the pure rule.
+ * The migration test (`cross-plan-lag-migration.e2e-spec.ts` at api-v1.0.0) called this on the seeded
+ * links, so the differential it ran against the SQL covered this assembly and not only the pure rule.
  */
 export async function attachCrossPlanLagDayFactors<T extends CrossPlanLagRow>(
   sources: CrossPlanLagFactorSources,

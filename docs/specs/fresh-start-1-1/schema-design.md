@@ -589,3 +589,93 @@ The questions as they were put:
   test data)? Or should it be **2.0.0**? This is the owner's call. The database design does not depend
   on it.
 - **Q6, a permanent catalogue gate (§7.4).** Approve as a separate follow-up, or decline?
+
+---
+
+## M2-T1 equivalence proof (2026-11-09, database-architect)
+
+**Scope.** M2-T1 ships the baseline as an **exact equivalent** of today's schema; the §3 tidy is folded
+into the still-unreleased baseline in M3. So `expected` in §7.2 is the chain itself and the allow-list
+(`tidy.sql`) is empty.
+
+**What was built.** `apps/api/prisma/migrations/20261109000000_baseline_1_1/migration.sql`, 2,067 lines,
+110,215 bytes, sha256 `84f2c9d9…92fa0b` (equal to the `_prisma_migrations.checksum` Prisma recorded for
+it, which settles M2-T3's open question: Prisma's checksum is the SHA-256 of the file). Layout:
+`btree_gist`; the output of `prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma
+--script` (Prisma 6.19.3) verbatim, except three marked hand edits adding `NULLS NOT DISTINCT`; 116
+CHECKs, 68 partial indexes and 3 EXCLUDE constraints, grouped by table, each rendered from the chain's
+own catalogue (`pg_get_constraintdef`, `pg_indexes.indexdef`) with a `-- was: <migration> (git tag
+api-v1.0.0)` provenance line found by searching the 84 files for the last statement creating that
+name; and the audit function and both triggers verbatim from `20260803170000_audit_events`.
+
+**Differences from §2.2 found in practice.**
+
+- The three `NULLS NOT DISTINCT` uniques are **declared** in `schema.prisma` as plain `@@unique`, so
+  Prisma generates them and the clause is edited into the generated statement rather than added in
+  the hand-written section (the first A-vs-generated comparison showed them as the only three
+  objects the generated part had in a _different_ form; everything else it lacked was simply absent).
+- No per-object "one-line why" was written. Text extracted from the old migrations' comments was
+  unusable as one-liners (sampled: section banners, half sentences), and the constraint names are
+  self-describing; the reason for each object is on its model in `schema.prisma` (one header note
+  there now says legacy names in comments resolve at the tag) and in the cited migration.
+- Postgres renders `CASE` CHECKs on one line; lines over 160 characters were broken before
+  `WHEN`/`ELSE`/`END`. The comparison below is what proves the reformatting changed nothing.
+
+**Command** (PostgreSQL 16.15, role `app`, both databases on the local server; `catalog.final.sql` is
+the §7.2 query, `catalog.extra.sql` the supplement below):
+
+```sh
+P=postgresql://app:app@localhost:5432
+git archive api-v1.0.0 apps/api/prisma | tar -x -C "$S/v1"                 # 84 legacy directories
+psql $P/postgres -c 'CREATE DATABASE sq_chain OWNER app' -c 'CREATE DATABASE sq_base OWNER app'
+DATABASE_URL="$P/sq_chain?schema=public" pnpm exec prisma migrate deploy --schema "$S/v1/apps/api/prisma/schema.prisma"
+DATABASE_URL="$P/sq_base?schema=public"  pnpm exec prisma migrate deploy   # the baseline, from apps/api
+for d in sq_chain sq_base; do
+  psql $P/$d -XAt -f catalog.final.sql > $d.catalog
+  psql $P/$d -XAt -f catalog.extra.sql > $d.extra
+done
+diff sq_chain.catalog sq_base.catalog && diff sq_chain.extra sq_base.extra && echo NO-DIFF
+```
+
+**Result:** `NO-DIFF`. 1,173 catalogue lines on each side (the §1 counts: 43 tables, 116 CHECKs, 84
+FKs, 3 EXCLUDE, 191 indexes of which 68 partial, 3 `NULLS NOT DISTINCT`, 31 enums with label order,
+2 triggers `enabled=A`, 1 function by body hash, `btree_gist`), and 1,409 supplementary lines.
+`DATABASE_URL=$P/sq_base pnpm --filter @repo/api prisma:check-drift` → "No difference detected", exit 0.
+
+**The supplement** covers properties the §7.2 lines do not print: per-column collation, identity,
+storage, compression and statistics target; extension version and schema; relation kind, replica
+identity, reloptions and access method; constraint deferrability and `NO INHERIT`; enum/domain/composite
+types; function `SECURITY DEFINER`, volatility and language; relation ACLs; and the schema list.
+
+```sql
+SELECT line FROM (
+  SELECT 'colx '||c.relname||'.'||a.attname||' coll='||COALESCE(co.collname,'-')||' ident='||a.attidentity::text
+         ||' storage='||a.attstorage::text||' compr='||a.attcompression::text||' stat='||COALESCE(a.attstattarget::text,'-') AS line
+    FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+    LEFT JOIN pg_collation co ON co.oid=a.attcollation AND a.attcollation<>0
+   WHERE c.relnamespace='public'::regnamespace AND c.relkind='r' AND a.attnum>0 AND NOT a.attisdropped
+     AND c.relname<>'_prisma_migrations'
+  UNION ALL SELECT 'extv '||extname||' '||extversion||' '||extnamespace::regnamespace::text FROM pg_extension
+  UNION ALL SELECT 'relx '||relname||' kind='||relkind::text||' replident='||relreplident::text
+         ||' opts='||COALESCE(array_to_string(reloptions,','),'-')||' am='||COALESCE(relam::regclass::text,'-')
+    FROM pg_class WHERE relnamespace='public'::regnamespace AND relname NOT LIKE '_prisma_migrations%'
+  UNION ALL SELECT 'conx '||conname||' defer='||condeferrable::text||condeferred::text||' noinh='||connoinherit::text
+    FROM pg_constraint WHERE connamespace='public'::regnamespace AND conrelid::regclass::text<>'_prisma_migrations'
+  UNION ALL SELECT 'type '||typname||' '||typtype::text FROM pg_type
+   WHERE typnamespace='public'::regnamespace AND typtype IN ('e','d','c') AND typrelid=0
+  UNION ALL SELECT 'proc '||proname||' secdef='||prosecdef::text||' vol='||provolatile::text
+         ||' lang='||(SELECT lanname FROM pg_language l WHERE l.oid=prolang)
+    FROM pg_proc WHERE pronamespace='public'::regnamespace
+     AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=pg_proc.oid AND d.deptype='e')
+  UNION ALL SELECT 'acl '||relname||' '||COALESCE(relacl::text,'-') FROM pg_class WHERE relnamespace='public'::regnamespace
+  UNION ALL SELECT 'nsp '||nspname FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname<>'information_schema'
+) s ORDER BY line;
+```
+
+**The comparison discriminates** (re-run on the baseline database, inside a rolled-back transaction):
+`ENABLE` instead of `ENABLE ALWAYS` on `trg_audit_events_append_only`, dropping
+`ck_notes_exactly_one_parent`, and recreating `uq_code_swimlane_lanes_basis` without `NULLS NOT
+DISTINCT` each produced a one-line difference.
+
+**Not covered, deliberately:** column order (§7.1) and `_prisma_migrations` itself (Prisma's own table,
+whose rows are the history this change replaces).

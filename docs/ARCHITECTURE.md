@@ -137,7 +137,8 @@ ESLint flat-config presets (`base`, `react`, `nest`) and tsconfig presets.
 ### PostgreSQL + Prisma
 
 Prisma is the ORM and migration tool. `apps/api/prisma/schema.prisma` (43
-models) is the source of truth for the data model; 84 migrations are committed.
+models) is the source of truth for the data model; 1 baseline migration is committed (the history
+before 1.1 is the git tag `api-v1.0.0`, ADR-0215).
 Constraints Prisma cannot express — partial uniques, CHECK constraints, partial
 indexes — are written as raw SQL in the migration and documented as a comment on
 the model, never as an `@@index` that would drift (see

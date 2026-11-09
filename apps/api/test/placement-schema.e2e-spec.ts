@@ -28,8 +28,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  *
  * **Why the database and not the migration file.** Reading the SQL would prove a constraint was
  * once absent and would pass happily after a later migration added one — the assertion would
- * describe history rather than the running system (`perf-probe-sweep-columns.e2e-spec.ts`,
- * `account-issuer-migration.e2e-spec.ts`).
+ * describe history rather than the running system (`perf-probe-sweep-columns.e2e-spec.ts`).
  *
  * The column-shape cases below are a weaker instrument and are labelled as one: a database drifted
  * BY HAND fails them, and a schema changed CONSISTENTLY does not. They are kept because the

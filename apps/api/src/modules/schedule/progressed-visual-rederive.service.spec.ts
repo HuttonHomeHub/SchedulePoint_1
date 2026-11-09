@@ -19,7 +19,7 @@ import type { ScheduleService } from './schedule.service';
 
 /**
  * The boot re-derivation's ORDER and its downstream propagation (#421 M2-T2.2, spec §4.4). The pending
- * query runs against a real database in `test/progressed-visual-rederive.e2e-spec.ts`; here it is
+ * query ran against a real database in `test/progressed-visual-rederive.e2e-spec.ts` at api-v1.0.0; here it is
  * stubbed so the cases can say which plans are pending and which edges exist.
  */
 const edge = (predecessorPlanId: string, successorPlanId: string): PlanCrossEdge => ({
@@ -57,7 +57,9 @@ function harness(
 }
 
 describe('ProgressedVisualRederiveService', () => {
-  it('names a migration that exists, so the marker is not a query that can never match', () => {
+  it('names a migration the 1.1 baseline does not ship, so the service is dormant', () => {
+    // The history before 1.1 is one baseline (ADR-0215): this marker row can no longer exist, the
+    // pending query's scalar subquery is NULL, and no plan qualifies. Fail-closed, and removed in M3.
     const dir = join(
       __dirname,
       '..',
@@ -67,9 +69,8 @@ describe('ProgressedVisualRederiveService', () => {
       'migrations',
       PROGRESSED_VISUAL_MIGRATION,
     );
-    expect(existsSync(join(dir, 'migration.sql'))).toBe(true);
+    expect(existsSync(join(dir, 'migration.sql'))).toBe(false);
   });
-
   it('does nothing, and loads no adjacency, when no plan is pending', async () => {
     const h = harness([], {});
     expect(await h.service.rederive()).toBe(0);

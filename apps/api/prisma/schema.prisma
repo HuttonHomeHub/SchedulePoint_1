@@ -6,6 +6,11 @@
 // timestamptz (UTC). Primary keys are UUID v7 (time-ordered). Every table
 // carries created_at/updated_at; mutable rows carry a soft-delete (deleted_at)
 // and an optimistic-locking version.
+//
+// Migrations: one baseline, `migrations/20261109000000_baseline_1_1`, builds this schema from empty
+// (ADR-0215), including every CHECK, partial index, EXCLUDE constraint and trigger the comments below
+// say lives "in the migration". A migration named `2026…_name` in a comment is from the history
+// before 1.1, which is the git tag api-v1.0.0; its reasoning and measurements are read there.
 
 generator client {
   provider        = "prisma-client-js"
@@ -4566,7 +4571,7 @@ model AuditEvent {
   //       'staff.'` and literally nothing else — not a narrower prefix, not an equality on a
   //       staff action. If StaffHealthService.activity()'s filter changes, this index changes
   //       with it. The measurements, the negative cases and the plan-cache argument are in
-  //       migrations/20260809180000_audit_events_staff_index.
+  //       migration 20260809180000_audit_events_staff_index at api-v1.0.0.
   @@map("audit_events")
 }
 

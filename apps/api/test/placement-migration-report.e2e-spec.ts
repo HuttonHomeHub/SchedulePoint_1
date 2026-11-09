@@ -18,8 +18,8 @@ import { clearDomainData } from './audit-reset';
  * which is why the table exists at all.
  *
  * **The rows are seeded through Prisma rather than by running the migration**, and the split is
- * deliberate: `strip-drag-constraints-migration.e2e-spec.ts` owns whether the migration produces
- * the right rows, and this file owns whether a member can read them, scoped and shaped correctly.
+ * deliberate: `strip-drag-constraints-migration.e2e-spec.ts` (at api-v1.0.0) owned whether the migration
+ * produced the right rows, and this file owns whether a member can read them, scoped and shaped correctly.
  * Combining them would make a route defect and a SQL defect indistinguishable in a failure.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);

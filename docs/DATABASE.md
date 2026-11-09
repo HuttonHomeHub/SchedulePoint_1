@@ -3,7 +3,8 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 43
-> models across 84 committed migrations — is the single source of truth for the data model.
+> models built by 1 baseline migration — is the single source of truth for the data model.
+> The history before 1.1 is the git tag `api-v1.0.0` (ADR-0215).
 > See ADR-0008.
 
 ## Philosophy
@@ -54,6 +55,15 @@
   redeploying the previous image; destructive changes are gated and reviewed
   with extra care.
 - Migrations are deterministic and independent of application code state.
+- **One baseline since 1.1 (ADR-0215).** `migrations/20261109000000_baseline_1_1` builds the whole
+  schema from an empty database: Prisma's generated DDL, then a hand-written section holding every
+  object Prisma cannot express (CHECKs, partial and `NULLS NOT DISTINCT` indexes, EXCLUDE
+  constraints, `btree_gist`, the `audit_events` triggers with `ENABLE ALWAYS`). Each hand-written
+  object names the pre-1.1 migration it came from (`-- was: <name> (git tag api-v1.0.0)`), and that
+  migration at the tag is where its reasoning and any recorded measurement live, so "record the
+  measurement in the migration comment" is met by reference for everything before 1.1. Every later
+  migration must sort after the baseline. It was proven equal to the 84-migration chain by a catalogue
+  comparison (`docs/specs/fresh-start-1-1/schema-design.md`, "M2-T1 equivalence proof").
 - **A re-derivation marker may be a migration with no statement.** When a release changes
   what the engine writes into engine-owned columns without changing any stored input, a boot
   service recalculates the affected plans once, keyed on a migration's
@@ -2150,7 +2160,11 @@ two columns mean the same thing (`docs/TECH_DEBT.md` #385; spec
 Engine-owned columns (ADR-0022) keep whatever the engine that last recalculated a plan wrote.
 When a release changes that engine, a plan nobody edits keeps the old dates, and nothing flags
 it as stale (ADR-0155 D9). Five boot services now recalculate such plans once, and each is
-keyed on a migration's `finished_at`:
+keyed on a migration's `finished_at`.
+
+**Since the 1.1 baseline (ADR-0215) none of the marker rows below exists**, so each service's scalar
+subquery is NULL, no plan qualifies, and the services are dormant until they are removed (fresh-start
+M3). The technique stays valid for a release after 1.1; a squash ends every marker.
 
 | Service                           | Marker migration                                        | Has DDL/data |
 | --------------------------------- | ------------------------------------------------------- | ------------ |

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { PinoLogger } from 'nestjs-pino';
@@ -19,7 +19,7 @@ import type { ScheduleService } from './schedule.service';
 
 /**
  * The boot re-derivation's ORDER (#385 M3-T1, spec D8). The pending query itself runs against a real
- * database in `test/cross-plan-rederive.e2e-spec.ts`; here it is stubbed so the cases can say exactly
+ * database in `test/cross-plan-rederive.e2e-spec.ts` (at api-v1.0.0); here it is stubbed so the cases can say exactly
  * which plans are pending and which edges exist, and assert the sequence of recalculations.
  */
 const edge = (predecessorPlanId: string, successorPlanId: string): PlanCrossEdge => ({
@@ -75,7 +75,9 @@ function harness(
 }
 
 describe('CrossPlanInstantRederiveService', () => {
-  it('names a migration that exists, so the marker is not a query that can never match', () => {
+  it('names a migration the 1.1 baseline does not ship, so the service is dormant', () => {
+    // The history before 1.1 is one baseline (ADR-0215): this marker row can no longer exist, the
+    // pending query's scalar subquery is NULL, and no plan qualifies. Fail-closed, and removed in M3.
     const dir = join(
       __dirname,
       '..',
@@ -85,29 +87,8 @@ describe('CrossPlanInstantRederiveService', () => {
       'migrations',
       CROSS_PLAN_INSTANTS_MIGRATION,
     );
-    expect(existsSync(join(dir, 'migration.sql'))).toBe(true);
+    expect(existsSync(join(dir, 'migration.sql'))).toBe(false);
   });
-
-  it('names a marker migration that holds no statement: its row is its only product', () => {
-    const sql = readFileSync(
-      join(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        'prisma',
-        'migrations',
-        CROSS_PLAN_INSTANTS_MIGRATION,
-        'migration.sql',
-      ),
-      'utf8',
-    );
-    const statements = sql
-      .split('\n')
-      .filter((line) => line.trim() !== '' && !line.trim().startsWith('--'));
-    expect(statements).toEqual([]);
-  });
-
   it('keys the pending read on a scalar-subquery marker and states every soft-delete filter', async () => {
     const prisma = { $queryRaw: vi.fn().mockResolvedValue([]) };
     const service = new CrossPlanInstantRederiveService(
