@@ -3,11 +3,12 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the GUI review session of the same day), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
-epic ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
+**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the GUI review session
+of the same day), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start epic
+([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
 [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
-still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
-question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
+still stands: nothing that needs the owner to run or check anything on their server or devices (a decision question
+is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
 
 ## What shipped
 
@@ -32,7 +33,8 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
   `DATABASE_URL` that names a schema other than `public` (`docs/DECISIONS.md`, "Four dependency overrides…"). It
   carries a patch changeset for `@repo/api`; the Version Packages PR it opened was merged the same night as #1298
   (`9ac6882a`, its Release run succeeded), so nothing from it is pending.
-- **One branch, `main`** — 2026-11-10. Five branches whose work was already in `main` (`fix/project-delete-import-race`,
+- **One branch, `main`** — 2026-11-10. Five branches whose work was already in `main`
+  (`fix/project-delete-import-race`,
   `claude/vibrant-dijkstra-tmdl7x` and three closed `dependabot/…` updates) and `wip/history-numerator-preaggregate`
   were deleted by the owner on GitHub (the cloud session's proxy refuses branch deletion). The one commit the wip
   branch held, a possible speed-up for the staff-console history counts, is kept as
@@ -48,27 +50,31 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
   (44 of them tests) match `grep -rli "flag-off\|flag off"`. Many are accurate history; it was outside the row and
   not swept.
 - **The GUI review, 2026-11-10: two pages, no product change.** Nothing in the repository changed except this file.
-  - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint Runbook"):
+  - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint
+    Runbook"):
     39 goal-phrased steps in three chapters (getting in 8, setting up 14, building a plan 17), each with an
-    Easy / OK / Struggled answer, a notes box and a folded hint; chapters 4 to 6 are **outlines only**, waiting for the
-    owner's go-ahead. Answers are saved in the page's own database, collection `answers`, one document per step with
-    id `<chapter>-<two-digit step>` (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` /
-    null), `notes`, `goal`, `step`, `updatedAt`. Read them with the `ArtifactData` tool (`action: "list"`,
-    `collection: "answers"`, that URL). It held no answers when this was written.
+    Easy / OK / Struggled answer, a notes box and a folded hint; chapters 4 to 6 are **outlines only**, waiting for
+    the owner's go-ahead. Answers are saved in the page's own database, collection `answers`, one document per step
+    with id `<chapter>-<two-digit step>` (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` /
+    `struggled` / null), `notes`, `goal`, `step`, `updatedAt`. Read them with the `ArtifactData` tool (action `list`,
+    collection `answers`, that URL). It held no answers when this was written.
   - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
     Walkthrough"): the five journeys of `docs/PROJECT_BRIEF.md` §10, 80 steps each at 1024 × 600 and 1440 × 900, a
-    screenshot and a click / key count per step, and the ranked list of GUI problems from `ux-reviewer` and
-    `accessibility-reviewer` as its first section. The scripts that drove it are published beside the page under
+    screenshot and a click / key count per step, and one ranked list of 30 GUI problems from `ux-reviewer` and
+    `accessibility-reviewer` as its first section (2 that block a task, 19 that slow or confuse, 9 polish; no screen
+    reader was run and zoomed views were not tested). The scripts that drove it are published beside the page under
     `scripts/` (see "How the walkthrough was run" below); nothing was committed.
   - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
     API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
     and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
-    date has no control of its own, it is "Planned start" in "Edit plan details"; at 1024 × 600 selecting a bar opens
-    a four-row actions block that takes about a third of the screen and scrolls the diagram; Ctrl+Z and Esc do nothing
-    straight after a mouse click or drag on the diagram, while the Undo button works; the plan's Calendar box does not
-    open on a click, only on typing or the down-arrow; and the brief's "draw a logic line from its finish to a blank
-    spot" does not exist (that drag resizes the bar). **None of these is fixed or registered in `docs/TECH_DEBT.md`
-    yet**: the owner picks from the ranked list first.
+    date has no control of its own, it is "Planned start" in "Edit plan details"; at 1024 × 600 that refusal is off
+    the screen, so the save seems to do nothing; at 1024 × 600 selecting a bar opens an actions block of three or
+    four rows that takes a quarter to a third of the screen and scrolls the diagram; Ctrl+Z does nothing straight
+    after a mouse click or drag on the diagram, while the Undo button works (the click leaves focus on `<main>`,
+    which neither undo key listener covers); the plan's Calendar box does not open on a click on its text, only on
+    its small arrow, typing or the down-arrow; and the brief's "draw a logic line from its finish to a blank spot"
+    does not exist (that drag resizes the bar). **None of these is fixed or registered in `docs/TECH_DEBT.md` yet**:
+    the owner picks from the ranked list first.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -157,12 +163,12 @@ Other candidates, each needing the owner's say:
   `BETTER_AUTH_SECRET` (32+ characters) and `RATE_LIMIT_LIMIT=100000`. Web: `pnpm --filter @repo/web dev`. Start the
   two separately: under `pnpm dev` the API answered with `X-RateLimit-Limit: 100`, so the raised limit had not reached
   it. The scripts are plain Node files using the pre-installed `playwright` (`h.js` harness, `common.js`, `j1.js` to
-  `j5.js`, `run.js`; `node run.js j3 1024`), saved beside the storyboard artifact as `scripts/*.txt`; `build.js` and
-  `template.html` build the page from their output. Set-up data goes in through the REST API from inside the page;
-  everything photographed is real clicks and typing.
+  `j5.js`, `run.js`; `node run.js j3 1024`), saved beside the storyboard artifact as `scripts/*.txt`; `build.js`,
+  `template.html` and `findings.json` build the page from their output. Set-up data goes in through the REST API
+  from inside the page; everything photographed is real clicks and typing.
 - **Things the walkthrough had to learn about the diagram.** There is no test hook for where a bar is: the scripts
   click-probe the canvas and read the selection bar's name. Selecting a bar at 1024 × 600 shrinks and scrolls the
-  canvas, so clear the selection (click an empty part of the diagram; Esc does not do it after a mouse click) and
+  canvas, so clear the selection (click an empty part of the diagram; Esc never clears a selection, by design) and
   press "Fit to plan" between probes. Rows are not on an exact 60 px pitch at 1024 × 600, so probe every 12 px.
 - **Two things the code reading got wrong and the browser corrected.** A new organisation already has a calendar
   called "Standard" and a new plan already uses it (the picker's "None (all days work)" is an option, not the
