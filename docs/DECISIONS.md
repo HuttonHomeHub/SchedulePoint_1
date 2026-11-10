@@ -10,6 +10,22 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-10 — The repository goes down to one branch, and the parked speed-up becomes a patch
+
+**What was decided** (owner's yes, same day). Five branches were deleted because everything they held was already in
+`main` or was a closed Dependabot update replaced by #1295: `fix/project-delete-import-race` (every line its commit
+added is in `main`; the file differences are later edits on top), `claude/vibrant-dijkstra-tmdl7x` (identical to `main`)
+and the three `dependabot/…` branches for #1282, #1290 and #1291.
+
+**The one branch with unfinished work**, `wip/history-numerator-preaggregate`, held a single commit not in `main`,
+`64ff45d4`, a possible speed-up for the three staff-console history counts. It is saved whole as
+`docs/specs/staff-server-readings/m1-preaggregate-numerators.patch` (`git apply --check` passes on the 2026-11-10
+`main`). It was **not measured and not adopted**: gate S-4 refuses its shape, widening a shared gate is an ADR-0105
+trigger, and the saving only matters above about 250,000 history rows where the live host holds hundreds. The reopen
+condition is unchanged (`m1-measurement.md`, "The pre-aggregate rewrite").
+
+---
+
 ## 2026-11-09 — Four dependency overrides, and the boot check refuses a schema it does not read
 
 **What was decided** (owner's yes to the two hardening suggestions of the reconciliation pass, same day).

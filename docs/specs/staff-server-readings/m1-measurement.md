@@ -90,8 +90,11 @@ and 512-byte figures stay in the SQL, the docblock and the sentences. The test w
 ## The pre-aggregate rewrite, prepared and not adopted
 
 Review proposed grouping each numerator by `(plan_id, organization_id)` before counting distinct
-values, which removes the large distinct sort. It is prepared as commit `64ff45d4` on
-`wip/history-numerator-preaggregate` and **not adopted** (2026-10-05): the inner `SELECT` projects
+values, which removes the large distinct sort. It was prepared as commit `64ff45d4` and is kept as
+[`m1-preaggregate-numerators.patch`](m1-preaggregate-numerators.patch) (saved 2026-11-10, when the
+`wip/history-numerator-preaggregate` branch was retired so the repository holds one branch; the patch
+applies cleanly to the 2026-11-10 `main` with `git apply`, and has still **not been measured**). It is
+**not adopted** (2026-10-05): the inner `SELECT` projects
 columns rather than aliased `count()` expressions, so gate S-4 refuses it, and widening a shared gate
 (ADR-0105) for a saving that matters only above ~250,000 history rows is not worth doing while the
 live host holds hundreds. It is the first remedy to measure when the H-1 `examined` ≥ 250,000 trigger
