@@ -3,7 +3,7 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
+**Written:** 2026-11-09, brought up to date 2026-11-10 (the last bullet of "What shipped", the first "What is next" item and the last environment note), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
 epic ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
 [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
 still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
@@ -30,7 +30,15 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
   `fast-uri`, `qs` and `seroval` (`pnpm audit --prod` 37 to 16 advisories, none critical; the 16 left are dev-time
   tooling, the unused `mysql2` adapter and Prisma's config loader), and a new boot refusal, `other_schema`, for a
   `DATABASE_URL` that names a schema other than `public` (`docs/DECISIONS.md`, "Four dependency overrides…"). It
-  carries a patch changeset for `@repo/api`, so the Release workflow will open a **Version Packages** PR.
+  carries a patch changeset for `@repo/api`; the Version Packages PR it opened was merged the same night as #1298
+  (`9ac6882a`, its Release run succeeded), so nothing from it is pending.
+- **One branch, `main`** — 2026-11-10. Five branches whose work was already in `main` (`fix/project-delete-import-race`,
+  `claude/vibrant-dijkstra-tmdl7x` and three closed `dependabot/…` updates) and `wip/history-numerator-preaggregate`
+  were deleted by the owner on GitHub (the cloud session's proxy refuses branch deletion). The one commit the wip
+  branch held, a possible speed-up for the staff-console history counts, is kept as
+  `docs/specs/staff-server-readings/m1-preaggregate-numerators.patch` (PR #1300, merge `d798a4d7`): **not measured and
+  not adopted**, and it is still the first remedy to try if the history counts pass about 250,000 rows (gate S-4 would
+  need widening, an ADR-0105 trigger). Decision-log entry: `docs/DECISIONS.md`, 2026-11-10.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -45,9 +53,9 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 Nothing is approved. Candidates, each needing the owner's say:
 
-1. **The Version Packages PR** that #1297's changeset opens (an `@repo/api` patch). Its checks read
-   `action_required` or `failure` with no job body run, which is expected (`CLAUDE.md` §11); merging it publishes the
-   API image and Watchtower pulls it on the owner's host, so it is the owner's call, and the web image does not move.
+1. **Whatever Version Packages PR the next changeset opens.** None is pending now (#1298 was the last). Its checks
+   read `action_required` or `failure` with no job body run, which is expected (`CLAUDE.md` §11); merging one
+   publishes the image and Watchtower pulls it on the owner's host, so it is the owner's call.
 2. **`docs/TECH_DEBT.md` #577** (13 dead test mocks for a retired flag, and two unused flag helpers; trigger: the next
    change to those tests or the next proposed flag).
 3. **Whether to make the Baseline criticality columns NOT NULL.** #576 was the stated reason they stayed nullable and
@@ -84,5 +92,11 @@ Nothing is approved. Candidates, each needing the owner's say:
 - The clone starts shallow. `git fetch --unshallow origin main` makes `check:reconcile-due` and the reconciliation's
   day-one-file query meaningful (1,205 commits).
 - `scripts/e2e-local.sh api` takes no file filter: it is the whole suite, about 15 minutes.
-- This session's branch is `claude/vibrant-dijkstra-tmdl7x`, the only branch it may push to; GitHub removes it when the
-  pull request merges, so start the next session's branch from `origin/main`.
+- Push only to the branch the session's instructions name; GitHub removes it when its pull request merges, so start
+  the next session's branch from `origin/main`. The repository holds only `main` between sessions; a new
+  `dependabot/…` or `changeset-release/main` branch is normal and short-lived.
+- **If lint reports hundreds of "cannot be resolved" or "unsafe member access" errors**, the Prisma client was
+  generated after eslint cached its result: run `prisma generate`, then
+  `find . -name .eslintcache -not -path './node_modules/*' -delete`, and lint again.
+- The unit-test half of `pnpm prepush` runs past ten minutes in this container: start it in the background
+  (`run_in_background`) rather than under a foreground timeout.
