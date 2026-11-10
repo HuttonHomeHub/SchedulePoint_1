@@ -52,12 +52,13 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
 - **The GUI review, 2026-11-10: two pages, no product change.** Nothing in the repository changed except this file.
   - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint
     Runbook"):
-    39 goal-phrased steps in three chapters (getting in 8, setting up 14, building a plan 17), each with an
-    Easy / OK / Struggled answer, a notes box and a folded hint; chapters 4 to 6 are **outlines only**, waiting for
-    the owner's go-ahead. Answers are saved in the page's own database, collection `answers`, one document per step
-    with id `<chapter>-<two-digit step>` (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` /
-    `struggled` / null), `notes`, `goal`, `step`, `updatedAt`. Read them with the `ArtifactData` tool (action `list`,
-    collection `answers`, that URL). It held no answers when this was written.
+    66 goal-phrased steps in six chapters (getting in 8, setting up 14, building a plan 17, running a plan 10,
+    sharing and output 9, deeper features 8), each with an Easy / OK / Struggled answer, a notes box and a folded
+    hint. Chapters 4 to 6 were written the same evening at the owner's request. Answers are saved in the page's own
+    database, collection `answers`, one document per step with id `<chapter>-<two-digit step>` (`3-05`) or
+    `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` / null), `notes`, `goal`, `step`, `updatedAt`.
+    Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). It held no answers when
+    this was written.
   - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
     Walkthrough"): the five journeys of `docs/PROJECT_BRIEF.md` §10, 80 steps each at 1024 × 600 and 1440 × 900, a
     screenshot and a click / key count per step, and one ranked list of 30 GUI problems from `ux-reviewer` and
@@ -95,10 +96,15 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 - **Ask the owner which problems to fix.** No fix before they choose. A fix that adds a screen entry point, a
   Playwright config, a shared gate or a schema change needs a spec and plan first (ADR-0105); most of the list is
   smaller than that, and each chosen item wants a `docs/TECH_DEBT.md` row before work starts.
-- **Runbook chapters 4 to 6** (running a plan; sharing and output; deeper features) are outlined on the page and
-  were not written up. The owner was asked whether to fill them in as outlined. Each step must be checked against the
-  running app before it is written, as chapters 1 to 3 were: reading the code alone got two hints wrong (see
-  "Environment notes").
+- **The owner asked whether to fix the list before starting the runbook, and was advised not to** (2026-11-10): their
+  untouched first impression is the point, and fixing first would lose the "both found" signal. Nothing on the list
+  stops chapters 1 to 3. Step 4.1 is written so that the refused progress save is something the owner meets and
+  judges, with the way round it (step 4.5, move the data date) in the hint.
+- **Two runbook hints rest on reading the code, not on a browser run**: "Move to swimlane…" on the selection bar
+  (step 6.4) and what "Flag over-allocated" shows when a resource really is overloaded (step 6.2). Everything else in
+  chapters 4 to 6 was done in a browser first. One outlined goal changed: "find out which change caused the finish to
+  move" became "find out what has changed since the baseline", because Compare revisions says on screen that it
+  cannot attribute a cause.
 - **Keeping the walkthrough** as a permanent suite was not proposed and is not approved. It would add a Playwright
   config, an ADR-0105 trigger, so it needs `feature-analyst` and the owner's approval. The session's own view: the
   click-probing it uses to find bars is slow and tied to today's layout, so it is a poor regression test as it
@@ -175,3 +181,7 @@ Other candidates, each needing the owner's say:
   default). And a plan is not visible in the Project Explorer until its project is expanded.
 - Creating several organisations with the same name eventually fails with "Could not allocate a unique name for this
   organisation." Give test organisations distinct names.
+- Importing a file into the project its plan was exported from is refused with "A plan with this name already exists
+  for this project", and the import dialog has no way to change the name: import into another project.
+- "Print…" calls the browser's own print window directly; "Health check" and "Share…" are toolbar buttons
+  at 1440 wide and menu items under "Analysis" and "Share & export" at 1024.
