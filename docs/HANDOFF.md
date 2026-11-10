@@ -3,7 +3,7 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the owner's choice of the next session's work), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
+**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the GUI review session of the same day), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
 epic ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
 [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
 still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
@@ -47,6 +47,28 @@ question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export
   in the register's "Closed numbers" ledger. "Flag-off" wording remains elsewhere: 98 files under `apps/web/src`
   (44 of them tests) match `grep -rli "flag-off\|flag off"`. Many are accurate history; it was outside the row and
   not swept.
+- **The GUI review, 2026-11-10: two pages, no product change.** Nothing in the repository changed except this file.
+  - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint Runbook"):
+    39 goal-phrased steps in three chapters (getting in 8, setting up 14, building a plan 17), each with an
+    Easy / OK / Struggled answer, a notes box and a folded hint; chapters 4 to 6 are **outlines only**, waiting for the
+    owner's go-ahead. Answers are saved in the page's own database, collection `answers`, one document per step with
+    id `<chapter>-<two-digit step>` (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` /
+    null), `notes`, `goal`, `step`, `updatedAt`. Read them with the `ArtifactData` tool (`action: "list"`,
+    `collection: "answers"`, that URL). It held no answers when this was written.
+  - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
+    Walkthrough"): the five journeys of `docs/PROJECT_BRIEF.md` §10, 80 steps each at 1024 × 600 and 1440 × 900, a
+    screenshot and a click / key count per step, and the ranked list of GUI problems from `ux-reviewer` and
+    `accessibility-reviewer` as its first section. The scripts that drove it are published beside the page under
+    `scripts/` (see "How the walkthrough was run" below); nothing was committed.
+  - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
+    API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
+    and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
+    date has no control of its own, it is "Planned start" in "Edit plan details"; at 1024 × 600 selecting a bar opens
+    a four-row actions block that takes about a third of the screen and scrolls the diagram; Ctrl+Z and Esc do nothing
+    straight after a mouse click or drag on the diagram, while the Undo button works; the plan's Calendar box does not
+    open on a click, only on typing or the down-arrow; and the brief's "draw a logic line from its finish to a blank
+    spot" does not exist (that drag resizes the bar). **None of these is fixed or registered in `docs/TECH_DEBT.md`
+    yet**: the owner picks from the ranked list first.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -59,26 +81,22 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-**The owner's chosen next session (2026-11-10): a GUI review, before any GUI fine-tuning.** It is two tasks, in this
-order, and neither changes the product:
+**The GUI review is half done: the pages exist, the owner's answers and choices do not.** In order:
 
-- **First, a manual runbook for the owner.** A step-by-step script of what a user does, from sign-up to a shared and
-  baselined plan, which the owner works through themselves and answers step by step. Each step states a **goal**,
-  not where to click ("make the second activity wait for the first", never "press the + button"), because a step that
-  names the control hides exactly the "I could not find it" problems the review is for. Each step has what the user
-  should end up with, an Easy / OK / Struggled answer, a notes box, and a hidden hint so being stuck never blocks the
-  rest. It is split into chapters of about 20–30 minutes (getting in; setting up; building a plan; running a plan;
-  sharing and output; deeper features), chapters 1–3 first. It is built as an artifact page that **saves the owner's
-  answers** (the artifact `db` capability), so a later session reads the feedback directly. Every step is checked
-  against the real app before it is written: a goal the product cannot do wastes the owner's time.
-- **Then, an automated walkthrough** of the five user journeys in `docs/PROJECT_BRIEF.md` §10, driven in a real browser
-  with a screenshot at every step at 1024 × 600 (ADR-0179) and 1440 × 900, published as a scrollable storyboard, then
-  reviewed by `ux-reviewer` and `accessibility-reviewer` into one ranked list of GUI problems, cross-referenced with
-  the owner's runbook answers. It is **one-off**: scripts and screenshots stay in the scratchpad. Keeping it in the
-  repository adds a Playwright config, an ADR-0105 trigger, so that needs a spec and the owner's approval first.
-
-No fixes until the owner picks them from the ranked list. The owner does the runbook because they **chose** to use
-their own product; it is not a test the session needs them to run, so it does not break the hard rule above.
+- **Read the owner's runbook answers** (how is in "What shipped"). Every "Struggled" and every note is a finding; set
+  them beside the walkthrough's ranked list and say which problems the owner found, which the walkthrough found, and
+  which both found (the list's "Found by" tag is there for this, and reads "walkthrough" on every row today).
+- **Ask the owner which problems to fix.** No fix before they choose. A fix that adds a screen entry point, a
+  Playwright config, a shared gate or a schema change needs a spec and plan first (ADR-0105); most of the list is
+  smaller than that, and each chosen item wants a `docs/TECH_DEBT.md` row before work starts.
+- **Runbook chapters 4 to 6** (running a plan; sharing and output; deeper features) are outlined on the page and
+  were not written up. The owner was asked whether to fill them in as outlined. Each step must be checked against the
+  running app before it is written, as chapters 1 to 3 were: reading the code alone got two hints wrong (see
+  "Environment notes").
+- **Keeping the walkthrough** as a permanent suite was not proposed and is not approved. It would add a Playwright
+  config, an ADR-0105 trigger, so it needs `feature-analyst` and the owner's approval. The session's own view: the
+  click-probing it uses to find bars is slow and tied to today's layout, so it is a poor regression test as it
+  stands; its value was the pictures.
 
 Other candidates, each needing the owner's say:
 
@@ -134,3 +152,20 @@ Other candidates, each needing the owner's say:
   module `@repo/…`" until the workspace packages are built; read the whole output, not its last lines.
 - The unit-test half of `pnpm prepush` runs past ten minutes in this container: start it in the background
   (`run_in_background`) rather than under a foreground timeout.
+- **How the walkthrough was run** (2026-11-10), so it can be repeated. Database: `SP_E2E_LOG= scripts/e2e-local.sh
+--db-only`. API: `pnpm --filter @repo/api exec nest start` with `DATABASE_URL` (the `app_test` URL in that script),
+  `BETTER_AUTH_SECRET` (32+ characters) and `RATE_LIMIT_LIMIT=100000`. Web: `pnpm --filter @repo/web dev`. Start the
+  two separately: under `pnpm dev` the API answered with `X-RateLimit-Limit: 100`, so the raised limit had not reached
+  it. The scripts are plain Node files using the pre-installed `playwright` (`h.js` harness, `common.js`, `j1.js` to
+  `j5.js`, `run.js`; `node run.js j3 1024`), saved beside the storyboard artifact as `scripts/*.txt`; `build.js` and
+  `template.html` build the page from their output. Set-up data goes in through the REST API from inside the page;
+  everything photographed is real clicks and typing.
+- **Things the walkthrough had to learn about the diagram.** There is no test hook for where a bar is: the scripts
+  click-probe the canvas and read the selection bar's name. Selecting a bar at 1024 × 600 shrinks and scrolls the
+  canvas, so clear the selection (click an empty part of the diagram; Esc does not do it after a mouse click) and
+  press "Fit to plan" between probes. Rows are not on an exact 60 px pitch at 1024 × 600, so probe every 12 px.
+- **Two things the code reading got wrong and the browser corrected.** A new organisation already has a calendar
+  called "Standard" and a new plan already uses it (the picker's "None (all days work)" is an option, not the
+  default). And a plan is not visible in the Project Explorer until its project is expanded.
+- Creating several organisations with the same name eventually fails with "Could not allocate a unique name for this
+  organisation." Give test organisations distinct names.
