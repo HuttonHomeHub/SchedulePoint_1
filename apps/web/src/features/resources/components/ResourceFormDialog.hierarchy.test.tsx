@@ -12,7 +12,7 @@ import type * as ApiClient from '@/lib/api/client';
 import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 
 /**
- * The resource-tree FORM surface under `VITE_LIBRARY_SCOPING` (ADR-0053 §3): creating a `GROUP`,
+ * The resource-tree FORM surface (ADR-0053 §3): creating a `GROUP`,
  * picking a parent group (never one that would form a cycle), and the rule that a group carries no
  * calendar / capacity / cost — enforced in the UI by hiding those fields AND by stripping any stale
  * value on the way out, so what the form shows and what it sends can never disagree.
@@ -23,11 +23,6 @@ import { apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
  * Also pins the assignment picker's exclusion of groups: the API answers 422
  * `GROUP_NOT_ASSIGNABLE`, so offering one would only ever produce an error.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

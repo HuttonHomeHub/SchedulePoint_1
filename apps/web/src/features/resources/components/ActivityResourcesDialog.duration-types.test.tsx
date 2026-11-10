@@ -14,9 +14,6 @@ import { apiFetch } from '@/lib/api/client';
  * driving assignment's rate field renders, previews the derived duration for a units-driven type,
  * carries the `editedField` so the server recomputes the triad, and mirrors the N20 zero-rate block.
  */
-// `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
-// native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
-// has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

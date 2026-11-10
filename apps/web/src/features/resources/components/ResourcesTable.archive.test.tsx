@@ -11,16 +11,10 @@ import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { clickRowAction } from '@/test/row-actions';
 
 /**
- * The resource library's M4 management layer with `VITE_LIBRARY_SCOPING` ON (ADR-0053 §4): search,
+ * The resource library's M4 management layer (ADR-0053 §4): search,
  * kind + archived filters, the `Archived` badge, archive/unarchive, and the deliberate decision that
  * a FILTERED list is flat (a tree of partial matches would draw branches the server never sent).
- * The flag-OFF parity assertions live in `ResourcesTable.hierarchy.flag-off.test.tsx`.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

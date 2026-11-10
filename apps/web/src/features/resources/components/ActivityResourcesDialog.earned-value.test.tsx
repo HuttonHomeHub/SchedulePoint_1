@@ -16,9 +16,6 @@ import { apiFetch } from '@/lib/api/client';
  * to null), and the assign form carries the cost inputs on POST. Flag-off behaviour is covered by
  * `ActivityResourcesDialog.test.tsx`.
  */
-// `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
-// native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
-// has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 

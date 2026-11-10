@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { router } from './router';
 
-// **Every route-gating flag is pinned ON, not just the one this file started with.** Each is
-// default-on today, so the mock is a no-op — and pinned deliberately, for the reason the original
-// comment gave: these assertions are about route validators, and
-// they must not start passing or failing because somebody changed a default elsewhere. Widened at
-// #96 M2 because the census below asserts an absolute route count, and a flag flipped off would
-// otherwise shrink the census silently instead of failing it — the `docs/TECH_DEBT.md`
-// #178/#181/#183 shape, a rule going quiet rather than wrong.
-
 /**
  * The search params other systems put in our URLs, read through the **router's real parser**
  * (ADR-0074 M5).

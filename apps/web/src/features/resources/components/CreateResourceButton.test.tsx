@@ -18,11 +18,6 @@ import { apiFetchAllPages } from '@/lib/api/client';
  * the other (ADR-0064 §7), found by the ADR-0097 F1 coarse-pointer harness, which refused to
  * report an option count of 1 as a measurement.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

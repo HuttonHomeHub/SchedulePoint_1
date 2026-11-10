@@ -10,14 +10,8 @@ import { PlanCalendarPicker } from './PlanCalendarPicker';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
-// Flag ON: the combobox picker with tier-grouped options (ADR-0053 §1 + §4). The flag-OFF parity
-// assertions — a native `<select>`, a flat option list, no groups — live in the sibling
-// `PlanCalendarPicker.test.tsx` against the real config.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
+// The combobox picker's tier-grouped options (ADR-0053 §1 + §4). The picker's value, PATCH body
+// and read-only render are asserted by the sibling `PlanCalendarPicker.test.tsx`.
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

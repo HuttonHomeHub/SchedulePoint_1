@@ -7,7 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarFormDialog } from './CalendarFormDialog';
 
-import type * as Env from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
@@ -16,10 +15,6 @@ vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
 // was deleted. Four assertions from `CalendarFormDialog.test.tsx` were RE-HOSTED here when that
 // file went with the weekday-checkbox surface it existed to pin: they were never about the deleted
 // branch, they merely lived on it.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof Env>()),
-}));
-
 const SPLIT_SHIFT: CalendarSummary = {
   id: 'cal-1',
   name: 'Two shift',

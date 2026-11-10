@@ -9,9 +9,6 @@ import { ActivityResourcesPanel } from './ActivityResourcesPanel';
 
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
-// Pinned OFF for the same reason the sibling dialog suite pins it: this asserts the BASE surface
-// (a flat native `<select>`), not the flag's searched `Combobox`.
-
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 
 const CREW: ResourceSummary = {

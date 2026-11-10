@@ -12,15 +12,9 @@ import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 
 /**
- * The assignment resource picker with `VITE_LIBRARY_SCOPING` ON (ADR-0053 §4 / US-8). This is the
- * one picker that owns its own fetch, so it is the one that genuinely searches SERVER-side and pages
+ * The assignment resource picker (ADR-0053 §4 / US-8). This is the one picker that owns its own fetch, so it is the one that genuinely searches SERVER-side and pages
  * with "Load more" — and therefore the one that must prove a >20-row library is reachable.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

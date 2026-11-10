@@ -15,10 +15,6 @@ import {
 } from '@/components/ui/toolbar/toolbar-promotion';
 import { selectionActionItems } from '@/features/plan-actions/selection-actions';
 
-// Every flag the entries and menus read, pinned ON: this suite is the manifest of the full build, and
-// a flag-off command is on neither the bar nor a menu (the entry's `isVisible`), which the flag-off
-// registry suites cover.
-
 /**
  * **SC-14 and SC-19: no tool is lost** (toolbar-redesign M5, spec §4.11 "Checks").
  *
