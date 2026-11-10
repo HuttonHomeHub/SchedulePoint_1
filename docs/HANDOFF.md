@@ -3,7 +3,7 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
+**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the owner's choice of the next session's work), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start
 epic ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
 [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
 still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
@@ -59,7 +59,28 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-Nothing is approved. Candidates, each needing the owner's say:
+**The owner's chosen next session (2026-11-10): a GUI review, before any GUI fine-tuning.** It is two tasks, in this
+order, and neither changes the product:
+
+- **First, a manual runbook for the owner.** A step-by-step script of what a user does, from sign-up to a shared and
+  baselined plan, which the owner works through themselves and answers step by step. Each step states a **goal**,
+  not where to click ("make the second activity wait for the first", never "press the + button"), because a step that
+  names the control hides exactly the "I could not find it" problems the review is for. Each step has what the user
+  should end up with, an Easy / OK / Struggled answer, a notes box, and a hidden hint so being stuck never blocks the
+  rest. It is split into chapters of about 20–30 minutes (getting in; setting up; building a plan; running a plan;
+  sharing and output; deeper features), chapters 1–3 first. It is built as an artifact page that **saves the owner's
+  answers** (the artifact `db` capability), so a later session reads the feedback directly. Every step is checked
+  against the real app before it is written: a goal the product cannot do wastes the owner's time.
+- **Then, an automated walkthrough** of the five user journeys in `docs/PROJECT_BRIEF.md` §10, driven in a real browser
+  with a screenshot at every step at 1024 × 600 (ADR-0179) and 1440 × 900, published as a scrollable storyboard, then
+  reviewed by `ux-reviewer` and `accessibility-reviewer` into one ranked list of GUI problems, cross-referenced with
+  the owner's runbook answers. It is **one-off**: scripts and screenshots stay in the scratchpad. Keeping it in the
+  repository adds a Playwright config, an ADR-0105 trigger, so that needs a spec and the owner's approval first.
+
+No fixes until the owner picks them from the ranked list. The owner does the runbook because they **chose** to use
+their own product; it is not a test the session needs them to run, so it does not break the hard rule above.
+
+Other candidates, each needing the owner's say:
 
 1. **Whatever Version Packages PR the next changeset opens.** None is pending now (#1298 was the last). Its checks
    read `action_required` or `failure` with no job body run, which is expected (`CLAUDE.md` §11); merging one
