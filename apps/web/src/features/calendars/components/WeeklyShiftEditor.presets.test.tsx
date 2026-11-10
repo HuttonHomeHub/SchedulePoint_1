@@ -6,16 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CalendarFormDialog } from './CalendarFormDialog';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
-import type * as Env from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
-// Flag ON. The flag-off surface stays pinned by `CalendarFormDialog.test.tsx`, which is kept rather
-// than weakened — it is the rollback contract (ADR-0053 M6 precedent).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof Env>()),
-}));
-
 const CALENDAR: CalendarSummary = {
   id: 'cal-1',
   name: 'Site',

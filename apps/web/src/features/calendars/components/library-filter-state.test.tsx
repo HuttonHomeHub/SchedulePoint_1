@@ -30,11 +30,6 @@ import { apiFetchAllPages } from '@/lib/api/client';
  * while the URL still claimed otherwise. It also covers the WCAG 4.1.3 result-count announcement,
  * which a debounced search otherwise makes invisible to a screen-reader user.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

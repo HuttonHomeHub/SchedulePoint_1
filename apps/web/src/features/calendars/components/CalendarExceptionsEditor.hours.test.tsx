@@ -8,7 +8,6 @@ import { calendarKeys } from '../api/use-calendars';
 
 import { CalendarExceptionsEditor } from './CalendarExceptionsEditor';
 
-import type * as Env from '@/config/env';
 import type * as ApiClient from '@/lib/api/client';
 import { apiFetch } from '@/lib/api/client';
 
@@ -16,12 +15,6 @@ vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),
 }));
-// Flag ON. The flag-off surface stays pinned by `CalendarExceptionsEditor.test.tsx`, which is kept
-// rather than weakened — it is the rollback contract (ADR-0053 M6 precedent).
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<typeof Env>()),
-}));
-
 /** A half-day before a shutdown: worked, but not for the whole day. */
 const HALF_DAY = {
   id: 'ex-half',

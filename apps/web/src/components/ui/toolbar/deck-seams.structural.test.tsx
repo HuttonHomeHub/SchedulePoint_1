@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
@@ -32,10 +32,6 @@ import * as toolbarStyles from './toolbar-styles';
  * group wrapper fails the "no group paints a fill" case. The journey that drives the clip in a real
  * browser (`command-surface.spec.ts`) was verified red without it separately: jsdom has no layout.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-}));
-
 /** Two deck groups per row, the second of which holds two registry sections — the shape under test. */
 const ITEMS: ToolbarItem<Record<string, never>>[] = defineToolbar<Record<string, never>>([
   { id: 'a', group: 'frame', order: 0, label: 'A', onActivate: () => {} },

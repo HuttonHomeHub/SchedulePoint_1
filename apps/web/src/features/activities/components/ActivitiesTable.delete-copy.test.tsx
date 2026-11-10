@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 
@@ -13,12 +13,6 @@ import { ActivitiesTable } from './ActivitiesTable';
  * this call site actually reaches it, because the same dialog is raised from a second place
  * (`activity-crud-dialogs`) and a warning on only one of them is the defect all over again.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  // The tabbed editor owns Edit; Delete stays a plain confirm either way. Pinned so a flag flip
-  // elsewhere cannot quietly change which dialog this test is looking at.
-}));
-
 const BASE: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
   id: 'a1',
   name: 'Excavate',

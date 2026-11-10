@@ -14,9 +14,6 @@ import { apiFetch } from '@/lib/api/client';
  * Proves the picker seeds from the row, round-trips on create, and saves
  * immediately on an assigned row — all via the assignment create/update mutation.
  */
-// `LIBRARY_SCOPING_ENABLED` is pinned OFF so the assign form's resource picker stays the BASE
-// native `<select>` this suite was written against; the searched `Combobox` the flag turns it into
-// has its own suite (`ActivityResourcesDialog.picker.test.tsx`, ADR-0053 §4).
 
 vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchEnvelope: vi.fn() }));
 

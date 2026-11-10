@@ -11,15 +11,9 @@ import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 /**
- * The calendar library's M4 management layer with `VITE_LIBRARY_SCOPING` ON (ADR-0053 §4 / US-7 +
- * US-8): server-side search, the archived filter, the `Archived` badge and the archive/unarchive
- * actions. The flag-OFF parity assertions live in `library-scoping-flag-off.test.tsx`.
+ * The calendar library's M4 management layer (ADR-0053 §4 / US-7 + US-8): server-side search, the
+ * archived filter, the `Archived` badge and the archive/unarchive actions.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

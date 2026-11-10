@@ -22,11 +22,6 @@ import { ApiFetchError, apiFetch } from '@/lib/api/client';
  * `ActivityCalendarField`'s own behaviour (via `lib/calendar-tiers.ts`), driven identically by
  * either host, and that suite had no coverage of the archived state at all before this.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

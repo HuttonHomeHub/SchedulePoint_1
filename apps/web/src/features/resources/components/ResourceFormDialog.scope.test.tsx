@@ -11,17 +11,12 @@ import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
 /**
- * The resource calendar picker under `VITE_LIBRARY_SCOPING` (ADR-0053 §2). The resource pool is
+ * The resource calendar picker's scoping (ADR-0053 §2). The resource pool is
  * org-global (ADR-0039), so the API **hard-rejects** a project-scoped calendar on a resource — this
  * suite pins the two halves of that: the picker is fed the ORGANISATION list only (the route reads
  * the default `?scope=org` list, so a project calendar is never even offered), and if one somehow
  * reaches the wire the 422 comes back as a plain explanation rather than a raw code.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

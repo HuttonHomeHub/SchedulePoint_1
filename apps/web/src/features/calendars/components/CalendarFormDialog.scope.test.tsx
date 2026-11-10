@@ -8,13 +8,7 @@ import { CalendarFormDialog } from './CalendarFormDialog';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
-// Flag ON: the create-time scope choice (ADR-0053 §1). The flag-OFF parity assertions live in the
-// sibling `CalendarFormDialog.test.tsx`, which imports the real (default-off) config.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
+// The create-time scope choice (ADR-0053 §1).
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),

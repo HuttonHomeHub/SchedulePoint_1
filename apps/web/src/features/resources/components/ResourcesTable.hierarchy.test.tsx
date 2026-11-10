@@ -11,19 +11,11 @@ import type * as ApiClient from '@/lib/api/client';
 import { apiFetch } from '@/lib/api/client';
 
 /**
- * The resource library's TREE surface under `VITE_LIBRARY_SCOPING` (ADR-0053 §3): rows are ordered
+ * The resource library's TREE surface (ADR-0053 §3): rows are ordered
  * depth-first so a group is followed by its own contents, a group is visibly labelled and shown as
  * non-scheduled, and the parent relationship is also carried IN TEXT (the Group column) so nesting
  * is never conveyed by indentation alone.
- *
- * The flag-OFF half of the contract — the same data rendering byte-for-byte today's flat table —
- * lives in `ResourcesTable.hierarchy.flag-off.test.tsx`, which must mock the flag the other way.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),
@@ -79,7 +71,7 @@ function rowNames(): string[] {
     .map((row) => within(row).getAllByRole('cell')[0]?.textContent?.trim() ?? '');
 }
 
-describe('ResourcesTable — resource tree (VITE_LIBRARY_SCOPING on)', () => {
+describe('ResourcesTable — resource tree', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
   });

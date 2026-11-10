@@ -1,7 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
@@ -20,10 +20,6 @@ import { ActivitiesTable } from './ActivitiesTable';
  * a planner actually meets: the reason on the shaded row action must be the reason the gate carries,
  * character for character. It also closes `docs/TECH_DEBT.md` #112(5).
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-}));
-
 const ROW: Pick<ActivitySummary, 'id' | 'name' | 'type' | 'parentId'> = {
   id: 'a1',
   name: 'Excavate',

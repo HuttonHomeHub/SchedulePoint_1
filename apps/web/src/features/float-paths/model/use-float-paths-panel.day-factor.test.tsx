@@ -24,9 +24,6 @@ import { useFloatPathsPanel } from './use-float-paths-panel';
  * "5 days" fixture (2,400) prints `+5d` against the crew and `+1d 16h` against the crane, so the
  * choice is not arbitrary. 600 takes the sub-day branch on BOTH — `10h` against the crane, `1d 2h`
  * against the crew — which keeps the assertion on one rendered string that only the frame can move.
- *
- * The flag is pinned ON because this file is about behaviour, not about the rollback contract that
- * `float-paths-flag-off.parity.test.tsx` owns.
  */
 
 const CREW_8H = 'cal-crew-8h';

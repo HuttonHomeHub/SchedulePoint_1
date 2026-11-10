@@ -12,13 +12,7 @@ import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages } from '@/lib/api/client';
 import { projectKeys } from '@/lib/query/hierarchy-keys';
 
-// Flag ON: the whole ADR-0053 §1 web surface. The flag-OFF parity assertions live in the sibling
-// `CalendarsTable.test.tsx`, which imports the real (default-off) config.
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  LIBRARY_SCOPING_ENABLED: true,
-}));
-
+// The whole ADR-0053 §1 web surface: scope tiers in the calendar library.
 vi.mock('@/lib/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof ApiClient>()),
   apiFetch: vi.fn(),
