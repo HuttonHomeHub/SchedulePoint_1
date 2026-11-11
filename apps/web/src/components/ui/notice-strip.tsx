@@ -17,10 +17,16 @@ import { cn } from '@/lib/utils';
  * a warning, or the tool you currently have armed — and collapsing them into one `variant` list is
  * how a fifth caller ends up adding `neutralDashed`.
  *
+ * `min-w-0` on the strip is what lets the default `truncate` fit work at all. The strip is itself a
+ * flex item of the dock's outlet, and a flex item cannot shrink below its content width unless it
+ * says so; the sentence's own `min-w-0` only applies INSIDE the strip, so without this the strip
+ * kept the full width of a long sentence, spilled out of the outlet, and carried its buttons under
+ * the foot row's clip (measured, `docs/specs/placed-bar-follows-link/m0-measurement.md` M0b).
+ *
  * `destructive` is for a condition that blocks the action, never a transient message; multi-sentence
  * errors use `Alert tone="error"` (ADR-0132).
  */
-const noticeStripVariants = cva('flex gap-3 border px-3 text-sm', {
+const noticeStripVariants = cva('flex min-w-0 gap-3 border px-3 text-sm', {
   variants: {
     tone: {
       // Each pair is a `*-text` token on its own surface fill — the DESIGN_SYSTEM.md colour rule.
@@ -56,8 +62,9 @@ export interface NoticeStripProps
   message: React.ReactNode;
   /**
    * Whether the message takes the leftover width (`grow`) or only what it needs (`truncate`).
-   * `truncate` keeps a one-line mode statement from pushing its Undo button off a narrow canvas;
-   * `grow` lets a two-line conflict message use the room and keeps its buttons hard right.
+   * `truncate` cuts a one-line sentence with an ellipsis rather than let it push its buttons out of
+   * a narrow container (it needs the strip's own `min-w-0` to do so); `grow` lets a two-line
+   * conflict message use the room and keeps its buttons hard right.
    */
   messageFit?: 'grow' | 'truncate';
   /** Buttons, in reading order. Anything falsy renders nothing, so a caller can pass a condition. */
