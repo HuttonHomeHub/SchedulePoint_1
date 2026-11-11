@@ -52,19 +52,25 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
 - **The GUI review, 2026-11-10: two pages, no product change.** Nothing in the repository changed except this file.
   - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint
     Runbook"):
-    66 goal-phrased steps in six chapters (getting in 8, setting up 14, building a plan 17, running a plan 10,
-    sharing and output 9, deeper features 8), each with an Easy / OK / Struggled answer, a notes box and a folded
-    hint. Chapters 4 to 6 were written the same evening at the owner's request. Answers are saved in the page's own
-    database, collection `answers`, one document per step with id `<chapter>-<two-digit step>` (`3-05`) or
-    `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` / null), `notes`, `goal`, `step`, `updatedAt`.
-    Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). It held no answers when
-    this was written.
+    148 goal-phrased steps in twelve chapters, each with an Easy / OK / Struggled answer, a notes box and a folded
+    hint. Chapters 1 to 6 (66 steps: getting in 8, setting up 14, building a plan 17, running a plan 10, sharing and
+    output 9, deeper features 8) are what most people do; chapters 7 to 12 (82 steps: finding your way around 14,
+    more ways to edit 14, activity details 12, plan settings and analysis 14, the Gantt view and the libraries 14,
+    people, control and unusual situations 14) were added on 2026-11-11 from a code-derived inventory of every
+    user-facing feature, at the owner's request that both pages cover everything a user can do. Answers are saved in
+    the page's own database, collection `answers`, one document per step with id `<chapter>-<two-digit step>`
+    (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` / null), `notes`, `goal`, `step`,
+    `updatedAt`. Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). It held no
+    answers when this was written.
   - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
-    Walkthrough"): the five journeys of `docs/PROJECT_BRIEF.md` §10, 80 steps each at 1024 × 600 and 1440 × 900, a
-    screenshot and a click / key count per step, and one ranked list of 30 GUI problems from `ux-reviewer` and
-    `accessibility-reviewer` as its first section (2 that block a task, 19 that slow or confuse, 9 polish; no screen
-    reader was run and zoomed views were not tested). The scripts that drove it are published beside the page under
-    `scripts/` (see "How the walkthrough was run" below); nothing was committed.
+    Walkthrough"): in two parts, each run at 1024 × 600 and 1440 × 900 with a screenshot and a click / key count per
+    step. Part one is the five journeys of `docs/PROJECT_BRIEF.md` §10 (80 steps). Part two follows the runbook step
+    for step, all twelve chapters (346 shots; every one of the 148 runbook steps has at least one at each size,
+    labelled with its step number). Its first section is one ranked list of 90 GUI problems from `ux-reviewer` and
+    `accessibility-reviewer` (2 that block a task, 46 that slow or confuse, 42 polish; no screen reader was run,
+    zoomed views were tested on a few pages only, and chapters 7 to 9 were not given a reviewer pass: their entries
+    are what the scripting agent met). The scripts that drove it are published beside the page under `scripts/` (see
+    "How the walkthrough was run" below); nothing was committed.
   - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
     API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
     and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
@@ -100,11 +106,19 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
   untouched first impression is the point, and fixing first would lose the "both found" signal. Nothing on the list
   stops chapters 1 to 3. Step 4.1 is written so that the refused progress save is something the owner meets and
   judges, with the way round it (step 4.5, move the data date) in the hint.
-- **Two runbook hints rest on reading the code, not on a browser run**: "Move to swimlane…" on the selection bar
-  (step 6.4) and what "Flag over-allocated" shows when a resource really is overloaded (step 6.2). Everything else in
-  chapters 4 to 6 was done in a browser first. One outlined goal changed: "find out which change caused the finish to
-  move" became "find out what has changed since the baseline", because Compare revisions says on screen that it
-  cannot attribute a cause.
+- **What "covers every feature" rests on.** An inventory built from the code's own registries (routes, the toolbar
+  registry and manifest, the selection actions, the editor's tabs, the settings dialog) listed 95 features the first
+  66 steps did not reach; chapters 7 to 12 exercise all of them except the staff console, left out on purpose because
+  only the operator sees it. Every step was done by a script in a browser. The "before you start" notes of
+  chapters 7 to 12 are the exception: they tell the owner how to set up by hand what the scripts set up through the
+  API, and nobody has done them by hand. Three things a script cannot show are marked on the storyboard: emails (links
+  were read from the API log), the browser's own print window, and the downloads folder.
+- **Things the product cannot do that the runbook now says plainly**: create a second organisation (first sign-up
+  only); copy a heading at 1024 × 600; rename or reorder swimlanes that follow a code; type a start, finish or
+  duration in the Gantt from the keyboard alone; name the cause of a moved finish (Compare revisions says it
+  cannot).
+- **One finding is unconfirmed**: Ctrl-click did not add a second bar to the selection in the walkthrough, while
+  `TsldCanvas.tsx` appears to support it. The owner's step 7.14 will settle it.
 - **Keeping the walkthrough** as a permanent suite was not proposed and is not approved. It would add a Playwright
   config, an ADR-0105 trigger, so it needs `feature-analyst` and the owner's approval. The session's own view: the
   click-probing it uses to find bars is slow and tied to today's layout, so it is a poor regression test as it
@@ -169,9 +183,11 @@ Other candidates, each needing the owner's say:
   `BETTER_AUTH_SECRET` (32+ characters) and `RATE_LIMIT_LIMIT=100000`. Web: `pnpm --filter @repo/web dev`. Start the
   two separately: under `pnpm dev` the API answered with `X-RateLimit-Limit: 100`, so the raised limit had not reached
   it. The scripts are plain Node files using the pre-installed `playwright` (`h.js` harness, `common.js`, `j1.js` to
-  `j5.js`, `run.js`; `node run.js j3 1024`), saved beside the storyboard artifact as `scripts/*.txt`; `build.js`,
-  `template.html` and `findings.json` build the page from their output. Set-up data goes in through the REST API
-  from inside the page; everything photographed is real clicks and typing.
+  `j5.js` for the journeys, `r1.js` to `r12.js` for the runbook chapters, `run.js`; `node run.js r4 1024`), saved
+  beside the storyboard artifact as `scripts/*.txt` with `BRIEF.md`, the written brief the scripting agents worked
+  from. `sprites.py` joins each step's two screenshots into one image (the artifact allows 511 files; there are 427
+  images), and `build.js`, `template.html` and `findings.json` build the page. Set-up data goes in through the REST
+  API from inside the page; everything photographed is real clicks and typing.
 - **Things the walkthrough had to learn about the diagram.** There is no test hook for where a bar is: the scripts
   click-probe the canvas and read the selection bar's name. Selecting a bar at 1024 × 600 shrinks and scrolls the
   canvas, so clear the selection (click an empty part of the diagram; Esc never clears a selection, by design) and
@@ -185,3 +201,9 @@ Other candidates, each needing the owner's say:
   for this project", and the import dialog has no way to change the name: import into another project.
 - "Print…" calls the browser's own print window directly; "Health check" and "Share…" are toolbar buttons
   at 1440 wide and menu items under "Analysis" and "Share & export" at 1024.
+- **The container restarted once during the walkthrough extension** (2026-11-11, about three hours in). The
+  scratchpad survived; Postgres, the two servers and a running agent did not. Publish finished work to the artifact as
+  it completes, and have agents write their results to files, not only into their final message.
+- **Three `builder` agents scripted nine chapters in parallel against one running app** without colliding, because
+  each script signs up its own user and organisation. `mapBars` in `h.js` probes rows on a 60 px pitch and clears any
+  selection first; probing every 12 px made one chapter take an hour.
