@@ -21,7 +21,7 @@ import { recalculate } from '../e2e-support/toolbar';
  *
  * `src/features/gantt/coverage.structural.test.ts` asks that an action reachable in this view be
  * exercised by a journey, or not render. It caught five that were not — `Fix this conflict`,
- * `Resources`, `Duplicate`, `Delete` and `Clear visual start` — on its first run, which is the
+ * `Resources`, `Duplicate`, `Delete` and `Follow logic` — on its first run, which is the
  * gate doing the job the Q4 merge condition needs from it: with no feature flag, each milestone
  * reaches the auto-pulling host as it merges, and "the bar appeared" is not the same claim as "its
  * controls work here".
@@ -108,9 +108,7 @@ test('Delete asks before removing, and removes on confirm', async ({ page }) => 
     .toBeLessThan(before);
 });
 
-test('Clear visual start is absent for an unplaced activity, and the bar is not', async ({
-  page,
-}) => {
+test('Follow logic is absent for an unplaced activity, and the bar is not', async ({ page }) => {
   test.setTimeout(120_000);
   await ganttPlanWithSelection(page, Date.now());
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
@@ -132,7 +130,7 @@ test('Clear visual start is absent for an unplaced activity, and the bar is not'
   //
   // The observation is therefore what it was in (2) and the reason is not. This fixture seeds
   // activities and places none of them, so there is nothing to clear.
-  await expect(bar.getByRole('button', { name: 'Clear visual start' })).toHaveCount(0);
+  await expect(bar.getByRole('button', { name: 'Follow logic' })).toHaveCount(0);
 
   // **The pinned positive**, and it is why this is two assertions rather than one. `toHaveCount(0)`
   // passes just as well if the bar never rendered, if the selection was lost, or if the control was

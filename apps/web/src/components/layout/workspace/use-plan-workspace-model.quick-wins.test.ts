@@ -203,9 +203,7 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     await act(async () => {
       await result.current.clearVisualPlacement('a1', 7);
     });
-    expect(h.announce).toHaveBeenCalledWith(
-      'Cleared the visual placement for “Excavate”; dates will update.',
-    );
+    expect(h.announce).toHaveBeenCalledWith('“Excavate” now follows its logic; dates will update.');
   });
 
   it('A2: a 409 announces the conflict non-destructively (never silent), no success announce', async () => {
@@ -249,7 +247,7 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     expect(h.notify).not.toHaveBeenCalled();
     // No success announce on a failed clear.
     expect(h.announce).not.toHaveBeenCalledWith(
-      'Cleared the visual placement for “Excavate”; dates will update.',
+      '“Excavate” now follows its logic; dates will update.',
     );
   });
 });

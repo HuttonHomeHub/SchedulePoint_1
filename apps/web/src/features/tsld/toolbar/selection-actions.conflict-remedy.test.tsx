@@ -105,7 +105,7 @@ describe('the conflict remedy on the selection bar', () => {
     render(<SelectionActionsBar context={ctx({ conflictKey: 'visualEarlierThanLogic' })} />);
     expect(remedy()).toBeNull();
     expect(
-      within(bar()).getAllByRole('button', { name: 'Clear visual start' }),
+      within(bar()).getAllByRole('button', { name: 'Follow logic' }),
       'exactly one control clears a placement, and it is the bar’s own item',
     ).toHaveLength(1);
   });

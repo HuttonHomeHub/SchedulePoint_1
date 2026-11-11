@@ -351,7 +351,7 @@ export interface TsldToolbarContext {
      which stopped being true when ADR-0062 gave notes a tab of their own; it is recorded here
      rather than carried, because a comment nobody re-read is how the Gantt lost its notes route. */
   /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
-   * mutating items. (**Clear visual start** cited this until ADR-0094 M4-T1 moved it to the
+   * mutating items. (**Follow logic** cited this until ADR-0094 M4-T1 moved it to the
    * selection bar; {@link lateOverlayActive} below is now read only by that surface's shared gate.) */
   canEditSchedule: boolean;
   /**

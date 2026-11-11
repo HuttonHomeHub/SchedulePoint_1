@@ -1092,7 +1092,7 @@ test.describe('The plan command surface', () => {
    * `docs/TECH_DEBT.md` #124 put the selection bar outside this sweep's scope **by decision**, and
    * `selection-actions.tsx:286-288` cites that. The decision has cost: measured
    * (`docs/specs/foot-row/m0-measurement.md`), the bar's content is 1753 px at every width against
-   * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Clear visual start`
+   * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Follow logic`
    * renders off-screen at 1920 and `Edit`, `Duplicate` and `Delete` join it at 1646. A pointer
    * cannot reach any of them, and **a keyboard does not rescue them either**: §C1d focused a
    * clipped control and read its rect before and after — identical, because the clip is an

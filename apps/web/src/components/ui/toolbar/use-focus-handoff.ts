@@ -15,7 +15,7 @@ import { useAnnounce } from '@/components/ui/announcer';
  * WCAG 2.2 §2.4.3, level A, and on the plan workspace it also silently disables every keyboard
  * accelerator, which are React handlers on the workspace root.
  *
- * **The canonical case named here was `Clear visual start`, whose `isVisible` was literally
+ * **The canonical case named here was `Follow logic` (then named Clear visual start), whose `isVisible` was literally
  * `schedulingMode === 'VISUAL'` — a plan-level setting a peer could change holding no pen.**
  * One-planning-surface M-F removed the mode, so that route is closed and nothing plan-level
  * replaces it; the reachable case is now a peer holding the pen retyping the selected activity,

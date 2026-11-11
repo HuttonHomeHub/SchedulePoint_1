@@ -419,3 +419,17 @@ folded into the spec, the plan, ADR-0216's draft or `docs/TECH_DEBT.md`. Finding
   its buttons were past the window's edge. The amendment's cell list asked for this reading and rules 1 and 3 count it.
 - **The 100 % picture is good.** If the owner wants the 200 % cell and the 1912 mouse-with-selection cell judged acceptable costs, or the stop rules
   reworded, the readings above are what that decision is made on. This pass does not make it.
+
+## M1 reading (2026-11-11)
+
+The rename (`Clear visual start` to `Follow logic`, label only) is built. Command, run from the worktree with `NODE_OPTIONS=--max-old-space-size=8192
+PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium`:
+
+`scripts/e2e-local.sh web:workspace-chrome` — **47 passed**, including every `dock.spec.ts` case. Its foot-row equality at 1646 × 1097 (the check M0 did not
+measure) **did not move**: the asserted figure is unchanged, so no value in the spec was edited and there is no old/new pair to record. The label is
+narrower (C14: 146 to 113.8 px fine, 154 to 121.8 px coarse), and at 1646 the bar still fits one row, as it did before.
+
+`scripts/e2e-local.sh web:gantt-editing` — **53 passed**, including `object-actions-reach.spec.ts` with the renamed locator.
+
+C14's 1912 touch figure (the bar going from two lines to one, foot row −48 px) is M0's reading and is recorded here as the one a reader of
+`dock.spec.ts` should know about: no gated assertion sits at 1912 touch, so no journey measures it, and M1 did not re-take it.

@@ -1033,7 +1033,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       disabledReason: (ctx) => penRefusal(ctx),
       onActivate: (ctx) => ctx.onDelete(),
     },
-    // ── Clear visual start — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
+    // ── Follow logic (named Clear visual start until 2026-11-11) — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
     //
     // Its `isEnabled` consulted `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim:
     // an action whose subject is the selected object belongs on the object's surface. It was one of
@@ -1054,7 +1054,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       group: 'object' as const,
       labelVisibility: 'always' as const,
       order: 6.5,
-      label: 'Clear visual start',
+      label: 'Follow logic',
       // **The predicate moved from the PLAN to the ACTIVITY** (M-F-T6), and the measurement
       // is what moved it.
       //

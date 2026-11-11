@@ -131,7 +131,7 @@ describe('the warning glyph on the bar (#486, SC-5)', () => {
           />,
         );
         // One for the reason, and at most one more for the fix: the route remedy and the barAction
-        // remedy (Clear visual start) are mutually exclusive because a conflict has one remedy kind.
+        // remedy (Follow logic) are mutually exclusive because a conflict has one remedy kind.
         const triangles = container.querySelectorAll('svg.lucide-triangle-alert').length;
         expect(triangles).toBeGreaterThanOrEqual(1);
         expect(triangles).toBeLessThanOrEqual(2);
