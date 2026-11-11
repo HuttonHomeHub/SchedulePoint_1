@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.1.1
+
+### Patch Changes
+
+- [#1309](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1309) [`989dbee`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/989dbee766741f8709d63319397589c7932ccfc9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Link and level-of-effort tools on the diagram now pick a milestone, a very short bar, or the very end of any bar when you click it, instead of dropping the pick.
+
 ## 1.1.0
 
 ### Minor Changes
