@@ -375,6 +375,19 @@ export interface Reduction {
 }
 
 /**
+ * The activity a click in a two-click tool (link, LOE) picks, or undefined for empty ground.
+ * Without the resize vocabulary the outer `EDGE_HANDLE_PX` of a bar classify as end handles,
+ * and a milestone's 14 px rect (or any bar under 16 px) is ALL handle — so reading only `body`
+ * dropped the pick. There is no edge-drag link (ADR-0052 §1; linking is the two-click tool), so an
+ * unarmed end zone is the activity's body here, as it already is on pointer-down.
+ */
+function pickedActivityId(hit: HitZone): string | undefined {
+  return hit.kind === 'body' || hit.kind === 'startHandle' || hit.kind === 'finishHandle'
+    ? hit.id
+    : undefined;
+}
+
+/**
  * Advance the gesture machine. Pure: `(state, event, ctx) → { state, intent?, select? }`.
  * In `select` mode, a `pointerDown` on empty space returns `idle` (the canvas keeps its M1
  * pan/select path); on a bar **body** it starts a reposition ghost that tracks the pointer by
@@ -709,7 +722,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
       // the SAME activity again is rejected — the tool stays armed and re-prompts (spec §Edge cases);
       // a click on empty space cancels the pick (tool stays armed). Non-loe clicks fall through below.
       if (ctx.mode === 'loe') {
-        const bodyId = event.hit.kind === 'body' ? event.hit.id : undefined;
+        const bodyId = pickedActivityId(event.hit);
         if (state.kind === 'loePicking') {
           if (!bodyId) return { state: IDLE, loe: { kind: 'cancel' } };
           if (bodyId === state.startId) return { state, loe: { kind: 'reprompt' } };
@@ -730,7 +743,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
       // predecessor; the second body click on a *different* activity commits the link with the
       // tool-selected type. A click on empty space, or back on the predecessor, cancels the pick.
       if (ctx.mode !== 'link') return { state };
-      const bodyId = event.hit.kind === 'body' ? event.hit.id : undefined;
+      const bodyId = pickedActivityId(event.hit);
       if (state.kind === 'linkPicking') {
         if (bodyId && bodyId !== state.predecessorId) {
           return {

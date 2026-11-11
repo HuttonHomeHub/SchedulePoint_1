@@ -168,6 +168,29 @@ describe('gesture-machine: two-click link tool (M5)', () => {
     expect(r.intent).toBeUndefined();
   });
 
+  // A milestone's rect is 14 px, so every point of it classifies as an end handle (`classifyHit`
+  // without resize vocabulary) and nothing is `body`; the same holds for the outer 8 px of any bar.
+  it.each(['startHandle', 'finishHandle'] as const)(
+    'a %s hit picks the predecessor and, second, commits the link',
+    (kind) => {
+      const first = reduce(IDLE, { type: 'click', hit: { kind, id: 'a' } }, ctx('link'));
+      expect(first.state).toEqual({ kind: 'linkPicking', predecessorId: 'a' });
+      const second = reduce(first.state, { type: 'click', hit: { kind, id: 'm' } }, ctx('link'));
+      expect(second.state).toEqual(IDLE);
+      expect(second.intent).toEqual({
+        kind: 'link',
+        predecessorId: 'a',
+        successorId: 'm',
+        type: 'FS',
+      });
+    },
+  );
+
+  it('a resize or lag-anchor zone is still not a link pick', () => {
+    const hit = { kind: 'resizeFinish', id: 'a' } as const;
+    expect(reduce(IDLE, { type: 'click', hit }, ctx('link')).state).toEqual(IDLE);
+  });
+
   it('escape clears a pick', () => {
     const picked: GestureState = { kind: 'linkPicking', predecessorId: 'a' };
     expect(reduce(picked, { type: 'escape' }, ctx('link')).state).toEqual(IDLE);
@@ -227,6 +250,17 @@ describe('gesture-machine: two-click LOE endpoint-pick tool (Stage D)', () => {
     expect(r.intent).toBeUndefined();
     expect(r.loe).toEqual({ kind: 'cancel' });
   });
+
+  it.each(['startHandle', 'finishHandle'] as const)(
+    'a %s hit picks the start driver and, second, commits the span',
+    (kind) => {
+      const first = reduce(IDLE, { type: 'click', hit: { kind, id: 'a' } }, ctx('loe'));
+      expect(first.state).toEqual({ kind: 'loePicking', startId: 'a' });
+      const second = reduce(first.state, { type: 'click', hit: { kind, id: 'm' } }, ctx('loe'));
+      expect(second.state).toEqual(IDLE);
+      expect(second.intent).toEqual({ kind: 'loeSpan', startDriverId: 'a', finishDriverId: 'm' });
+    },
+  );
 
   it('escape clears a pick', () => {
     const picked: GestureState = { kind: 'loePicking', startId: 'a' };
