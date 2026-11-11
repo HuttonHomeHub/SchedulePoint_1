@@ -97,6 +97,24 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
     renames "Clear visual start". Approved 2026-11-11 with all five defaults. Four milestones, one PR each: M0
     measure and verify (nothing user-facing), M1 the rename, M2 the message (files ADR-0216), M3 the whole-plan
     message. No schema or API change. Ask the owner before merging each non-docs PR.
+  - **Where "Follow logic" stands (2026-11-11, evening).** M0 (measure) and M1 (the rename) are done: the rename
+    shipped as web 1.1.2 (PR #1313). M2 (the message) is **not** built. M0 found the offer does not fit the dock at
+    1024 px; amendment 1 (a line of its own) was approved, measured in a second pass (M0b) and **held**, because three
+    of its stop rules fired: a thin column of up to 11 lines at 200 % text, and an extra line of cost on wide screens
+    with a bar selected. Amendment 2 revises the design (a width floor on the outlet instead of a content basis, and
+    buttons that drop under the sentence) and was approved the same evening with all defaults. Next, in order: the
+    fix for the existing strips (below), then a third measuring pass (M0c) of the revised design, then M2 if no stop
+    rule fires. Everything is in `docs/specs/placed-bar-follows-link/`: `m0-measurement.md` (M0, M0b and the M1
+    reading), `amendment-1-offer-at-1024.md`, `amendment-2-after-m0b.md`, and the probes under
+    `apps/web/measure-toolbar/follow-logic-m0*.spec.ts`. Neither amendment is folded into the spec or plan yet.
+  - **A shipped defect M0b found, approved to fix first.** At 1024 px with long activity names the dock's existing
+    messages (the "Linked" band, the undo result, the layout-resolved notice) overflow their outlet and their
+    buttons cannot be pressed; `truncate` never engages because `NoticeStrip` has no `min-w-0`
+    (`notice-strip.tsx`). One class fixes all 47 overflowing readings. It ships as its own small PR with a journey.
+  - **GitHub's runners could not reach Ubuntu's mirrors for about three hours on 2026-11-11** (roughly 14:00 to
+    17:15 UTC): "Install Playwright browsers" failed with `Temporary failure resolving 'archive.ubuntu.com'` in all
+    four web e2e shards, three times, on PR #1312. No test ran in any of them. It cleared without a change here. If
+    it recurs, read the step's log before anything else; the job log downloads from the URL `get_job_logs` returns.
   - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
     API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
     and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data

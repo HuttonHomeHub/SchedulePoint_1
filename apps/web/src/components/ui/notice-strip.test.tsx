@@ -57,4 +57,13 @@ describe('NoticeStrip', () => {
     expect(container.firstElementChild).toHaveClass('mt-2');
     expect(container.firstElementChild?.className).toContain('rounded-md');
   });
+
+  it('lets the strip shrink below its content, so a truncating sentence cannot push its buttons out', () => {
+    // jsdom lays nothing out, so this is a tripwire on the class; the behaviour is the dock journey's
+    // ("a dock message with long names"). Both fits: `grow` strips share the outlet's flex row.
+    const { container, rerender } = render(<NoticeStrip message="x" />);
+    expect(container.firstElementChild).toHaveClass('min-w-0');
+    rerender(<NoticeStrip message="x" messageFit="grow" />);
+    expect(container.firstElementChild).toHaveClass('min-w-0');
+  });
 });

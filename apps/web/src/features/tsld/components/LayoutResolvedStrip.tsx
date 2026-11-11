@@ -35,7 +35,13 @@ export function LayoutResolvedStrip({
   restoreFocus,
 }: LayoutResolvedStripProps): React.ReactElement {
   return (
-    <NoticeStrip data-testid="canvas-layout-resolved" tone="muted" message={message}>
+    <NoticeStrip
+      data-testid="canvas-layout-resolved"
+      tone="muted"
+      message={message}
+      // The sentence truncates in a narrow dock; the full text is a hover convenience only.
+      title={message}
+    >
       <Button
         type="button"
         variant="ghost"

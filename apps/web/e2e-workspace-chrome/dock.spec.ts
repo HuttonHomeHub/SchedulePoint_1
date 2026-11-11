@@ -10,6 +10,7 @@ import {
   findBar,
   newPlan,
   onboard,
+  openPlanId,
   recalculate,
   seedActivities,
 } from './support';
@@ -165,6 +166,86 @@ test.describe('The canvas dock', () => {
     // milestone. Asserted as containment in the row, not as "not over the canvas": a bar can sit
     // outside the canvas box and still be an overlay, and only its host says where it belongs.
     await expect(activitiesRow(page).getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+  });
+});
+
+test.describe('a dock message with long names, at the 1024 px floor', () => {
+  test('the Linked band keeps its Undo on screen and pressable', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 600 });
+    const orgSlug = await onboard(page, STAMP + 7);
+    await createHierarchy(page);
+    await newPlan(page, 'Long names');
+    await ensurePen(page);
+
+    // Two 46-character names: the sentence is wider than the foot row's outlet. Before the strip
+    // could shrink, it kept its content width, spilled 423 px past the outlet and put Undo
+    // under the foot row's clip (`docs/specs/placed-bar-follows-link/m0-measurement.md`, M0b).
+    const [first, second] = await seedActivities(page, orgSlug, [
+      { name: 'Install structural steel to level 3 west wings', laneIndex: 0 },
+      { name: 'Fabricate and erect precast stair cores, blk B', laneIndex: 1 },
+    ]);
+    if (!first || !second) throw new Error('seeding returned fewer than two activities');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    const firstPoint = await findBar(page, first.id);
+    const secondPoint = await findBar(page, second.id);
+    // Deselect before arming: a bar still selected from the search above takes the next click.
+    await canvas(page).press('Escape');
+    await canvas(page).press('Escape');
+    await canvas(page).click({ position: { x: 20, y: 200 } });
+    await page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Link', exact: true })
+      .click();
+    await canvas(page).click({ position: firstPoint });
+    await canvas(page).click({ position: secondPoint });
+
+    const band = page.getByTestId('canvas-mode-band');
+    await expect(band).toContainText('Linked “Install structural steel');
+    const undo = band.getByRole('button', { name: 'Undo' });
+    await expect(undo).toBeVisible();
+
+    const fit = await activitiesRow(page).evaluate((foot) => {
+      const outlet = foot.querySelector<HTMLElement>('div[class*="not-empty:min-w-"]');
+      if (!outlet) throw new Error('the dock outlet is not in the foot row');
+      return {
+        outletOver: outlet.scrollWidth - outlet.clientWidth,
+        footOver: foot.scrollWidth - foot.clientWidth,
+      };
+    });
+    expect(
+      fit.outletOver,
+      'the band must fit its outlet rather than spill out of it',
+    ).toBeLessThanOrEqual(0);
+    expect(fit.footOver, 'the foot row must not scroll sideways').toBeLessThanOrEqual(0);
+
+    const hit = await undo.evaluate((button) => {
+      const box = button.getBoundingClientRect();
+      const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return top !== null && button.contains(top);
+    });
+    expect(hit, 'a pointer at Undo’s centre must land on Undo').toBe(true);
+
+    await undo.click();
+    // The press worked, asserted at the API rather than from the sentence the press replaces.
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          async ({ org, plan }: { org: string; plan: string }) => {
+            const response = await fetch(
+              `/api/v1/organizations/${org}/plans/${plan}/dependencies`,
+              {
+                credentials: 'include',
+              },
+            );
+            const body = (await response.json()) as { data: unknown[] };
+            return body.data.length;
+          },
+          { org: orgSlug, plan: openPlanId(page) },
+        ),
+      )
+      .toBe(0);
   });
 });
 

@@ -103,13 +103,16 @@ export function CanvasModeBand({
 }): React.ReactElement | null {
   if (!statement) return null;
   const confirmation = statement.kind === 'linked';
+  const text = modeStatementText(statement);
   return (
     // No `role` is passed, so this is NOT a live region. `TsldPanel` already announces every one of
     // these transitions through the app's single polite region; a second one here would say the
     // same sentence twice, which is the double-speak the plan named as this task's risk.
     <NoticeStrip
       data-testid="canvas-mode-band"
-      message={modeStatementText(statement)}
+      message={text}
+      // The sentence truncates in a narrow dock; the full text is a hover convenience only.
+      title={text}
       tone={confirmation ? 'muted' : 'accent'}
     >
       {confirmation && onUndo ? (
