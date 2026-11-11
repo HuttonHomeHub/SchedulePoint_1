@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.1.2
+
+### Patch Changes
+
+- [#1313](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1313) [`f1222b7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f1222b7db3f10df5802364442bdf7a108d1e5cfb) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The button that puts a hand-placed bar back where its links put it is now called "Follow logic" instead of "Clear visual start".
+
 ## 1.1.1
 
 ### Patch Changes
