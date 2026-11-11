@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { expect, test } from '../e2e-support/test';
 
-import { drawActivity, onboard, openNewPlan, startEditing } from './support';
+import { canvas, drawActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
  * **Canvas-first plan authoring** journey (ADR-0032) — the layer
@@ -105,4 +105,67 @@ test('the Add caret closes the menu it opened, and focus lands on the main half'
   await main.click();
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(main).toHaveAttribute('aria-pressed', 'true');
+});
+
+/**
+ * **The Link tool picks a milestone** (`docs/TECH_DEBT.md` #578). A milestone's rect is 14 px wide (and a
+ * one-day bar is under 16 px), so `classifyHit` calls every point of it an end handle, never a body;
+ * the two-click tool read only `body`, dropped the pick and announced "Link pick dropped". Before the
+ * fix this case never reached "Linked": the first click was dropped and no dependency existed.
+ *
+ * Bar positions are measured, not assumed: the canvas snaps a drawn activity to the day grid, so the
+ * point is found by sweeping the activity's row in select mode and reading which option the diagram's
+ * own listbox reports as active.
+ */
+test('the Link tool picks a milestone and a one-day bar', async ({ page }) => {
+  const stamp = Date.now() + 47;
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+  const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
+
+  await drawActivity(page, 'Task', 'Excavate', { x: 220, y: 120 });
+  await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
+  await drawActivity(page, 'Finish milestone', 'Handover', { x: 360, y: 180 });
+  await expect(diagram.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+
+  // Leave the Add tool (it is sticky), then sweep each row for the activity's own point.
+  await canvas(page).press('Escape');
+  await canvas(page).press('Escape');
+  const listbox = page.getByRole('listbox', { name: 'Activities in the diagram' });
+  const find = async (name: string, rowY: number): Promise<{ x: number; y: number }> => {
+    for (let x = 100; x <= 700; x += 4) {
+      await canvas(page).click({ position: { x, y: rowY } });
+      const active = await listbox.getAttribute('aria-activedescendant');
+      if (active !== null && (await page.locator(`[id="${active}"]`).innerText()).includes(name)) {
+        return { x, y: rowY };
+      }
+    }
+    throw new Error(`no point on the canvas selects ${name}`);
+  };
+  const task = await find('Excavate', 120);
+  const milestone = await find('Handover', 180);
+
+  await canvas(page).press('Escape');
+  await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
+  await expect(toolbar.getByRole('button', { name: /Linking · FS/ })).toBeVisible();
+  await canvas(page).click({ position: task });
+  await expect(page.getByTestId('canvas-mode-band')).toContainText('Linking FS from “Excavate”');
+  await canvas(page).click({ position: milestone });
+  await expect(page.getByTestId('canvas-mode-band')).toContainText(
+    'Linked “Excavate” → “Handover” (FS).',
+  );
+
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+  const count = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+        credentials: 'include',
+      });
+      return ((await response.json()) as { data: unknown[] }).data.length;
+    },
+    { org: orgSlug, id: planId ?? '' },
+  );
+  expect(count).toBe(1);
 });
