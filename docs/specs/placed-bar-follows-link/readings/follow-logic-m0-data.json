@@ -1,0 +1,132 @@
+{
+  "measuredAt": "2026-11-11T13:09:08.872Z",
+  "linkP_S": 201,
+  "summary": {
+    "placeStatus": 200,
+    "convertStatus": 200,
+    "convertBody": "ok",
+    "row": {
+      "name": "X",
+      "type": "WBS_SUMMARY",
+      "dur": 2,
+      "placed": "2026-02-02",
+      "drawn": "2026-02-02",
+      "early": "2026-01-05",
+      "reason": null,
+      "constraint": null
+    }
+  },
+  "summaryDirectPlacePatch": {
+    "status": 200,
+    "body": "ok"
+  },
+  "summaryBatch": {
+    "status": 422,
+    "body": {
+      "error": {
+        "code": "VALIDATION_FAILED",
+        "message": "A WBS summary cannot be placed: its dates roll up from its children.",
+        "details": {
+          "reason": "SUMMARY_NOT_BULK_ELIGIBLE"
+        }
+      }
+    }
+  },
+  "summaryAfterDirectPlace": {
+    "name": "X",
+    "type": "WBS_SUMMARY",
+    "dur": 2,
+    "placed": "2026-02-09",
+    "drawn": "2026-02-09",
+    "early": "2026-01-05",
+    "reason": null,
+    "constraint": null
+  },
+  "summaryPlacedBeforeDataDate": {
+    "name": "X",
+    "type": "WBS_SUMMARY",
+    "dur": 2,
+    "placed": "2025-12-01",
+    "drawn": "2025-12-01",
+    "early": "2026-01-05",
+    "reason": "EARLIER_THAN_LOGIC",
+    "constraint": null
+  },
+  "summaryClearedPerObject": {
+    "status": 200,
+    "after": {
+      "name": "X",
+      "type": "WBS_SUMMARY",
+      "dur": 2,
+      "placed": null,
+      "drawn": "2026-01-05",
+      "early": "2026-01-05",
+      "reason": null,
+      "constraint": null
+    }
+  },
+  "started": {
+    "before": {
+      "name": "S",
+      "type": "TASK",
+      "dur": 3,
+      "placed": "2026-01-06",
+      "drawn": "2026-01-06",
+      "early": "2026-01-12",
+      "reason": "EARLIER_THAN_LOGIC",
+      "constraint": null
+    },
+    "progressStatus": 200,
+    "progressBody": "ok",
+    "after": {
+      "name": "S",
+      "type": "TASK",
+      "dur": 3,
+      "placed": "2026-01-06",
+      "drawn": "2026-01-05",
+      "early": "2026-01-05",
+      "reason": "EARLIER_THAN_LOGIC",
+      "constraint": null,
+      "actualStart": "2026-01-05",
+      "pct": 40
+    }
+  },
+  "startedClear": {
+    "batchStatus": 200,
+    "beforeDrawn": "2026-01-05",
+    "after": {
+      "name": "S",
+      "type": "TASK",
+      "dur": 3,
+      "placed": null,
+      "drawn": "2026-01-05",
+      "early": "2026-01-05",
+      "reason": null,
+      "constraint": null
+    }
+  },
+  "constraintRoundTrip": {
+    "before": {
+      "name": "K",
+      "type": "TASK",
+      "dur": 2,
+      "placed": "2026-01-12",
+      "drawn": "2026-01-12",
+      "early": "2026-02-02",
+      "reason": "EARLIER_THAN_LOGIC",
+      "constraint": "SNET 2026-02-02"
+    },
+    "batchStatus": 200,
+    "after": {
+      "name": "K",
+      "type": "TASK",
+      "dur": 2,
+      "placed": null,
+      "drawn": "2026-02-02",
+      "early": "2026-02-02",
+      "reason": null,
+      "constraint": "SNET 2026-02-02"
+    },
+    "constraintKept": true
+  }
+}

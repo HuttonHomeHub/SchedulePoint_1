@@ -1,0 +1,311 @@
+{
+  "measuredAt": "2026-11-11T13:07:04.552Z",
+  "pointer": "fine",
+  "scenario": "chain",
+  "steps": [
+    {
+      "step": "3.5 three bars drawn",
+      "rows": [
+        {
+          "name": "Excavate",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-19",
+          "drawn": "2026-01-19",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Pour slab",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-23",
+          "drawn": "2026-01-23",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Steel beam",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-26",
+          "drawn": "2026-01-26",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        }
+      ]
+    },
+    {
+      "step": "3.6 link A->B, Link tool still armed?",
+      "rows": [
+        {
+          "name": "Excavate",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-19",
+          "drawn": "2026-01-19",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Pour slab",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-23",
+          "drawn": "2026-01-23",
+          "early": "2026-01-06",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Steel beam",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-26",
+          "drawn": "2026-01-26",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        }
+      ],
+      "newlyFlagged": [],
+      "dock": {
+        "modeBand": "Linked “Excavate” → “Pour slab” (FS).Undo",
+        "layoutResolved": null,
+        "footRow": "Linked “Excavate” → “Pour slab” (FS).UndoData date05 Jan 2026Finish26 Jan 2026Activities32 critical activitiesEditingYou’re editing this plan.",
+        "armedLinkButton": ["Linking · FS"],
+        "announcer": "Linked “Excavate” → “Pour slab” (FS)."
+      },
+      "linkToolStillArmed": true
+    },
+    {
+      "step": "3.7 link B->C",
+      "rows": [
+        {
+          "name": "Excavate",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-19",
+          "drawn": "2026-01-19",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Pour slab",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-23",
+          "drawn": "2026-01-23",
+          "early": "2026-01-06",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Steel beam",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-26",
+          "drawn": "2026-01-26",
+          "early": "2026-01-07",
+          "reason": null,
+          "constraint": null
+        }
+      ],
+      "newlyFlagged": [],
+      "dock": {
+        "modeBand": "Linked “Pour slab” → “Steel beam” (FS).Undo",
+        "layoutResolved": null,
+        "footRow": "Linked “Pour slab” → “Steel beam” (FS).UndoData date05 Jan 2026Finish26 Jan 2026Activities33 critical activitiesEditingYou’re editing this plan.",
+        "armedLinkButton": ["Linking · FS"],
+        "announcer": "Linked “Pour slab” → “Steel beam” (FS)."
+      }
+    },
+    {
+      "step": "Esc after linking",
+      "dock": {
+        "modeBand": null,
+        "layoutResolved": null,
+        "footRow": "Data date05 Jan 2026Finish26 Jan 2026Activities33 critical activitiesEditingYou’re editing this plan.",
+        "armedLinkButton": [],
+        "announcer": "Tool closed. Select mode."
+      }
+    },
+    {
+      "step": "3.8 lengthen A",
+      "durationBefore": 1,
+      "durationAfter": 9,
+      "settleMs": 1700,
+      "rows": [
+        {
+          "name": "Excavate",
+          "type": "TASK",
+          "dur": 9,
+          "placed": "2026-01-19",
+          "drawn": "2026-01-19",
+          "early": "2026-01-05",
+          "reason": null,
+          "constraint": null
+        },
+        {
+          "name": "Pour slab",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-23",
+          "drawn": "2026-01-23",
+          "early": "2026-01-16",
+          "reason": "EARLIER_THAN_LOGIC",
+          "constraint": null
+        },
+        {
+          "name": "Steel beam",
+          "type": "TASK",
+          "dur": 1,
+          "placed": "2026-01-26",
+          "drawn": "2026-01-26",
+          "early": "2026-01-19",
+          "reason": "EARLIER_THAN_LOGIC",
+          "constraint": null
+        }
+      ],
+      "newlyFlagged": ["Pour slab", "Steel beam"],
+      "dock": {
+        "modeBand": null,
+        "layoutResolved": null,
+        "footRow": "Data date05 Jan 2026Finish29 Jan 2026Activities33 critical activitiesEditingYou’re editing this plan.",
+        "armedLinkButton": [],
+        "announcer": "“Excavate” now 05 Jan 2026 to 15 Jan 2026. Project finish moved to 29 Jan 2026."
+      }
+    }
+  ],
+  "everyDrawnBarHasAPlacement": true,
+  "barPoints": {
+    "A": {
+      "x": 243,
+      "y": 120,
+      "r": [236, 250]
+    },
+    "B": {
+      "x": 299,
+      "y": 180,
+      "r": [292, 306]
+    },
+    "C": {
+      "x": 341,
+      "y": 240,
+      "r": [334, 348]
+    }
+  },
+  "scale": {
+    "gapDays": 4,
+    "pxPerDay": 14
+  },
+  "flaggedAtEnd": ["Pour slab", "Steel beam"],
+  "clearVisualStartPlacement": [
+    {
+      "size": "1024x600",
+      "target": "Pour slab",
+      "name": "Actions for Pour slab",
+      "inline": [
+        "open-logic",
+        "notes",
+        "progress",
+        "resources",
+        "edit",
+        "duplicate",
+        "delete",
+        "clear-visual-placement",
+        "zoom-to-selection",
+        "isolate-logic",
+        "float-paths"
+      ],
+      "buttons": [
+        "Logic",
+        "Notes",
+        "Progress",
+        "Resources",
+        "Edit",
+        "Duplicate",
+        "Delete",
+        "Clear visual start",
+        "Zoom to selection",
+        "Isolate logic path",
+        "Isolate logic path options",
+        "Float paths"
+      ],
+      "clearVisualInline": true,
+      "hasOverflowMenuButton": false
+    },
+    {
+      "size": "1440x900",
+      "target": "Pour slab",
+      "name": "Actions for Pour slab",
+      "inline": [
+        "open-logic",
+        "notes",
+        "progress",
+        "resources",
+        "edit",
+        "duplicate",
+        "delete",
+        "clear-visual-placement",
+        "zoom-to-selection",
+        "isolate-logic",
+        "float-paths"
+      ],
+      "buttons": [
+        "Logic",
+        "Notes",
+        "Progress",
+        "Resources",
+        "Edit",
+        "Duplicate",
+        "Delete",
+        "Clear visual start",
+        "Zoom to selection",
+        "Isolate logic path",
+        "Isolate logic path options",
+        "Float paths"
+      ],
+      "clearVisualInline": true,
+      "hasOverflowMenuButton": false
+    }
+  ],
+  "finalRows": [
+    {
+      "name": "Excavate",
+      "type": "TASK",
+      "dur": 9,
+      "placed": "2026-01-19",
+      "drawn": "2026-01-19",
+      "early": "2026-01-05",
+      "reason": null,
+      "constraint": null
+    },
+    {
+      "name": "Pour slab",
+      "type": "TASK",
+      "dur": 1,
+      "placed": "2026-01-23",
+      "drawn": "2026-01-23",
+      "early": "2026-01-16",
+      "reason": "EARLIER_THAN_LOGIC",
+      "constraint": null
+    },
+    {
+      "name": "Steel beam",
+      "type": "TASK",
+      "dur": 1,
+      "placed": "2026-01-26",
+      "drawn": "2026-01-26",
+      "early": "2026-01-19",
+      "reason": "EARLIER_THAN_LOGIC",
+      "constraint": null
+    }
+  ],
+  "planId": "01a1cab7-b798-7391-ac3d-9fa3bad98811"
+}
