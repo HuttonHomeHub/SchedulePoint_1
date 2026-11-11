@@ -1,6 +1,7 @@
 # Feature Spec: A bar you placed is offered its logic when an edit leaves it behind
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-11-11, with all defaults (Q1 remove the placement, Q2 any
+  edit, Q3 dock message only, Q4 rename to "Follow logic", Q5 no one-time explanation).
 - **Author(s):** feature-analyst (for the product owner, james)
 - **Date:** 2026-11-11
 - **Tracking issue / epic:** the owner's GUI review, runbook steps 3.5–3.8 (`docs/HANDOFF.md`, "The owner's biggest
