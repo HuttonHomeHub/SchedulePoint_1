@@ -433,3 +433,204 @@ narrower (C14: 146 to 113.8 px fine, 154 to 121.8 px coarse), and at 1646 the ba
 
 C14's 1912 touch figure (the bar going from two lines to one, foot row −48 px) is M0's reading and is recorded here as the one a reader of
 `dock.spec.ts` should know about: no gated assertion sits at 1912 touch, so no journey measures it, and M1 did not re-take it.
+
+## M0c reading (2026-11-11)
+
+- **What this pass asks:** amendment 2's revised design, option A′ ([`amendment-2-after-m0b.md`](./amendment-2-after-m0b.md) §2–§3), against its five stop
+  rules S1–S5, each judged against the same cell's own base state.
+- **Probe:** `apps/web/measure-toolbar/follow-logic-m0c-offer-row.spec.ts`, run by the existing `measure:toolbar` target. The judge that applies the
+  rules is `apps/web/measure-toolbar/follow-logic-m0c-judge.mjs` (prints, never gates). A harness, not a gate (ADR-0081 section 3): no new Playwright
+  config, no CI step, **nothing under `apps/web/src` or `apps/api/src` changed**. Tree: `origin/main` at web 1.1.3 (the `min-w-0` fix, #579, is in it).
+- **Raw readings:** [`readings/follow-logic-m0c-offer-row.fine.json`](./readings/follow-logic-m0c-offer-row.fine.json) and
+  [`.coarse.json`](./readings/follow-logic-m0c-offer-row.coarse.json): every cell, every state, with the sentences the product produced.
+- **Commands** (from the worktree root; each pointer is one test in the file; the runs these figures come from reported `1 passed (5.4m)` and
+  `1 passed (4.6m)`):
+
+  ```text
+  export NODE_OPTIONS=--max-old-space-size=8192 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium
+  scripts/e2e-local.sh measure:toolbar -- follow-logic-m0c-offer-row.spec.ts --grep fine
+  scripts/e2e-local.sh measure:toolbar -- follow-logic-m0c-offer-row.spec.ts --grep coarse
+  node apps/web/measure-toolbar/follow-logic-m0c-judge.mjs docs/specs/placed-bar-follows-link/readings   # every verdict and table below
+  ```
+
+  The probe writes JSON to `apps/web/measure-output/` (git-ignored); the files in `readings/` are copies.
+
+- **Discarded runs, and why.** Two earlier runs of the same file were discarded for probe faults, fixed before the run reported here; each reported
+  `1 passed` per pointer, which says the test ran and not that its readings were sound. **Run 1 (fine only):** the Gantt at 200 % failed (`selection would not clear in gantt`: the Gantt's selection cannot
+  be cleared once made, so its 200 % read had to ride the same selection-major pass as its 100 % read); the "widest facts" injection rewrote the
+  schedule-state sentence and never put it back, so later "real stale" readings carried the injected 677 px (visible as `facts.w` 677.1 in cells labelled
+  `stale-real`); and R0's controlled comparison and its 100 ms series did not exist yet. **Run 2 (both pointers):** complete, but it had no `grow-floor`
+  mode, which is the only way to read "`grow` under the A-prime outlet floor" (row 580), so the multi-select bar's answer under the floor would have been
+  a guess. The judge's verdict lines and the 1024 message rows of run 2 agree with the final run's in every cell I compared (S2 fires at 1250 only, 40 px, both
+  views). In run 1 the first live read at 1024 happened to find the schedule already `current` (outlet 347.5), which is why R0's timing read is
+  discussed below.
+
+### Summary, in plain English
+
+**One of the five tests fails, so the revised design is not folded into the spec, and this goes back to you with option B as the fallback the amendment
+names.** On an ordinary mouse, in a window about 1210 to 1250 pixels wide, with a bar selected, the new message makes the bottom bar 40 pixels
+taller than it needs to be. That is the same 40 pixels the selection bar was refused in an earlier decision. It is the single place it happens (the
+width sweep reads every 10 px from 1150 to 1330, and only 1210, 1220, 1230, 1240 and 1250 are affected; on a finger no width is affected). The cause
+is plain and narrow: the revised rule asks the message's space for 36 rem, and in that band 36 rem leaves just enough room beside the plan facts but not
+enough for the "Expand" button as well, so the button drops onto a line of its own. Everything else passes. At normal text size every button is
+pressable, nothing scrolls sideways, the message never takes more than two lines of words (three for the link-plus-offer sentence, which is its limit),
+and with nothing selected the diagram keeps at least 344 pixels on a mouse and 216 on a finger. At double text size every button can be reached by
+scrolling, nothing scrolls sideways, and with nothing selected the diagram keeps at least 219 pixels on a mouse and 195 on a finger; the message is 2 lines and about 200 pixels tall
+(M0b read 4 to 11 lines and 474 pixels). **The "buttons not pressable at double size" finding of the last pass was the measuring tool**: the shell
+already scrolls at that size and the foot bar, with its own Expand button, sits below the window before any message exists; the Expand button is not
+pressable in place either and is pressable after scrolling, exactly like every message button. **The odd 731-against-347.5 reading is explained**: it is
+the same message on a line of its own, and it happens while the bar's "Recalculating…" or "Recalculate" part is showing, which makes the plan facts
+too wide to share a line with the message. The same pass measured the three existing foot messages and the multi-select bar for row 580: the
+revised layout (own row, buttons dropped under the sentence) shows the whole sentence on all four without hover and costs the diagram nothing on the
+multi-select bar; the other candidate, letting the sentence grow, turns the multi-select bar into a 14-line column and is rejected.
+
+### What was injected, stated plainly
+
+Nothing in the product was changed. Every strip is a clone of the real `NoticeStrip` the running page rendered (now carrying the shipped `min-w-0`),
+captured from a real Link-tool link between two real bars (or, for the undo result, a real Ctrl+Z), with its sentence and buttons replaced and put into
+the real dock outlet. **A-prime** is exactly what amendment 2 §3 gives: its four-rule stylesheet, verbatim (`RULES_CSS` in the probe: the outlet's
+36 rem floor on `:not(:empty):has([data-dock-row])`; `min-width: 0` and `flex-wrap: wrap` on the strip; the sentence `flex: 1 1 0%` with
+`min-width: min(16rem, 100%)`; the action group at the trailing edge with its own wrap), `data-dock-row` on the strip, comfortable density
+(`items-start py-2` in place of `items-center justify-between py-1.5`), the sentence's class `flex-1`, and the buttons moved into one
+`<div data-dock-row-actions>`. **Product order:** in the Diagram the link-plus-offer face (and the bare Linked band) is inserted **before** the selection
+bar's element in the outlet (`TsldPanel.tsx:3327` against `:3338`), and every other face is appended; in the Gantt every face is appended. M0b appended
+all of them. **Not the product:** the offer's sentences and button labels (the spec's draft), the layout-resolved notice (the Linked band's HTML, which has
+the same classes as `LayoutResolvedStrip`, carrying `sentenceFor`'s one-bar sentence), and that nothing is wired to anything. The multi-select bar is the
+real one (a real Shift+ArrowDown selection), reshaped in place and put back. **Two extra rules were read for row 580 only:** `grow` (sentence `flex-1`,
+comfortable density) and `grow-floor` (`grow` plus only the outlet's 36 rem floor, no wrap and no action group).
+
+Fixture, as M0b: a new account on a real API and Postgres, real Chromium 156 in this container (ADR-0128: every pixel figure is from here and not from the
+Surface Pro). `Excavate` and `Pour slab` (linked through the API, `Pour slab` placed on 6 Jan so it is flagged `EARLIER_THAN_LOGIC`), two 46-character
+names linked with the Link tool, and the undo result from a real Ctrl+Z (`Undid add “Commission the rooftop plant and chilled water loop”.`).
+**R3's widened facts:** an activity created through the API after the last calculation and a page reload give the real stale state ("Edited since it
+was last calculated" plus **Recalculate**, `data-schedule-state="stale"`, facts 627.1 px wide against 327.5 when current), and the widest honest
+sentence ("Could not calculate — 12 edits still pending", 677.1 px) is put in by text and put back after each cell. R3 is mouse only, as the amendment words it.
+
+### What was read
+
+Cells: 1024 × 600, 1120 × 700, 1250 × 800, 1280 × 800, 1440 × 900, 1646 × 1097, 1912 × 1080; a mouse (`fine`) and a finger (`coarse`, `hasTouch`; the
+pointer type is read back in every reading); nothing selected, `Excavate` selected, `Pour slab` selected (flagged); the Diagram and the Gantt; the five
+variants of the amendment. **R2:** 105 A′ readings per view per pointer, 420 in all. **R3:** 1024, 1280 and 1440, mouse, three selection states, five
+variants, two facts states: 90 A′ readings. **R1 and R4:** 1024 × 600 at 200 % by the root font size (selection made at 100 % first, because the list cannot
+take focus after) and by `Page.setFontSizes` (what a browser's own text size does; it moves the rem media queries), both pointers, three selection states;
+and, new in this pass, the **Gantt at 200 %** by the root font size (selection-major, as at 100 %). Per cell: the base reading, the three shipped strips
+(Linked band, undo result, layout-resolved) and the five A′ variants, 135 strip readings per pointer. **Per reading, new in this pass:** the facts' `data-schedule-state` and
+width; the shell scroller's `scrollTop`, `scrollHeight`, `clientHeight` and whether `squat` is engaged (its computed `overflow-y` is `auto`); the
+outlet's computed `min-width`; for every strip button and for the foot row's own Expand toggle, `selfHit` in place **and** after
+`scrollIntoView({ block: 'nearest' })` (every scrollable ancestor's offset is put back afterwards); the sentence's lines, whether it is cut, and
+whether the buttons dropped under it. Extra is cost − strip height − 8 px when the strip and the selection bar do not share a line, as M0b defined it.
+**S2's width sweep** (new, because S2 fired): 1150 to 1330 in 10 px steps at height 800, both pointers, both bar-selected states, the base and `edit-one`.
+
+### Verdict per stop rule
+
+| Rule                                                                                                                                                                   | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1 (100 %): a strip button not self-hit after `scrollIntoView`, or a sideways scroll the base lacks                                                                    | **HOLDS.** 1,122 strip buttons (660 mouse, 462 finger) across the Diagram, the Gantt and R3's widened facts: every one self-hit after scrolling. No reading adds a sideways scroll to the foot row, the page or the shell that its base lacks.                                                                                                                                                                                                                                                                                                                                                                                          |
+| S2 (100 %): extra above 4 px, any cell, both views, both facts states                                                                                                  | **FIRES.** Decided by: **mouse, 1250 × 800, either bar selected, Diagram and Gantt, all five variants: extra +40 px** (`edit-one`: foot 253 against a base of 147, strip 58, gap 8). 20 of the 300 mouse readings; the other 280 are between −120 and 0. The 10 px sweep puts the band at **1210 to 1250** (1200 and 1260 hold, both selections); on a finger **no** reading exceeds 0 (−44 to 0) and the sweep is 0 throughout. R3's widened facts hold (−120 to 0).                                                                                                                                                                   |
+| S3 (100 %): nothing selected, stage below 120 px                                                                                                                       | **HOLDS.** Minimum stage with nothing selected 344 px on a mouse (1024 × 600; base 402) and 216 px on a finger (base 278), in both views and with the widened facts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S4 (100 %): the sentence takes more than 2 lines (3 for link-plus-offer)                                                                                               | **HOLDS.** Maximum 2 lines for `edit-one`, `edit-one-long-name` and `edit-several`; `plan` 1 (mouse) and 2 (finger); link-plus-offer 3, at 1250 and 1280 on both pointers: it sits exactly at its limit.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| S5 (200 %, either route): button not self-hit after scrolling where the base's toggle is, new sideways scroll, stage < 120 with nothing selected where the base is not | **HOLDS.** 90 A′ readings (root font, browser setting and Gantt root font, three selections, two pointers). Every strip button is self-hit after scrolling (the base toggle is too, in every cell); 0 of 27 readings per list has any sideways scroll. With nothing selected the stage is 219 (root font, mouse; finger 195) and 283 to 371 (browser setting; finger 259 to 363), against bases of 421 and 485. **Line counts at 200 % are reported, not judged:** 2 lines and 202 px (mouse; finger 226 px) at the root-font route for every variant; 1 to 2 lines and 114 to 202 px (finger 122 to 226) at the browser-setting route. |
+
+**S2's cause, from the readings.** In the band the base's outlet is 533 to 573 px wide beside the facts, with a 3-line selection bar. A′'s floor makes
+the outlet at least 576 px, which still fits beside the facts (outlet 581.5 to 621.5) and does not leave room for the foot row's Expand toggle (40 × 40),
+which wraps onto a line of its own: toggle top 756 against 708 in the base at 1250, and 675 at 1260 where it fits beside the outlet; the foot row is
+253 px at 1250 and 213 at 1260 with the same strip, 40 px, the toggle's own height. Below 1210 the outlet
+takes a line of its own (907 px at 1200) and the bar goes from 3 lines to 2, which pays for the facts' line; above 1260 everything fits. The band is
+the width where the floor, the facts, the gaps and the toggle first cannot all share one line. That a floor at any other value leaves a band of the same
+kind is an inference from this arithmetic, **not measured**: no other floor was read.
+
+**Decision per amendment 2 §3.** S3 and S4 did not fire, so the single 20 rem re-read is not allowed and was not taken. S2 fired: "S1, S2 or S5 fires and
+R1 shows the base state passing the same test: abandon A′ for **B** and return to the owner." R1's control (below) concerns S1 and S5, which hold; S2's
+base cannot "pass the test" because the base has no strip. **Nothing is folded into the spec, the plan, the amendments' status lines, ADR-0216's draft
+or `docs/TECH_DEBT.md`.** Findings the owner's decision needs are in "What this means for amendment 2".
+
+### R0: why the live outlet was 731 px and the clone's 347.5
+
+**It is the same outlet on a line of its own, and the schedule-state region is what pushes it there.** Readings, `apps/web/measure-output` copy in
+`readings/follow-logic-m0c-offer-row.fine.json`, keys `r0` and `r0Controlled`:
+
+| Reading (mouse, 1024 × 600)                                                                          | `data-schedule-state` | Facts width | Outlet width | Foot row |
+| ---------------------------------------------------------------------------------------------------- | --------------------- | ----------- | ------------ | -------- |
+| Live Linked band at 1646, right after the link                                                       | `stale`               | 562         | 735          | 57       |
+| Live Linked band, **0.5 s after the resize** (M0b read here)                                         | `recalculating`       | **438**     | **731**      | **97**   |
+| Live Linked band, 3.5 s after the resize                                                             | `current`             | 327.5       | **347.5**    | 57       |
+| Live Linked band, when a recalculate was requested (by the API: no button was showing) and 3 s later | `current`             | 327.5       | 347.5        | 57       |
+| Clone of the Linked band, stale facts (real stale state, API edit and reload)                        | `stale`               | 627.1       | **731**      | **97**   |
+| Same clone, after the real **Recalculate** button                                                    | `current`             | 327.5       | **347.5**    | **57**   |
+
+The last two rows change one thing, the facts' state, and reproduce both M0b numbers (731 with a 97 px foot row, 347.5 with 57). **Arithmetic:** at
+1024 the foot row's content is 731 px. The current facts (327.5), the toggle and two gaps leave the outlet 347.5, so the toggle and gaps are 56 px;
+the outlet's own floor is 288 px. The outlet therefore wraps onto its own line whenever the facts exceed 731 − 288 − 56 = **387 px**. The
+`Recalculating…` region (facts 438) and the stale sentence plus **Recalculate** (562 to 677) both exceed it; the current state (327.5) does not. M0b's two 1024
+live readings were the first read after an edit, 400 to 500 ms after a resize, and in this run the first such read caught `recalculating`; in discarded run 1 it
+had already settled to `current`, so whether the 731 px is seen depends on timing, which is the point. A Ctrl+Z sampled every 100 ms for 6 s at 1024
+(57 samples) stayed `current` at 347.5 throughout: undoing the link did not make the schedule stale in this run, so that series does not reproduce the
+window; the controlled pair and the 0.5 s read do. **The amendment's expectation holds:** the region is present in the first read (outlet 731) and gone
+in the later one (347.5).
+
+### R1: the control at 200 %
+
+**Is the base dock already unreachable at 200 %? In place, yes; after scrolling, no: it is exactly as reachable as the strip's buttons.**
+
+| Route, pointer, selection        | Foot row's Expand toggle in place | After `scrollIntoView` | Toggle top (window 600) | Shell `scrollTop` of `scrollHeight`/`clientHeight` |
+| -------------------------------- | --------------------------------- | ---------------------- | ----------------------- | -------------------------------------------------- |
+| Root font, mouse, all 3          | not hit                           | **hit**                | 1219                    | 0 of 1307/600 (`squat` engaged)                    |
+| Root font, finger, all 3         | not hit                           | **hit**                | 1439 to 1522            | 0 of 1531/600                                      |
+| Browser setting, mouse, none     | not hit                           | **hit**                | 795                     | 0 of 883/600                                       |
+| Browser setting, mouse, selected | hit                               | hit                    | 512                     | 283 of 883/600 (focus scrolled the shell)          |
+| Gantt, root font, mouse, all 3   | not hit                           | **hit**                | 1219                    | 0 of 1307/600                                      |
+
+For the **shipped** strips (Linked band, undo result, layout-resolved; `min-w-0` now in place), root-font route: **0 of 15 buttons hit in place, 15 of 15 hit
+after scrolling**, both pointers and the Gantt; browser-setting route: 10 of 15 in place, 15 of 15 after. That is the dock's own behaviour at 200 %: the
+shell's one scroller (`app-shell.tsx:160`, `squat`) puts the foot row below the fold, and the same is true of A′'s buttons. **M0b's rule 1 "buttons
+not pressable, clipped, with nothing selected" is therefore the instrument** (its `elementFromPoint` returns `null` for a point below the window and its
+`clipped` counted `bottom > innerHeight`), as amendment 2 §1 said; the shell has no 1.4.4 defect here that predates this epic, and no separate register
+row is raised. **Pre-existing and worth knowing:** with a bar selected at 200 % by the root font the base stage is already 109 and 69 px on a mouse (0
+on a finger), below the 120 px guard, before any strip.
+
+### Row 580: the existing foot messages and the multi-select bar
+
+Measured at 1024 × 600 with the long names, mouse, in product order; "cost" is the foot row's growth against the same cell's base; "cut" is whether the
+sentence is ellipsised (so unreadable without hover). The same table for the finger and for 1280 and 1646 is in the readings (`messages`).
+
+| Message (cell)                           | Shipped (`min-w-0`, today)        | A′ own row (marker, wrap, group)                                                          | `grow` + comfortable                                | `grow` under the A′ outlet floor              |
+| ---------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------- |
+| Linked band, nothing selected            | cut; +6 px                        | whole sentence, 2 lines; **+58**, stage 344 of 402                                        | whole, 3 lines; +38, stage 364                      | as A′ (outlet 731)                            |
+| Linked band, flagged bar selected        | cut; +54                          | whole, 2 lines; **+26**, stage 240 of 266                                                 | whole, 3 lines; +86, stage 180                      | as A′                                         |
+| Undo result, nothing / bar               | cut; +6 / +54                     | whole, 1 line; **+50 / +18**, stage 352 / 248                                             | whole, 3 lines; +38 / +86                           | as A′                                         |
+| Layout-resolved, nothing / bar           | cut; +6 / +54                     | whole, 2 lines; **+58 / +26**, stage 344 / 240                                            | whole, **5 lines**; +78 / **+126**, stage 324 / 140 | as A′                                         |
+| Multi-select bar (2 long names selected) | count kept, name cut; 194 px tall | **whole sentence, buttons dropped under it; 122 px tall, −32 px (stage 280 against 248)** | **14 lines, 298 px tall; +104, stage 144**          | **14 lines, 298 px; +144, stage 104 (< 120)** |
+
+**Confirmed, not overturned:** `grow` makes the multi-select bar a tall narrow column: the sentence is a **65 px** column (as M0-follow-up recorded) and reads
+14 lines in a 298 px strip (shipped: 134 px of sentence, cut, strip 194 px; A′: 705 px of sentence, strip 122 px). It is not rescued by the A′ outlet floor: `grow-floor` still reads 14 lines, and
+costs more (+144 px, stage 104, under the 120 px guard on a mouse at 100 % text), because the floor gives the outlet room but the bar's action group is
+not wrapping, so the sentence is still the squeezed item. What fixes it is A′'s wrap and grouped actions, not the floor and not `grow`. On a finger at 1024
+with the flagged bar the stage is 52 to 56 in every mode (base 122), because the outlet is already on its own line there and the stage is already short;
+that is the cell amendment 1's Q2 accepted. All 156 message buttons (84 strip readings per pointer) are self-hit after scrolling, in every mode.
+
+### What this means for row 580
+
+**The own-row treatment (A′'s markup and wrap) is the remedy that keeps the full sentence visible without hover on all four messages**, at a cost of
+18 to 58 px of foot row on a mouse at 1024 (stage 240 to 352, always above 120) and **less** than today's strip on the multi-select bar (−32 px). `grow` also
+shows the sentence but costs 38 to 126 px on the three strips and turns the multi-select bar into 14 lines, so it is rejected. **But the own-row treatment
+depends on the outlet floor, and the outlet floor is what S2 fires on at 1210 to 1250 on a mouse with a bar selected** (the existing messages
+were read at 1024, 1280 and 1646 only, so whether they cost the same 40 px in that band was not measured, though the mechanism says they would). Row 580's
+Next is therefore **not edited** in this pass: which remedy, and whether it is built with M2 or as its own row, waits on the owner's decision about A′'s floor.
+
+### What this means for amendment 2
+
+- **S2 fired, so A′ as written does not pass.** The defect is in the outlet rule, as the amendment's own decision rule words it, not in the strip or the sentence:
+  the strip, its wrap, the sentence floor and the grouped buttons all measured as intended (S1, S3, S4, S5 hold; the strip is 2 lines and about 200 px at 200 %
+  where M0b's was 474; at 1912 with a bar selected the cost is 58 px, strip 50 + gap 8, extra 0, where option A cost 98). Option B (a compact trigger with a
+  `Menu` at narrow widths) is the amendment's named fallback; option C is never the fallback. Amendment 2 says what the fallback is and not what a narrower
+  floor would do, so a different floor was **not** read: that choice is the owner's, and a re-read at another floor is a separate approval.
+- **Claims in amendment 2 the readings confirm:** the 731 against 347.5 explanation (§1); the "mostly the instrument" reading of the 200 % self-hit (§1,
+  rule 1); the cost at 1912 with a bar selected falling from 98 to 58 (§2, "about 58, not 98", est.); the 200 % root route strip of "about 170" (it is 202 px,
+  2 lines); the Gantt and Diagram now agree at 1912 (both 58, extra 0).
+- **Claims the readings contradict or qualify.** (1) §2's "1120 to 1250 with a selection: … the same geometry as M0b, where extra was 0" is **false at 1250 and
+  at 1210 to 1250 generally**: the floor fits beside the facts there and strands the toggle (extra +40, mouse, both views). (2) §3's R0 expectation "the outlet is
+  about 347 px in the second read" holds (347.5), but its stated cause, "stale sentence plus **Recalculate**", is one of two: in the first read it was the
+  **`Recalculating…`** region (438 px), and both exceed the 387 px threshold computed above. (3) The brief's "731 px vs 347.5 px **at 1024**": confirmed as
+  the same element; no live-versus-clone difference exists. (4) The estimate "200 % root route link-plus-offer: about 2 text lines plus a 64 px button line,
+  a strip of about 170 px" read 2 lines and 202 px; the stage with nothing selected is 219, so the criterion holds with less margin than estimated.
+  (5) Pre-existing, unrelated to A′: at 200 % by the root font the base stage with a bar selected is already 109 and 69 px (mouse) and 0 (finger).
