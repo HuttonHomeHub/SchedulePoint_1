@@ -634,3 +634,171 @@ Next is therefore **not edited** in this pass: which remedy, and whether it is b
   the same element; no live-versus-clone difference exists. (4) The estimate "200 % root route link-plus-offer: about 2 text lines plus a 64 px button line,
   a strip of about 170 px" read 2 lines and 202 px; the stage with nothing selected is 219, so the criterion holds with less margin than estimated.
   (5) Pre-existing, unrelated to A′: at 200 % by the root font the base stage with a bar selected is already 109 and 69 px (mouse) and 0 (finger).
+
+## M0d reading (2026-11-11)
+
+- **What this pass asks:** [`amendment-3-after-m0c.md`](./amendment-3-after-m0c.md) §6: does option A″ (A′ plus one wrapper that keeps the plan facts and the foot
+  row's toggle on one line by structure) hold stop rules S1–S7, each against the same cell's own base, S2 against the base with the group?
+- **Probe and judge:** `apps/web/measure-toolbar/follow-logic-m0d-offer-row.spec.ts` (run by the existing `measure:toolbar` target) and
+  `apps/web/measure-toolbar/follow-logic-m0d-judge.mjs` (prints, never gates; every verdict below is its output on the committed JSON). A harness, not a gate
+  (ADR-0081 section 3): no new Playwright config, no CI step, **nothing under `apps/web/src` or `apps/api/src` changed**. Tree: `m0d-follow-logic`, which is
+  `origin/main` (web 1.1.3) plus the M0c commits `048182a` and `ad130f0` and amendment 3.
+- **Raw readings:** [`readings/follow-logic-m0d-offer-row.fine.json`](./readings/follow-logic-m0d-offer-row.fine.json) (1,259 readings) and
+  [`.coarse.json`](./readings/follow-logic-m0d-offer-row.coarse.json) (987), one flat `readings` array each, every reading tagged with its `set`, `view`, `cell`,
+  `selection`, `mode` and (where it applies) `variant`, `factsVariant` and `message`.
+- **Commands** (from the worktree root; each pointer is one test, reported `1 passed (9.5m)` and `1 passed (7.5m)`):
+
+  ```text
+  export NODE_OPTIONS=--max-old-space-size=8192 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium
+  scripts/e2e-local.sh measure:toolbar -- follow-logic-m0d-offer-row.spec.ts --grep fine
+  scripts/e2e-local.sh measure:toolbar -- follow-logic-m0d-offer-row.spec.ts --grep coarse
+  node apps/web/measure-toolbar/follow-logic-m0d-judge.mjs docs/specs/placed-bar-follows-link/readings   # every verdict and table below
+  ```
+
+  The probe writes JSON to `apps/web/measure-output/` (git-ignored); the files in `readings/` are copies. The judge also reads the two M0c files in the same
+  directory, for S6's red-first check.
+
+### Summary, in plain English
+
+**None of the seven tests fails, so option A″ is folded into the spec, the plan and the decision record.** The one-line fix works: putting the plan facts and the
+panel's Expand button into one group means the new message is either beside both or above both, and the button can no longer be left on a line of its own.
+The cell that failed last time (1250 pixels wide, a mouse, a bar selected) now costs exactly the message's own height and nothing more (extra 0, where the
+last pass read +40), and so does every one of the other 1,353 readings at normal text size on a mouse and a finger, in the Diagram and the Gantt, across all
+five message wordings. Every button is pressable, nothing scrolls sideways, the message never takes more than two lines of words (three for the
+link-plus-offer wording), with nothing selected the diagram keeps at least 344 pixels on a mouse and 216 on a finger, and at double text size every button can
+be reached by scrolling and the diagram keeps at least 219 pixels (195 on a finger). The group alone, with no message at all, never makes the bottom bar taller;
+in 49 of 352 cells it makes it **shorter**. **The new check for the very defect last time found (S6, "the button is on the facts' line") was first shown to catch
+it:** it fires on M0c's own 1250-pixel readings and not on the 1260-pixel ones where the button fit.
+
+**Two things you did not ask about came out of the same readings.** (1) **The bottom bar you have today already leaves its Expand button on a line of its own in some
+states, and costs 48 to 120 pixels for it.** With a bar selected, on a mouse, while the bar says "Recalculating…" (windows about 1030 to 1070 wide) or shows the
+"edited since it was calculated" sentence with its Recalculate button (about 1220 to 1260 wide); and, a case nobody predicted, **on a finger, with a bar selected, in
+the ordinary up-to-date state, at about 1210 to 1250** (48 pixels in the Diagram, 96 in the Gantt). The group removes every one of these. That is a new register
+row, #581, fixed by the same change. (2) The wording of the record that guided the foot bar's order ("the facts lead") is out of date; that is noted below for the
+decision record and not edited here.
+
+### What was injected, stated plainly
+
+Nothing in the product was changed. Every strip is, as in M0c, a clone of the real `NoticeStrip` the running page rendered (carrying the shipped `min-w-0`), captured
+from a real Link-tool link between two real bars (or a real Ctrl+Z), with its sentence and buttons replaced and put into the real dock outlet, in product order (the
+link-plus-offer face and the bare Linked band before the selection bar in the Diagram; every other face appended; the Gantt appends all of them). **A-prime** is M0c's
+stylesheet verbatim (`RULES_CSS`) plus `data-dock-row`, comfortable density and the buttons in one `data-dock-row-actions` group. **What M0d adds is amendment 3 §4,
+exactly:** its stylesheet rule for `[data-activities-bar] > [data-foot-trail]` verbatim (`TRAIL_CSS`), and the group itself, **built in the page**: a new
+`<div data-foot-trail>` is put where the facts' outlet is, and the facts' outlet and the foot row's toggle are moved under it, in their DOM order. **It is undone, nodes
+put back and the element removed, straight after every reading** (`groupOff`, in a `finally`), so no view switch, panel expand or collapse, reload, route change or
+selection change ever happens while it is in place; the probe throws if the group is already in place when it is asked to build one. Each reading records `grouped`
+and the judge checks it against the mode (0 mismatches in 2,246 readings). Three foot-row modes are read in every cell: `base` (the shipped dock),
+`base-grouped` (the shipped dock plus the group only; S2's baseline and S7's subject) and `A-double-prime` (A-prime's strip plus the group); the row 580 messages also
+read `shipped` (the product's own strip, no group) and `own-row` (A-prime's markup on the strip, plus the group).
+
+**Not the product:** the offer's sentences and button labels (the spec's draft), the layout-resolved notice (the Linked band's HTML, which has the same classes as
+`LayoutResolvedStrip`), and that nothing is wired to anything. The multi-select bar is the real one (a real Shift+ArrowDown selection), reshaped in place and put back.
+Fixture, as M0c: a new account on a real API and Postgres, real Chromium in this container (ADR-0128: every pixel figure is from here and not from the Surface Pro).
+**Wide facts, three real states:** (a) the stale state is real (an activity created through the API after the last calculation and a reload: "Edited since it was last
+calculated" plus **Recalculate**, `data-schedule-state="stale"`, facts 627.1 px against 327.5 current); (b) the widest honest sentence ("Could not calculate — 12 edits
+still pending", 677.1 px) is put in by text and put back after each cell; (c) **"Recalculating…" is real and held**: the Recalculate button is pressed with the
+`**/schedule/recalculate` request held by `page.route` until the readings are taken (`data-schedule-state="recalculating"`, facts 438 px; the judge confirms the state in
+all 96 held readings, and `stale` in all 176 R3s readings), and the plan is then allowed to settle.
+
+### What was read
+
+Mouse (`fine`) and finger (`coarse`, `hasTouch`; the pointer type is read back in every reading and the judge confirms it). Per cell the base, the base with the group and
+each variant as A″.
+
+| Set                                          | Cells                                                                                                                                                                                                              | Readings, fine / coarse |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| Sweep (`sweep`)                              | 1150 to 1330 in 10 px steps × 800 high; `Excavate` (placed, unflagged) and `Pour slab` (flagged) selected; **Diagram and Gantt; all five variants**                                                                | 532 / 532               |
+| Regression grid (`grid`)                     | 1024 × 600, 1120 × 700, 1280 × 800, 1440 × 900, 1646 × 1097, 1912 × 1080; nothing selected and both bars; Diagram and Gantt; five variants                                                                         | 252 / 252               |
+| Wide facts (`r3s`, mouse only)               | 1024 × 600 and 1200, 1210 … 1270, 1280, 1440 × 800; nothing selected and the flagged bar; real stale and the widest sentence; `edit-one` and link-plus-offer                                                       | 176 / none              |
+| Held "Recalculating…" (`held`)               | 1024 to 1090 in 6 px steps × 800; both bars; `edit-one` and link-plus-offer (mouse only)                                                                                                                           | 96 / none               |
+| Row 580 messages (`messages`)                | 1024 × 600, 1210 to 1250 in 10 px steps, 1280 × 800; nothing selected, the flagged bar, and the real two-name multi-select bar; the three strips shipped and as own-row; the multi-select bar shipped and reshaped | 140 / 140               |
+| 200 % (`text200-root`, `-browser`, `-gantt`) | 1024 × 600, root font size, browser text setting (`Page.setFontSizes`), and the Gantt by the root font; three selections; five variants                                                                            | 63 / 63                 |
+
+### Verdict per stop rule
+
+Judged by `follow-logic-m0d-judge.mjs`; "readings judged" is the number the rule was applied to (both pointers together).
+
+| Rule                                                                                                                               | Verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1 (100 %): a strip button not self-hit after `scrollIntoView`, or a sideways scroll the base lacks                                | **HOLDS.** 1,354 readings (745 fine, 609 coarse). 1,663 strip buttons on a mouse and 1,323 on a finger: every one self-hit after scrolling **and in place**; no reading adds a sideways scroll; the foot row's toggle is self-hit in every one of the 1,354. Deciding cell: none fires; the cell M0c's S1 was nearest to is any 200 % cell, which is S5's.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| S2 (100 %, every cell): `extra > 4 px`, `extra = cost − expected`, cost against `base-grouped`, `expected` as amendment 3 words it | **HOLDS.** 1,354 readings. Extra ranges **−80 to 0** on a mouse (560 readings at exactly 0, 185 below, none between 0 and 4) and **−40 to 0** on a finger (602 at 0, 7 below). **The cell M0c's S2 fired on, 1250 × 800, a bar selected, Diagram and Gantt, all five variants, now reads extra 0 in the Diagram on both pointers, and −40 (mouse) or 0 (finger) in the Gantt:** `edit-one`, flagged bar, Diagram: foot 205 against base-grouped 147, strip 50, gap 8, 205 − 147 − 58 = 0 (M0c's A′: 253). The 10 px sweep from 1150 to 1330 is **0 at every width, both selections, in the Diagram on both pointers and in the Gantt on a finger**, and in the Gantt on a mouse −40 from 1150 to 1250 and 0 from 1260. Deciding (nearest) cell: the largest value is 0, first at fine grid 1024 × 600, nothing selected, `edit-one`. R3s, held "Recalculating…" and the widest sentence all hold (−80 to 0).                                                                                                                                               |
+| S3 (100 %): nothing selected, stage below 120 px                                                                                   | **HOLDS.** 206 readings. Minimum stage with nothing selected **344 px on a mouse** (grid 1024 × 600, `edit-one-long-name`; its base 402) and **216 px on a finger** (grid 1024 × 600, `edit-one`; base 278). Identical to M0c's.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| S4 (100 %): sentence over 2 lines (3 for link-plus-offer)                                                                          | **HOLDS.** 1,256 A″ readings. Maximum lines: `edit-one`, `edit-one-long-name`, `edit-several` and `plan` 2; link-plus-offer 3 (at its limit, both pointers, as in M0c).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S5 (200 %, either route)                                                                                                           | **HOLDS.** 90 readings (root font, browser setting and Gantt root font; three selections; two pointers). 198 of 198 strip buttons self-hit after scrolling where the base toggle is; **0 of 90 readings has any sideways scroll**; minimum stage with nothing selected **219 px (mouse) and 195 (finger)** at the root-font route (bases 421) and 283 to 371 / 259 to 363 at the browser setting (bases 485), exactly as M0c. Line counts, reported: 2 lines and 202 px (finger 226) for every variant at the root-font route; 1 to 2 lines and 114 to 202 px (finger 122 to 226) at the browser setting.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **S6 (100 %): the toggle is not on the facts' line (centres more than half a line apart)**                                         | **HOLDS, and was shown red first.** 1,354 readings: the largest offset between the toggle's centre and the facts' is **0 px** (both pointers), and in 0 of the readings with the group and no strip (`base-grouped`) is it off. **Red first (ADR-0110):** the judge, run on M0c's own A′ readings at 1250 × 800, fires on **28 of 30** on each pointer (15 per view: three selections × five variants), e.g. Diagram, a bar selected, `edit-one`: toggle top 756 on a line of its own (M0c fine.json l. 39667). It fires on 18 of the 20 readings M0c's S2 flagged and on all ten with nothing selected, where M0c's S2 scored 0; the two it does not fire on are the Diagram's link-plus-offer with a bar selected, where the strip (before the bar, 3 lines) sits above the facts and the proxy below has no facts' line to compare with (their foot is 253 and 273 px, so the toggle is stranded there too). It fires on **0 of 2** at 1260 × 800, where the toggle fitted. See "How S6 was made red first" below for the one thing M0c did not record. |
+| S7 (100 %): the group alone makes any foot row taller, or adds sideways scroll                                                     | **HOLDS.** 352 `base-grouped` readings (210 fine, 142 coarse): **largest increase 0 px**, no new sideways scroll. The group makes the foot row **shorter** in 24 of 210 mouse cells (largest saving **120 px**: stale facts, 1220 × 800, the flagged bar) and 25 of 142 finger cells (largest **96 px**: Gantt, 1210 × 800, `Excavate`), equal in the other 186 and 117. Reported, not judged: the group moves the facts off the leading edge of their line in 15 of 210 mouse and 35 of 142 finger cells (the cells where the outlet takes a line of its own: e.g. Diagram 1024 × 600 with the flagged bar selected on a mouse; 1024 × 600 and 1120 × 700 with a bar selected on a finger).                                                                                                                                                                                                                                                                                                                                                               |
+
+**How S6 was made red first, and its one limit.** M0c's readings carry the toggle's `top` but not the facts' `top`, so amendment 3's own test ("`toggle.top` differs from the
+facts' line") cannot be run on them as written. The judge uses the amendment's own reading of l. 39667 instead: on M0c's A′ readings the strip sits beside the facts
+(`aboveFacts` false), so the facts' line is the strip's, and the toggle is stranded when `toggle.top ≥ strip.bottom − 2`. That proxy fires on the defect and not on 1260. On
+M0d's own readings the real rule runs, with the facts' outlet's `top` and height recorded in every reading (centres compared, tolerance half of the taller of the two).
+The proxy's weakness is that it needs a strip, so it says nothing about M0c's base readings.
+
+**What is not a surprise but is worth stating.** At 1250 × 800 A″ does not put the strip beside the facts: the 36 rem floor plus the 375.5 px group is 959.5 px against a
+957 px row, so the outlet takes its own line and the group takes the one below (outlet 957, group 375.5 px at the trailing edge, foot 185 and 205 against base-grouped 127 and
+147). That is amendment 3 §4's estimate ("A″'s geometry at 1210–1250 is 1200's"), now read.
+
+### The shipped dock today: does it strand the toggle? **Yes, in three states, and one of them nobody predicted**
+
+Amendment 3 §2 derived the first two; M0c's R3 read stale facts at 1024, 1280 and 1440 only, all outside the band. Read here, in the `base` mode (no strip, no group), on the
+toggle's centre against the facts' centre, with a bar selected:
+
+| State (mouse)                                      | Facts | Window widths stranded (10 px steps, or 6 px for "Recalculating…")                     | Foot row, shipped against the same dock grouped                                                               |
+| -------------------------------------------------- | ----- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| "Recalculating…" held (real), either bar           | 438   | **1030 to 1072** (not at 1024; not at 1078 to 1090)                                    | 247 / 267 against 127 / 147 at 1030 to 1042 (**+120**); 207 / 227 against 127 / 147 at 1048 to 1072 (**+80**) |
+| Real stale sentence plus Recalculate, flagged bar  | 627.1 | **1220 to 1260** (not at 1024, 1200, 1210, 1270, 1280, 1440)                           | 267 against 147 at 1220 and 1230 (**+120**); 227 against 147 at 1240 to 1260 (**+80**)                        |
+| The widest honest sentence (injected), flagged bar | 677.1 | **1270 and 1280** (and, with **nothing selected**, 1024 × 600: 83 against 51, **+32**) | 267 against 147 (**+120**)                                                                                    |
+
+The predicted bands were "about 1027 to 1075" and "about 1216 to 1264"; the readings are inside them to the sampling step. **The third case, not predicted:** on a **finger**,
+with a bar selected, in the ordinary **current** state (facts 327.5 px), the toggle is stranded at **1210 to 1250** in the Diagram (foot 191 with `Excavate` and 207 with
+`Pour slab`, against 143 and 159 grouped: **+48**) and in the Gantt (**+96**). The cause is §2's arithmetic at a different floor: a finger-sized window's selection bar already
+asks the outlet for 36 rem (`canvas-dock.tsx:136`, `sm:pointer-coarse:has-[[data-dock-wide]]:min-w-[min(36rem,100%)]`), so the same band opens with the facts at their narrowest.
+On a mouse with current facts nothing is stranded in the shipped dock outside 200 % text. (At 200 % by the root font the shipped dock reads the toggle off the facts' line in
+all six root-font cells, Diagram and Gantt, three selections, on both pointers; the group changes the foot row there by 0 px and reads the toggle on the facts' line, and S6 is a 100 % rule, so this is reported and not judged.)
+**The group removes every one of these:** `base-grouped` reads the toggle on the facts' line in all of them (0 readings off), and S7's largest savings are exactly the
+stranded cells above. This is a shipped defect inside the design floor and is filed as `docs/TECH_DEBT.md` #581.
+
+### Row 580: the four existing messages with A″'s own-row treatment
+
+Long names (two 46-character activity names), in product order. "Shipped" is the foot row's growth against the same cell's base; "own-row" is against the base **with the group**
+(S2's baseline), and the figure in brackets is against the plain shipped base. "Cut" is whether the sentence is ellipsised. Every own-row reading holds S1 (every button self-hit),
+S2 (extra 0, or negative for the multi-select bar, which adds no strip) and S6 (toggle on the facts' line).
+
+| Message                                  | 1024 × 600 mouse, shipped                         | 1024 × 600 mouse, own-row                                                       | 1210 to 1250 mouse, own-row                                     | 1280 mouse, own-row                   |
+| ---------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------- |
+| Bare Linked band, nothing / flagged bar  | cut; +6 / +54                                     | whole sentence, 2 lines; **+58 / +26**, stage 344 / 240 (bases 402 / 266)       | whole, **1 line**; +50 / +58, stage 552 / 448 (bases 602 / 506) | whole, 2 lines; +18 / +66             |
+| Undo result, nothing / flagged bar       | cut; +6 / +54                                     | whole, 1 line; **+50 / +18**, stage 352 / 248                                   | whole, 1 line; +50 / +58                                        | whole, 1 line; +10 / +58              |
+| Layout-resolved, nothing / flagged bar   | cut; +6 / +54                                     | whole, 2 lines; **+58 / +26**, stage 344 / 240                                  | whole, 1 line; +50 / +58                                        | whole, 2 lines; +18 / +66             |
+| Multi-select bar (2 long names selected) | count kept, name cut; foot unchanged (194 px bar) | **whole sentence, buttons under it; 122 px bar, −32 px**, stage 280 against 248 | whole, 1 line; 82 px bar, **−12 px**, stage 520 against 508     | whole, 2 lines; 130 px bar, **−4 px** |
+
+At 1210 to 1250 the shipped strips cost +6 (nothing selected) and +54 (flagged bar) and are cut in all of them. **On a finger** the own-row treatment at 1024 reads +62 / +70
+(stage 216 / **52** with the flagged bar, where its base is 122: the coarse-1024 cell amendment 1's Q2 accepted, and where the shipped strips already read stage 56), the multi-select
+bar **−40**; at 1210 to 1250 it reads +62 / +70 against the grouped base and **+62 / +22 against the shipped one**, because the group's 48 px saving (above) is netted off.
+All 182 buttons in the 98 shipped and own-row message readings on each pointer are self-hit after scrolling.
+
+**What this means for row 580:** the own-row treatment holds S1, S2 and S6 for all four messages at every width the amendment asks for (1024, 1210 to 1250, 1280), on both
+pointers, so row 580 follows M2 as its own PR (amendment 3 §8), now with the group as part of M2.
+
+### Discarded runs, and why
+
+- **Run 1 (fine only), discarded:** the probe's held "Recalculating…" cleanup unrouted `**/schedule/recalculate` while its handler was still waiting, so the handler's
+  `route.continue()` failed ("Route is already handled") and Playwright reported `1 failed` after the readings had been taken. The file it wrote was complete; the judge's verdicts on it
+  were the same and 1,259 of 1,259 readings agree with the final run on cell, mode, variant, foot height, stage height, outlet width and strip height. It is discarded because a
+  run that fails does not count, and because the fault was real. The fix waits for `data-schedule-state="current"` before unrouting. **The coarse run was taken once, after the fix.**
+- **The judge's first S2 formula for the multi-select bar**, written before any reading was judged, scored its reshaped bar as if a strip had been added; a reshaped bar adds none
+  (`expected` 0), and that was corrected before the verdicts above (the figures in this section are all from the corrected judge).
+- No other run was taken: no reading was repeated to get a different answer.
+
+### What this means for the amendments
+
+- **Amendment 3's refinement passes.** The decision rule ("No rule fires: fold A″ (§9). Row 580 follows as §8") applies, and this commit carries the §9 fold-in. Option B is **not built**.
+- **Amendment 3 claims the readings confirm:** the band is a foot-row width and the group removes it for every floor (S2 and S6 at every sweep width on both pointers); A″'s
+  geometry at 1210 to 1250 is the 1200 geometry (outlet 957 on its own line, bar 3 lines to 2); the 1912 cost is unchanged (grid cell: extra 0 on both pointers, as M0c).
+- **Amendment 3 claims the readings qualify.** (1) §2 says the shipped dock has the stranding "at the 18 rem floor, whenever a selection bar is showing and the facts are wide";
+  it also has it **at the 36 rem coarse floor with the facts current** (above), which the derivation did not consider, and the widest sentence strands it at 1270 to 1280, outside
+  the two bands §2 named. (2) §11 says ADR-0187 D3's "costs 40 px at 1120 to 1250" on fine pointers "may be this same stranding; not read": on a **mouse** with current facts the
+  shipped dock strands nothing in the Diagram or the Gantt (above), so that figure is not this stranding; what is read is the finger's 48 px at 1210 to 1250. (3) §6 S6 as written
+  cannot be run on M0c's readings (no facts `top`); a proxy was used and is stated above.
+- **For M2's ADR work, not edited here:** ADR-0114 D2 still says "The facts lead and the dock follows" (`docs/adr/0114-…md:86-88`) and carries no amendment note, while the code
+  has had the facts trailing since foot-row-and-deck M3 (`activity-bottom-panel.tsx:457-475`; the docblock there records why the ADR's reason was false). ADR-0216 amends ADR-0114 D2
+  and should state that drift.

@@ -17,6 +17,7 @@ flowchart LR
   M2 --> T22[T2.2 Strip + dock rung + Link-tool band]
   M2 --> T23[T2.3 Accept path + undo]
   M2 --> T24[T2.4 Gantt dock + journey + ADR-0216]
+  M2 --> T25[T2.5 Row 580: own-row for the four messages]
   M3 --> T31[T3.1 Plan offer + journey]
   M3 --> T32[T3.2 Reviews + docs]
 ```
@@ -29,7 +30,8 @@ rollback is each milestone's commit). ADR-0216 is filed at M2. Every milestone i
 
 **ADR-0105 triggers, per milestone:** M0 none (measurement only). **M1 crosses** (a control's accessible name, which
 journeys and the remedy map rely on). **M2 crosses** (a new user-facing entry point; a change to the dock's
-precedence contract). **M3 crosses** (a new user-facing entry point). The spec exists, so crossing means "built to
+precedence contract; and, since amendments 1–3 (2026-11-11), a component's public contract: `NoticeStrip`'s new `messageFit="wrap"` value, and
+the foot row's new trailing group). **T2.5 (row 580) crosses nothing new** (it uses what M2 lands). **M3 crosses** (a new user-facing entry point). The spec exists, so crossing means "built to
 this spec", not "stop".
 
 **Agents to involve:** builder (Sonnet) for M1–M3; component-reviewer, accessibility-reviewer and ux-reviewer at M2
@@ -100,6 +102,27 @@ the spec's premises, and replace its marked checks with findings.
      calls `beginLayoutEdit` (`use-auto-resolve.census.structural.test.ts` is the list).
   5. Decide whether a catalogue plan (a placed chain) earns a `docs/TEST_PLAYBOOK.md` row; `pnpm check:playbook`.
 
+##### Task 0.4 — M0b: does the offer fit the dock (amendments 1–3, 2026-11-11)
+
+- **Description:** the second measuring pass, on amendment 1's option A (a content basis on the outlet): the draft copy at seven widths,
+  both pointers, three selection states, Diagram and Gantt. Record: `m0-measurement.md`, "M0b".
+- **Result:** stop rules 1, 3 and 4 fired, so option A was replaced by A′ (amendment 2). Amendment 1 is superseded.
+
+##### Task 0.5 — M0c: A′ against stop rules S1–S5 (amendments 1–3, 2026-11-11)
+
+- **Description:** the third pass, on A′ (a 36 rem outlet floor, `messageFit="wrap"`, grouped buttons), plus the 200 % controls, the facts' states
+  and, for `docs/TECH_DEBT.md` #580, the four existing foot messages. Record: `m0-measurement.md`, "M0c".
+- **Result:** S2 fired at 1210–1250 on a mouse with a bar selected (+40 px: the toggle stranded on a line of its own); S1, S3, S4 and S5 held. Amendment 3 diagnoses
+  it and proposes A″.
+
+##### Task 0.6 — M0d: A″ against stop rules S1–S7 (amendments 1–3, 2026-11-11)
+
+- **Description:** the fourth, short pass: A′ plus the foot row's one trailing group (the facts' outlet and the toggle as one item), injected, with the
+  group alone as a control (`base-grouped`), across the 1150–1330 sweep, the regression grid, the wide-facts states (real stale, the widest sentence,
+  a held "Recalculating…"), 200 % by both routes, and the four row-580 messages. Record: `m0-measurement.md`, "M0d"; readings in `readings/`.
+- **Result:** **no rule fired**; S6 was shown red first on M0c's own readings. A″ is folded into the spec (§4.6, §4.7, §4.9, SC-6) and into M2 below; option B
+  (amendment 3 §7) is not built. The same readings found the shipped dock strands its toggle today (`docs/TECH_DEBT.md` #581), which M2's group fixes.
+
 ---
 
 ### Milestone M1: One name — "Clear visual start" becomes "Follow logic" (if Q4 = yes)
@@ -149,7 +172,7 @@ let it follow" (runbook 3.5–3.8 as a journey; asserts SC-1 and SC-3 at the API
 
 > **Description:** spec §4.6.
 > **Complexity:** M
-> **Dependencies:** M1 (the button's words)
+> **Dependencies:** M1 (the button's words); M0d passed (amendments 1–3, 2026-11-11), so the layout below is A″, not option A
 > **Risks:** see rollup.
 > **Testing requirements:** unit for the pure diff, the hook, the dock precedence, the strip, the band; journey
 > above; a11y review of focus hand-off and reading order.
@@ -172,16 +195,31 @@ let it follow" (runbook 3.5–3.8 as a journey; asserts SC-1 and SC-3 at the API
 ##### Task 2.2 — `FollowLogicStrip`, the dock rung and the Link-tool band
 
 - **Description:** the strip (edit variant), the `followEdit` rung in `resolveDockStrip` with its reason written in
-  the function, and the `linked` confirmation carrying the offer.
+  the function, and the `linked` confirmation carrying the offer. **Builds A″ (amendments 1–3, 2026-11-11; spec §4.6; M0d
+  passed):** the `NoticeStrip` value `messageFit="wrap"`, the marked outlet floor on `CanvasDockOutlet`, the foot row's
+  trailing group (the facts' outlet and the toggle as one `data-foot-trail` item, with the line-fill arithmetic as its
+  docblock), and the strip itself (`wrap`, comfortable, `data-dock-row`). The group is what fixes `docs/TECH_DEBT.md` #581
+  (the shipped dock's stranded toggle), so that row is closed by this task.
 - **Complexity:** M
-- **Dependencies:** T2.1
+- **Dependencies:** T2.1; M0d's readings (`m0-measurement.md`)
 - **Risks:** two strips in one row → the precedence function is the only place the order lives, asserted as a
-  decision (`dock-strip.ts`'s own rule); the band never renders beside the strip.
+  decision (`dock-strip.ts`'s own rule); the band never renders beside the strip. The offer does not fit beside the facts
+  at narrow widths → it takes its own line and the facts and toggle move as one group (see the rollup row; M0d read it).
+  The facts now sit at the trailing edge of a line the outlet has taken (the one visible change; ux-reviewer judges it).
 - **Testing:** `resolveDockStrip` cases for every new pair; strip unit tests (no `role`, buttons, focus target called
-  before the action); band test (`linked` + offer → one strip with Undo and Follow logic).
+  before the action); band test (`linked` + offer → one strip with Undo and Follow logic). `notice-strip` unit (the `wrap`
+  markup; `grow` and `truncate` byte-identical); `canvas-dock` unit (the class present when a marked strip is mounted);
+  `activity-bottom-panel` unit (facts and toggle inside one `data-foot-trail` element with `ml-auto max-w-full flex-wrap`;
+  DOM order unchanged). **Journey cells** in `e2e-workspace-chrome/dock.spec.ts`: a case at 1024 × 600 and at 1250 × 800
+  on a mouse with a bar selected (every button self-hit, no sideways scroll, the toggle on the facts' line); a case for
+  #581's states (the real stale sentence at 1240 × 800 with a bar selected, and a finger at 1230 × 800 with current facts:
+  the toggle on the facts' line). The existing `narrow-shell` and `dock.spec.ts` deltas must stay green
+  (`scripts/e2e-local.sh web:workspace-chrome`). **Reviews:** component-reviewer (the primitive value), ux-reviewer (the
+  facts trailing on a line of their own), accessibility-reviewer (spec §4.7: reading order and the hand-off).
 - **Development steps:**
   1. Strip on `NoticeStrip`, no timer, ADR-0135 hand-off via `useContainerUnmountHandoff`.
   2. Announce through the workspace's polite region once, from the same sentence function the strip renders.
+  3. `messageFit="wrap"`, the outlet floor and the foot-row group, each with its reason written beside it; `COMPONENT_LIBRARY.md`.
 
 ##### Task 2.3 — The accept path
 
@@ -203,7 +241,9 @@ let it follow" (runbook 3.5–3.8 as a journey; asserts SC-1 and SC-3 at the API
 ##### Task 2.4 — Gantt dock, journey, ADR-0216
 
 - **Description:** add the offer to the Gantt dock chain (`plan-workspace-toolbar.tsx:1977`); the two journey cases;
-  file ADR-0216 from spec §4.9 with one line in `CLAUDE.md` §16 (`check:adr-coverage`).
+  file ADR-0216 from spec §4.9 with one line in `CLAUDE.md` §16 (`check:adr-coverage`). The ADR's amendments (spec §4.9:
+  ADR-0187 D3, ADR-0092 D2, ADR-0114 D1 and D2, and D8 and D9) are also noted as one-line dated amendment notes on those ADRs
+  (amendments 1–3, 2026-11-11), the ADR-0114 D2 note stating the "facts lead" drift.
 - **Complexity:** S
 - **Dependencies:** T2.2, T2.3
 - **Risks:** the journey asserts on DOM before the engine has flagged → poll the API for the flag, as
@@ -214,6 +254,26 @@ let it follow" (runbook 3.5–3.8 as a journey; asserts SC-1 and SC-3 at the API
      both `visualStart: null`, constraints unchanged, zero `EARLIER_THAN_LOGIC`; Ctrl+Z restores both placements.
   2. Journey: a drag that places B early raises **no** offer (SC-2).
   3. File ADR-0216; changeset (web, minor).
+
+##### Task 2.5 — Row 580: the four existing foot messages, own row (amendments 1–3, 2026-11-11)
+
+- **Description:** `docs/TECH_DEBT.md` #580. Give the bare Linked band (`CanvasModeBand`), `HistoryResultStrip`, `LayoutResolvedStrip` and
+  `BulkSelectionBar` (all four render `NoticeStrip`) `messageFit="wrap"`, `density="comfortable"` and `data-dock-row`, so the full sentence is
+  visible without hover on all four. `grow` stays rejected (it turns the multi-select bar into a 14-line column). **Its own PR immediately after
+  M2, in the same release, under row 580:** M2 lands the value, the marker, the outlet floor and the foot-row group, so this adds no entry
+  point and no primitive value, and it is separate because it changes four strips' journeys and every link's confirmation height at 1024 and
+  M2's journeys should not carry that.
+- **Complexity:** S
+- **Dependencies:** M2 (T2.2). M0d read all four at 1024, 1210 to 1250 and 1280, mouse and finger: S1, S2 and S6 hold (`m0-measurement.md`, M0d,
+  "Row 580").
+- **Risks:** +18 to +58 px of foot row at 1024 on a mouse while a message shows (stage 240 to 352, always above 120), and the multi-select bar
+  **shrinks** (194 to 122 px, −32); on a finger at 1024 with the flagged bar the stage is 52 with any of the three messages (shipped: 56), the cell
+  amendment 1's Q2 accepted for the offer.
+- **Testing:** `dock.spec.ts` cases at 1024 on a mouse with long names (the full sentence visible, every button self-hit, no sideways scroll);
+  unit cases for the four strips' props. Reviews: ux-reviewer, accessibility-reviewer.
+- **Development steps:**
+  1. The four props, each with its reason written beside it.
+  2. Update #580's status when it lands (it stays `open` until then).
 
 ---
 
@@ -265,7 +325,7 @@ API, open the plan, press Follow logic in the dock, read back zero flags; Dismis
 
 ## Sequencing & slices
 
-M0 → M1 → M2 → M3, each one PR that leaves `main` releasable. M1 is independently valuable (the remedy becomes
+M0 → M1 → M2 → (T2.5, row 580, its own PR straight after M2 and in the same release; amendments 1–3, 2026-11-11) → M3, each one PR that leaves `main` releasable. M1 is independently valuable (the remedy becomes
 findable by name) and is the cheapest; if Q4 is declined it is dropped and the offers say "Clear visual start" so
 there is still one name. M2 delivers the owner's request and step 3.8. M3 covers plans that were already in that
 state. No flags. If Q2 is answered (b), T2.1's trigger narrows to link creates only and M3 becomes the only remedy
@@ -281,13 +341,13 @@ named `scripts/e2e-local.sh web:<suite>` runs reported before push.
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption                                                              | Likelihood | Impact | Mitigation                                                                                             |
-| ------------------------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------------------ |
-| The Link confirmation plus the offer does not fit the dock row at 1024         | med        | med    | M0 T0.2 measures first; shorten copy, then drop the band's Undo; owner decides if neither fits         |
-| A batch row nulls a constraint                                                 | low        | high   | Rows built from the cached row's stored constraint; unit and journey both read it back                 |
-| Settle ordering with auto-resolve binds the offer to the wrong step            | med        | low    | Evaluate after auto-resolve in the same callback; unit test on order; the consumed flag stops a replay |
-| The offer is noisy for planners who keep bars early on purpose                 | low        | low    | Only _newly_ stranded bars; never the bar the edit placed; Keep it here; the plan offer is dismissible |
-| The Logic tab's offer is hidden behind the modal editor until it closes        | high       | low    | Announced at once; visible on close; recorded as accepted rather than designed around (spec defaults)  |
-| Clearing a placement changes levelling results (ADR-0166 reads the drawn span) | med        | low    | Expected behaviour; the levelling flags recompute on the recalculation; stated in spec §4.10           |
-| The rename breaks an unlisted journey locator                                  | med        | low    | Grep of the tree in M1; both suites run locally before push                                            |
-| A cross-plan successor is stranded silently in another plan                    | low        | low    | Its plan's whole-plan offer shows it when opened; recorded as out of scope                             |
+| Risk / assumption                                                              | Likelihood | Impact | Mitigation                                                                                                                                  |
+| ------------------------------------------------------------------------------ | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| The offer does not fit beside the facts at narrow widths                       | high       | low    | It takes its own line, and the facts and toggle move as one group (amendments 1–3, A″); M0d measured it: 1,354 readings, no stop rule fires |
+| A batch row nulls a constraint                                                 | low        | high   | Rows built from the cached row's stored constraint; unit and journey both read it back                                                      |
+| Settle ordering with auto-resolve binds the offer to the wrong step            | med        | low    | Evaluate after auto-resolve in the same callback; unit test on order; the consumed flag stops a replay                                      |
+| The offer is noisy for planners who keep bars early on purpose                 | low        | low    | Only _newly_ stranded bars; never the bar the edit placed; Keep it here; the plan offer is dismissible                                      |
+| The Logic tab's offer is hidden behind the modal editor until it closes        | high       | low    | Announced at once; visible on close; recorded as accepted rather than designed around (spec defaults)                                       |
+| Clearing a placement changes levelling results (ADR-0166 reads the drawn span) | med        | low    | Expected behaviour; the levelling flags recompute on the recalculation; stated in spec §4.10                                                |
+| The rename breaks an unlisted journey locator                                  | med        | low    | Grep of the tree in M1; both suites run locally before push                                                                                 |
+| A cross-plan successor is stranded silently in another plan                    | low        | low    | Its plan's whole-plan offer shows it when opened; recorded as out of scope                                                                  |

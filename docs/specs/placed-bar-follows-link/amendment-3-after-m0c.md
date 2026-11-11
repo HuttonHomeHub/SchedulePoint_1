@@ -2,7 +2,8 @@
 
 - **Status:** Approved — under the product owner's instruction of 2026-11-11 to drive this work to completion and a
   release; the choice to try this refinement first, with option B built automatically if M0d fails, was reported to
-  them the same evening.
+  them the same evening. **M0d passed 2026-11-11; folded** (`m0-measurement.md`, "M0d": no stop rule fired, S6 shown red first;
+  the spec, the plan and the ADR-0216 draft carry A″; option B is not built).
 - **Amends:** [`amendment-2-after-m0b.md`](./amendment-2-after-m0b.md) §2 (A′ gains one element), §3 (the decision rule, which
   could not be applied to S2 as written, and the stop rules, replaced for M0d). Through it:
   [`amendment-1-offer-at-1024.md`](./amendment-1-offer-at-1024.md) §2 option B (now specified to build);
