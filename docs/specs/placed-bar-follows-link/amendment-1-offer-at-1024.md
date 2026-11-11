@@ -1,6 +1,6 @@
 # Amendment 1: where the offer goes when the dock cannot hold it at 1024
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-11-11, with all defaults (Q1 option A, Q2 accept, Q3 separate row). **Held, not folded in:** the M0b readings fired stop rules 1, 3 and 4 on 2026-11-11 (`m0-measurement.md`, "M0b"), so this returns to the owner.
 - **Amends:** [`feature-spec.md`](./feature-spec.md) §1 item 4, §2 Edge cases (summary row), §4.6, §4.9, SC-6;
   [`implementation-plan.md`](./implementation-plan.md) M0 (a second pass), M2 (dependency and risk row).
 - **Author:** ui-architect, 2026-11-11.

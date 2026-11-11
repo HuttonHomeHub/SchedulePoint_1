@@ -244,3 +244,178 @@ new row; M3 may add one sentence to the `capability-placements` row naming the w
 | A summary placed and flagged cannot occur                       | Overturned in part (C7)   | The whole-plan offer's N excludes summaries and can read lower than the conflict chip; M3's copy or a footnote should say so              |
 
 The instrument check in §2 (the touch stage height reproducing #488's 2 px) shows the width reading is the same one the repository already trusts.
+
+---
+
+# M0b: option A measured (amendment 1, 2026-11-11)
+
+- **Date:** 2026-11-11. **Tree:** `m0b-follow-logic` = `m0-follow-logic` (02a2c65) plus the probe commit. **Question:** does option A in
+  [`amendment-1-offer-at-1024.md`](./amendment-1-offer-at-1024.md) (the offer takes a row of its own when it does not fit beside the plan facts) hold the
+  amendment's four stop rules (its section 4)? The owner approved the amendment with all three defaults the same day; that approval folds the amendment
+  into the spec and plan **only if no stop rule fires**.
+- **Probe:** `apps/web/measure-toolbar/follow-logic-m0b-offer-row.spec.ts`, run by the existing `measure:toolbar` target. A harness, not a gate
+  (ADR-0081 section 3): no new Playwright config, no CI step, **nothing under `apps/web/src` changed**.
+- **Raw readings:** [`readings/follow-logic-m0b-offer-row.fine.json`](./readings/follow-logic-m0b-offer-row.fine.json) and
+  [`.coarse.json`](./readings/follow-logic-m0b-offer-row.coarse.json): every cell, every state, with the sentences the product produced.
+- **Command** (from the worktree root; the two pointers are two tests in one file; the run these figures come from reported `2 passed (7.3m)`):
+
+  ```text
+  export NODE_OPTIONS=--max-old-space-size=8192 PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium
+  scripts/e2e-local.sh measure:toolbar -- follow-logic-m0b-offer-row.spec.ts
+  ```
+
+  The probe wrote the JSON to `apps/web/measure-output/` (git-ignored); the files in `readings/` are copies. Earlier runs of the same file were
+  discarded because of probe faults, all fixed before the run reported here: the alternative rule's selector was matched together with option A's (so
+  the two modes read the same), the Gantt stage was read from an element that does not shrink with the foot row, and the Gantt's selection cannot be
+  cleared once made (no Clear selection button on a mouse, and Escape does not reach it), so the Gantt is read selection-major with `none` first.
+
+## Summary, in plain English
+
+**Option A works at the sizes a planner uses at normal text size, but it fails two of the amendment's four tests, so the amendment is not folded in and
+this comes back to the owner.** At 100 % text, in every window from 1024 to 1912 wide, on both pointers and in both the Diagram and the Gantt, the offer
+takes a line of its own when it does not fit beside the plan facts: at most two lines of words (one line at 1250 and wider), every button is
+pressable, nothing scrolls sideways, the diagram's corner buttons stay inside the diagram, and with nothing selected the diagram never drops below
+216 px (finger) or 344 px (mouse). That is stop rule 3 at normal text size, and stop rule 2, both holding. Two things do not hold. **At 200 % text on a
+1024 window** (stop rule 1 and, by one of the two ways of enlarging text, stop rule 3) the offer takes 2 to 11 lines, and with nothing selected its buttons
+end up past the window's edge. **And on a mouse at 1912, with a bar selected, the offer costs the Diagram 98 px but the Gantt 40 px** (stop rule 4): in
+the Diagram the selection bar and the offer no longer share a line, so the plan facts get a line of their own too, the 36 to 40 px that ADR-0187 D3
+refused to pay for the selection bar. The same 36 to 44 px also appears in the Gantt at 1646 and 1912; the amendment's stop rule 2 only asked about 1120
+to 1250, where the extra cost is zero. Separately, the three existing foot messages (the bare "Linked ..." confirmation, the layout-resolved notice and
+the undo result) **do** spill out of the dock with long activity names, as the amendment suspected, and the design review's guess about why is right:
+adding `min-w-0` to the strip alone makes the existing ellipsis work. That evidence is ready for the separate register row (Q3).
+
+## What was injected, stated plainly
+
+Nothing in the product was changed. Every strip is a clone of the real `NoticeStrip` the running page rendered, captured from a real Link-tool link
+between two real bars (or, for the undo result, from a real Ctrl+Z), with its sentence and buttons replaced and put into the real dock outlet.
+**Option A** is three injected things and nothing else:
+
+1. `data-dock-row` on the cloned strip;
+2. a stylesheet rule that is the compiled form of the outlet class `has-[[data-dock-row]]:basis-auto`:
+   `[data-activities-bar] > div[class*="not-empty:min-w-"]:has([data-dock-row]) { flex-basis: auto; }`;
+3. the strip's message fit `grow` (the `<p>` is `flex-1`) and density `comfortable` (`items-start py-2` in place of `items-center justify-between py-1.5`).
+
+The **alternative rule** (stop rule 2's fallback: the marker counts only when no `data-dock-wide` selection bar is in the outlet) was read at 1120 and
+1250 on a mouse. It was not needed (rule 2 held) and it was worse: cost +66 to +146 px in the Diagram against +58 to +66 for option A. The **`min-w-0`
+test** adds that one class to the existing strips. The offer's **copy** is the spec's draft, injected. The three **existing** messages use sentences the
+product built: the Linked band and the undo result are the live strips' real HTML and real sentences from the run; the layout-resolved notice is the
+Linked band's HTML (both are `NoticeStrip tone="muted"`, compact, `truncate`, and `LayoutResolvedStrip.tsx:38` passes nothing else) carrying
+`sentenceFor`'s one-bar sentence, because a real overlap resolution was not triggered. **Not the product:** the offer's sentences and button labels,
+and the fact that nothing is wired.
+
+**Fixture** (a new account on a real API and Postgres, real Chromium 156 in this container; ADR-0128: every pixel figure is from here and not from the
+Surface Pro). Bars drawn with the Add tool: `Excavate` and `Pour slab` (linked through the API, `Pour slab` placed on 6 Jan so it is flagged
+`EARLIER_THAN_LOGIC`) and two 46-character names, `Install structural steel to level 3 west wings` and `Fabricate and erect precast stair cores, blk B`,
+linked with the Link tool (the probe asserts both are 46 characters). The undo result is the real strip from drawing a third long-named bar and
+pressing Ctrl+Z (`Undid add “Commission the rooftop plant and chilled water loop”.`, buttons `Redo` and `Dismiss`).
+
+## What was read
+
+Cells: 1024 x 600, 1120 x 700, 1250 x 800, 1280 x 800, 1440 x 900, 1646 x 1097, 1912 x 1080; a mouse (fine) and a finger (coarse, `hasTouch`; the
+pointer type was read back in every reading); nothing selected, `Excavate` selected (a placed bar, not flagged) and `Pour slab` selected (flagged);
+the Diagram and the Gantt; the five variants of the amendment (`edit-one`, `edit-one-long-name`, `edit-several`, `plan`,
+`link-confirmation-plus-offer`); plus 1024 x 600 at 200 % text by two routes. **Per reading:** the strip's lines, height, width and overflow of the
+outlet; whether a pointer at each button's centre hits the button (`elementFromPoint`); whether a button is past the foot row's right edge or the
+window's right or bottom edge (`clipped`); foot row and stage height; sideways scroll of the foot row and the page; whether the Diagram's corner
+cluster is inside the stage; the selection bar's line count and label (every selected reading names the intended activity). The two routes to 200 %:
+the root font size set to 200 % (a user style sheet's effect; it does not move the rem media queries; the selection is made at 100 % first because the
+list cannot take focus after) and Chromium's `Page.setFontSizes` (what a browser's own text-size setting does; the rem media queries answer; the page is
+reloaded, then reloaded again at 100 %). The Gantt's stage is the tallest ancestor of the grid that ends where the foot row begins. **A cost** below is
+the foot row's growth against the same cell with no strip; **extra** is cost minus the strip's own height minus the 8 px gap to the selection bar (no
+gap with nothing selected). Totals: 420 option A readings at 100 % text across both pointers and both views, 84 existing-message readings, 5 live
+readings per pointer.
+
+## The readings, in brief (option A, 100 % text, injected)
+
+Stage is the diagram or Gantt height above the foot row. Each row spans the five variants unless stated.
+
+| Cell (selection), pointer | Stage without a strip | Stage with option A | Strip lines | Cost (px)                                                 | Extra beyond the strip (px)       |
+| ------------------------- | --------------------- | ------------------- | ----------- | --------------------------------------------------------- | --------------------------------- |
+| 1024, none, mouse         | 402                   | 344 to 352          | 1 to 2      | 50 to 58                                                  | 0                                 |
+| 1024, none, finger        | 278                   | 216                 | 1 to 2      | 62                                                        | 0                                 |
+| 1024, flagged bar, mouse  | 266                   | 200 to 208          | 1 to 2      | 58 to 66                                                  | 0                                 |
+| 1024, flagged bar, finger | 122                   | **52**              | 1 to 2      | 70                                                        | 0                                 |
+| 1120 and 1250, bar, mouse | 406 to 526            | 340 to 508          | 1 to 2      | 58 to 66 (Diagram), 18 to 26 (Gantt)                      | 0 (Diagram), -40 (Gantt)          |
+| 1280 to 1646, bar, mouse  | 506 to 899            | 448 to 805          | 1           | 58 (Diagram); Gantt 18 (1280), 58 (1440), 94 to 98 (1646) | 0 (Diagram); Gantt 1646: 36 to 40 |
+| 1912, bar, mouse          | 866 to 882            | 768 to 832          | 1           | Diagram 94 to 98, Gantt 40 to 98                          | Diagram **36 to 40**              |
+| 1440 to 1912, none, mouse | 702 to 899            | 652 to 889          | 1           | 10 to 50                                                  | -40 to 0                          |
+
+On a finger at 1024 with a bar selected the stage falls to 68 (unflagged) and 52 (flagged) while the strip is up, against 138 and 122 without it;
+amendment Q2 accepts exactly that, and the corner cluster is outside the stage there (the 52 px case). The finger readings at 1120 to 1912 follow the
+mouse's pattern, 8 to 12 px taller per strip (62 against 50 with nothing selected, 66 to 70 against 58 with a bar). The Gantt's and the Diagram's costs differ by
+up to 40 px (mouse) and 48 px (finger) in most selection cells, and by 58 px (mouse) at 1912 with the flagged bar: that last one is rule 4.
+
+## Verdict per stop rule
+
+| Stop rule (amendment section 4)                                                                                          | Verdict                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. In any fine-pointer cell a variant takes more than two lines (three for link plus offer), or a button is not self-hit | **FIRES at 200 % text. HOLDS at 100 %.**                                                                                                                                                                                                        |
+| 2. At 1120 to 1250 fine with a selection, the strip costs more than its own lines (ADR-0187 D3's 40 px returning)        | **HOLDS.** Extra is 0 px in the Diagram and -40 px in the Gantt in all 40 option A readings; the alternative rule was worse and is not needed. **But** see rule 4: the same cost returns at 1646 and 1912, outside this rule's window.          |
+| 3. With nothing selected, the stage drops below 120 px in any cell at or above 1024 x 600                                | **HOLDS at 100 %** (minimum 344 mouse, 216 finger). **FIRES at 200 % by the root-font-size route** (stage 0 for link plus offer and 107 for the long name, both pointers). **Holds by the browser-setting route** (minimum 291, both pointers). |
+| 4. Any Gantt cell differs from its Diagram cell by more than the strip's own height                                      | **FIRES.** Mouse, 1912 x 1080, flagged bar selected: the offer costs the Diagram 98 px and the Gantt 40 px, a 58 px difference against a 50 px strip (`edit-one`, `edit-several`, `plan`).                                                      |
+
+**Rule 1, the evidence.** At 100 % text no cell on either pointer, in either view, exceeded 2 lines (link plus offer: 2), missed a button's own hit,
+scrolled sideways, put a button past an edge or overlapped a neighbour, in 420 readings. At 200 %, root-font-size route: strips of 4, 7, 6, 4 and 11
+lines (`edit-one`, long name, several, plan, link plus offer) and no button self-hit with nothing selected (`clipped`: past the window's bottom edge or
+the foot row's right edge; the cause was not investigated, and the shipped band at 200 % was not read to see whether the base state clips too).
+Browser-setting route: strips of 2, 3, 3, 2 and 4 lines, so the long name (3 against a limit of 2) and link plus offer (4 against 3) exceed, again with no
+button self-hit with nothing selected, and every button self-hit with a bar selected. Both pointers read the same lines. The 200 % base state is
+already tight with a selection (stage 109 and 69 px on a mouse by the first route, 253 and 213 by the second), so the offer is added to a cell that is
+already near the floor.
+
+**Rule 4, the evidence and its context.** Mouse at 1912, `Pour slab` selected: Diagram foot 67 to 165 (the strip sits below the selection bar,
+`belowSelectionBar` true, and the plan facts take a line of their own), Gantt 67 to 107 (the strip shares the selection bar's line,
+`belowSelectionBar` false). The same extra appears at 1912 in the Diagram for `Excavate` (foot 51 to 145, extra 36) and in the Gantt at 1646 and 1912 (extra 36
+to 44 on both pointers). Rule 2's window, 1120 to 1250, is where the Diagram's extra is zero because the line the facts gain is offset by the line the
+selection bar loses (3 to 2 lines) once it has the full row. Compared by raw foot height rather than by cost, rule 4 also fires on a finger at 1912
+(Gantt 113, Diagram 181, strip 62). The amendment's sentence "on a wide screen like yours (1646 or 1912) nothing changes" holds with nothing selected
+(+10 mouse, +18 finger) and does not hold with a bar selected.
+
+**Not measured, so not claimed.** A classic (non-overlay) scrollbar; a real Surface Pro; the product's own `Follow logic` buttons and offer strip (none
+exist); the shipped band at 200 % text; the Gantt at 200 %; the Link tool beside a strip in the Gantt; the alternative rule at 1646 and 1912; why the
+live Linked band's outlet was 731 px at 1024 while the injected clone's was 347.5 (see below).
+
+## The three existing foot messages with long names (Q3)
+
+The strips as shipped use `NoticeStrip`'s default `truncate` fit and compact density. **Does `truncate` engage?** No: in the 47 of 84 shipped-strip
+readings where the strip is wider than its outlet, `textTruncated` is `false` in all 47, and the strip keeps its natural width (`minWidth: auto`).
+**With `min-w-0` injected on the strip, in all 47 of those readings the strip narrows to the outlet, the ellipsis engages (`textTruncated` true,
+`minWidth: 0px`), nothing overflows and every button is hit.** So the design review's suspicion is correct and sufficient in these cells; that is a
+measurement of an injected style, not a claim about every strip.
+
+Mouse, nothing selected, outlet 347.5 px at 1024 (hit means a pointer at the button's centre hits the button):
+
+| Message (natural width)         | Shipped at 1024                                      | Still overflowing at (px over)                                         | With `min-w-0`                                          | With option A (cost)                        |
+| ------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------- |
+| Linked band, 2 long names (771) | 423 px over, Undo not hit, foot row scrolls sideways | 1120 (327), 1250 (197), 1280 (167), 1440 (7); Undo not hit up to 1280  | 0 over, Undo hit; 252 of 675 px of the sentence visible | 1 to 2 lines, hit: +58 at 1024, +10 at 1646 |
+| Undo result (592)               | 245 px over, both buttons not hit                    | 1120 (149), 1250 (19); both hit again from 1250                        | 0 over, both hit; 167 of 411 px visible                 | 1 line, hit: +50 at 1024, +10 at 1646       |
+| Layout-resolved notice (823)    | 475 px over, both not hit, foot row scrolls sideways | 1120 (379), 1250 (249), 1280 (219), 1440 (59); Dismiss not hit at 1440 | 0 over, both hit; 166 of 641 px visible                 | 1 to 2 lines, hit: +58 at 1024              |
+
+With a flagged bar selected on a mouse the outlet is the same 347.5 px and the overflow is the same, but the buttons are hit (the strip sits on its own
+line under the bar) and the foot row scrolls sideways for the Linked band and the layout notice at 1024. On a finger with a bar selected at 1024 the
+outlet is 731 px (the bar is `data-dock-wide`); the Linked band overflows it by 40 px and the layout-resolved notice by 92 px (Dismiss not hit), with the
+stage already at 56 px. **The live Linked band** (the Link tool actually armed, long names, nothing selected) read: 1024 mouse, outlet 731, strip 771,
+overflow 40, Undo clipped, foot row scrolling sideways; 1120, outlet 443.5, overflow 327, Undo not hit; 1440, overflow 7; 1912, none (the finger run is within
+4 px of each). **So the docblock claim at `notice-strip.tsx:59-62` (that `truncate` "keeps a one-line mode statement from pushing its Undo button off a
+narrow canvas") is contradicted by these readings** for the strip as shipped, and made true by the injected `min-w-0`. The live outlet at 1024 was 731
+px against the clone's 347.5; that difference was not investigated (the live reading was taken with the tool armed), and the overflow and the
+unpressable or clipped Undo are present in both.
+
+**For Q3's row.** Two one-line fixes have evidence behind them: `data-dock-row` on the strip (option A's mechanism: the full sentence, a line of height
+while the message is up, +50 to +66 at 1024 and +10 to +18 at 1646 and wider) or `min-w-0` on the strip (no added height; at 1024 the sentence is cut to
+about a quarter to two fifths of its width). Choosing between them is that row's job. The TECH_DEBT row is **not** filed from this pass because a stop
+rule fired (below), and the brief says to change only the amendment's status line in that case.
+
+## What this means for the amendment
+
+Stop rules 1, 3 (one route) and 4 fired, so per the amendment's own words it **returns to the owner with option B as the fallback**, and nothing is
+folded into the spec, the plan, ADR-0216's draft or `docs/TECH_DEBT.md`. Findings the owner's decision needs, each with its reading:
+
+- **Rule 4 and the wide-screen cost.** With a bar selected on a mouse the offer costs 94 to 98 px in the Diagram at 1912 and in the Gantt at 1646 and 1912,
+  where the strip's own height is 50; the extra 36 to 40 px is the plan facts taking a line of their own. Rule 2 was written for 1120 to 1250 and holds
+  there; the same cost at 1646 to 1912 was asked about by no rule and is wider than the amendment says. The alternative rule (no marker when a selection
+  bar is in the outlet) was worse at 1120 and 1250 and was not read at 1646 or 1912.
+- **200 % text.** At 1024 x 600 the offer is 2 to 4 lines by the browser-setting route and 4 to 11 by the root-font-size route, and with nothing selected
+  its buttons were past the window's edge. The amendment's cell list asked for this reading and rules 1 and 3 count it.
+- **The 100 % picture is good.** If the owner wants the 200 % cell and the 1912 mouse-with-selection cell judged acceptable costs, or the stop rules
+  reworded, the readings above are what that decision is made on. This pass does not make it.
