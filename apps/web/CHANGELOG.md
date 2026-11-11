@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.1.3
+
+### Patch Changes
+
+- [#1315](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1315) [`a91f8ef`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a91f8ef5310161204b2b0ab95e107ce8b669338e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A message in the bottom bar with long activity names, such as "Linked ... to ...", now shortens its text instead of pushing its Undo and Dismiss buttons off the screen.
+
 ## 1.1.2
 
 ### Patch Changes
