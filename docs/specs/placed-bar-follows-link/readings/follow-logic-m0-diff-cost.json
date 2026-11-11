@@ -1,0 +1,10 @@
+{
+  "measuredAt": "2026-11-11T13:09:09.187Z",
+  "n": 2160,
+  "samples": 50,
+  "p50": 0.10000000009313226,
+  "p95": 0.3000000002793968,
+  "max": 0.5,
+  "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.4 Safari/537.36",
+  "activities": 2160
+}

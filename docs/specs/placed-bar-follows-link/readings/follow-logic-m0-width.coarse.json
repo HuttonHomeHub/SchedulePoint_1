@@ -1,0 +1,4972 @@
+{
+  "measuredAt": "2026-11-11T13:04:34.954Z",
+  "pointer": "coarse",
+  "cells": [
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 51,
+      "footScrollsSideways": false,
+      "stageH": 278,
+      "outletW": 344.1,
+      "outletH": 0
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 287,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 121,
+      "footScrollsSideways": false,
+      "stageH": 208,
+      "outletW": 344.1,
+      "outletH": 114,
+      "strip": {
+        "w": 344.1,
+        "h": 114,
+        "left": 285,
+        "right": 629.1,
+        "textClientW": 93,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 5,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": true,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 491.2,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 148,
+      "outletW": 344.1,
+      "outletH": 174,
+      "strip": {
+        "w": 344.1,
+        "h": 174,
+        "left": 285,
+        "right": 629.1,
+        "textClientW": 93,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 8,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": true,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 400.8,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 161,
+      "footScrollsSideways": false,
+      "stageH": 168,
+      "outletW": 344.1,
+      "outletH": 154,
+      "strip": {
+        "w": 344.1,
+        "h": 154,
+        "left": 285,
+        "right": 629.1,
+        "textClientW": 93,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 7,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 262.2,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": false,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 101,
+      "footScrollsSideways": false,
+      "stageH": 228,
+      "outletW": 344.1,
+      "outletH": 94,
+      "strip": {
+        "w": 344.1,
+        "h": 94,
+        "left": 285,
+        "right": 629.1,
+        "textClientW": 120,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 4,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": true,
+      "stageH": 264,
+      "outletW": 344.1,
+      "outletH": 58,
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 598.1,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": false,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": true
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 241,
+      "footScrollsSideways": false,
+      "stageH": 88,
+      "outletW": 344.1,
+      "outletH": 234,
+      "strip": {
+        "w": 390,
+        "h": 234,
+        "left": 285,
+        "right": 675,
+        "textClientW": 69,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 11,
+        "overflowsOutletBy": 46,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 191,
+      "footScrollsSideways": false,
+      "stageH": 138,
+      "outletW": 731,
+      "outletH": 140,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 191,
+      "footScrollsSideways": false,
+      "stageH": 138,
+      "outletW": 731,
+      "outletH": 140,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 121.8,
+        "remedyText": "Follow logic"
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": true,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 104.3,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 480,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": true,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 13.8,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 480,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": true,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 211.2,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": true
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 257,
+      "footScrollsSideways": false,
+      "stageH": 72,
+      "outletW": 731,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 410,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 207,
+      "footScrollsSideways": false,
+      "stageH": 122,
+      "outletW": 731,
+      "outletH": 156,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 207,
+      "footScrollsSideways": false,
+      "stageH": 122,
+      "outletW": 731,
+      "outletH": 156,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 121.8,
+        "remedyText": "Follow logicPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": true,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 104.3,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 480,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": true,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 13.8,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 480,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": true,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 211.2,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": false,
+            "w": 99.8,
+            "h": 44,
+            "clipped": true
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": true
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1024x600",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 273,
+      "footScrollsSideways": false,
+      "stageH": 56,
+      "outletW": 731,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 679,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 731,
+        "h": 58,
+        "left": 285,
+        "right": 1016,
+        "textClientW": 410,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 51,
+      "footScrollsSideways": false,
+      "stageH": 682,
+      "outletW": 760.1,
+      "outletH": 0
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 75.2,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 509,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 182.1,
+        "overlapsFootSibling": true,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": false,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 668,
+      "outletW": 760.1,
+      "outletH": 58,
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 439,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 147,
+      "footScrollsSideways": false,
+      "stageH": 586,
+      "outletW": 760.1,
+      "outletH": 140,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 147,
+      "footScrollsSideways": false,
+      "stageH": 586,
+      "outletW": 760.1,
+      "outletH": 140,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 121.8,
+        "remedyText": "Follow logic"
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 75.2,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 509,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 182.1,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 213,
+      "footScrollsSideways": false,
+      "stageH": 520,
+      "outletW": 760.1,
+      "outletH": 206,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 439,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 163,
+      "footScrollsSideways": false,
+      "stageH": 570,
+      "outletW": 760.1,
+      "outletH": 156,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 163,
+      "footScrollsSideways": false,
+      "stageH": 570,
+      "outletW": 760.1,
+      "outletH": 156,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 121.8,
+        "remedyText": "Follow logicPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 75.2,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 509,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 182.1,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1440x900",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 229,
+      "footScrollsSideways": false,
+      "stageH": 504,
+      "outletW": 760.1,
+      "outletH": 222,
+      "selectionBar": {
+        "lines": 3,
+        "barW": 708.1,
+        "barH": 140,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 760.1,
+        "h": 58,
+        "left": 285,
+        "right": 1045.1,
+        "textClientW": 439,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 2,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 51,
+      "footScrollsSideways": false,
+      "stageH": 862,
+      "outletW": 1232.1,
+      "outletH": 0
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "none",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 65,
+      "footScrollsSideways": false,
+      "stageH": 848,
+      "outletW": 1232.1,
+      "outletH": 58,
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": false
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 99,
+      "footScrollsSideways": false,
+      "stageH": 814,
+      "outletW": 1232.1,
+      "outletH": 92,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 51,
+      "footScrollsSideways": false,
+      "stageH": 862,
+      "outletW": 1232.1,
+      "outletH": 44,
+      "selectionBar": {
+        "lines": 1,
+        "barW": 1158.2,
+        "barH": 44,
+        "remedyW": 121.8,
+        "remedyText": "Follow logic"
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "placed-unflagged-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 165,
+      "footScrollsSideways": false,
+      "stageH": 748,
+      "outletW": 1232.1,
+      "outletH": 158,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual start"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "base",
+      "tag": "base",
+      "coarse": true,
+      "footH": 115,
+      "footScrollsSideways": false,
+      "stageH": 798,
+      "outletW": 1232.1,
+      "outletH": 108,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "label-swap",
+      "swapped": true,
+      "tag": "follow-logic-label",
+      "coarse": true,
+      "footH": 67,
+      "footScrollsSideways": false,
+      "stageH": 846,
+      "outletW": 1232.1,
+      "outletH": 60,
+      "selectionBar": {
+        "lines": 1,
+        "barW": 1158.2,
+        "barH": 44,
+        "remedyW": 121.8,
+        "remedyText": "Follow logicPlaced before its logic allows"
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "control-shipped-linked-band",
+      "fit": "truncate",
+      "tag": "control-shipped-linked-band/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 333.8,
+        "h": 58,
+        "left": 285,
+        "right": 618.8,
+        "textClientW": 238,
+        "textNaturalW": 238,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "truncate",
+      "tag": "edit-one/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one",
+      "fit": "grow",
+      "tag": "edit-one/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 631.1,
+        "h": 58,
+        "left": 285,
+        "right": 916.1,
+        "textClientW": 380,
+        "textNaturalW": 380.1,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "truncate",
+      "tag": "edit-one-long-name/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-one-long-name",
+      "fit": "grow",
+      "tag": "edit-one-long-name/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 835.3,
+        "h": 58,
+        "left": 285,
+        "right": 1120.3,
+        "textClientW": 584,
+        "textNaturalW": 584.3,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "truncate",
+      "tag": "edit-several/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "edit-several",
+      "fit": "grow",
+      "tag": "edit-several/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 744.8,
+        "h": 58,
+        "left": 285,
+        "right": 1029.8,
+        "textClientW": 494,
+        "textNaturalW": 493.9,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "truncate",
+      "tag": "plan/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "plan",
+      "fit": "grow",
+      "tag": "plan/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 606.3,
+        "h": 58,
+        "left": 285,
+        "right": 891.3,
+        "textClientW": 382,
+        "textNaturalW": 382.5,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Dismiss",
+            "selfHit": true,
+            "w": 74,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "truncate",
+      "tag": "link-confirmation-plus-offer/truncate",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    },
+    {
+      "cell": "1912x1080",
+      "selection": "flagged-bar-selected",
+      "variant": "link-confirmation-plus-offer",
+      "fit": "grow",
+      "tag": "link-confirmation-plus-offer/grow",
+      "coarse": true,
+      "footH": 181,
+      "footScrollsSideways": false,
+      "stageH": 732,
+      "outletW": 1232.1,
+      "outletH": 174,
+      "selectionBar": {
+        "lines": 2,
+        "barW": 1180.1,
+        "barH": 92,
+        "remedyW": 154,
+        "remedyText": "Clear visual startPlaced before its logic allows"
+      },
+      "strip": {
+        "w": 942.2,
+        "h": 58,
+        "left": 285,
+        "right": 1227.2,
+        "textClientW": 621,
+        "textNaturalW": 621.4,
+        "textTruncated": false,
+        "textLines": 1,
+        "overflowsOutletBy": 0,
+        "overlapsFootSibling": false,
+        "buttons": [
+          {
+            "text": "Undo",
+            "selfHit": true,
+            "w": 57.9,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Follow logic",
+            "selfHit": true,
+            "w": 99.8,
+            "h": 44,
+            "clipped": false
+          },
+          {
+            "text": "Keep it here",
+            "selfHit": true,
+            "w": 101.1,
+            "h": 44,
+            "clipped": false
+          }
+        ],
+        "onItsOwnLine": true
+      }
+    }
+  ],
+  "templateClasses": "flex gap-3 border px-3 text-sm border-border bg-muted/60 rounded-md items-center justify-between py-1.5",
+  "fixture": [
+    {
+      "name": "Excavate",
+      "placed": "2026-01-19",
+      "reason": null
+    },
+    {
+      "name": "Pour slab",
+      "placed": "2026-01-06",
+      "reason": "EARLIER_THAN_LOGIC"
+    }
+  ]
+}
