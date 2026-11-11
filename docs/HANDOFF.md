@@ -49,28 +49,42 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
   in the register's "Closed numbers" ledger. "Flag-off" wording remains elsewhere: 98 files under `apps/web/src`
   (44 of them tests) match `grep -rli "flag-off\|flag off"`. Many are accurate history; it was outside the row and
   not swept.
-- **The GUI review, 2026-11-10: two pages, no product change.** Nothing in the repository changed except this file.
+- **The GUI review, 2026-11-10 and 11: two pages, no product change.** Nothing in the repository changed except
+  this file.
   - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint
     Runbook"):
-    148 goal-phrased steps in twelve chapters, each with an Easy / OK / Struggled answer, a notes box and a folded
-    hint. Chapters 1 to 6 (66 steps: getting in 8, setting up 14, building a plan 17, running a plan 10, sharing and
+    150 goal-phrased steps in twelve chapters, each with an Easy / OK / Struggled answer, a notes box and a folded
+    hint. Chapters 1 to 6 (68 steps: getting in 8, setting up 14, building a plan 19, running a plan 10, sharing and
     output 9, deeper features 8) are what most people do; chapters 7 to 12 (82 steps: finding your way around 14,
     more ways to edit 14, activity details 12, plan settings and analysis 14, the Gantt view and the libraries 14,
     people, control and unusual situations 14) were added on 2026-11-11 from a code-derived inventory of every
     user-facing feature, at the owner's request that both pages cover everything a user can do. Answers are saved in
     the page's own database, collection `answers`, one document per step with id `<chapter>-<two-digit step>`
     (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` / null), `notes`, `goal`, `step`,
-    `updatedAt`. Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). It held no
-    answers when this was written.
+    `updatedAt`. Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). **The
+    owner has started**: on 2026-11-11 it held 32 answers, chapters 1 and 2 complete and chapter 3 up to step 3.8,
+    with two "Struggled" (2.4, accepting an invitation; 2.9, adding a holiday).
   - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
     Walkthrough"): in two parts, each run at 1024 × 600 and 1440 × 900 with a screenshot and a click / key count per
     step. Part one is the five journeys of `docs/PROJECT_BRIEF.md` §10 (80 steps). Part two follows the runbook step
-    for step, all twelve chapters (346 shots; every one of the 148 runbook steps has at least one at each size,
-    labelled with its step number). Its first section is one ranked list of 90 GUI problems from `ux-reviewer` and
-    `accessibility-reviewer` (2 that block a task, 46 that slow or confuse, 42 polish; no screen reader was run,
+    for step, all twelve chapters (346 shots; every runbook step except 3.18 and 3.19, added later, has at least one
+    at each size, labelled with its step number). Its first section is one ranked list of 108 GUI problems (3 that
+    block a task, 50 that slow or confuse, 55 polish): 90 from `ux-reviewer` and `accessibility-reviewer`, and 18 from the
+    owner's runbook answers alone; 9 of the 90 the owner also found, and each row's "Found by" tag says which (no
+    screen reader was run,
     zoomed views were tested on a few pages only, and chapters 7 to 9 were not given a reviewer pass: their entries
     are what the scripting agent met). The scripts that drove it are published beside the page under `scripts/` (see
     "How the walkthrough was run" below); nothing was committed.
+  - **The owner's biggest finding, and the walkthrough's blind spot (2026-11-11).** At step 3.8 the owner reported
+    that bars did not move when linked or when the activity before them was lengthened, and asked which "planning
+    mode" they were in. There is none: this is ADR-0148. A bar drawn on the diagram is saved with a placement
+    (`visualStart`, `use-plan-workspace-model.ts` where a drop creates an activity) and stays there; logic only raises
+    the conflict count and the "later than its earliest start" text, and "Clear visual start" (one activity at a
+    time) is the only way to make a bar follow its links. Reproduced in a browser the same day with a three-activity
+    plan. The runbook had expected bars to move, because the walkthrough's later plans were seeded through the API
+    with no placement and so did follow their logic. Corrected in the runbook: chapter 3's introduction, steps 3.5,
+    3.8, 3.9, 3.12 and 4.8, plus two new steps, 3.18 (the "Feasible window" overlay) and 3.19 ("Clear visual start").
+    Nothing in the product explains this to a planner; it is the third "blocks a task" row on the list.
   - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
     API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
     and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
@@ -94,11 +108,18 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-**The GUI review is half done: the pages exist, the owner's answers and choices do not.** In order:
+**The GUI review is part done: the pages exist, the owner is at step 3.9 of 150, and has not yet chosen what to
+fix.** In order:
 
-- **Read the owner's runbook answers** (how is in "What shipped"). Every "Struggled" and every note is a finding; set
-  them beside the walkthrough's ranked list and say which problems the owner found, which the walkthrough found, and
-  which both found (the list's "Found by" tag is there for this, and reads "walkthrough" on every row today).
+- **Read the owner's runbook answers again** (how is in "What shipped"); those up to step 3.8 are already on the
+  ranked list. Every later "Struggled" and every note is a finding: add it to the list with "Found by" set to
+  Runbook, or change an existing row to Both, and republish the walkthrough page. The list is `findings.json` in the
+  session scratchpad, which does not survive; the published page's own data (`FINDINGS` in its HTML, read with the
+  Artifact tool) is the copy to start from.
+- **If the owner reports a result the runbook did not predict, believe the owner first** and reproduce it in a
+  browser by drawing, not by seeding: seeded activities have no placement and behave differently (see the finding
+  above). Steps in chapters 4 to 12 were scripted on seeded plans, so more of their "what you should end up with"
+  lines may assume bars move; 4.8 was the only one found and corrected.
 - **Ask the owner which problems to fix.** No fix before they choose. A fix that adds a screen entry point, a
   Playwright config, a shared gate or a schema change needs a spec and plan first (ADR-0105); most of the list is
   smaller than that, and each chosen item wants a `docs/TECH_DEBT.md` row before work starts.
