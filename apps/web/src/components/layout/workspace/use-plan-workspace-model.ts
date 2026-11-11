@@ -389,7 +389,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
-  // selection-aware items (Update progress / Add note / Clear visual start) can read it — mirroring
+  // selection-aware items (Update progress / Add note / Follow logic) can read it — mirroring
   // the `editActivityId`/`deleteActivityId` precedent. Held as an id; the resolved row is derived below
   // from the live query so it clears when the row is deleted. Nothing else reads it until a row is selected.
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
@@ -2239,7 +2239,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     activitiesRef.current = activities.data;
   });
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
-  // — the **Clear visual start** command. A faithful subset of the reposition VISUAL branch above:
+  // — the **Follow logic** command. A faithful subset of the reposition VISUAL branch above:
   // the minimal `visualStart: null` PATCH → (flag-guarded) the `visualStartCommand` inverse restoring the
   // prior placement → announce + `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at
   // its computed date. A stale-version 409 surfaces the (announced) conflict non-destructively, and a
@@ -2289,7 +2289,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
       // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3),
       // matching the reposition VISUAL branch's "dates will update" wording.
-      announce(`Cleared the visual placement for “${name}”; dates will update.`);
+      announce(`“${name}” now follows its logic; dates will update.`);
       notifyRecalc();
     },
     [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce, beginLayoutEdit],

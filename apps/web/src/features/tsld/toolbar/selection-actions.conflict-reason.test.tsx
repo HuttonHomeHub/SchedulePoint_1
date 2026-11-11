@@ -12,7 +12,7 @@ import {
  * as its description; and nothing about the line can take focus or speak on its own.
  *
  * Written red first: against the pre-change bar every case below fails (no caption exists, the
- * remedy has no description, Clear visual start has none).
+ * remedy has no description, Follow logic has none).
  */
 const spies = {
   onOpenLogic: vi.fn(),
@@ -193,7 +193,7 @@ describe('the control that answers the conflict carries the reason as its descri
     expect(remedy).toHaveAccessibleName('Review the constraint…');
   });
 
-  it('describes Clear visual start when it IS the remedy', () => {
+  it('describes Follow logic when it IS the remedy', () => {
     render(
       <SelectionActionsBar
         context={ctx({
@@ -202,11 +202,11 @@ describe('the control that answers the conflict carries the reason as its descri
         })}
       />,
     );
-    const clear = within(bar()).getByRole('button', { name: 'Clear visual start' });
+    const clear = within(bar()).getByRole('button', { name: 'Follow logic' });
     expect(clear).toHaveAccessibleDescription('Placed before its logic allows');
   });
 
-  it('describes Clear visual start for a Viewer, whose button is shaded', () => {
+  it('describes Follow logic for a Viewer, whose button is shaded', () => {
     render(
       <SelectionActionsBar
         context={ctx({
@@ -217,12 +217,12 @@ describe('the control that answers the conflict carries the reason as its descri
         })}
       />,
     );
-    const clear = within(bar()).getByRole('button', { name: 'Clear visual start' });
+    const clear = within(bar()).getByRole('button', { name: 'Follow logic' });
     expect(clear.getAttribute('aria-describedby')).toBeTruthy();
     expect(clear).toHaveAccessibleDescription(/Placed before its logic allows/);
   });
 
-  it('gives Clear visual start NO reason when the route carries it (later-than-bound)', () => {
+  it('gives Follow logic NO reason when the route carries it (later-than-bound)', () => {
     render(
       <SelectionActionsBar
         context={ctx({
@@ -231,7 +231,7 @@ describe('the control that answers the conflict carries the reason as its descri
         })}
       />,
     );
-    const clear = within(bar()).getByRole('button', { name: 'Clear visual start' });
+    const clear = within(bar()).getByRole('button', { name: 'Follow logic' });
     expect(clear).not.toHaveAccessibleDescription(/Placed after/);
   });
 

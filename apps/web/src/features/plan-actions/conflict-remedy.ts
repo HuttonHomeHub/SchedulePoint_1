@@ -58,7 +58,7 @@ export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = 
   visualEarlierThanLogic: {
     kind: 'barAction',
     itemId: 'clear-visual-placement',
-    label: 'Clear visual start',
+    label: 'Follow logic',
   },
   // **The side the boolean never covered, and it does NOT get the same answer** (one-planning-surface
   // M-D). It is tempting to give both placement conflicts the `barAction` above — the placement is

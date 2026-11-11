@@ -5,6 +5,9 @@
   bar's controls) on 2026-10-10 after M0 showed the inline read-out costs a line at 1912 × 1080.
 - **Amended by:** ADR-0187 (2026-10-11) — the Consequences' first Tab stop is no longer Zoom to selection or
   Float paths: the selection bar leads with the activity's own actions.
+- **Amended by:** the placed-bar-follows-link spec ([`docs/specs/placed-bar-follows-link/`](../specs/placed-bar-follows-link/feature-spec.md),
+  2026-11-11) — D2: the remedy's label is now **Follow logic**, no longer "Clear visual start". The action, its
+  item id (`clear-visual-placement`), its gate and its write are unchanged; this is a name only.
 - **Spec:** [`docs/specs/conflict-reason-on-object/feature-spec.md`](../specs/conflict-reason-on-object/feature-spec.md)
   · **Plan:** [`implementation-plan.md`](../specs/conflict-reason-on-object/implementation-plan.md)
   · **Readings:** [`m0-measurement.md`](../specs/conflict-reason-on-object/m0-measurement.md) (the inline

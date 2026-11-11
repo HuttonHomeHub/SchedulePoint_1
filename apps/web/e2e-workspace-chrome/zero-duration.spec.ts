@@ -266,7 +266,7 @@ test.describe('Make milestone… (M4)', () => {
         durationDays: 1,
         laneIndex: 2,
       });
-      // FC-6 is about an UNPLACED zero-duration task: a placed one also shows `Clear visual start`,
+      // FC-6 is about an UNPLACED zero-duration task: a placed one also shows `Follow logic`,
       // which already wraps the foot row at 1646 with no new item (m0-measurement.md, M0-T5, accepted
       // at M-F-T6). This one sits at the data date in Succ's lane, clear of Succ, and ties to nothing.
       const loose = await createActivity(page, orgSlug, {

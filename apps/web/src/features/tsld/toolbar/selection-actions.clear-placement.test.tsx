@@ -7,7 +7,7 @@ import {
 } from '@/features/plan-actions/selection-actions';
 
 /**
- * **Clear visual start, on the surface it moved to** (ADR-0094 M4-T1).
+ * **Follow logic, on the surface it moved to** (ADR-0094 M4-T1).
  *
  * The gate's four conditions and their precedence are `conflict-remedy.gate.test.ts` — a pure
  * function, one call site away. What is left for a rendered test is the half that only exists here:
@@ -68,12 +68,12 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
 
 const clearButton = (): HTMLElement =>
   within(screen.getByRole('toolbar', { name: 'Actions for Excavate' })).getByRole('button', {
-    name: 'Clear visual start',
+    name: 'Follow logic',
   });
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('Clear visual start on the selection bar', () => {
+describe('Follow logic on the selection bar', () => {
   it('clears the placement when the gate is open', () => {
     render(<SelectionActionsBar context={ctx()} />);
     const btn = clearButton();
@@ -113,9 +113,9 @@ describe('Clear visual start on the selection bar', () => {
     expect(btn).toHaveAccessibleDescription(
       'Turn off the Late-start overlay to clear the placement',
     );
-    // The reason is a description, not part of the name: "Clear visual start, Only available in
+    // The reason is a description, not part of the name: "Follow logic, Only available in
     // Visual mode, button" is how a folded reason reads, and it makes the action unfindable by name.
-    expect(btn).toHaveAccessibleName('Clear visual start');
+    expect(btn).toHaveAccessibleName('Follow logic');
     fireEvent.click(btn);
     expect(spies.onClearVisualPlacement).not.toHaveBeenCalled();
   });
@@ -135,7 +135,7 @@ describe('Clear visual start on the selection bar', () => {
    * **The omission case MOVED from the plan to the activity** (one-planning-surface M-F-T6), and
    * both halves are asserted because either alone is satisfied by the wrong thing.
    *
-   * It used to assert that `Clear visual start` is omitted outside Visual mode — ADR-0082's *omit*
+   * It used to assert that `Follow logic` is omitted outside Visual mode — ADR-0082's *omit*
    * clause, because a plan scheduled Early had no hand-placed start anywhere in it. The collapse
    * removes that condition and the predicate follows the subject down a level: an activity nobody
    * has PLACED has no placement to clear.
@@ -150,12 +150,12 @@ describe('Clear visual start on the selection bar', () => {
    */
   it('is offered when the selected activity carries a placement', () => {
     render(<SelectionActionsBar context={ctx()} />);
-    expect(screen.getByRole('button', { name: /Clear visual start/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Follow logic/i })).toBeInTheDocument();
   });
 
   it('is omitted when the selected activity has no placement to clear', () => {
     render(<SelectionActionsBar context={ctx({ hasPlacement: false })} />);
-    expect(screen.queryByRole('button', { name: /Clear visual start/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Follow logic/i })).toBeNull();
     // The pinned positive — without it this passes against a bar that rendered nothing at all.
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   });

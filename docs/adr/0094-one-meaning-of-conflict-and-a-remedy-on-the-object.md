@@ -3,6 +3,9 @@
 - **Status:** Accepted (M0–M5 landed 2026-08-14)
 - **Amended by:** ADR-0186 (2026-10-11) — D5 ("one of them renders nothing") stays true of the remedy and stops
   being true of the conflict: its reason is stated on the object.
+- **Amended by:** the placed-bar-follows-link spec ([`docs/specs/placed-bar-follows-link/`](../specs/placed-bar-follows-link/feature-spec.md),
+  2026-11-11) — D5 and D6: the remedy's label is now **Follow logic**, no longer "Clear visual start". The action, its
+  item id (`clear-visual-placement`), its gate and its write are unchanged; this is a name only.
 - **Date:** 2026-08-14
 - **Supersedes:** nothing
 - **Amends:** ADR-0031 (the toolbar item taxonomy — a read-out's rank), ADR-0033 (`visualConflict`

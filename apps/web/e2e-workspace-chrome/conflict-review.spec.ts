@@ -34,7 +34,7 @@ import {
  *    sighted planner through the read-out chip, and to an AT user through the button's own
  *    description, because the chip is deliberately `aria-hidden`.
  * 3. **The remedy is on the object.** Landing on a flagged activity offers the fix on the selection
- *    bar — and for a hand-placed conflict that fix is the bar's own `Clear visual start`, not a
+ *    bar — and for a hand-placed conflict that fix is the bar's own `Follow logic`, not a
  *    second conflict-flavoured copy of it (ADR-0093's rule applied inside one surface).
  *
  * **Why this suite.** It already owns the dock and the placement rules this journey stands on.
@@ -261,7 +261,7 @@ test.describe('Conflict review', () => {
     const clearOnBar = dock(page).locator('[data-toolbar-item="clear-visual-placement"]');
     await expect(clearOnBar, 'the remedy for a hand-placed conflict is this item').toBeVisible();
     await expect(
-      dock(page).getByRole('button', { name: /Clear visual start/ }),
+      dock(page).getByRole('button', { name: /Follow logic/ }),
       'and there is exactly one of it — the `visualConflict` remedy points AT this item rather ' +
         'than rendering a conflict-flavoured twin beside it (ADR-0094 M4-T2)',
     ).toHaveCount(1);
@@ -279,7 +279,7 @@ test.describe('Conflict review', () => {
       clearOnBar,
       'the control that answers the conflict carries the same sentence as its description',
     ).toHaveAccessibleDescription('Placed before its logic allows');
-    await expect(clearOnBar).toHaveAccessibleName('Clear visual start');
+    await expect(clearOnBar).toHaveAccessibleName('Follow logic');
     await expect(
       page.locator('[data-conflict-reason]'),
       'the line is not a toolbar item and is no stop on the keyboard',
@@ -293,7 +293,7 @@ test.describe('Conflict review', () => {
       })),
     ).toEqual({ tabindex: null, role: null, live: null, inToolbar: false });
     // The bar is ONE Tab stop (roving). Tab from the diagram's list enters it at its first item,
-    // which for a barAction conflict is Logic (the remedy is Clear visual start, in its place after
+    // which for a barAction conflict is Logic (the remedy is Follow logic, in its place after
     // Delete), and the arrow keys walk it. The reason line is never a stop on that walk, and Clear
     // visual start (which carries the reason) is reachable by it.
     await walkBar(page, 'clear-visual-placement', 'open-logic');

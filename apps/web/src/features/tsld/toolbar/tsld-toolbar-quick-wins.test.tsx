@@ -142,7 +142,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
   });
 
-  // --- F5 · Clear visual start -----------------------------------------------------------
+  // --- F5 · Follow logic -----------------------------------------------------------
   //
   // **Its six cases moved with it** (ADR-0094 M4-T1). The command surface no longer registers this
   // item — its `isEnabled` consulted the selection, which is ADR-0093's discriminator — so the four

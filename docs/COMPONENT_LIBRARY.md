@@ -563,7 +563,7 @@ toolbar, and an inline one wrapped the bar at 1912 x 1080. Its look is `features
 (`CONFLICT_READOUT_TEXT`, `CONFLICT_READOUT_ICON`), shared with the deck's count chip so the two cannot drift.
 Contract: no `tabindex`, `role`, `aria-live` or `truncate`; not `aria-hidden` (where no described control
 exists it is the only channel); one derivation (`matchingConflictFlags`) with the announcer and the remedy.
-`ConflictRemedyControl` and Clear visual start (when it is the remedy) carry the leading reason as
+`ConflictRemedyControl` and Follow logic (when it is the remedy; named Clear visual start until 2026-11-11) carry the leading reason as
 `aria-describedby`/`srDescription`. The Gantt row menu lists only items with an activation path.
 
 ## Primitive: `Tabs` (`components/ui/tabs.tsx`)
