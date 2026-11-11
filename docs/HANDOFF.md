@@ -68,9 +68,9 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
     Walkthrough"): in two parts, each run at 1024 × 600 and 1440 × 900 with a screenshot and a click / key count per
     step. Part one is the five journeys of `docs/PROJECT_BRIEF.md` §10 (80 steps). Part two follows the runbook step
     for step, all twelve chapters (346 shots; every runbook step except 3.18 and 3.19, added later, has at least one
-    at each size, labelled with its step number). Its first section is one ranked list of 108 GUI problems (3 that
+    at each size, labelled with its step number). Its first section is one ranked list of 109 GUI problems (4 that
     block a task, 50 that slow or confuse, 55 polish): 90 from `ux-reviewer` and `accessibility-reviewer`, and 18 from the
-    owner's runbook answers alone; 9 of the 90 the owner also found, and each row's "Found by" tag says which (no
+    owner's runbook answers alone; 10 the owner and the walkthrough both found, and each row's "Found by" tag says which (no
     screen reader was run,
     zoomed views were tested on a few pages only, and chapters 7 to 9 were not given a reviewer pass: their entries
     are what the scripting agent met). The scripts that drove it are published beside the page under `scripts/` (see
@@ -85,6 +85,18 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
     with no placement and so did follow their logic. Corrected in the runbook: chapter 3's introduction, steps 3.5,
     3.8, 3.9, 3.12 and 4.8, plus two new steps, 3.18 (the "Feasible window" overlay) and 3.19 ("Clear visual start").
     Nothing in the product explains this to a planner; it is the third "blocks a task" row on the list.
+  - **The Link tool could not pick a milestone; fixed in PR #1309 (2026-11-11), web patch.** The owner hit it at
+    step 3.11. A click in the two-click Link or level-of-effort tool read only a "body" hit, and a milestone's 14 px
+    shape, any bar under 16 px and the outer 8 px of every bar classify as end handles (`hit-test.ts`), so the pick
+    was dropped. `gesture-machine.ts` now treats an unarmed end handle as the activity; closed register number 578.
+    The walkthrough had met the same fault and its caption wrongly said the link was made; the caption is corrected
+    and the fault is on the ranked list (109 problems, 4 that block a task).
+  - **Approved and not yet built: "Follow logic" (`docs/specs/placed-bar-follows-link/`).** The owner asked for a
+    message when linking a hand-placed bar; the spec widens it to any edit that leaves a placed bar newly too early,
+    offers "Follow logic" / "Keep it here" in the dock, adds a whole-plan offer for plans already in that state, and
+    renames "Clear visual start". Approved 2026-11-11 with all five defaults. Four milestones, one PR each: M0
+    measure and verify (nothing user-facing), M1 the rename, M2 the message (files ADR-0216), M3 the whole-plan
+    message. No schema or API change. Ask the owner before merging each non-docs PR.
   - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
     API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
     and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
@@ -108,7 +120,7 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-**The GUI review is part done: the pages exist, the owner is at step 3.9 of 150, and has not yet chosen what to
+**The GUI review is part done: the pages exist, the owner is at step 3.11 of 150, and has not yet chosen what to
 fix.** In order:
 
 - **Read the owner's runbook answers again** (how is in "What shipped"); those up to step 3.8 are already on the
