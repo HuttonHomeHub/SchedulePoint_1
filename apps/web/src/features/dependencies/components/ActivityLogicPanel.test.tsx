@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityLogicPanel } from './ActivityLogicPanel';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
@@ -202,7 +203,10 @@ describe('ActivityLogicPanel', () => {
     fireEvent.change(screen.getByLabelText('Predecessor activity'), { target: { value: 'a1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add link' }));
 
-    await waitFor(() => expect(screen.getByText(/would create a cycle/)).toBeInTheDocument());
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/would create a cycle/);
+    // Beside the Save that was pressed, not above a form that may be scrolled past it (ADR-0217).
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Add link' }));
   });
 
   it('shows a way-out empty state when the plan has no other activities', () => {

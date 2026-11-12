@@ -181,11 +181,6 @@ export function AddLinkSection({
               `disabled`, which is #64's defect and would take the values out of a reader's reach. */}
           <FieldGateProvider gate={gate}>
             <FormErrorSummary errors={errors} />
-            {create.isError ? (
-              <p role="alert" className="text-destructive-text text-sm">
-                {create.error.message}
-              </p>
-            ) : null}
             <FieldGrid>
               {/* Activity names are long, so the picker takes the full width; the two fields that
                 describe the SHAPE of the link pair up underneath it. */}
@@ -258,6 +253,7 @@ export function AddLinkSection({
               pending={create.isPending}
               label="Add link"
               pendingLabel="Adding…"
+              error={create.isError ? { message: create.error.message } : null}
             />
           </FieldGateProvider>
         </form>

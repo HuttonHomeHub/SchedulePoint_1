@@ -7,6 +7,7 @@ import {
   findBar,
   newPlan,
   onboard,
+  placeViaApi,
   recalculate,
   seedActivities,
 } from './support';
@@ -124,5 +125,99 @@ test.describe('Progress refusal', () => {
     await expect(refusal).toContainText('the Planned start box in Edit plan details');
     expect(DATA_DATE, 'the fixture’s data date is the day the sentence quotes').toBe('2026-01-05');
     await expect(finish).toHaveAccessibleDescription(/data date/);
+  });
+  test('a refused definition save shows its refusal beside Save, and Save describes it', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 1);
+    await createHierarchy(page);
+    await newPlan(page, 'Save refusal');
+    await ensurePen(page);
+
+    const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
+    const [dig] = seeded;
+    if (!dig) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    await findBar(page, dig.id);
+    await page.setViewportSize({ width: 1024, height: 600 });
+
+    const dock = page.getByRole('toolbar', { name: /^Actions for / });
+    await dock.getByRole('button', { name: 'Edit', exact: true }).click();
+    const editor = page.getByRole('dialog');
+    await expect(editor.getByRole('tab', { name: /General/, selected: true })).toBeVisible();
+
+    // A real version conflict: somebody else saves this activity after the editor opened, so the
+    // version the editor holds is stale when Save is pressed. The editor reads its version from the
+    // list it fetched; nothing here invalidates it.
+    await placeViaApi(page, orgSlug, 'Dig footings', '2026-01-12');
+
+    await editor.getByLabel('Name').fill('Dig footings, north strip');
+    const save = editor.getByRole('button', { name: 'Save general' });
+    await save.focus();
+    await save.press('Enter');
+
+    // The refusal says what went wrong and offers the way out; it is found by its way out so the
+    // wording of the server's sentence is not pinned here.
+    const refresh = editor.getByRole('button', { name: 'Refresh this section' });
+    await expect(refresh, 'the refusal offers Refresh this section').toBeVisible();
+    const refusal = editor.getByRole('alert').filter({ hasText: /\S/ });
+    await expect(refusal).toHaveCount(1);
+    const message = ((await refusal.textContent()) ?? '').trim();
+    expect(message, 'the refusal says something').not.toBe('');
+
+    // 1. In the viewport, and not clipped by the editor's scroll container.
+    await expect(refusal, 'the refusal is inside the viewport').toBeInViewport({ ratio: 1 });
+    const clipped = await refusal.evaluate((el) => {
+      let scroller: HTMLElement | null = el.parentElement;
+      while (scroller) {
+        const overflow = getComputedStyle(scroller).overflowY;
+        if (overflow === 'auto' || overflow === 'scroll') break;
+        scroller = scroller.parentElement;
+      }
+      if (!scroller) return 'no scroll container found';
+      const inner = el.getBoundingClientRect();
+      const outer = scroller.getBoundingClientRect();
+      return inner.top >= outer.top && inner.bottom <= outer.bottom
+        ? null
+        : 'outside its container';
+    });
+    expect(clipped, 'the refusal lies inside the editor’s scroll container').toBeNull();
+
+    // 2. It sits beside the Save that was pressed: the same bar, so both are in view together.
+    await expect(save, 'Save is in view with it').toBeInViewport({ ratio: 1 });
+    const sameBar = await refusal.evaluate((el, saveLabel) => {
+      const button = Array.from(el.closest('form')?.querySelectorAll('button') ?? []).find(
+        (b) => b.textContent?.trim() === saveLabel,
+      );
+      // The bar is the button's row's container: row and refusal are its two children.
+      return button !== undefined && button.parentElement?.parentElement?.contains(el) === true;
+    }, 'Save general');
+    expect(sameBar, 'the refusal is inside the Save button’s own bar').toBe(true);
+
+    // 3. Save is described by it, for a screen reader.
+    await expect(save).toHaveAccessibleDescription(message);
+
+    // 4. Focus did not move: it is still on Save.
+    await expect(save, 'focus stays on the Save that was pressed').toBeFocused();
+
+    // 5. Nothing pushed the page sideways, and nothing in the bar is clipped.
+    const sideways = await page.evaluate(() => {
+      const root = document.scrollingElement;
+      return root ? root.scrollWidth - root.clientWidth : 0;
+    });
+    expect(sideways, 'no sideways scroll at 1024 wide').toBeLessThanOrEqual(0);
+    for (const control of [save, refresh]) {
+      await expect(control).toBeInViewport({ ratio: 1 });
+    }
+
+    // 6. The draft is kept, and the way out recovers the section.
+    await expect(editor.getByLabel('Name')).toHaveValue('Dig footings, north strip');
+    await refresh.click();
+    await expect(save, 'Refresh hands focus to the Save that stays').toBeFocused();
+    await expect(editor.getByRole('alert').filter({ hasText: /\S/ })).toHaveCount(0);
+    await expect(editor.getByLabel('Name')).toHaveValue('Dig footings');
   });
 });

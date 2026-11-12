@@ -133,11 +133,6 @@ export function ReportedProgressPanel({
       <FieldGateProvider gate={gate}>
         <PanelHeading title="Reported progress" effect="Moves the activity’s dates." />
         <FormProblemCount errors={form.formState.errors} />
-        {error ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {error}
-          </p>
-        ) : null}
         {/* Two decisions, two groups: how far along it is, and when it actually happened. Flat, the
           six controls read as one undifferentiated list of numbers and dates. */}
         <FieldGrid>
@@ -206,6 +201,7 @@ export function ReportedProgressPanel({
           pending={pending}
           saved={saved}
           label="Save progress"
+          error={error ? { message: error } : null}
         />
       </FieldGateProvider>
     </form>
@@ -268,11 +264,6 @@ export function ValueMeasurePanel({
       <FieldGateProvider gate={gate}>
         <PanelHeading title={MEASURE_SECTION_TITLE} effect={MEASURE_SECTION_DESCRIPTION} />
         <FormProblemCount errors={form.formState.errors} />
-        {error ? (
-          <p role="alert" className="text-destructive-text text-sm">
-            {error}
-          </p>
-        ) : null}
         {/* The chooser and the value it governs, side by side — the pairing that makes "steps are
           overriding this" legible at a glance instead of two rows apart. */}
         <ActivityMeasureFields
@@ -311,6 +302,7 @@ export function ValueMeasurePanel({
           pending={pending}
           saved={saved}
           label="Save measure"
+          error={error ? { message: error } : null}
           {...(dirtyMessage === undefined ? {} : { dirtyMessage })}
         />
       </FieldGateProvider>
@@ -538,11 +530,6 @@ export function WeightedStepsPanel({
         >
           <FieldGateProvider gate={gate}>
             <FormProblemCount errors={errors} />
-            {error ? (
-              <p role="alert" className="text-destructive-text text-sm">
-                {error}
-              </p>
-            ) : null}
 
             {fields.length === 0 ? (
               <NoticeStrip
@@ -661,6 +648,7 @@ export function WeightedStepsPanel({
               pending={pending}
               saved={saved}
               label="Save steps"
+              error={error ? { message: error } : null}
             />
           </FieldGateProvider>
         </form>

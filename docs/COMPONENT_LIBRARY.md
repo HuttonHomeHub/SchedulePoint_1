@@ -131,6 +131,35 @@ ADR-0083 require, on an interactive role, and the unlayered rule in `globals.css
 theme. Do not restate `forced-colors:[color:GrayText]` on it. A primitive that paints its own shaded state under
 `forced-color-adjust: none` (the toolbar's pressed member) must be excluded by state in that rule and say so. The roles it covers, and the containers it leaves out, are listed in `docs/DESIGN_SYSTEM.md` §Forced colours; the system-colour class vocabulary for a mark that was a fill is `components/ui/forced-colors.ts`.
 
+## Primitive: `ScopeSaveBar` — one write scope's Save, its reason, and its refusal (`components/ui/scope-save-bar.tsx`)
+
+The bar at the foot of every write scope in the activity editor and its sibling forms (ADR-0060 §6): a
+helper sentence on the left, Save on the right, shaded with `aria-disabled` and a reason, never natively
+disabled.
+
+**`error?: { message: string; action?: ReactNode } | null` is where a refused save is shown (ADR-0217 D2).**
+Pass the refusal here and delete any `<p role="alert">` of your own at the top of the form.
+
+- **It is in the bar, above Save**, so a reader who pressed Save sees it without scrolling, at the 1024 × 600
+  floor included. The bar is a column only while it shows, so the sentence takes the full width instead of
+  squeezing the button.
+- **Save is described by it** (`aria-describedby`, after any gate reason), so a screen-reader user on Save
+  hears the refusal as the button's description. The Alert is `role="alert"`, so it is also announced once as
+  it appears: do not announce it again from the caller.
+- **It never takes focus.** The reader is on Save. The bar scrolls itself into view (`block: 'nearest'`, once
+  per new refusal; guarded for jsdom) and does nothing else.
+- **`action` is outside the alert and outside the description** (a "Refresh this section" button): it is a
+  control, not part of what Save is described by. A caller whose action removes the refusal also removes the
+  button that was pressed, so it must hand focus to the Save that stays (`ActivityEditorSession` does).
+- **While it shows it replaces the dirty and saved sentences**, never a gate reason.
+- **When the refusal is about one field, put it on the field instead** (ADR-0217 D1; the Reported progress
+  panel does). Only a refusal that is not about a field goes in the bar.
+- A refusal beside its own row (a per-row Save) and a failure to load are not save refusals; they stay where
+  they are.
+
+`alsoDescribedBy` is retired: it was the earlier way to tie a top-of-form alert to Save, and the slot replaces it.
+Tests assert placement with `expectRefusalBesideSave` (`scope-save-bar-assertions.ts`).
+
 ## Primitive: `Menu` / `MenuItem` (`components/ui/menu.tsx`)
 
 The single **action menu** primitive: a hand-rolled WAI-ARIA APG "Menu Button" on
@@ -680,7 +709,8 @@ URL-level not-found markup; it renders this.
 ## Primitive: `ServerError` (`components/ui/server-error.tsx`)
 
 The failure that came back from the server, given the same weight as the client-side validation
-beside it (ADR-0077 M2-T1). It renders `role="alert"`, takes focus **once** when it appears, and
+beside it (ADR-0077 M2-T1). It renders `role="alert"`, announces without taking focus (the unmounting-nothing rule in its
+own docblock), and
 uses the bordered, tinted treatment `FormErrorSummary` already had — the defect it replaces is a
 hierarchy inversion, where "enter a valid email" got a bordered block and "too many attempts" got a
 bare red sentence, in six hand-assembled copies.

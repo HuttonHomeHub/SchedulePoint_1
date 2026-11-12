@@ -9364,4 +9364,4 @@ A progress save with an actual date after the plan's data date is refused (ADR-0
 
 The message exists and is announced to assistive technology, but a sighted reader at the design floor sees no change after pressing Save. It changes `ScopeSaveBar`'s public contract, so it is a spec (ADR-0105), not a register row.
 
-**Next:** M3 (the save bar carries the refusal where Save is) and M2 (the field is marked and focused). **Closed by** M2 and M3 of `docs/specs/progress-before-data-date/`.
+**Next:** M2 (the field is marked and focused) and M3 (the save bar carries the refusal where Save is, ADR-0217 D2) are built; this row closes when they are released and the reviewers' findings are dealt with. **Closed by** M2 and M3 of `docs/specs/progress-before-data-date/`.

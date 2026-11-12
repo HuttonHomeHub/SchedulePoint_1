@@ -1,5 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 
 import { membershipDiff } from '../model/membership-diff';
 import type { OnReparented } from '../model/reparented';
@@ -66,8 +66,6 @@ export function ActivityMembersPanel({
   const updateParents = useReparentActivities(orgSlug, planId);
   const searchId = useId();
   const countId = useId();
-  const errorId = useId();
-  const errorRef = useRef<HTMLParagraphElement>(null);
 
   const [term, setTerm] = useState('');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -155,12 +153,6 @@ export function ActivityMembersPanel({
     const inside = roots.reduce((total, id) => total + (sizes.get(id) ?? 0), 0);
     return inside - (moving.size - roots.length);
   }, [changes, byId, sizes]);
-
-  // The alert renders below a list that can be long, while focus stays on Save: bring it into view.
-  // `scrollIntoView` is absent in jsdom, hence the guard.
-  useEffect(() => {
-    if (saveError !== null) errorRef.current?.scrollIntoView?.({ block: 'nearest' });
-  }, [saveError]);
 
   const toggle = (id: string): void => {
     setSaved(false);
@@ -276,19 +268,13 @@ export function ActivityMembersPanel({
           </ul>
         )}
 
-        {saveError ? (
-          <p ref={errorRef} id={errorId} role="alert" className="text-destructive-text text-sm">
-            {saveError}
-          </p>
-        ) : null}
-
         <ScopeSaveBar
           gate={gate}
           dirty={dirty}
           pending={updateParents.isPending}
           saved={saved}
           label="Save membership"
-          alsoDescribedBy={saveError ? errorId : undefined}
+          error={saveError ? { message: saveError } : null}
           dirtyMessage={dirtyMessage(changes.length, carried)}
           savedMessage="Membership saved. Recalculate to update the summary’s dates."
         />

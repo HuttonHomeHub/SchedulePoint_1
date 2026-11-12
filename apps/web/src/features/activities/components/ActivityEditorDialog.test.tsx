@@ -5,7 +5,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
 
-import { expectInert } from '@/components/ui/scope-save-bar-assertions';
+import { expectInert, expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 const PATCHES: { url: string; body: Record<string, unknown> }[] = [];
@@ -522,7 +522,8 @@ describe('ActivityEditorDialog — review findings', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('keeps a failed save with the tab that owns it, and offers a way out', async () => {
+  /** A 409 for every write: the activity "changed elsewhere", so the stale version is refused. */
+  const refuseEveryWrite = (): void => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
@@ -533,18 +534,55 @@ describe('ActivityEditorDialog — review findings', () => {
         } as unknown as Response),
       ),
     );
+  };
+
+  it('keeps a failed save with the tab that owns it, and offers a way out', async () => {
+    refuseEveryWrite();
     mount();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Conflicting' } });
     fireEvent.click(screen.getByRole('button', { name: /save general/i }));
 
     // Scoped to General — not one dialog-level banner that any other scope's save would wipe.
-    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save general' }));
     const refresh = screen.getByRole('button', { name: 'Refresh this section' });
     fireEvent.click(refresh);
     // Re-seeded from the live row: the error is gone and the scope is clean again, so a retry
     // carries the CURRENT version instead of the one that just conflicted.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('Pour slab');
+    // The button that was pressed is gone with the refusal; focus goes to the Save that stays rather
+    // than falling to <body> (SC 2.4.3).
+    expect(screen.getByRole('button', { name: 'Save general' })).toHaveFocus();
+  });
+
+  it('Scheduling: shows its refusal beside its own Save, and not on another tab', async () => {
+    refuseEveryWrite();
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Scheduling' }));
+    fireEvent.click(screen.getByLabelText(/schedule as late as possible/i));
+    fireEvent.click(screen.getByRole('button', { name: /save scheduling/i }));
+
+    const alert = await screen.findByRole('alert');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save scheduling' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh this section' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save scheduling' })).toHaveFocus();
+  });
+
+  it('Cost: shows its refusal beside its own Save', async () => {
+    refuseEveryWrite();
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: 'Cost' }));
+    fireEvent.change(screen.getByLabelText('Budgeted expense'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: /save cost/i }));
+
+    const alert = await screen.findByRole('alert');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save cost' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh this section' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('keeps the visible label inside the accessible name on the step move buttons', async () => {

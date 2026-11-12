@@ -104,6 +104,21 @@ Enforced by `components/ui/page/empty-state.structural.test.ts`, which fails on 
 hand-rolled dashed box outside a one-entry allow-list, and fails again when an
 entry stops being needed.
 
+### Where a refusal goes (ADR-0217)
+
+A save the server refused is shown **where the reader pressed Save**, never at the top of a form that may be
+scrolled past it. At 1024 × 600 a scope is taller than the pane, so a refusal above the fields is off the screen
+and Save seems to do nothing.
+
+| The refusal is…                                | It goes…                                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| About one field the reader must change         | **On that field**, marked invalid and described by the sentence; focus moves there only from Save (or from nowhere)       |
+| About the save as a whole (a version conflict) | **In the save bar** (`ScopeSaveBar`'s `error`), above Save, describing it, scrolled into view, with the way out beside it |
+| About the data the form could not load         | Where the data would have been (the error shape with a retry); there is no Save to describe                               |
+
+A refusal **never takes focus into an alert**: the reader's cursor is on Save, and it stays there. It stays until the
+reader acts (edits the field, retries or refreshes), and is not also announced by a second live region.
+
 ## Interaction standards
 
 - **Feedback within 100ms** for any interaction (press state, focus, spinner).

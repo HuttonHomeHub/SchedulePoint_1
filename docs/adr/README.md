@@ -240,3 +240,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0214](0214-a-frozen-float-carries-its-minutes.md)                                                   | A frozen float carries its minutes                                                         | Accepted           |
 | [0215](0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)                    | A fresh start is a new database, and the image refuses the old one                         | Proposed           |
 | [0216](0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md) | A bar you placed stays put, and an edit that leaves it behind offers to let it follow      | Accepted           |
+| [0217](0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md)               | A refusal is shown where it was asked for, and on the field it is about                    | Accepted           |

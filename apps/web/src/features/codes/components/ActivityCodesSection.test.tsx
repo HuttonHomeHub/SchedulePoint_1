@@ -12,6 +12,7 @@ import {
   useUnsavedWorkReports,
 } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { AnnouncerProvider } from '@/components/ui/announcer';
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import { ActivityEditorDialog } from '@/features/activities/components/ActivityEditorDialog';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 import type { Command } from '@/features/undo-redo';
@@ -276,7 +277,9 @@ describe('the Codes section in the editor', () => {
       details: { reason: 'STALE_VERSION' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save codes' }));
-    expect(await screen.findByText(/Could not save codes:/)).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Could not save codes:/);
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save codes' }));
     expect(record).not.toHaveBeenCalled();
     expect(screen.getByTestId('reg')).toHaveTextContent('Codes');
   });

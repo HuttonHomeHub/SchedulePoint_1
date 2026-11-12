@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityMembersPanel } from './ActivityMembersPanel';
 
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import { ApiFetchError } from '@/lib/api/client';
 
 /**
@@ -412,6 +413,13 @@ describe('ActivityMembersPanel', () => {
       rerender(panelOf([...PLAN]));
       expect(screen.getByRole('checkbox', { name: /^Superstructure/ })).toBeChecked();
       expect(screen.getByRole('checkbox', { name: /^Excavate/ })).toBeChecked();
+      // While the refusal shows it stands in for the bar's "N will move" sentence (ADR-0217 D2); the
+      // ticks above are what prove the draft survived, and the count returns once the refusal clears.
+      expect(
+        screen.queryByText(/2 will move, with 1 activity inside them/),
+      ).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Excavate/ }));
       expect(screen.getByText(/2 will move, with 1 activity inside them/)).toBeInTheDocument();
     });
 
@@ -422,7 +430,7 @@ describe('ActivityMembersPanel', () => {
       await save();
       const alert = screen.getByRole('alert');
       const button = screen.getByRole('button', { name: 'Save membership' });
-      expect(button.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
+      expectRefusalBesideSave(alert, button);
       // ADR-0184 D1: a row's subject wraps; it never clips.
       const name = screen.getByText('Superstructure');
       expect(name).not.toHaveClass('truncate');

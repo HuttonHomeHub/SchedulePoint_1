@@ -64,7 +64,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FormProblemCount } from '@/components/ui/form';
 import { ContextStrip, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
-import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
+import { ScopeSaveBar, type ScopeSaveError } from '@/components/ui/scope-save-bar';
 import { Tabs, type TabDescriptor, type TabMarker } from '@/components/ui/tabs';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { ActivityLogicPanel } from '@/features/dependencies';
@@ -534,19 +534,32 @@ export function ActivityEditorSession({
     if (scope === 'cost') cost.form.reset(seedCost(activity));
   };
 
-  /** One scope's server error, with the way out. Rendered inside the tab that owns it. */
-  const scopeError = (scope: TabKey): React.ReactElement | null => {
+  /**
+   * One scope's refusal for its save bar, with the way out (ADR-0217 D2). The bar shows it beside Save
+   * and describes Save by it; Refresh removes the sentence, so focus is handed to the Save that stays —
+   * it would otherwise fall to `<body>` from the very button that was just pressed (SC 2.4.3).
+   */
+  const scopeFailure = (scope: TabKey): ScopeSaveError | null => {
     if (saveError?.scope !== scope) return null;
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="text-destructive-text text-sm">
-          {saveError.message}
-        </p>
-        <Button type="button" variant="outline" size="sm" onClick={() => refreshScope(scope)}>
+    return {
+      message: saveError.message,
+      action: (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(event) => {
+            const save = event.currentTarget
+              .closest('form')
+              ?.querySelector<HTMLButtonElement>('button[type="submit"]');
+            refreshScope(scope);
+            save?.focus();
+          }}
+        >
           Refresh this section
         </Button>
-      </div>
-    );
+      ),
+    };
   };
 
   /**
@@ -860,7 +873,6 @@ export function ActivityEditorSession({
                     className="flex flex-col gap-4"
                   >
                     <FormProblemCount errors={general.form.formState.errors} />
-                    {scopeError('general')}
 
                     <FieldGateProvider gate={gating.general}>
                       <ActivityIdentityFields form={general.form} />
@@ -895,6 +907,7 @@ export function ActivityEditorSession({
                         dirty={general.isDirty}
                         pending={saves.fieldsPending || codesSaving}
                         saved={savedSlots.general === true}
+                        error={scopeFailure('general')}
                         label="Save general"
                         {...othersSaving('general')}
                       />
@@ -954,7 +967,6 @@ export function ActivityEditorSession({
                   className="flex flex-col gap-4"
                 >
                   <FormProblemCount errors={scheduling.form.formState.errors} />
-                  {scopeError('scheduling')}
 
                   <FieldGateProvider gate={gating.scheduling}>
                     <FormSection
@@ -991,6 +1003,7 @@ export function ActivityEditorSession({
                       dirty={scheduling.isDirty}
                       pending={saves.fieldsPending || codesSaving}
                       saved={savedSlots.scheduling === true}
+                      error={scopeFailure('scheduling')}
                       label="Save scheduling"
                       {...othersSaving('scheduling')}
                     />
@@ -1148,7 +1161,6 @@ export function ActivityEditorSession({
                   className="flex flex-col gap-4"
                 >
                   <FormProblemCount errors={cost.form.formState.errors} />
-                  {scopeError('cost')}
 
                   <FieldGateProvider gate={gating.cost}>
                     <ActivityExpenseFields form={cost.form} />
@@ -1158,6 +1170,7 @@ export function ActivityEditorSession({
                       dirty={cost.isDirty}
                       pending={saves.fieldsPending || codesSaving}
                       saved={savedSlots.cost === true}
+                      error={scopeFailure('cost')}
                       label="Save cost"
                       {...othersSaving('cost')}
                     />
