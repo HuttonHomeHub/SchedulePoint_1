@@ -1,5 +1,13 @@
 # @repo/web
 
+## 1.6.0
+
+### Minor Changes
+
+- [#1339](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1339) [`4c458d0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4c458d096873efa7192e3e33cf2af35bc74dc5e5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Double-clicking a bar or milestone on the diagram now opens its editor: on General if you can edit right now, on Progress if you can report progress but not edit (a Contributor), and otherwise it tells you why it cannot. It does nothing in the Link, Add, level-of-effort and Select-area tools, after a drag, on a link or on empty space. The shortcuts sheet lists it.
+
+- [#1342](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1342) [`1729a6b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1729a6b0c8309106f45bdeeb8afc33daeb3b4d8d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - With two or more activities selected, the bar under the diagram is now short: it reads "3 selected", followed by Link in sequence…, Move to swimlane… and Set code… where they apply, Delete and Clear selection. On a plain plan that is one line; on a plan with both swimlanes and activity codes the five buttons take two. The long sentence and the drag hint are no longer on screen (the hint appears when you hover "3 selected"). Link in sequence… now tells you when the activities are already linked ("These 3 activities are already linked in this order. Nothing to add.") and, when only some are linked, adds just the missing links and says how many already existed.
+
 ## 1.5.0
 
 ### Minor Changes
