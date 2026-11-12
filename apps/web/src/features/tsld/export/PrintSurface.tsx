@@ -1,7 +1,7 @@
 import './PrintSurface.css';
 
 import {
-  mountPrintDocument,
+  mountPrintDocumentWhenReady,
   PRINT_TEARDOWN_FALLBACK_MS,
   type PrintDocumentDeps,
 } from '@/lib/print-document';
@@ -99,25 +99,73 @@ export interface PrintDiagramImageInput {
   swimlaneCount?: number;
 }
 
+/** How long the printed picture may take to load and decode before the print is given up. */
+export const PRINT_IMAGE_READY_MS = 10_000;
+
 /** Injectable seams so the mount/teardown lifecycle is testable without a real print dialog. */
-export type PrintDiagramImageDeps = PrintDocumentDeps;
+export type PrintDiagramImageDeps = PrintDocumentDeps & {
+  /** The ready timeout (ms); defaults to {@link PRINT_IMAGE_READY_MS}. */
+  imageReadyMs?: number;
+};
 
 /**
- * Mount the {@link PrintSurface} for `input.blob`, open the browser print dialog, and tear everything
- * down again — all of which is the shared {@link mountPrintDocument} lifecycle. The only concern
- * added here is the object URL: created before the mount, revoked in the teardown, so the blob is
- * released exactly once however the print session ends.
- *
- * A no-op where `URL.createObjectURL` is unavailable (import-safe).
+ * Resolve once the mounted `<img>` has loaded and decoded, reject if it cannot be made or does not
+ * arrive in `timeoutMs`. `decode()` is what makes the pixels available to the print snapshot; where
+ * a browser lacks it (jsdom) the `load` event is the best signal there is.
  */
-export function printDiagramImage(
+function imageReady(container: HTMLElement, timeoutMs: number): Promise<void> {
+  const img = container.querySelector('img');
+  if (!img) return Promise.reject(new Error('The print surface holds no image.'));
+  const loaded =
+    typeof img.decode === 'function'
+      ? img.decode()
+      : new Promise<void>((resolve, reject) => {
+          if (img.complete && img.naturalWidth > 0) resolve();
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => reject(new Error('The diagram image failed.')), {
+            once: true,
+          });
+        });
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('The diagram image took too long to load.'));
+    }, timeoutMs);
+    loaded.then(
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error('The diagram image failed to decode.'));
+      },
+    );
+  });
+}
+
+/**
+ * Mount the {@link PrintSurface} for `input.blob`, wait for its image to load and decode, open the
+ * browser print dialog, and tear everything down again — the lifecycle is the shared
+ * {@link mountPrintDocumentWhenReady}. The waiting is the point: `window.print()` snapshots the DOM at
+ * the instant it is called, and an `<img>` of a blob URL has not loaded when it is mounted, so
+ * printing straight away produced the title over a blank page (TECH_DEBT #585). The object URL is
+ * created before the mount and revoked in the teardown, so the blob is released exactly once
+ * however the print session ends.
+ *
+ * Rejects — after tearing the surface down, with nothing printed — if the picture cannot be made
+ * ready in time; the caller owns saying so.
+ *
+ * Resolves without doing anything where `URL.createObjectURL` is unavailable (import-safe).
+ */
+export async function printDiagramImage(
   input: PrintDiagramImageInput,
   deps: PrintDiagramImageDeps = {},
-): void {
+): Promise<void> {
   if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return;
 
+  const { imageReadyMs, ...documentDeps } = deps;
   const url = URL.createObjectURL(input.blob);
-  mountPrintDocument(
+  await mountPrintDocumentWhenReady(
     <PrintSurface
       imageUrl={url}
       title={input.title}
@@ -127,6 +175,7 @@ export function printDiagramImage(
         ...(input.swimlaneCount === undefined ? {} : { swimlaneCount: input.swimlaneCount }),
       })}
     />,
-    { ...deps, onTeardown: () => URL.revokeObjectURL(url) },
+    (container) => imageReady(container, imageReadyMs ?? PRINT_IMAGE_READY_MS),
+    { ...documentDeps, onTeardown: () => URL.revokeObjectURL(url) },
   );
 }

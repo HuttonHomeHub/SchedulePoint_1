@@ -44,6 +44,12 @@ export interface PrintDocumentDeps {
 }
 
 /**
+ * Resolves when the mounted document is ready to be snapshotted — e.g. its image has loaded and
+ * decoded. A rejection means it never will be, and nothing is printed.
+ */
+export type PrintReady = (container: HTMLElement) => Promise<void>;
+
+/**
  * Mount `node` into a print-only container, open the browser print dialog, and tear everything down
  * again. Teardown fires on the `afterprint` event AND on a fallback timeout — whichever comes first
  * wins, and it is idempotent, so a browser that fires both never double-cleans.
@@ -60,7 +66,42 @@ export interface PrintDocumentDeps {
  */
 export function mountPrintDocument(node: React.ReactNode, deps: PrintDocumentDeps = {}): void {
   if (typeof document === 'undefined') return;
+  const { openDialog } = mount(node, deps);
+  openDialog();
+}
 
+/**
+ * {@link mountPrintDocument} for a surface that is not paintable the moment it is committed — an
+ * `<img>` of a blob URL has not loaded, let alone decoded, when `flushSync` returns, and
+ * `window.print()` snapshots the DOM as it is at that instant (TECH_DEBT #585: the printed diagram
+ * was the title over a blank page). The dialog opens only after `ready` resolves.
+ *
+ * If `ready` rejects the document is torn down at once (focus restored, `onTeardown` run) and the
+ * rejection is passed on, so the caller can say so — a print window is never opened on an empty
+ * page. Teardown's fallback timer starts when the dialog opens, not at mount, so waiting for
+ * `ready` does not shorten the print session.
+ */
+export async function mountPrintDocumentWhenReady(
+  node: React.ReactNode,
+  ready: PrintReady,
+  deps: PrintDocumentDeps = {},
+): Promise<void> {
+  if (typeof document === 'undefined') return;
+  const { container, teardown, openDialog } = mount(node, deps, { deferFallback: true });
+  try {
+    await ready(container);
+  } catch (error) {
+    teardown();
+    throw error;
+  }
+  openDialog();
+}
+
+function mount(
+  node: React.ReactNode,
+  deps: PrintDocumentDeps,
+  options: { deferFallback?: boolean } = {},
+): { container: HTMLElement; teardown: () => void; openDialog: () => void } {
   const container = document.createElement('div');
   container.className = PRINT_CONTAINER_CLASS;
   // **The print surface scope** (TECH_DEBT #163). One container is shared by the TSLD print
@@ -102,10 +143,19 @@ export function mountPrintDocument(node: React.ReactNode, deps: PrintDocumentDep
     root.render(node);
   });
 
-  window.addEventListener('afterprint', teardown);
-  state.fallbackTimer = setTimeout(teardown, deps.fallbackMs ?? PRINT_TEARDOWN_FALLBACK_MS);
+  const armTeardown = (): void => {
+    if (state.done) return;
+    window.addEventListener('afterprint', teardown);
+    state.fallbackTimer = setTimeout(teardown, deps.fallbackMs ?? PRINT_TEARDOWN_FALLBACK_MS);
+  };
+  if (!options.deferFallback) armTeardown();
 
-  const print =
-    deps.print ?? (typeof window.print === 'function' ? window.print.bind(window) : undefined);
-  print?.();
+  const openDialog = (): void => {
+    if (options.deferFallback) armTeardown();
+    const print =
+      deps.print ?? (typeof window.print === 'function' ? window.print.bind(window) : undefined);
+    print?.();
+  };
+
+  return { container, teardown, openDialog };
 }
