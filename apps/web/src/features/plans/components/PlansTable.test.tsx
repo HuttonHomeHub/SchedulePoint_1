@@ -67,7 +67,7 @@ function renderTable(canWrite: boolean, data: PlanSummary[] = PLANS) {
 }
 
 describe('PlansTable', () => {
-  it('renders a plan with status, a formatted planned start, and writer actions', () => {
+  it('renders a plan with status, a formatted data date, and writer actions', () => {
     renderTable(true);
     expect(screen.getByRole('link', { name: 'Baseline' })).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe('PlansTable', () => {
     expect(screen.queryByRole('button', { name: 'Edit Baseline' })).not.toBeInTheDocument();
   });
 
-  it('shows an empty planned start as an em dash', () => {
+  it('shows an empty data date as an em dash', () => {
     renderTable(true, [{ ...PLANS[0]!, plannedStart: null }]);
     expect(screen.getByText('—')).toBeInTheDocument();
   });

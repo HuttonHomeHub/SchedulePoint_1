@@ -52,11 +52,11 @@ describe('PlanFormDialog', () => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(PLAN);
   });
 
-  it('creates a plan with the chosen status and planned start', async () => {
+  it('creates a plan with the chosen status and start date', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });
     fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'ACTIVE' } });
-    fireEvent.change(screen.getByLabelText(/Planned start/), { target: { value: '2026-06-15' } });
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-06-15' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -70,22 +70,37 @@ describe('PlanFormDialog', () => {
     });
   });
 
-  it('rejects an empty planned start with a friendly message and does not submit', async () => {
+  it('rejects an empty start date with a friendly message and does not submit', async () => {
     renderDialog();
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });
-    // Leave "Planned start" empty (the field's default value).
+    // Leave "Start date" empty (the field's default value).
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
 
     await waitFor(() =>
-      expect(screen.getAllByText('A planned start date is required.').length).toBeGreaterThan(0),
+      expect(screen.getAllByText('A date is required.').length).toBeGreaterThan(0),
     );
     expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('names the date for what it is: "Start date" for a new plan, "Data date" when editing', () => {
+    const { unmount } = renderDialog();
+    expect(screen.getByLabelText('Start date')).toHaveAccessibleDescription(
+      'This is also the plan’s data date.',
+    );
+    expect(screen.queryByLabelText('Data date')).not.toBeInTheDocument();
+    unmount();
+
+    renderDialog({ plan: PLAN });
+    expect(screen.getByLabelText('Data date')).toHaveAccessibleDescription(
+      'Activities are scheduled from this date. Progress can be reported up to it.',
+    );
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument();
   });
 
   it('seeds status/date in edit mode and PATCHes with the row version', async () => {
     renderDialog({ plan: PLAN });
     expect(screen.getByLabelText('Status')).toHaveValue('ACTIVE');
-    expect(screen.getByLabelText(/Planned start/)).toHaveValue('2026-05-01');
+    expect(screen.getByLabelText('Data date')).toHaveValue('2026-05-01');
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -126,7 +141,7 @@ describe('PlanFormDialog', () => {
     );
     const view = render(tree(true));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Kickoff' } });
-    fireEvent.change(screen.getByLabelText(/Planned start/), { target: { value: '2026-06-15' } });
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-06-15' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create plan' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Name already taken');
 
@@ -135,6 +150,6 @@ describe('PlanFormDialog', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Name')).toHaveValue('');
-    expect(screen.getByLabelText(/Planned start/)).toHaveValue('');
+    expect(screen.getByLabelText('Start date')).toHaveValue('');
   });
 });

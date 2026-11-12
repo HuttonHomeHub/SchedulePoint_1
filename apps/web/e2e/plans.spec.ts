@@ -57,7 +57,7 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
   ).toEqual([]);
   await dialog.getByLabel('Name').fill('Baseline');
   await dialog.getByLabel('Status').selectOption('ACTIVE');
-  await dialog.getByLabel(/Planned start/).fill('2026-05-01');
+  await dialog.getByLabel('Start date').fill('2026-05-01');
   await dialog.getByRole('button', { name: 'Create plan' }).click();
 
   // It appears in the table with the formatted date, then opens to its detail.

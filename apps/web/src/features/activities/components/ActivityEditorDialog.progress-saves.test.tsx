@@ -201,7 +201,7 @@ describe('a Reported-progress save refused for an actual after the data date', (
     expect(finish).toHaveFocus();
     expect(finish).toHaveAccessibleDescription(
       'Actual finish, 14 Nov 2026, is after the plan’s data date, 10 Nov 2026. ' +
-        'Move the data date (the Planned start box in Edit plan details) to 14 Nov 2026 or later, ' +
+        'Move the data date to 14 Nov 2026 or later in Edit plan details, ' +
         'then save again. ' +
         'What you typed stays here until you close the editor.',
     );

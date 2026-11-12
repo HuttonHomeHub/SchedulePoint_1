@@ -3419,7 +3419,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       labelVisibility: 'never',
       order: 1,
       label: 'Edit plan details',
-      description: "Change the plan's name, status, planned start and description",
+      description: "Change the plan's name, status, data date and description",
       icon: <SquarePen className="size-4" />,
       isVisible: (ctx) => ctx.editPlan !== null,
       lostReason: 'This appears only while you can edit the plan.',

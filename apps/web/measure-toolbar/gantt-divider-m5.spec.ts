@@ -99,10 +99,7 @@ test('#494 what the Gantt divider strip covers', async ({ browser }) => {
   await page0.getByRole('link', { name: 'Quarter' }).click();
   await page0.getByRole('button', { name: 'New plan' }).click();
   await page0.getByRole('dialog').getByLabel('Name').fill('Slab');
-  await page0
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page0.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page0.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page0.getByRole('link', { name: 'Slab', exact: true }).click();
   await expect(page0).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

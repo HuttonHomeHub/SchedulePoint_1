@@ -251,6 +251,23 @@ a product idea that has not yet earned a roadmap line:
   sources (`m0-record.md`, ADR-0071 §5). The approved plan (`plan.md` M5, M6) is the spec; the XER reader ships
   one release before the writer (ADR-0156 D9).
 
+- `XL` **Separate the plan's start from its data date.** Today they are one stored value
+  (`plans.planned_start`): the owner's runbook step 4.6 asked for two, and the progress work
+  (`docs/specs/progress-before-data-date/`, Q3, 2026-11-12) chose to name the one date "Data date" and cost
+  the split rather than build it. Costed, not designed (spec §4.10):
+  - **Schema:** `plans.data_date DATE NOT NULL`, backfilled from `planned_start`, which becomes the project's
+    start — database-architect first (CLAUDE.md §19.3). Baselines already capture `data_date`.
+  - **Engine and services:** every `formatCalendarDate(plan.plannedStart)` that means "data date" moves
+    (`schedule.service.ts`, `activities.service.ts`, health, EV, the canvas origin in
+    `plan-workspace-toolbar.tsx`). Parity holds if the backfill copies.
+  - **API:** add `dataDate` to the plan DTOs (additive). Keeping `plannedStart` as "data date" is the only
+    non-breaking reading; repurposing it is a **major** under ADR-0190 D2, with an ADR and a migration note.
+  - **Interchange:** import collapses P6's `plan_start_date` into the data date today
+    (`xer-adapter.ts`, `mspdi-adapter.ts`), so a split would also restore fidelity; the organisation export
+    (ADR-0194) gains a field, so a format version step.
+  - **Size:** roughly an epic of its own, 4–6 PRs, and it fixes neither of the two problems the progress work
+    set out to fix — which is why it waits for its own decision.
+
 ## Platform foundations not yet built
 
 Each of these has an **accepted ADR** and no implementation — see

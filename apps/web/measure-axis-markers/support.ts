@@ -47,10 +47,7 @@ export async function newPlan(page: Page, name: string, dataDate: string): Promi
   if ((await project.count()) > 0) await project.first().click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(name);
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill(dataDate);
+  await page.getByRole('dialog').getByLabel('Start date').fill(dataDate);
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name, exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

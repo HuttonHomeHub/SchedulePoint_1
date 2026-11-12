@@ -52,7 +52,7 @@ export async function createAndOpenPlan(page: Page, name: string): Promise<strin
   await page.getByRole('button', { name: 'New plan' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name').fill(name);
-  await dialog.getByLabel(/Planned start/).fill('2026-01-05');
+  await dialog.getByLabel('Start date').fill('2026-01-05');
   await dialog.getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name, exact: true }).click();
   return planIdOf(page.url());

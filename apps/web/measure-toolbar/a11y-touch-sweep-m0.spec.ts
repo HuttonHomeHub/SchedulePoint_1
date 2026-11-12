@@ -77,10 +77,7 @@ async function build(browser: Browser): Promise<Fixture> {
   await page.getByRole('link', { name: LONG_PROJECT }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(LONG_PLAN);
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: LONG_PLAN, exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

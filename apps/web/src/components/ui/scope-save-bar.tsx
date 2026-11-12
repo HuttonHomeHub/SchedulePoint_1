@@ -10,6 +10,50 @@ export interface ScopeSaveError {
   action?: React.ReactNode;
 }
 
+export interface ScopeSaveBarProps {
+  /**
+   * May the caller write, and — when not — why. Typed structurally so both the editor's `ScopeGate`
+   * and a one-off `{ writable, reason }` satisfy it without either side importing the other.
+   */
+  gate: { writable: boolean; reason: string | null };
+  /** The scope has unsaved edits. A clean scope's Save is inert with no reason — nothing to say. */
+  dirty: boolean;
+  pending: boolean;
+  /**
+   * This scope saved and has not been edited since.
+   *
+   * Without it, a successful save leaves a sighted user with *nothing*: the helper text goes from
+   * "Unsaved changes in this section." to blank and the button greys — pixel-identical to a tab
+   * nobody has ever touched. The rest of the app pairs its screen-reader announcement with a visible
+   * signal by closing the dialog; this editor deliberately stays open (a multi-scope session is the
+   * point), so it has to say so itself. This was the epic's own named muscle-memory risk.
+   */
+  saved?: boolean;
+  /** The button's text, e.g. "Save progress". Scope-specific so three Saves are tellable apart. */
+  label: string;
+  /**
+   * What the button says while the write is in flight. Defaults to the editor's "Saving…"; a form
+   * whose verb is not "save" overrides it, so the busy state names the same action the idle label
+   * promised ("Add link" → "Adding…", not "Saving…").
+   */
+  pendingLabel?: string;
+  /**
+   * What to say while there are unsaved edits. Defaults to the editor's sentence; a **create** form
+   * overrides it — "Unsaved changes in this section" describes an edit to something that already
+   * exists, and a half-filled new-link form is not that. `null` says nothing at all, for a surface
+   * where the result is its own feedback (a new row appearing in the list above the form).
+   */
+  dirtyMessage?: string | null;
+  /** What to say after a successful write. Overridden for the same reason as {@link dirtyMessage}. */
+  savedMessage?: string | null;
+  /**
+   * The refusal of the last save, or `null`. Shown in the bar, described-by on Save, scrolled into
+   * view and never focused (ADR-0217 D2). `action` is the way out — "Refresh this section" — rendered
+   * under the sentence and deliberately **outside** the live region and the description.
+   */
+  error?: ScopeSaveError | null;
+}
+
 /**
  * One write scope's Save, with its reason when it cannot be used (ADR-0060 §6).
  *
@@ -75,49 +119,7 @@ export function ScopeSaveBar({
   dirtyMessage = 'Unsaved changes in this section.',
   savedMessage = 'Saved.',
   error = null,
-}: {
-  /**
-   * May the caller write, and — when not — why. Typed structurally so both the editor's `ScopeGate`
-   * and a one-off `{ writable, reason }` satisfy it without either side importing the other.
-   */
-  gate: { writable: boolean; reason: string | null };
-  /** The scope has unsaved edits. A clean scope's Save is inert with no reason — nothing to say. */
-  dirty: boolean;
-  pending: boolean;
-  /**
-   * This scope saved and has not been edited since.
-   *
-   * Without it, a successful save leaves a sighted user with *nothing*: the helper text goes from
-   * "Unsaved changes in this section." to blank and the button greys — pixel-identical to a tab
-   * nobody has ever touched. The rest of the app pairs its screen-reader announcement with a visible
-   * signal by closing the dialog; this editor deliberately stays open (a multi-scope session is the
-   * point), so it has to say so itself. This was the epic's own named muscle-memory risk.
-   */
-  saved?: boolean;
-  /** The button's text, e.g. "Save progress". Scope-specific so three Saves are tellable apart. */
-  label: string;
-  /**
-   * What the button says while the write is in flight. Defaults to the editor's "Saving…"; a form
-   * whose verb is not "save" overrides it, so the busy state names the same action the idle label
-   * promised ("Add link" → "Adding…", not "Saving…").
-   */
-  pendingLabel?: string;
-  /**
-   * What to say while there are unsaved edits. Defaults to the editor's sentence; a **create** form
-   * overrides it — "Unsaved changes in this section" describes an edit to something that already
-   * exists, and a half-filled new-link form is not that. `null` says nothing at all, for a surface
-   * where the result is its own feedback (a new row appearing in the list above the form).
-   */
-  dirtyMessage?: string | null;
-  /** What to say after a successful write. Overridden for the same reason as {@link dirtyMessage}. */
-  savedMessage?: string | null;
-  /**
-   * The refusal of the last save, or `null`. Shown in the bar, described-by on Save, scrolled into
-   * view and never focused (ADR-0217 D2). `action` is the way out — "Refresh this section" — rendered
-   * under the sentence and deliberately **outside** the live region and the description.
-   */
-  error?: ScopeSaveError | null;
-}): React.ReactElement {
+}: ScopeSaveBarProps): React.ReactElement {
   const reasonId = useId();
   const errorId = useId();
   const barRef = useRef<HTMLDivElement>(null);
@@ -156,7 +158,11 @@ export function ScopeSaveBar({
     // A column so the refusal gets the bar's whole width above the button instead of squeezing it
     // (ADR-0114): a row that cannot shrink is never asked to wrap. Without a refusal the column holds
     // one row and looks exactly as it did.
-    <div ref={barRef} className="border-border flex flex-col gap-3 border-t pt-4">
+    <div
+      ref={barRef}
+      data-scope-save-bar=""
+      className="border-border flex flex-col gap-3 border-t pt-4"
+    >
       {error ? (
         <div className="flex flex-col items-start gap-2">
           <Alert id={errorId} purpose="event" tone="error" className="w-full">

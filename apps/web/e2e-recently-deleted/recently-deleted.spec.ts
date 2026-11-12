@@ -75,7 +75,7 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
   // The plan's data date (ADR-0033), which `planFormSchema` requires. This journey's first run
   // could not get past this dialog, because the label read "Planned start (optional)" over a
   // required field — fixed in the same commit rather than worked around here.
-  await page.getByRole('dialog').getByLabel('Planned start').fill('2026-01-01');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await expect(page.getByRole('link', { name: 'Programme A', exact: true })).toBeVisible();
 

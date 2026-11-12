@@ -19,7 +19,7 @@ import { deleteCascadeWarning } from '@/lib/delete-copy';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
- * A project's plans as a table (name → plan detail, status, planned start).
+ * A project's plans as a table (name → plan detail, status, data date).
  * Edit/Delete render only for writers; delete is a soft delete confirmed first.
  * The edit target is looked up by id from the live query so a 409 retry carries
  * the current version. States come from the shared DataTable.
@@ -67,7 +67,7 @@ export function PlansTable({
       cell: (plan) => PLAN_STATUS_LABELS[plan.status],
     },
     {
-      header: 'Planned start',
+      header: 'Data date',
       cell: (plan) => (
         <span className="text-muted-foreground">{formatCalendarDate(plan.plannedStart)}</span>
       ),

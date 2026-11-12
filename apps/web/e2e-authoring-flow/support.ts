@@ -64,10 +64,7 @@ export async function newPlan(page: Page, planName: string): Promise<void> {
   if ((await project.count()) > 0) await project.first().click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill(planName);
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: planName, exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

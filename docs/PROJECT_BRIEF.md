@@ -154,7 +154,7 @@ Key entity notes:
 ## 10. User Journeys
 
 1. **Green-field plan build (planner).** Create client → project → plan; set plan calendar and start date; on the TSLD canvas, drop the first activity by clicking on the timeline; drag its width to set duration; draw a logic line from its finish to a new blank spot to create the successor; repeat. Critical path highlights as the network grows.
-2. **Weekly progress update (planner + contributor).** Contributor opens the plan (read + progress permissions); marks activities % complete and actual finish; posts a note on a slipping activity. Planner re-opens for full edit, sets the data date, runs CPM, reviews impact on the critical path.
+2. **Weekly progress update (planner + contributor).** Planner moves the data date to the end of the reporting week; contributors (read + progress permissions) mark % complete and actual dates up to it, and post a note on a slipping activity; planner runs CPM and reviews impact on the critical path.
 3. **Client review (viewer / guest).** Planner generates a read-only share link (optional expiry) for the client's owner rep, who opens the graphical view in a browser without an account.
 4. **Baseline & variance.** Planner creates a "Contract Baseline" snapshot before mobilisation; four months in, the current schedule shows critical-path activities 12 days behind baseline in both the TSLD (variance overlay) and Gantt (variance bar).
 5. **Logic what-if.** Planner temporarily changes a driving FS to SS+5, sees the network re-flow live, and undoes if unwanted — no separate "what-if scenario" mode in v1; the undo stack is enough.
