@@ -1217,20 +1217,54 @@ export function ToolbarPlanWorkspace({
     hasSelection: true,
     scheduleRefusal: model.scheduleRefusal,
   });
-  const followEditNotice =
-    followEdit === null
-      ? null
-      : (link?: { lead: string; onUndo?: (() => void) | undefined }): React.ReactNode => (
-          <FollowLogicStrip
+  const followEditShutReason = followEditShut.enabled ? null : followEditShut.reason;
+  const { acceptFollowEdit, keepFollowEdit, dismissFollowEdit, announceFollowEditShown } = model;
+  const undoFollowEdit = model.undoRedo.undo;
+  // Memoised on what it reads, so a render that changes none of it hands both docks the same function.
+  const followEditNotice = useMemo(() => {
+    if (followEdit === null) return null;
+    return function renderFollowEdit(link?: {
+      lead: string;
+      onUndo?: (() => void) | undefined;
+    }): React.ReactNode {
+      if (followEdit.phase === 'done') {
+        // The bars have moved: the existing result strip, with Undo, and its 15 s window. The
+        // sentence was announced once when the write landed, so this says nothing more.
+        return (
+          <HistoryResultStrip
+            kind="success"
             message={followEdit.message}
-            lead={link?.lead}
-            onUndo={link?.onUndo}
-            onFollow={() => void model.acceptFollowEdit()}
-            onKeep={model.dismissFollowEdit}
-            followReason={followEditShut.enabled ? null : followEditShut.reason}
+            action={{ label: 'Undo', onClick: undoFollowEdit }}
+            onDismiss={dismissFollowEdit}
             restoreTarget={planSurfaceTarget}
           />
         );
+      }
+      return (
+        <FollowLogicStrip
+          message={followEdit.message}
+          phase={
+            followEdit.phase === 'busy' || followEdit.phase === 'moving' ? 'busy' : followEdit.phase
+          }
+          onShown={announceFollowEditShown}
+          lead={link?.lead}
+          onUndo={link?.onUndo}
+          onFollow={() => void acceptFollowEdit()}
+          onKeep={keepFollowEdit}
+          followReason={followEditShutReason}
+          restoreTarget={planSurfaceTarget}
+        />
+      );
+    };
+  }, [
+    followEdit,
+    followEditShutReason,
+    acceptFollowEdit,
+    keepFollowEdit,
+    dismissFollowEdit,
+    announceFollowEditShown,
+    undoFollowEdit,
+  ]);
   /**
    * **Undo and redo are live only when the planner can author right now** — pen
    * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the

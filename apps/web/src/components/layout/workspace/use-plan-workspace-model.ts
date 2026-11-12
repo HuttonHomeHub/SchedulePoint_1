@@ -12,9 +12,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   FOLLOW_LOGIC_CONFLICT,
+  followFailedSentence,
   followLogicDoneSentence,
   followLogicLabel,
   followLogicRows,
+  isPlacedBeforeLogic,
 } from './follow-logic-offer';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 import { useFollowLogicOffer } from './use-follow-logic-offer';
@@ -153,6 +155,7 @@ import {
   bulkDeleteCommand,
   bulkMoveCoalesceKey,
   bulkPlacementCommand,
+  type Command,
   createActivityCommand,
   createLoeSpanCommand,
   crossPlanLinkAddCommand,
@@ -674,6 +677,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const followOffer = useFollowLogicOffer({
     enabled: canEditSchedule,
+    settled: autoRecalc.settled,
     pendingEdits: autoRecalc.pendingEdits,
     isWriting: () => queryClient.isMutating() > 0,
     readActivities: readCachedActivities,
@@ -2280,55 +2284,105 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * **Follow logic, for a set of bars** (ADR-0216 D3): `visualStart := null`, the constraint sent
    * back as stored, the lane left alone, through the existing batch placement route — one
    * all-or-nothing write, recorded as ONE undo step with `bulkPlacementCommand`, the shape apply
-   * levelling uses. A stale version on any row refuses the whole batch (409, announced); a lost pen
-   * (423) defers to the shared pen banner. Either way nothing applied, nothing recorded, never re-sent.
+   * levelling uses. It **reports its outcome and never throws**: `ok` carries the step it recorded; a
+   * stale version on any row refuses the whole batch (`conflict`); a lost pen (423) defers to the
+   * shared pen banner (`lock`); anything else is `error`, with the cause. Either failure applied
+   * nothing, recorded nothing and is never re-sent. What each caller SAYS about a failure is the
+   * caller's, because the dock offer shows it in its strip and the selection bar only announces it.
    *
    * `beginLayoutEdit(ids)` first, so a bar that now overlaps another is moved clear on the settle
    * (ADR-0153), exactly as the single-bar clear always did. Summaries are the route's refusal
    * (`SUMMARY_NOT_BULK_ELIGIBLE`), so they are filtered here and never reach it.
    */
   const followLogicRowsWrite = useCallback(
-    async (rows: readonly ActivitySummary[]): Promise<void> => {
+    async (
+      rows: readonly ActivitySummary[],
+    ): Promise<
+      | { status: 'ok'; command: Command }
+      | { status: 'none' | 'lock' | 'conflict' }
+      | { status: 'error'; error: unknown }
+    > => {
       const eligible = rows.filter((row) => row.type !== 'WBS_SUMMARY');
       const [first] = eligible;
-      if (first === undefined) return;
+      if (first === undefined) return { status: 'none' };
       const { placements, before, after } = followLogicRows(eligible);
       beginLayoutEdit(eligible.map((row) => row.id));
+      let command: Command;
       try {
         const saved = await batchPlacements({ placements });
-        editHistory.record(
-          bulkPlacementCommand({
-            batchPlacements,
-            before,
-            after,
-            saved,
-            label: followLogicLabel(eligible.length),
-          }),
-        );
+        command = bulkPlacementCommand({
+          batchPlacements,
+          before,
+          after,
+          saved,
+          label: followLogicLabel(eligible.length),
+        });
+        editHistory.record(command);
       } catch (err) {
-        if (onPenWriteRejected(err).kind === 'lock') return;
-        if (err instanceof ApiFetchError && err.status === 409) {
-          announce(FOLLOW_LOGIC_CONFLICT);
-          return;
-        }
-        throw err;
+        if (onPenWriteRejected(err).kind === 'lock') return { status: 'lock' };
+        if (err instanceof ApiFetchError && err.status === 409) return { status: 'conflict' };
+        return { status: 'error', error: err };
       }
       // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3).
       announce(followLogicDoneSentence(first.name, eligible.length));
       notifyRecalc();
+      return { status: 'ok', command };
     },
     [beginLayoutEdit, batchPlacements, editHistory, onPenWriteRejected, announce, notifyRecalc],
   );
-  // The dock offer's **Follow logic**: take the offer (which clears it, so it cannot return when an
-  // undo puts its step back on top) and write for the bars it named, read at press time so the
-  // versions are the freshest the cache holds.
-  const takeFollowOffer = followOffer.take;
+  // The dock offer's **Follow logic**. The offer is NOT consumed by the press: it goes busy, and the
+  // write's outcome decides what the strip becomes (B1, B2 of the M2 UX review). The bars are read at
+  // press time, so the versions are the freshest the cache holds, and a bar that has stopped being
+  // stranded since (a refresh after a 409, a peer's edit) is left out; with none left the offer is
+  // simply withdrawn and says so.
+  const startFollowOffer = followOffer.start;
+  const succeedFollowOffer = followOffer.succeed;
+  const failFollowOffer = followOffer.fail;
+  const restoreFollowOffer = followOffer.restore;
+  const dismissFollowOffer = followOffer.dismiss;
   const acceptFollowEdit = useCallback(async (): Promise<void> => {
-    const ids = takeFollowOffer();
+    const ids = startFollowOffer();
     if (ids === null) return;
     const wanted = new Set(ids);
-    await followLogicRowsWrite((activitiesRef.current ?? []).filter((a) => wanted.has(a.id)));
-  }, [takeFollowOffer, followLogicRowsWrite]);
+    const rows = (activitiesRef.current ?? []).filter(
+      (a) => wanted.has(a.id) && isPlacedBeforeLogic(a),
+    );
+    const [first] = rows;
+    if (first === undefined) {
+      dismissFollowOffer();
+      announce('Nothing to move: those bars already follow their logic.');
+      return;
+    }
+    const outcome = await followLogicRowsWrite(rows);
+    switch (outcome.status) {
+      case 'ok':
+        succeedFollowOffer(outcome.command);
+        return;
+      case 'lock':
+        restoreFollowOffer();
+        return;
+      case 'conflict':
+        failFollowOffer(FOLLOW_LOGIC_CONFLICT);
+        return;
+      case 'none':
+        dismissFollowOffer();
+        return;
+      case 'error':
+        console.error('Follow logic could not be applied', outcome.error, {
+          activities: rows.map((row) => row.id),
+        });
+        failFollowOffer(followFailedSentence(first.name, rows.length));
+        return;
+    }
+  }, [
+    startFollowOffer,
+    succeedFollowOffer,
+    failFollowOffer,
+    restoreFollowOffer,
+    dismissFollowOffer,
+    followLogicRowsWrite,
+    announce,
+  ]);
 
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
   // — the selection bar's **Follow logic**. One write path with the dock offer's: a one-row batch
@@ -2342,7 +2396,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     async (activityId: string, version: number): Promise<void> => {
       const activity = (activitiesRef.current ?? []).find((a) => a.id === activityId);
       if (activity !== undefined && activity.type !== 'WBS_SUMMARY') {
-        await followLogicRowsWrite([{ ...activity, version }]);
+        const outcome = await followLogicRowsWrite([{ ...activity, version }]);
+        // Nothing applied, nothing recorded, never re-sent. A 409 is announced, and anything else is
+        // the caller's to see, as it always was (T5).
+        if (outcome.status === 'conflict') announce(FOLLOW_LOGIC_CONFLICT);
+        if (outcome.status === 'error') throw outcome.error;
         return;
       }
       const name = activity?.name ?? 'the activity';
@@ -3204,7 +3262,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
      */
     followEdit: followOffer.offer,
     acceptFollowEdit,
+    keepFollowEdit: followOffer.keep,
     dismissFollowEdit: followOffer.dismiss,
+    announceFollowEditShown: followOffer.announceShown,
     /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
     bulkOperations,
     applyLevelling,

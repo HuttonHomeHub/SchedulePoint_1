@@ -283,3 +283,74 @@ export async function selectInList(page: Page, orgSlug: string, name: string): P
   }
   if ((await selectedActivityId(page)) !== row.id) throw new Error(`could not reach ${name}`);
 }
+
+/**
+ * Record every sentence the app's polite region is given, in order, so a journey can say what a
+ * screen reader was told and how often. The region is replaced, not appended to, so reading it once
+ * cannot show a sentence that was spoken and gone; an observer can.
+ */
+export async function recordAnnouncements(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const target = document.querySelector('[data-testid="announcer"]');
+    if (!target) throw new Error('the announcer is not on the page');
+    const w = window as unknown as { __announced?: string[]; __announcer?: MutationObserver };
+    w.__announcer?.disconnect();
+    w.__announced = [];
+    const seen = w.__announced;
+    const read = (): void => {
+      const text = (target.textContent ?? '').trim();
+      if (text !== '' && seen[seen.length - 1] !== text) seen.push(text);
+    };
+    w.__announcer = new MutationObserver(read);
+    w.__announcer.observe(target, { childList: true, characterData: true, subtree: true });
+  });
+}
+
+/** What the polite region has been told since {@link recordAnnouncements}. */
+export async function announced(page: Page): Promise<string[]> {
+  return page.evaluate(() => [
+    ...((window as unknown as { __announced?: string[] }).__announced ?? []),
+  ]);
+}
+
+/** Raise the offer for `Pour slab` alone (the owner's runbook: B stranded, C left alone). */
+export async function raiseOfferForPourSlab(page: Page, orgSlug: string): Promise<DrawnBars> {
+  const bars = await drawThreeBars(page, orgSlug, [220, 440, 660]);
+  await linkWithTool(page, bars.A, bars.B);
+  await expect(page.getByTestId('canvas-mode-band')).toContainText('Linked', { timeout: 10_000 });
+  await linkWithTool(page, bars.B, bars.C, false);
+  await expect
+    .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(0);
+  await canvas(page).press('Escape');
+  const a = requireRow(bars.rows, 'Excavate');
+  const b = requireRow(bars.rows, 'Pour slab');
+  const gap = dayGap(a.visualEffectiveStart ?? '', b.visualEffectiveStart ?? '');
+  const pxPerDay = (bars.B.r[0] - bars.A.r[0]) / Math.max(1, gap);
+  await lengthenBar(page, { y: bars.A.y, r: bars.A.r }, Math.round(pxPerDay * (gap + 1.5)));
+  await expect
+    .poll(async () => (await flaggedNames(page, orgSlug)).join(','), { timeout: 30_000 })
+    .toBe('Pour slab');
+  await expect(page.getByTestId('canvas-follow-logic-offer')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('canvas-follow-logic-offer')).toContainText(
+    '“Pour slab” stays where you placed it, before its logic allows.',
+  );
+  return bars;
+}
+
+/**
+ * Raise the link-plus-offer: B is drawn LEFT of A, so linking A to B strands B at the moment of the
+ * link itself, and the Link tool (still armed) shows its confirmation carrying the offer.
+ */
+export async function raiseOfferByLinking(page: Page, orgSlug: string): Promise<DrawnBars> {
+  const bars = await drawThreeBars(page, orgSlug, [440, 220, 660]);
+  await linkWithTool(page, bars.A, bars.B);
+  await expect
+    .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+      message: 'the link never stranded the bar drawn before its predecessor',
+      timeout: 30_000,
+    })
+    .toBe('Pour slab');
+  await expect(page.getByTestId('canvas-follow-logic-offer')).toBeVisible({ timeout: 15_000 });
+  return bars;
+}

@@ -43,7 +43,7 @@ export function followSnapshotOf(rows: readonly SnapshotRow[]): FollowSnapshot {
   );
 }
 
-type DiffRow = SnapshotRow & Pick<ActivitySummary, 'type'>;
+type DiffRow = SnapshotRow & Pick<ActivitySummary, 'type' | 'actualStart'>;
 
 /**
  * The activities an edit **newly** left before their logic, in the order of `after`.
@@ -54,12 +54,18 @@ type DiffRow = SnapshotRow & Pick<ActivitySummary, 'type'>;
  * for, created by a drop or levelled out of the offer: the edit wrote its placement, so it is
  * where they put it. A bar that did not exist before the edit is excluded for the same reason.
  *
+ * **A started activity is never offered.** Actuals freeze its bar and what it passes on, so Follow
+ * logic would clear the flag and move nothing, and "stays where you placed it" would not be true of a
+ * bar that is where it is because work began. The count chip still counts it and the selection bar's
+ * own Follow logic still clears it (M0 C6; the one way to meet it is to place a bar and then report progress).
+ *
  * "Worsened" is deliberately not a term: the client has no measure of the logic bound (spec §1, item 3).
  */
 export function strandedBy(before: FollowSnapshot, after: readonly DiffRow[]): string[] {
   const stranded: string[] = [];
   for (const row of after) {
-    if (row.type === 'WBS_SUMMARY' || row.visualStart === null) continue;
+    if (row.type === 'WBS_SUMMARY' || row.visualStart === null || row.actualStart !== null)
+      continue;
     if (!isPlacedBeforeLogic(row)) continue;
     const was = before.get(row.id);
     if (was === undefined || was.flagged || was.visualStart !== row.visualStart) continue;
@@ -127,6 +133,31 @@ export function followLogicDoneSentence(subject: string, count: number): string 
     ? `${quote(subject)} now follows its logic; dates will update.`
     : `${subjectOf(subject, count)} now follow their logic; dates will update.`;
 }
+
+/** The sentence while the write and the recalculation that follows are in flight. */
+export function followMovingSentence(subject: string, count: number): string {
+  return count <= 1 ? `Moving ${quote(subject)}…` : `Moving ${subjectOf(subject, count)}…`;
+}
+
+/** What is announced when the planner keeps the bars where they are: the offer must not end in silence. */
+export function followKeptSentence(subject: string, count: number): string {
+  return count <= 1
+    ? `Kept ${quote(subject)} where you placed it; it stays flagged.`
+    : `Kept ${subjectOf(subject, count)} where you placed them; they stay flagged.`;
+}
+
+/** Any failure that is not a stale version or a lost pen: visible in the strip, with Try again. */
+export function followFailedSentence(subject: string, count: number): string {
+  return count <= 1
+    ? `Couldn’t move ${quote(subject)} just now. Nothing was changed.`
+    : `Couldn’t move ${subjectOf(subject, count)} just now. Nothing was changed.`;
+}
+
+/** What the two choices do, for a screen reader (the strip's visible copy is the spec's, verbatim). */
+export const FOLLOW_LOGIC_DESCRIPTION =
+  'Removes the hand placement, so the bar moves to where its links put it and follows them from then on.';
+export const KEEP_IT_HERE_DESCRIPTION =
+  'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.';
 
 /** The undo step's label. */
 export function followLogicLabel(count: number): string {

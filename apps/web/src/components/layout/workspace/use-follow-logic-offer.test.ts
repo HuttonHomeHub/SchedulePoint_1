@@ -65,6 +65,7 @@ function setup(initial: Partial<Harness> = {}) {
       const history = usePlanEditHistory('p1');
       const follow = useFollowLogicOffer({
         enabled: props.enabled,
+        settled: props.settled,
         pendingEdits: props.pendingEdits,
         isWriting: () => props.writing,
         readActivities: () => props.rows,
@@ -116,7 +117,12 @@ describe('useFollowLogicOffer', () => {
     expect(offer?.ids).toEqual(['B']);
     expect(offer?.command).toBe(step);
     expect(offer?.message).toBe('“B” stays where you placed it, before its logic allows.');
-    // The dock and the announcement are one sentence, and it is said once.
+    expect(offer?.phase).toBe('idle');
+    // Nothing is said at the raise: a strip hidden behind a higher band would be announced unseen.
+    expect(announce).not.toHaveBeenCalled();
+    // It is said once, when the strip reports it is on screen, however often that is reported.
+    act(() => view.result.current.follow.announceShown());
+    act(() => view.result.current.follow.announceShown());
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce).toHaveBeenCalledWith(offer?.message);
   });
@@ -245,32 +251,154 @@ describe('useFollowLogicOffer', () => {
     expect(view.result.current.follow.offer).toBeNull();
   });
 
-  it('is consumed by Follow logic, which hands back the bars, and does not return', async () => {
+  it('goes BUSY on Follow logic rather than being consumed: the strip stays, says Moving, and a second press starts nothing', async () => {
     const { view, settle, planEdit } = setup();
     planEdit('Lengthen A');
     act(() => settle({ rows: [bar('A'), bar('B', early), bar('C', early)] }));
     await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
-    let taken: readonly string[] | null = null;
+    let started: readonly string[] | null = null;
     act(() => {
-      taken = view.result.current.follow.take();
+      started = view.result.current.follow.start();
     });
-    expect(taken).toEqual(['B', 'C']);
-    expect(view.result.current.follow.offer).toBeNull();
-    // Nothing left to take: a second press cannot write twice.
+    expect(started).toEqual(['B', 'C']);
+    // **Verified red** by clearing the offer in `start`: the strip then vanishes on the press, and a
+    // write that fails leaves the planner with no sign that nothing happened (B1).
+    expect(view.result.current.follow.offer).toMatchObject({
+      phase: 'busy',
+      message: 'Moving “B” and 1 other…',
+    });
     act(() => {
-      taken = view.result.current.follow.take();
+      started = view.result.current.follow.start();
     });
-    expect(taken).toBeNull();
+    expect(started, 'no double-submit').toBeNull();
   });
 
-  it('is dismissed by Keep it here, and writes nothing', async () => {
+  it('stays, says why and can be tried again after a failure; the pen going defers to the banner', async () => {
+    const { view, settle, announce, planEdit } = setup();
+    planEdit('Lengthen A');
+    act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+    await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
+    act(() => void view.result.current.follow.start());
+    act(() => view.result.current.follow.fail('Couldn’t move “B” just now. Nothing was changed.'));
+    expect(view.result.current.follow.offer).toMatchObject({
+      phase: 'failed',
+      message: 'Couldn’t move “B” just now. Nothing was changed.',
+    });
+    expect(announce).toHaveBeenCalledWith('Couldn’t move “B” just now. Nothing was changed.');
+    // Try again starts it afresh.
+    let started: readonly string[] | null = null;
+    act(() => {
+      started = view.result.current.follow.start();
+    });
+    expect(started).toEqual(['B']);
+    // A lost pen goes back to asking: the shared banner says why.
+    act(() => view.result.current.follow.restore());
+    expect(view.result.current.follow.offer).toMatchObject({
+      phase: 'idle',
+      message: '“B” stays where you placed it, before its logic allows.',
+    });
+  });
+
+  it('keeps saying Moving until the recalculation settles, then confirms; a later undo does not bring it back', async () => {
     const { view, settle, planEdit } = setup();
     planEdit('Lengthen A');
     act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
     await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
-    act(() => view.result.current.follow.dismiss());
+    act(() => void view.result.current.follow.start());
+    // The write lands: its step is recorded and the offer rebinds to it.
+    const followStep = edit('Follow logic');
+    act(() => {
+      view.result.current.resolve.begin(['B']);
+      view.result.current.follow.begin();
+      view.result.current.history.record(followStep);
+      view.result.current.follow.succeed(followStep);
+    });
+    expect(view.result.current.follow.offer).toMatchObject({
+      phase: 'moving',
+      command: followStep,
+    });
+    expect(view.result.current.follow.offer?.message).toBe('Moving “B”…');
+    // The recalculation lands: the bars have moved.
+    act(() => settle({ rows: [bar('A'), bar('B', { visualStart: null }), bar('C')] }));
+    await waitFor(() => expect(view.result.current.follow.offer?.phase).toBe('done'));
+    expect(view.result.current.follow.offer?.message).toBe(
+      '“B” now follows its logic; dates will update.',
+    );
+    act(() => view.result.current.follow.noteReplay());
     expect(view.result.current.follow.offer).toBeNull();
-    expect(view.result.current.follow.take()).toBeNull();
+  });
+
+  it('is dismissed by Keep it here, writes nothing, and says so', async () => {
+    const { view, settle, announce, planEdit } = setup();
+    planEdit('Lengthen A');
+    act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+    await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
+    act(() => view.result.current.follow.keep());
+    expect(view.result.current.follow.offer).toBeNull();
+    expect(view.result.current.follow.start()).toBeNull();
+    expect(announce).toHaveBeenCalledWith('Kept “B” where you placed it; it stays flagged.');
+  });
+
+  it('drops a snapshot a settle passed over, rather than diffing a later edit against an older before', () => {
+    // **Verified red** by keeping the held snapshot unconditionally (the first-snapshot rule alone):
+    // the second edit is then diffed against the picture before the FIRST, so B reads as newly
+    // stranded by an edit that did not strand it.
+    const { result, rerender } = renderHook(
+      (props: { settled: number; rows: ActivitySummary[] }) => {
+        const history = usePlanEditHistory('p1');
+        const follow = useFollowLogicOffer({
+          enabled: true,
+          settled: props.settled,
+          pendingEdits: 0,
+          isWriting: () => false,
+          readActivities: () => props.rows,
+          history,
+          announce: vi.fn(),
+        });
+        return { history, follow };
+      },
+      { initialProps: { settled: 0, rows: [bar('A'), bar('B'), bar('C')] } },
+    );
+    act(() => result.current.follow.begin());
+    // A settle passes and nobody evaluates (a skipped resolution): B is now flagged, as of edit one.
+    const flagged = [bar('A'), bar('B', early), bar('C')];
+    rerender({ settled: 1, rows: flagged });
+    act(() => {
+      result.current.follow.begin();
+      result.current.history.record(edit('Second edit'));
+    });
+    act(() => result.current.follow.evaluate());
+    expect(
+      result.current.follow.offer,
+      'B was already flagged when the second edit began, so it is not newly stranded',
+    ).toBeNull();
+  });
+
+  it('does not tick on after the workspace is left: the look-again timer is cleared', () => {
+    vi.useFakeTimers();
+    try {
+      const announce = vi.fn();
+      const { result, unmount } = renderHook(() => {
+        const history = usePlanEditHistory('p1');
+        return useFollowLogicOffer({
+          enabled: true,
+          settled: 0,
+          pendingEdits: 0,
+          isWriting: () => true,
+          readActivities: () => [bar('A', early)],
+          history,
+          announce,
+        });
+      });
+      act(() => result.current.begin());
+      act(() => result.current.evaluate());
+      unmount();
+      vi.advanceTimersByTime(20_000);
+      expect(announce).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('raises nothing without the pen, and withdraws an offer when the pen goes', async () => {

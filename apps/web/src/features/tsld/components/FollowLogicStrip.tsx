@@ -1,19 +1,34 @@
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 
+import {
+  FOLLOW_LOGIC_DESCRIPTION,
+  KEEP_IT_HERE_DESCRIPTION,
+} from '@/components/layout/workspace/follow-logic-offer';
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 
 export interface FollowLogicStripProps {
-  /** The sentence the edit was announced with — one source for both channels. */
+  /**
+   * The sentence to show NOW: the ask, then "Moving …" while the write and the recalculation run, then
+   * the failure when one broke. The workspace announced the ask when this first mounted, and
+   * announces a failure itself.
+   */
   message: string;
+  /**
+   * `idle` asks; `busy` is a write in flight (both buttons `aria-disabled`, presses ignored, focus
+   * kept: no double-submit); `failed` says why and offers **Try again** in Follow logic's place.
+   */
+  phase?: 'idle' | 'busy' | 'failed';
+  /** Called once when this is first on screen, so the host can announce it then and not before. */
+  onShown?: (() => void) | undefined;
   /**
    * The Link tool's confirmation, when the tool is still armed and showing it. The confirmation is
    * carried by this strip rather than hidden behind it (ADR-0216 D5): an armed tool's band outranks
    * every lower dock strip, so a separate offer would never be seen after a link.
    */
   lead?: string | undefined;
-  /** The link's own Undo, kept beside Follow logic; present only with `lead`. */
+  /** The link's own Undo, labelled **Undo link** so it is not read as undoing the move; only with `lead`. */
   onUndo?: (() => void) | undefined;
   /** Let the named bars follow their logic. The host takes the offer and writes. */
   onFollow: () => void;
@@ -53,6 +68,8 @@ export interface FollowLogicStripProps {
  */
 export function FollowLogicStrip({
   message,
+  phase = 'idle',
+  onShown,
   lead,
   onUndo,
   onFollow,
@@ -61,20 +78,39 @@ export function FollowLogicStrip({
   restoreTarget,
 }: FollowLogicStripProps): React.ReactElement {
   const reasonId = useId();
+  const followId = useId();
+  const keepId = useId();
   const { wrapperProps } = useContainerUnmountHandoff({ target: restoreTarget });
+  // Said once, when the strip is actually here: a higher-ranked band can hide an offer that was just
+  // raised, and the host remembers it has spoken, so a remount between the dock's two places is silent.
+  useEffect(() => {
+    onShown?.();
+  }, [onShown]);
+  const busy = phase === 'busy';
+  const failed = phase === 'failed';
   const shaded = followReason != null;
-  const sentence = lead === undefined ? message : `${lead} ${message}`;
+  const reasonShown = shaded && !busy && !failed;
+  // The press is ignored while shaded or busy, and focus stays where it is (an `aria-disabled`
+  // control, not a native `disabled` one, ADR-0082 and ADR-0204).
+  const followShut = shaded || busy;
+  // The confirmation leads only while the offer is asking: once Follow logic has been pressed the
+  // sentence is about the move.
+  const sentence =
+    lead === undefined || phase !== 'idle'
+      ? message
+      : `${lead.replace(/\.$/, '')} — but ${message}`;
   return (
     // `contents`: the wrapper the hook needs is not a box, so the strip lays out exactly as before.
     <div className="contents" {...wrapperProps}>
       <NoticeStrip
         data-testid="canvas-follow-logic-offer"
+        data-phase={phase}
         data-dock-row=""
-        tone="muted"
+        tone={failed ? 'warning' : 'muted'}
         density="comfortable"
         messageFit="wrap"
         message={
-          shaded ? (
+          reasonShown ? (
             <>
               {sentence} <span id={reasonId}>{followReason}</span>
             </>
@@ -83,7 +119,7 @@ export function FollowLogicStrip({
           )
         }
       >
-        {lead !== undefined && onUndo !== undefined ? (
+        {lead !== undefined && onUndo !== undefined && phase === 'idle' ? (
           <Button
             type="button"
             variant="ghost"
@@ -93,7 +129,7 @@ export function FollowLogicStrip({
               onUndo();
             }}
           >
-            Undo
+            Undo link
           </Button>
         ) : null}
         <Button
@@ -101,30 +137,45 @@ export function FollowLogicStrip({
           variant="secondary"
           size="sm"
           data-testid="canvas-follow-logic"
-          aria-disabled={shaded}
-          {...(shaded ? { 'aria-describedby': reasonId } : {})}
+          aria-disabled={followShut}
+          aria-describedby={reasonShown ? reasonId : followId}
           onClick={(event) => {
-            if (shaded) {
+            if (followShut) {
               event.preventDefault();
               return;
             }
-            restoreTarget()?.focus();
+            // Focus is NOT moved first: the strip stays up while the write runs, so a failure leaves
+            // the planner where they pressed. When it is replaced by the confirmation the container
+            // hand-off puts focus on the plan surface (ADR-0135).
             onFollow();
           }}
         >
-          Follow logic
+          {failed ? 'Try again' : 'Follow logic'}
         </Button>
         <Button
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => {
+          aria-disabled={busy}
+          aria-describedby={keepId}
+          onClick={(event) => {
+            if (busy) {
+              event.preventDefault();
+              return;
+            }
             restoreTarget()?.focus();
             onKeep();
           }}
         >
           Keep it here
         </Button>
+        {/* What each choice does, for a screen reader: the visible copy is the spec's, verbatim. */}
+        <span id={followId} className="sr-only">
+          {FOLLOW_LOGIC_DESCRIPTION}
+        </span>
+        <span id={keepId} className="sr-only">
+          {KEEP_IT_HERE_DESCRIPTION}
+        </span>
       </NoticeStrip>
     </div>
   );

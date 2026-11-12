@@ -3,7 +3,7 @@
 - **Status:** Accepted — 2026-11-11. The product owner approved the spec, the plan and amendments 1–3 on 2026-11-11 with
   all defaults (Q1 remove the placement, Q2 any edit, Q3 dock message only, Q4 rename to "Follow logic", Q5 no one-time
   explanation) and instructed "Drive this to completion and a release". M0, M0b, M0c and M0d (measurement) preceded it; M0d
-  passed every stop rule. D1–D5 and D7–D9 ship with M2 (the edit offer and the layout); D6 (the whole-plan offer) ships with M3.
+  passed every stop rule. D1–D5 and D7–D10 ship with M2 (the edit offer and the layout); D6 (the whole-plan offer) ships with M3.
 - **Date:** 2026-11-11
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Extends:** [ADR-0148](0148-visual-is-the-plan.md) (visual is the plan),
@@ -38,6 +38,9 @@ teaches it.
 2. **D2 — The trigger is the consequence, not the gesture.** An offer is raised when a pen-holder's edit settles with a
    placed, non-summary activity **newly** `EARLIER_THAN_LOGIC`, excluding any activity whose placement that edit wrote
    (`strandedBy`, `follow-logic-offer.ts`). "Worsened" is not a trigger: the client has no measure of the logic bound.
+   **A started activity is never offered** (an actual start is set): actuals freeze its bar, so Follow logic would clear
+   the flag and move nothing, under a sentence ("stays where you placed it") that is not why it is where it is. The count
+   chip still counts it and the selection bar's own Follow logic still clears it.
 3. **D3 — Following is removing the placement.** `visualStart := null`, constraint round-tripped, lane unchanged, through the
    existing batch placement route and recorded with `bulkPlacementCommand`. For a stranded bar this is the same position as
    re-placing it at its logic date (Pass 2 already propagates the feasible start, `compute.ts:361`), so nothing downstream
@@ -61,6 +64,17 @@ teaches it.
    own. The band is the toggle's width plus a gap, in foot-row width, at any floor value; it exists in the dock as it shipped
    (a bar selected with "Recalculating…" or a stale sentence on a mouse; on a finger with current facts at 1210 to 1250,
    48 to 96 px, `docs/TECH_DEBT.md` #581), and M0d read the group at no cost anywhere.
+10. **D10 — The press does not consume the offer; its outcome does, and every state is visible** (UX review of M2).
+    Pressing **Follow logic** puts the strip into a busy state ("Moving …", both buttons `aria-disabled` with focus kept,
+    presses ignored) that lasts through the write and the recalculation that moves the bars, so there is no double-submit.
+    On success it becomes the existing result strip with **Undo** and its 15 s window, its sentence announced once. A stale
+    version (409) and any other failure keep the offer, say so in the strip in plain English (the 409's sentence is
+    `FOLLOW_LOGIC_CONFLICT`), announce it, and offer **Try again**; a lost pen (423) returns to asking and the pen banner
+    speaks. A failure is logged with the activity ids and is never an unhandled rejection. **Keep it here** announces that the
+    bar was kept and stays flagged. The offer's sentence is announced **when the strip is first on screen**, once, not when it
+    is raised, because a higher-ranked band can hide it at the settle (ADR-0132); the Link tool's confirmation is announced
+    at the link and the offer after it. The Link tool's carried Undo is labelled **Undo link**, and the two sentences are
+    joined "… — but …". The buttons carry `aria-describedby` descriptions of what each does.
 
 ### What the layout is, and why (amendments 1–3)
 

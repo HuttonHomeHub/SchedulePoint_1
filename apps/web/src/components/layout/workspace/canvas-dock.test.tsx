@@ -174,6 +174,16 @@ describe('the data-dock-row marker', () => {
     expect(strip).toMatch(/\n\s+data-dock-row=""/);
   });
 
+  it('shares its 36 rem floor with the selection bar’s: the two literals are one decision (P4)', () => {
+    const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
+    const floors = [
+      /has-\[\[data-dock-row\]\]:min-w-(\[[^\]]+\])/.exec(outlet)?.[1],
+      /has-\[\[data-dock-wide\]\]:min-w-(\[[^\]]+\])/.exec(outlet)?.[1],
+    ];
+    expect(floors[0], 'the row marker has a floor').toBeDefined();
+    expect(floors[0]).toBe(floors[1]);
+  });
+
   it('is a floor and never a content basis: the outlet stays basis zero', () => {
     const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
     expect(outlet).toMatch(/className="flex min-w-0 flex-1 flex-wrap/);

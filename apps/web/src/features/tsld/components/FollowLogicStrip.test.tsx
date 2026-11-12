@@ -61,35 +61,102 @@ describe('FollowLogicStrip', () => {
     }
   });
 
-  it('moves focus to its stable target BEFORE Follow logic acts', () => {
+  it('does NOT move focus when Follow logic is pressed: the strip stays up while it works', () => {
+    // A failed write leaves the planner where they pressed. When the strip is replaced by the
+    // confirmation the container hand-off (ADR-0135) is what puts focus on the plan surface.
     const { calls } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Follow logic' }));
-    // Every button removes the strip that holds it, so focus must already be somewhere that survives.
-    expect(calls).toEqual(['focus', 'follow']);
+    expect(calls).toEqual(['follow']);
   });
 
-  it('moves focus first for Keep it here too, and writes nothing', () => {
+  it('moves focus first for Keep it here, which removes the strip at once, and writes nothing', () => {
     const { calls, onFollow } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Keep it here' }));
     expect(calls).toEqual(['focus', 'keep']);
     expect(onFollow).not.toHaveBeenCalled();
   });
 
-  it('carries the link confirmation: its sentence leads, and the link’s Undo stays beside Follow logic', () => {
+  it('carries the link confirmation joined with “— but”, and the link’s Undo is labelled Undo link', () => {
     const { calls } = setup({
       lead: 'Linked “Excavate” → “Pour slab” (FS).',
       onUndo: () => undefined,
     });
     expect(
-      screen.getByText(`Linked “Excavate” → “Pour slab” (FS). ${MESSAGE}`),
+      screen.getByText(
+        'Linked “Excavate” → “Pour slab” (FS) — but “Pour slab” stays where you placed it, before its logic allows.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Undo',
+      'Undo link',
       'Follow logic',
       'Keep it here',
     ]);
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Undo link' }));
     expect(calls).toEqual(['focus', 'undo']);
+  });
+
+  it('says it is on screen once, to the host that announces it', () => {
+    const onShown = vi.fn();
+    const { rerender } = setup({ onShown });
+    expect(onShown).toHaveBeenCalledTimes(1);
+    // A re-render with the same callback (a busy line, a failure) says nothing more.
+    rerender(
+      <FollowLogicStrip
+        message="Moving “Pour slab”…"
+        phase="busy"
+        onShown={onShown}
+        onFollow={vi.fn()}
+        onKeep={vi.fn()}
+        restoreTarget={() => null}
+      />,
+    );
+    expect(onShown).toHaveBeenCalledTimes(1);
+  });
+
+  it('describes what each choice does, to a screen reader, and not by title alone', () => {
+    setup();
+    const follow = screen.getByRole('button', { name: 'Follow logic' });
+    const keep = screen.getByRole('button', { name: 'Keep it here' });
+    expect(follow).toHaveAccessibleDescription(
+      'Removes the hand placement, so the bar moves to where its links put it and follows them from then on.',
+    );
+    expect(keep).toHaveAccessibleDescription(
+      'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.',
+    );
+    expect(follow).not.toHaveAttribute('title');
+  });
+
+  it('is BUSY while the write runs: says so, both buttons aria-disabled, presses ignored, nothing native-disabled', () => {
+    // **Verified red** by dropping the busy guard: a second press starts a second write (B2).
+    const { onFollow, onKeep, calls } = setup({ message: 'Moving “Pour slab”…', phase: 'busy' });
+    expect(screen.getByText('Moving “Pour slab”…')).toBeInTheDocument();
+    const follow = screen.getByRole('button', { name: 'Follow logic' });
+    const keep = screen.getByRole('button', { name: 'Keep it here' });
+    for (const button of [follow, keep]) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).not.toBeDisabled();
+      fireEvent.click(button);
+    }
+    expect(onFollow).not.toHaveBeenCalled();
+    expect(onKeep).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  it('after a failure says why in the strip and offers Try again, which presses Follow logic again', () => {
+    const { onFollow } = setup({
+      message: 'Couldn’t move “Pour slab” just now. Nothing was changed.',
+      phase: 'failed',
+    });
+    expect(
+      screen.getByText('Couldn’t move “Pour slab” just now. Nothing was changed.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Follow logic' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onFollow).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Keep it here' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('shows no Undo of its own when there is no confirmation to carry', () => {
@@ -112,13 +179,14 @@ describe('FollowLogicStrip', () => {
     // Keep it here is not shaded: declining is always available.
     expect(screen.getByRole('button', { name: 'Keep it here' })).not.toHaveAttribute(
       'aria-disabled',
+      'true',
     );
   });
 
-  it('is not described, and not shaded, when nothing shuts it', () => {
+  it('is not shaded, and described by what it does rather than a reason, when nothing shuts it', () => {
     setup();
     const follow = screen.getByRole('button', { name: 'Follow logic' });
-    expect(follow).not.toHaveAttribute('aria-describedby');
     expect(follow).toHaveAttribute('aria-disabled', 'false');
+    expect(follow).not.toHaveAccessibleDescription(/Late-start/);
   });
 });

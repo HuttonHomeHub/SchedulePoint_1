@@ -139,6 +139,9 @@ export function CanvasDockOutlet(): React.ReactElement {
   // in M0d, 1,354 readings). It is a FLOOR and never a content basis: the outlet's basis stays zero, which
   // is the alternative ADR-0187 rejected and M0b re-measured (+94 to +98 px at 1912 with a bar selected).
   // `not-empty:` is in the class so it beats the 18 rem floor by specificity, not by source order.
+  // **The two `min(36rem,100%)` literals are one decision** (`data-dock-wide` on a finger, `data-dock-row`
+  // on any pointer): a Tailwind class has to be a literal, so a constant cannot carry the value, and
+  // `canvas-dock.test.tsx` asserts the two are the same string.
   return (
     <div
       ref={ref}

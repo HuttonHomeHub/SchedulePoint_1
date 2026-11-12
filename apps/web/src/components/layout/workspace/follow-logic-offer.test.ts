@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   followEditSentence,
+  followFailedSentence,
+  followKeptSentence,
+  followMovingSentence,
   followLogicDoneSentence,
   followLogicLabel,
   followLogicRows,
@@ -70,8 +73,17 @@ describe('strandedBy — which bars an edit newly left before their logic', () =
     expect(strandedBy(calm, [bar('B', { visualConflictReason: 'LATER_THAN_BOUND' })])).toEqual([]);
   });
 
-  it('includes a started or complete bar: following it changes no date and clears the flag', () => {
-    expect(strandedBy(calm, [bar('B', { ...early, percentComplete: 40 })])).toEqual(['B']);
+  it('never names a started bar: actuals freeze it, so Follow logic would move nothing', () => {
+    // **Verified red** by dropping the `actualStart` term: a bar frozen by work that began is then
+    // offered a move that clears its flag and changes no date, under a sentence ("stays where you
+    // placed it") that is not why it is where it is. The count chip still counts it and the
+    // selection bar's own Follow logic still clears it.
+    expect(
+      strandedBy(calm, [bar('B', { ...early, actualStart: '2026-01-20', percentComplete: 40 })]),
+    ).toEqual([]);
+    expect(
+      strandedBy(calm, [bar('B', early), bar('C', { ...early, actualStart: '2026-01-20' })]),
+    ).toEqual(['B']);
   });
 
   it('reads the flag through the shared derivation the count chip uses', () => {
@@ -150,6 +162,14 @@ describe('the sentences', () => {
     );
     expect(followLogicDoneSentence('Pour slab', 3)).toBe(
       '“Pour slab” and 2 others now follow their logic; dates will update.',
+    );
+    expect(followMovingSentence('Pour slab', 1)).toBe('Moving “Pour slab”…');
+    expect(followMovingSentence('Pour slab', 3)).toBe('Moving “Pour slab” and 2 others…');
+    expect(followKeptSentence('Pour slab', 1)).toBe(
+      'Kept “Pour slab” where you placed it; it stays flagged.',
+    );
+    expect(followFailedSentence('Pour slab', 2)).toBe(
+      'Couldn’t move “Pour slab” and 1 other just now. Nothing was changed.',
     );
     expect(followLogicLabel(1)).toBe('Follow logic');
     expect(followLogicLabel(3)).toBe('Follow logic for 3 activities');

@@ -4,13 +4,9 @@ import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
-  dayGap,
-  drawThreeBars,
-  flaggedNames,
   footFigures,
-  lengthenBar,
-  linkWithTool,
-  requireRow,
+  raiseOfferByLinking,
+  raiseOfferForPourSlab,
   selectInList,
   selfHit,
 } from './follow-logic-support';
@@ -434,30 +430,6 @@ async function toggleOnFactsLine(page: Page): Promise<boolean> {
   });
 }
 
-/** Raise the offer for `Pour slab` alone (the owner's runbook, B stranded and C left alone). */
-async function raiseOfferForPourSlab(page: Page, orgSlug: string): Promise<void> {
-  const bars = await drawThreeBars(page, orgSlug, [220, 440, 660]);
-  await linkWithTool(page, bars.A, bars.B);
-  await expect(page.getByTestId('canvas-mode-band')).toContainText('Linked', { timeout: 10_000 });
-  await linkWithTool(page, bars.B, bars.C, false);
-  await expect
-    .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 20_000 })
-    .toBe(0);
-  await canvas(page).press('Escape');
-  const a = requireRow(bars.rows, 'Excavate');
-  const b = requireRow(bars.rows, 'Pour slab');
-  const gap = dayGap(a.visualEffectiveStart ?? '', b.visualEffectiveStart ?? '');
-  const pxPerDay = (bars.B.r[0] - bars.A.r[0]) / Math.max(1, gap);
-  await lengthenBar(page, { y: bars.A.y, r: bars.A.r }, Math.round(pxPerDay * (gap + 1.5)));
-  await expect
-    .poll(async () => (await flaggedNames(page, orgSlug)).join(','), { timeout: 30_000 })
-    .toBe('Pour slab');
-  await expect(page.getByTestId('canvas-follow-logic-offer')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('canvas-follow-logic-offer')).toContainText(
-    '“Pour slab” stays where you placed it, before its logic allows.',
-  );
-}
-
 /** Every button of the strip is pressable where it is, and the foot row does not scroll sideways. */
 async function expectOfferPressable(page: Page, label: string): Promise<void> {
   const strip = page.getByTestId('canvas-follow-logic-offer');
@@ -686,5 +658,40 @@ test.describe('the follow-logic offer at 200 % text', () => {
         ).toBeGreaterThanOrEqual(219);
       }
     }
+  });
+});
+
+test.describe('the follow-logic offer reflows at 320 CSS px (WCAG 1.4.10)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  test('no sideways scroll, and every button of the link-plus-offer is still hit-testable', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, STAMP + 70);
+    await createHierarchy(page);
+    await newPlan(page, 'Offer reflow');
+    await ensurePen(page);
+    await raiseOfferByLinking(page, orgSlug);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    const strip = page.getByTestId('canvas-follow-logic-offer');
+    await expect(strip).toBeVisible();
+    for (const button of await strip.getByRole('button').all()) {
+      expect(
+        await selfHit(button),
+        `320 px: a pointer at the centre of “${await button.textContent()}” lands on it`,
+      ).toBe(true);
+    }
+    expect(
+      (await footFigures(page)).sideways,
+      '320 px: the foot row does not scroll sideways',
+    ).toBe(false);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+      '320 px: the page does not scroll sideways',
+    ).toBe(true);
   });
 });
