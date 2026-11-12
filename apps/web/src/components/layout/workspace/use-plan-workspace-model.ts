@@ -2297,6 +2297,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const followLogicRowsWrite = useCallback(
     async (
       rows: readonly ActivitySummary[],
+      /** Called the instant the undo step is recorded, before anything else can render. */
+      onRecorded?: (command: Command) => void,
     ): Promise<
       | { status: 'ok'; command: Command }
       | { status: 'none' | 'lock' | 'conflict' }
@@ -2318,6 +2320,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           label: followLogicLabel(eligible.length),
         });
         editHistory.record(command);
+        onRecorded?.(command);
       } catch (err) {
         if (onPenWriteRejected(err).kind === 'lock') return { status: 'lock' };
         if (err instanceof ApiFetchError && err.status === 409) return { status: 'conflict' };
@@ -2339,6 +2342,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const succeedFollowOffer = followOffer.succeed;
   const failFollowOffer = followOffer.fail;
   const restoreFollowOffer = followOffer.restore;
+  const settleNothingFollowOffer = followOffer.settleNothing;
   const dismissFollowOffer = followOffer.dismiss;
   const acceptFollowEdit = useCallback(async (): Promise<void> => {
     const ids = startFollowOffer();
@@ -2349,14 +2353,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     );
     const [first] = rows;
     if (first === undefined) {
-      dismissFollowOffer();
-      announce('Nothing to move: those bars already follow their logic.');
+      // Visible, not only announced: the strip says it, with no Undo (nothing was written).
+      settleNothingFollowOffer('Nothing to move: those bars already follow their logic.');
       return;
     }
-    const outcome = await followLogicRowsWrite(rows);
+    // The offer is rebound to the new step the moment it is recorded, so the strip cannot be hidden
+    // for a frame between the step landing on the stack and `succeed` running.
+    const outcome = await followLogicRowsWrite(rows, succeedFollowOffer);
     switch (outcome.status) {
       case 'ok':
-        succeedFollowOffer(outcome.command);
         return;
       case 'lock':
         restoreFollowOffer();
@@ -2379,9 +2384,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     succeedFollowOffer,
     failFollowOffer,
     restoreFollowOffer,
+    settleNothingFollowOffer,
     dismissFollowOffer,
     followLogicRowsWrite,
-    announce,
   ]);
 
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)

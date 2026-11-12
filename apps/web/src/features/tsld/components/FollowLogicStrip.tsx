@@ -89,7 +89,9 @@ export function FollowLogicStrip({
   const busy = phase === 'busy';
   const failed = phase === 'failed';
   const shaded = followReason != null;
-  const reasonShown = shaded && !busy && !failed;
+  // Printed and wired in EVERY phase: the button can be shaded by the overlay whether it is asking,
+  // busy or offering Try again, and a shaded control says why to every input (ADR-0204).
+  const reasonShown = shaded;
   // The press is ignored while shaded or busy, and focus stays where it is (an `aria-disabled`
   // control, not a native `disabled` one, ADR-0082 and ADR-0204).
   const followShut = shaded || busy;

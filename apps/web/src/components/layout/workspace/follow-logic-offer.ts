@@ -155,7 +155,7 @@ export function followFailedSentence(subject: string, count: number): string {
 
 /** What the two choices do, for a screen reader (the strip's visible copy is the spec's, verbatim). */
 export const FOLLOW_LOGIC_DESCRIPTION =
-  'Removes the hand placement, so the bar moves to where its links put it and follows them from then on.';
+  'Removes the hand placement, so the bar moves to where its logic puts it and follows it from then on.';
 export const KEEP_IT_HERE_DESCRIPTION =
   'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.';
 
@@ -164,6 +164,6 @@ export function followLogicLabel(count: number): string {
   return count === 1 ? 'Follow logic' : `Follow logic for ${String(count)} activities`;
 }
 
-/** A stale version: the whole batch was refused, so "nothing was moved" is a fact and not a hedge. */
+/** A stale version: the whole batch was refused, so "nothing was changed" is a fact and not a hedge. */
 export const FOLLOW_LOGIC_CONFLICT =
-  'This plan changed since you opened it — nothing was moved. Refresh to see the latest.';
+  'Couldn’t follow logic: this plan changed since you opened it. Nothing was changed.';

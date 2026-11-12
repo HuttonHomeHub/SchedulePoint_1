@@ -35,6 +35,8 @@ export interface FollowLogicOffer {
   readonly subject: string;
   readonly count: number;
   readonly phase: FollowLogicPhase;
+  /** False for a confirmation that wrote nothing (no bar was still stranded): it carries no Undo. */
+  readonly undoable: boolean;
   /** The sentence the dock shows NOW (the ask, the busy line, the failure, or the confirmation). */
   readonly message: string;
   /** The undo step this offer is about; the offer is withdrawn once it is no longer on top. */
@@ -65,6 +67,8 @@ export interface FollowLogicOfferState {
   succeed: (command: Command) => void;
   /** The write failed in a way the planner can see: `sentence` is shown in the strip, with Try again. */
   fail: (sentence: string) => void;
+  /** No bar was still stranded when Try again was pressed: say so in the strip, with no Undo, since nothing was written. */
+  settleNothing: (sentence: string) => void;
   /** The pen was lost: the shared pen banner owns the message, so the offer goes back to asking. */
   restore: () => void;
   /** "Keep it here": the offer goes, says so, and nothing is written. */
@@ -138,12 +142,20 @@ export function useFollowLogicOffer(params: {
   const begin = useCallback((): void => {
     const { enabled, readActivities, settled } = paramsRef.current;
     if (!enabled) return;
+    // A later edit ends whatever the last one left up, except the write Follow logic itself is making
+    // (which calls this too). Without it a moving, failed or confirmed offer stays in state bound to
+    // its step, and an undo of the later edit puts that step back on top and the stale strip with it.
+    const shown = offerRef.current;
+    if (shown !== null && shown.phase !== 'busy') {
+      clearTimers();
+      setOffer(null);
+    }
     const held = pendingRef.current;
     // A snapshot a settle has passed over was never decided (a skipped resolution, a read that came
     // back empty): diffing a later settle against it would offer bars for two edits.
     if (held !== null && held.settledAt === settled) return;
     pendingRef.current = { snapshot: followSnapshotOf(readActivities() ?? []), settledAt: settled };
-  }, []);
+  }, [clearTimers, setOffer]);
 
   const noteReplay = useCallback((): void => {
     pendingRef.current = null;
@@ -212,6 +224,7 @@ export function useFollowLogicOffer(params: {
       subject: first.name,
       count: ids.length,
       phase: 'idle',
+      undoable: true,
       message: followEditSentence(first.name, ids.length),
       command,
     });
@@ -272,6 +285,16 @@ export function useFollowLogicOffer(params: {
     [setOffer],
   );
 
+  const settleNothing = useCallback(
+    (sentence: string): void => {
+      const held = offerRef.current;
+      if (held === null) return;
+      setOffer({ ...held, phase: 'done', undoable: false, message: sentence });
+      paramsRef.current.announce(sentence);
+    },
+    [setOffer],
+  );
+
   const restore = useCallback((): void => {
     const held = offerRef.current;
     if (held === null) return;
@@ -299,6 +322,7 @@ export function useFollowLogicOffer(params: {
       start,
       succeed,
       fail,
+      settleNothing,
       restore,
       keep,
       dismiss,
@@ -312,6 +336,7 @@ export function useFollowLogicOffer(params: {
       start,
       succeed,
       fail,
+      settleNothing,
       restore,
       keep,
       dismiss,

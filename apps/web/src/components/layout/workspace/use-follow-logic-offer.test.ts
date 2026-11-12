@@ -9,6 +9,10 @@ import type { Command } from '@/features/undo-redo';
 import { APPLIED } from '@/features/undo-redo/replay';
 import { usePlanEditHistory } from '@/features/undo-redo/use-plan-edit-history';
 import { anActivity } from '@/test/activity-fixture';
+import { fakePlanServer } from '@/test/fake-plan-server';
+
+/** A replay context for steps that never read it. */
+const { ctx } = fakePlanServer();
 
 /**
  * **The follow-logic offer's state machine** (placed-bar-follows-link M2, ADR-0216), composed with
@@ -440,5 +444,101 @@ describe('useFollowLogicOffer', () => {
     act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
     await new Promise((done) => setTimeout(done, 20));
     expect(view.result.current.follow.offer).toBeNull();
+  });
+
+  describe('a later edit ends whatever the last one left up', () => {
+    async function offerInPhase(phase: 'failed' | 'moving' | 'done') {
+      const harness = setup();
+      harness.planEdit('Lengthen A');
+      act(() => harness.settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+      await waitFor(() => expect(harness.view.result.current.follow.offer).not.toBeNull());
+      const first = harness.view.result.current.follow.offer!.command;
+      act(() => void harness.view.result.current.follow.start());
+      if (phase === 'failed') act(() => harness.view.result.current.follow.fail('Failed.'));
+      else {
+        const step = edit('Follow logic');
+        act(() => {
+          // The write's own `beginLayoutEdit`, then its step, then the rebind.
+          harness.view.result.current.resolve.begin(['B']);
+          harness.view.result.current.follow.begin();
+          harness.view.result.current.history.record(step);
+          harness.view.result.current.follow.succeed(step);
+        });
+        if (phase === 'done') {
+          act(() =>
+            harness.settle({ rows: [bar('A'), bar('B', { visualStart: null }), bar('C')] }),
+          );
+          await waitFor(() => expect(harness.view.result.current.follow.offer?.phase).toBe('done'));
+        }
+      }
+      return { ...harness, first };
+    }
+
+    it.each(['failed', 'moving', 'done'] as const)(
+      'clears a %s offer when the next edit begins, so undoing that edit cannot bring it back',
+      async (phase) => {
+        // **Verified red** by leaving `begin` alone: the offer stays in state bound to its step, and
+        // once the later edit is undone that step is on top again and the stale strip returns.
+        const { view, planEdit } = await offerInPhase(phase);
+        planEdit('A later edit');
+        expect(view.result.current.follow.offer).toBeNull();
+        await act(async () => {
+          await view.result.current.history.undo(ctx);
+        });
+        await waitFor(() => expect(view.result.current.history.canRedo).toBe(true));
+        expect(view.result.current.follow.offer, 'the undo did not resurrect it').toBeNull();
+      },
+    );
+
+    it('leaves a BUSY offer alone: the write Follow logic is making begins an edit too', async () => {
+      const { view, settle, planEdit } = setup();
+      planEdit('Lengthen A');
+      act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+      await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
+      act(() => void view.result.current.follow.start());
+      act(() => view.result.current.follow.begin());
+      expect(view.result.current.follow.offer?.phase).toBe('busy');
+    });
+  });
+
+  it('rebinds in the same render the step is recorded, so the strip is never hidden for a frame', async () => {
+    const seen: (string | null)[] = [];
+    const harness = setup();
+    harness.planEdit('Lengthen A');
+    act(() => harness.settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+    await waitFor(() => expect(harness.view.result.current.follow.offer).not.toBeNull());
+    act(() => void harness.view.result.current.follow.start());
+    const step = edit('Follow logic');
+    // Recording and rebinding happen in one batch, as the model does it (`onRecorded`): a render
+    // between them would read the offer as no longer bound to the step on top.
+    act(() => {
+      harness.view.result.current.history.record(step);
+      harness.view.result.current.follow.succeed(step);
+      seen.push(harness.view.result.current.follow.offer?.phase ?? null);
+    });
+    expect(harness.view.result.current.follow.offer?.phase).toBe('moving');
+    expect(harness.view.result.current.follow.offer?.command).toBe(step);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('settles a Try again with nothing left to move as a visible sentence with no Undo', async () => {
+    const { view, settle, announce, planEdit } = setup();
+    planEdit('Lengthen A');
+    act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
+    await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
+    act(() => void view.result.current.follow.start());
+    act(() =>
+      view.result.current.follow.settleNothing(
+        'Nothing to move: those bars already follow their logic.',
+      ),
+    );
+    expect(view.result.current.follow.offer).toMatchObject({
+      phase: 'done',
+      undoable: false,
+      message: 'Nothing to move: those bars already follow their logic.',
+    });
+    expect(announce).toHaveBeenCalledWith(
+      'Nothing to move: those bars already follow their logic.',
+    );
   });
 });

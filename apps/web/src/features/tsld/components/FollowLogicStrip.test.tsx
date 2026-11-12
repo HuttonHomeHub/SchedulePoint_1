@@ -118,7 +118,7 @@ describe('FollowLogicStrip', () => {
     const follow = screen.getByRole('button', { name: 'Follow logic' });
     const keep = screen.getByRole('button', { name: 'Keep it here' });
     expect(follow).toHaveAccessibleDescription(
-      'Removes the hand placement, so the bar moves to where its links put it and follows them from then on.',
+      'Removes the hand placement, so the bar moves to where its logic puts it and follows it from then on.',
     );
     expect(keep).toHaveAccessibleDescription(
       'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.',
@@ -188,5 +188,21 @@ describe('FollowLogicStrip', () => {
     const follow = screen.getByRole('button', { name: 'Follow logic' });
     expect(follow).toHaveAttribute('aria-disabled', 'false');
     expect(follow).not.toHaveAccessibleDescription(/Late-start/);
+  });
+
+  it('prints the shading reason and wires it in EVERY phase, including Try again after a failure', () => {
+    // **Verified red** by restoring the idle-only condition: the failed strip then shades Try again
+    // with the overlay and prints no reason to a mouse, a keyboard or a finger (ADR-0204).
+    const { onFollow } = setup({
+      message: 'Couldn’t move “Pour slab” just now. Nothing was changed.',
+      phase: 'failed',
+      followReason: 'Turn off the Late-start overlay to clear the placement',
+    });
+    const retry = screen.getByRole('button', { name: 'Try again' });
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    const reason = screen.getByText('Turn off the Late-start overlay to clear the placement');
+    expect(retry).toHaveAttribute('aria-describedby', reason.id);
+    fireEvent.click(retry);
+    expect(onFollow).not.toHaveBeenCalled();
   });
 });

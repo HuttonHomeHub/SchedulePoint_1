@@ -1234,7 +1234,7 @@ export function ToolbarPlanWorkspace({
           <HistoryResultStrip
             kind="success"
             message={followEdit.message}
-            action={{ label: 'Undo', onClick: undoFollowEdit }}
+            action={followEdit.undoable ? { label: 'Undo', onClick: undoFollowEdit } : undefined}
             onDismiss={dismissFollowEdit}
             restoreTarget={planSurfaceTarget}
           />

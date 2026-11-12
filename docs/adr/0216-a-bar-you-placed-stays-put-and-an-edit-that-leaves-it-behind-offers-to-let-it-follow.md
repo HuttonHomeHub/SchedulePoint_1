@@ -75,6 +75,9 @@ teaches it.
     is raised, because a higher-ranked band can hide it at the settle (ADR-0132); the Link tool's confirmation is announced
     at the link and the offer after it. The Link tool's carried Undo is labelled **Undo link**, and the two sentences are
     joined "… — but …". The buttons carry `aria-describedby` descriptions of what each does.
+    Try again with no bar still stranded shows "Nothing to move: those bars already follow their logic." in the result strip with no Undo
+    (nothing was written). A later edit ends any non-idle offer, so undoing it cannot bring a stale strip back, and the offer is
+    rebound to its new undo step the moment that step is recorded.
 
 ### What the layout is, and why (amendments 1–3)
 

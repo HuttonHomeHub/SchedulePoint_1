@@ -258,7 +258,7 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     });
     expect(h.announce).toHaveBeenCalledTimes(1);
     expect(h.announce).toHaveBeenCalledWith(
-      'This plan changed since you opened it — nothing was moved. Refresh to see the latest.',
+      'Couldn’t follow logic: this plan changed since you opened it. Nothing was changed.',
     );
   });
 

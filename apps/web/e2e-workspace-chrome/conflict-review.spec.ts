@@ -926,7 +926,7 @@ test.describe('The edit offer', () => {
     );
     await offer(page).getByRole('button', { name: 'Try again' }).click();
     await expect(offer(page)).toContainText(
-      'This plan changed since you opened it — nothing was moved. Refresh to see the latest.',
+      'Couldn’t follow logic: this plan changed since you opened it. Nothing was changed.',
     );
     expect(
       (await activityRows(page, orgSlug)).map((r) => [r.name, r.version, r.visualStart]),
