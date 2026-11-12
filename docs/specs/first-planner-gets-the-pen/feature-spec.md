@@ -1,13 +1,13 @@
 # Feature Spec: The first planner to open a free plan gets the pen
 
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
 - **Author(s):** feature-analyst (Claude Code), for the product owner
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** none yet — the request is the product owner's runbook chapter 6 overall note, 2026-11-11
 - **Roadmap link:** none; a workflow change to a shipped Must-have (single-editor plan lock, `docs/PROJECT_BRIEF.md` §8)
 - **Related ADR(s):** ADR-0028 (the pen; amended by this work), ADR-0048 (undo is per pen session), ADR-0081
   (entry point and journey), ADR-0088 D1 (no flag), ADR-0112 (the pen sentence), ADR-0133 D5 (the pen leads the
-  row it unlocks), ADR-0190 (what 1.0 promises). New: **ADR-0217** (provisional number, see §4.7).
+  row it unlocks), ADR-0190 (what 1.0 promises). New: **ADR-0220** (provisional number, see §4.7).
 
 ---
 
@@ -349,7 +349,7 @@ behaviour-neutral (plan M0).
 
 - None to land first. Touches `apps/web` only (a builder is concurrently in `apps/api` and
   `docs/specs/progress-before-data-date`; no overlap).
-- ADR-0217 must be filed before or with M1.
+- ADR-0220 must be filed before or with M1.
 
 ---
 
@@ -459,11 +459,11 @@ acquisitions in the logs. It is additive (not a break under ADR-0190 D2) but buy
 row and required by heartbeat and release), which would make release and heartbeat exact per tab. It is a schema
 change and an API change for a race US-4 already makes harmless. Listed as the escape hatch.
 
-### 4.7 The ADR (required) — outline of ADR-0217
+### 4.7 The ADR (required) — outline of ADR-0220
 
 Number provisional: take the next free number at landing (another epic may file one first).
 
-> **ADR-0217 — The first planner to open a free plan holds the pen** _(amends ADR-0028; Accepted on approval)_
+> **ADR-0220 — The first planner to open a free plan holds the pen** _(amends ADR-0028; Accepted on approval)_
 >
 > - **Context.** ADR-0028 chose an explicit Start editing as an un-asked default
 >   (`docs/features/plan-edit-lock/feature-spec.md:149-150`); the owner has now asked for the opposite
@@ -481,7 +481,7 @@ Number provisional: take the next free number at landing (another epic may file 
 > - **Alternatives.** Acquire on first gesture; a per-person preference; keyboard shortcut / remember-per-session;
 >   per-tab lease id; auto-hand-over of an untouched pen.
 > - **Consequences.** A reader holds the pen while the plan is open (bounded by D5); the e2e estate presses
->   Start editing far less; ADR-0028's header gains "amended by ADR-0217"; CLAUDE.md §16 gains one line and
+>   Start editing far less; ADR-0028's header gains "amended by ADR-0220"; CLAUDE.md §16 gains one line and
 >   ADR-0028's line its amendment note.
 
 ### 4.8 Approach and alternatives
@@ -525,7 +525,7 @@ No scheduling input is added; `computeSchedule` is not reached by this change. N
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
-- Related docs updated by this change: ADR-0217 (new), ADR-0028 (header amendment line), CLAUDE.md §16 (one line
+- Related docs updated by this change: ADR-0220 (new), ADR-0028 (header amendment line), CLAUDE.md §16 (one line
   plus ADR-0028's annotation), `docs/UX_STANDARDS.md` (the "Start editing" lines at 219/317/431, checked),
   `docs/TESTING.md` (the "Start editing" note), `docs/TEST_PLAYBOOK.md` (pen lines 114/116, checked),
-  `docs/archive/design/plan-edit-lock-web.md` is archive and is **not** edited; ADR-0217 records the correction.
+  `docs/archive/design/plan-edit-lock-web.md` is archive and is **not** edited; ADR-0220 records the correction.

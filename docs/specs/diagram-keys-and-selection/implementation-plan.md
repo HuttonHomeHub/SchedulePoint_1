@@ -1,7 +1,7 @@
 # Implementation Plan: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
 - **Owner:** product owner; built by `builder` agents, one milestone per pull request.
 
 ## Breakdown
@@ -92,10 +92,10 @@ announcement and the API count; `e2e-multi-select/multi-select.spec.ts` — clic
 > `dialog[open]`, `modalOpen`); journeys above; the bottom-row suite list is **not** required (no layout change), but
 > `web:undo`, `web:multi-select`, `web:authoring-flow`, `web:gantt-editing` are.
 
-##### Task 1 — ADR-0217 and the key-scope fallback
+##### Task 1 — ADR-0218 and the key-scope fallback
 
 - **Development steps:**
-  1. File ADR-0217 (D1, D2; spec §4.9) and its one line in `CLAUDE.md` §16.
+  1. File ADR-0218 (D1, D2; spec §4.9) and its one line in `CLAUDE.md` §16.
   2. Move the document listener out of `use-undo-redo-keybindings.ts:128-139` into `usePlanWorkspaceKeyScope`, acting
      when `activeElement` is null, `<body>`, or contains the workspace root (`rootRef`), and no `dialog[open]`. It
      calls the composed handler, so copy/paste and `?` gain the fallback too.
@@ -133,7 +133,7 @@ the reason announced and nothing deleted.
      `BulkSelectionBar`'s `onDelete` (`TsldPanel.tsx:3412-3415`), refused with `bulk.gate.reason`.
   2. `aria-keyshortcuts="Delete"` on the bar's Delete buttons; shortcuts sheet row "Delete or Backspace — delete the
      selection (asks first)".
-  3. ADR-0217 dated amendment D3. accessibility-reviewer. Changeset `@repo/web` minor.
+  3. ADR-0218 dated amendment D3. accessibility-reviewer. Changeset `@repo/web` minor.
 
 ---
 
@@ -157,7 +157,7 @@ the Link tool armed, double-click, assert no dialog.
 - **Development steps:**
   1. `TsldCanvas`: `onDoubleClick` → hit-test (handles count as the bar) → `onActivateBar?.(id)` in Select only.
   2. `TsldPanel`: route via the selection context's Edit/Progress gates (no second rule).
-  3. Shortcuts sheet row; ADR-0217 amendment D4; accessibility-reviewer; changeset minor.
+  3. Shortcuts sheet row; ADR-0218 amendment D4; accessibility-reviewer; changeset minor.
 
 ---
 
@@ -179,7 +179,7 @@ the Link tool armed, double-click, assert no dialog.
 - **Development steps:**
   1. `pointerDown` stores `selectModifier` on `repositioning`/`resizing`; `pointerUp` returns it beside `select`.
   2. `TsldCanvas.tsx:2997`: `onSelect(select, modifier)`.
-  3. ADR-0217 amendment D5; changeset `@repo/web` patch.
+  3. ADR-0218 amendment D5; changeset `@repo/web` patch.
 
 ---
 
@@ -213,7 +213,7 @@ above the floor M5 shows holds on CI; open More, press a moved item (e.g. Duplic
 
 > **Complexity:** L · **Dependencies:** M5, Q4 = yes
 > **Risks:** reintroducing what the owner removed → bounded to `short`, declared per item, owner sees M5's pictures
-> first; `Toolbar` contract change → ADR-0218, component-reviewer + accessibility-reviewer before release; roving
+> first; `Toolbar` contract change → ADR-0219, component-reviewer + accessibility-reviewer before release; roving
 > order and first Tab stop (ADR-0187 D1) → journeys assert first stop, Home, End; focus when a resize moves the
 > command the reader is on → ADR-0185 D4's rule (focus follows, move announced); the follow-logic offer's row
 > (ADR-0216) shares the dock → run the full bottom-row suite list.
@@ -222,7 +222,7 @@ above the floor M5 shows holds on CI; open More, press a moved item (e.g. Duplic
 ##### Task 1 — the short-window ladder (shape per M5)
 
 - **Development steps:**
-  1. File ADR-0218; §16 line.
+  1. File ADR-0219; §16 line.
   2. Declare each item's short-window place; implement More (the APG `Menu`, items keep focus and reasons per
      ADR-0082/0204).
   3. S3: keep the selected bar's screen position (cause per M5).
@@ -262,7 +262,7 @@ and Confirm shaded.
 M0 → M1 → M2 → M4 → M3 → M5 → M6 → M7. M1 to M4 each ship on their own and are each valuable alone; M2 and M3 work
 from the keyboard and pointer without M1, but their pointer journeys are cleanest after it. M6 and M7 wait for M5 and
 the owner's look at its pictures. Every slice keeps `main` releasable. No flag (ADR-0088 D1); the rollback is the
-commit. Close the epic with the spec marked shipped, ADR-0217/0218 Accepted, and `docs/HANDOFF.md` updated (including
+commit. Close the epic with the spec marked shipped, ADR-0218/0218 Accepted, and `docs/HANDOFF.md` updated (including
 the correction of its line 275).
 
 ## Definition of Done (per task)

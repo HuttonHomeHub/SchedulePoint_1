@@ -1,7 +1,7 @@
 # Implementation Plan: The first planner to open a free plan gets the pen
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — awaiting approval before implementation
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
 - **Owner:** product owner (approval); builder agent (implementation)
 
 ## Breakdown
@@ -9,7 +9,7 @@
 ```mermaid
 flowchart LR
   E["Epic: first planner gets the pen"] --> M0["M0 — one pen helper for every journey<br/>(test-only, behaviour-neutral)"]
-  E --> M1["M1 — the pen on opening<br/>(US-1..US-4, ADR-0217, journey)"]
+  E --> M1["M1 — the pen on opening<br/>(US-1..US-4, ADR-0220, journey)"]
   E --> M2["M2 — the requester takes a freed pen<br/>(US-5)"]
   E --> M3["M3 — a background tab lets go<br/>(US-6; only if Q3 = yes)"]
   M0 --> M1 --> M2
@@ -176,7 +176,7 @@ via the existing `setUpTwoActors` fixture (`e2e-edit/pen-handoff.spec.ts:66-103`
 - **Description:** Read each of the ~14 free-state assertions (spec §3) and decide: still valid (released in
   the same opening) or needs `releaseThePen` first (reached by reload/`goto`). Update `e2e-edit/pen-smoke.spec.ts`
   so its opening assertion is the auto-held state and its free-state assertion follows an explicit Stop. File
-  ADR-0217 (outline in spec §4.7); add the "amended by ADR-0217" line to ADR-0028's header; one line in CLAUDE.md
+  ADR-0220 (outline in spec §4.7); add the "amended by ADR-0220" line to ADR-0028's header; one line in CLAUDE.md
   §16 and ADR-0028's annotation; check `docs/UX_STANDARDS.md:219,317,431` and `docs/TEST_PLAYBOOK.md:114,116`.
   Changeset: `@repo/web` **minor** ("A plan you open while nobody else is editing it is yours to edit
   straight away").
@@ -257,7 +257,7 @@ further 90 s a peer can take over at once, and after 120 s it is free for whoeve
 - **Complexity:** S
 - **Dependencies:** M1
 - **Risks:** as above.
-- **Testing:** as above; ADR-0217 D5 confirmed; changeset `@repo/web` patch.
+- **Testing:** as above; ADR-0220 D5 confirmed; changeset `@repo/web` patch.
 
 ---
 
@@ -295,4 +295,4 @@ tests, docs, security, performance, accessibility, Docker build, CI, changelog, 
 | Screen readers hear "No one is editing" then "You're editing" on every open                      | med without the suppression | low               | `resolveLockView` returns the loading view while the automatic acquire is pending (US-1); accessibility review                       |
 | Admin auto-acquire surprises an admin who only browses                                           | med                         | low               | Q2; Stop editing; never an override                                                                                                  |
 | Log volume from `plan_edit_lock.acquired`                                                        | high                        | negligible        | One info line per Planner opening; no alerting keys on it                                                                            |
-| Lost undo history on return from a long hidden spell (M3)                                        | med                         | low–med           | Stated to the owner in Q3 and in ADR-0217 D5                                                                                         |
+| Lost undo history on return from a long hidden spell (M3)                                        | med                         | low–med           | Stated to the owner in Q3 and in ADR-0220 D5                                                                                         |

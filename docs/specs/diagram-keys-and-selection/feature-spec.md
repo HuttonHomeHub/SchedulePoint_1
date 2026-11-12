@@ -1,6 +1,6 @@
 # Feature Spec: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
-- **Status:** Draft — awaiting approval before implementation.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, first severity-2 batch (chosen 2026-11-12): runbook steps 3.3,
@@ -8,7 +8,7 @@
   ADR-0105: this adds user-facing entry points (two keys and a gesture) and may change a shared component's public
   contract (`Toolbar`), so it is a spec, not a register row.
 - **Roadmap link:** GUI review remediation (`docs/HANDOFF.md`, "What is next").
-- **Related ADR(s):** **one new ADR is required at M1** (ADR-0217 if still free when filed; 0216 is the highest on
+- **Related ADR(s):** **one new ADR is required at M1** (ADR-0218 if still free when filed; 0216 is the highest on
   disk, `docs/adr/021*.md` listed 2026-11-12), outline in §4.9. **A second ADR is likely at M6** (outline in §4.9),
   decided by M5's measurement. Reads and builds on ADR-0026 §7, ADR-0048 (M5 body fallback), ADR-0064, ADR-0079 §4,
   ADR-0080, ADR-0092, ADR-0093, ADR-0111, ADR-0114, ADR-0135, ADR-0177, ADR-0185, ADR-0187, ADR-0204, ADR-0213,
@@ -446,7 +446,7 @@ short windows by a declared rule, but it is still an overflow, which is why it i
 
 ### 4.9 ADR outlines
 
-**ADR-0217 (M1) — "A click on the diagram gives it the keyboard".** Status Proposed → Accepted at M1.
+**ADR-0218 (M1) — "A click on the diagram gives it the keyboard".** Status Proposed → Accepted at M1.
 Context: P1 above. Decisions: **D1** a completed press on the scene canvas in Select, Marquee, Link or LOE moves focus
 to the diagram's list with `preventScroll`, without the list's row-0 default, unless a create popover, dialog or text
 field holds focus. **D2** the workspace key scope also acts when focus is on `<body>` or an ancestor of the workspace
@@ -458,7 +458,7 @@ Consequences: Escape clears a selection after a click; a screen reader hears the
 shortcuts sheet gains two rows. Alternatives: B and C alone (§4.7). Reviewed under ADR-0111 before release.
 (D3–D5 are added to the ADR by M2–M4 as dated amendments if the ADR is filed at M1 with D1–D2 only.)
 
-**ADR-0218 (M6, if Q4 is yes and M5 supports S1) — "A selection bar on a short window keeps one line, and says what
+**ADR-0219 (M6, if Q4 is yes and M5 supports S1) — "A selection bar on a short window keeps one line, and says what
 moved".** Amends ADR-0187 (order on a short window), ADR-0092 / ADR-0114 (the dock's vertical budget in selection
 states), and records the bounded exception to the `Toolbar` no-overflow position. If S1 needs a `Toolbar` prop, it is
 a public-contract change: component-reviewer and accessibility-reviewer before release (ADR-0111).
