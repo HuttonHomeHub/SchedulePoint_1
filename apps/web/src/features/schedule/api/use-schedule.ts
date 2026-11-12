@@ -23,7 +23,7 @@ export { scheduleKeys };
 export const PLAN_START_REQUIRED = 'PLAN_START_REQUIRED';
 
 /** Shared guidance shown wherever a plan can't be scheduled for lack of a start date. */
-export const NO_START_HINT = 'Set the plan’s start date, then recalculate.';
+export const NO_START_HINT = 'Set the plan’s data date in Edit plan details, then recalculate.';
 
 /** The generic recalc-failure message (anything that isn't the 422 no-start rejection). */
 export const RECALC_FAILED_MESSAGE = 'Couldn’t recalculate the schedule. Please try again.';

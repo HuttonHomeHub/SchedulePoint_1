@@ -82,7 +82,7 @@ export function PlanChromeDialogs({
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
           <dt className="text-muted-foreground">Status</dt>
           <dd>{PLAN_STATUS_LABELS[plan.status]}</dd>
-          <dt className="text-muted-foreground">Planned start</dt>
+          <dt className="text-muted-foreground">Data date</dt>
           <dd>{formatCalendarDate(plan.plannedStart)}</dd>
           {plan.description ? (
             <>

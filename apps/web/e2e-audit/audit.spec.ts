@@ -132,10 +132,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
 
   await admin.getByRole('button', { name: 'New plan' }).click();
   await admin.getByRole('dialog').getByLabel('Name').fill('Programme');
-  await admin
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await admin.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await admin.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await admin.getByRole('link', { name: 'Programme', exact: true }).click();
 

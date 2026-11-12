@@ -33,13 +33,6 @@ const FIELD_LABELS: Record<ProgressRefusalField, string> = {
 
 const FORM_ORDER: readonly ProgressRefusalField[] = ['actualStart', 'actualFinish', 'resumeDate'];
 
-/**
- * Where the data date is edited, until the Edit plan details dialog calls that box "Data date"
- * (M4 of `docs/specs/progress-before-data-date/`): the planner is told the name on the screen, not
- * the name of the thing. **M4 drops this parenthetical** — it is one constant so that is one edit.
- */
-const DATA_DATE_BOX = ' (the Planned start box in Edit plan details)';
-
 const KEPT = 'What you typed stays here until you close the editor.';
 
 /** The server's ISO calendar day, or `null` when the key is absent or not a `YYYY-MM-DD` string. */
@@ -98,7 +91,7 @@ export function progressRefusal(
       ? `${FIELD_LABELS[fields[0]]}, ${latest}, is after`
       : `${fields.map((field) => FIELD_LABELS[field]).join(' and ')} are after`;
   const remedy = canMovePlanDates
-    ? `Move the data date${DATA_DATE_BOX} to ${latest} or later, then save again.`
+    ? `Move the data date to ${latest} or later in Edit plan details, then save again.`
     : `A planner needs to move the data date to ${latest} or later first.`;
   const sentence = `${subject} the plan’s data date, ${data}. ${remedy} ${KEPT}`;
   const [first, ...rest] = fields;

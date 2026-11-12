@@ -45,10 +45,7 @@ async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Logic');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
   await takeThePen(page);
@@ -73,10 +70,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
 
   // Before scheduling there is nothing to plot: the diagram prompts a recalculation.
   await page.getByRole('button', { name: 'Edit plan details' }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-01');
+  await page.getByRole('dialog').getByLabel('Data date').fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');

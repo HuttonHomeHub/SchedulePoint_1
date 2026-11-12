@@ -165,6 +165,7 @@ export function ReportedProgressPanel({
           <TextField
             label="Actual finish"
             type="date"
+            hint="Makes the activity complete. Percent complete is not changed for you."
             error={form.formState.errors.actualFinish?.message}
             {...form.register('actualFinish')}
           />
@@ -195,6 +196,15 @@ export function ReportedProgressPanel({
           <span className="text-muted-foreground text-sm">Resulting status</span>
           <strong className="text-sm font-semibold">{deriveStatusLabel(values)}</strong>
         </div>
+        {/* An actual finish completes the activity on the server and leaves the percentage as typed
+          (N08), so the two can disagree; saying so here is the whole fix, not changing either. */}
+        {values.actualFinish &&
+        Number.isFinite(values.percentComplete) &&
+        values.percentComplete < 100 ? (
+          <p className="text-muted-foreground text-sm">
+            Percent complete is still {values.percentComplete} %.
+          </p>
+        ) : null}
         <ScopeSaveBar
           gate={gate}
           dirty={isDirty}

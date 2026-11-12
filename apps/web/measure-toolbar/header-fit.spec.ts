@@ -51,10 +51,7 @@ test('the app header row, measured for fit and pointer reachability', async ({ p
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Riverside — Phase 2 Substructure');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
   // `Plan commands` is the deck. This line waited for a toolbar named `View and navigate` until the

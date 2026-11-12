@@ -26,7 +26,11 @@ export function expectRefusalBesideSave(alert: HTMLElement, save: HTMLElement): 
   expect(alert).toHaveAttribute('role', 'alert');
   expect(alert.closest('form')).toBe(save.closest('form'));
   // The bar is the Save's own container: the refusal is among its descendants, not merely nearby.
-  expect(save.parentElement?.parentElement).toContainElement(alert);
+  // Found by the bar's own hook, so a change to its inner markup cannot make this pass or fail by
+  // counting parents.
+  const bar = save.closest('[data-scope-save-bar]');
+  expect(bar, 'Save is inside a ScopeSaveBar').not.toBeNull();
+  expect(bar).toContainElement(alert);
   expect(save.getAttribute('aria-describedby')?.split(' ')).toContain(alert.id);
   expect(alert).not.toHaveFocus();
 }

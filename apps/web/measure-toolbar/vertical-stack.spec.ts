@@ -355,10 +355,7 @@ test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page
   // PROCEED to WITHDRAWN (`m0-menu-band-measurement.md`): a harness that measures the one term a
   // documented risk is about, at that term's most favourable value, answers a question nobody asked.
   await page.getByRole('dialog').getByLabel('Name').fill('Riverside — Phase 2 Substructure');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();

@@ -16,9 +16,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField, TextareaField } from '@/components/ui/form';
 
 /**
- * Create-or-edit dialog for a plan under a project. Adds a status select and an
- * optional planned-start date (native `<input type="date">`, so the wire value
- * is always `YYYY-MM-DD`). Edit mode PATCHes with the row's `version`.
+ * Create-or-edit dialog for a plan under a project. Adds a status select and a
+ * required start date, which is the plan's data date (native `<input type="date">`, so the wire
+ * value is always `YYYY-MM-DD`). Edit mode PATCHes with the row's `version`.
  */
 export function PlanFormDialog({
   orgSlug,
@@ -142,9 +142,19 @@ function PlanForm({
           bold. A planner told the field was optional left it blank, pressed Create plan and was
           refused by the field they had just been told to skip; the refusal then called it "a
           project start date", a third name for one control on one screen. Found by the ADR-0096
-          journey, which could not create a plan at all. */}
+          journey, which could not create a plan at all.
+          **Two labels for one stored value, on purpose** (`docs/specs/progress-before-data-date/`
+          D-b): a new plan has no data date to speak of yet, so it asks for a start and says the
+          date doubles as the data date; an existing plan's date is the thing progress is refused
+          against, so the box carries that name, which is also what the refusal tells the planner
+          to look for. */}
       <TextField
-        label="Planned start"
+        label={isEdit ? 'Data date' : 'Start date'}
+        hint={
+          isEdit
+            ? 'Activities are scheduled from this date. Progress can be reported up to it.'
+            : 'This is also the plan’s data date.'
+        }
         type="date"
         error={errors.plannedStart?.message}
         {...register('plannedStart')}

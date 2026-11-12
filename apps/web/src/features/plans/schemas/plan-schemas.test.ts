@@ -13,9 +13,7 @@ describe('planFormSchema', () => {
     const result = planFormSchema.safeParse({ ...base, plannedStart: '' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.flatten().fieldErrors.plannedStart).toContain(
-        'A planned start date is required.',
-      );
+      expect(result.error.flatten().fieldErrors.plannedStart).toContain('A date is required.');
     }
   });
 

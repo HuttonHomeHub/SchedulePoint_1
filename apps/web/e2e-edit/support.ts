@@ -37,10 +37,7 @@ export async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Logic');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
 }
@@ -48,10 +45,7 @@ export async function openNewPlan(page: Page): Promise<void> {
 /** Set the plan's planned start (needed before the schedule can compute). */
 export async function setPlannedStart(page: Page, isoDate: string): Promise<void> {
   await page.getByRole('button', { name: 'Edit plan details' }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill(isoDate);
+  await page.getByRole('dialog').getByLabel('Data date').fill(isoDate);
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
 }
 

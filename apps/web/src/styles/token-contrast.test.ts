@@ -1052,6 +1052,34 @@ describe.each(THEME_SELECTORS)('%s — a destructive menu item at rest', (theme)
 });
 
 /**
+ * **A refusal in a Save bar** (ADR-0217 D2). `Alert tone="error"` paints `text-destructive-text` on
+ * `bg-destructive-text/10` — a 10 % wash of the same ink — over whatever the dialog's body is, which
+ * is `--panel` or `--background` depending on the surface the bar sits in. The pair is the ink on
+ * its own wash over each ground, composited rather than assumed: a wash only ever moves the ground
+ * toward the ink, so the ink-on-ground ratio above is an upper bound and this is the real one.
+ * Held in the `page` scope, where a dialog portalled to `body` reads its tokens.
+ */
+describe.each(THEME_SELECTORS)('%s — a refusal in a Save bar', (theme) => {
+  it.each(['--panel', '--background'])('--destructive-text on its own wash over %s', (ground) => {
+    const tokens = resolve(theme, 'page');
+    const read = (name: string) => {
+      const v = tokens.get(name);
+      if (v === undefined) throw new Error(`${name} is not declared`);
+      return parseColour(v);
+    };
+    const ink = read('--destructive-text');
+    // Both tokens are opaque in the page scope; the page's own white sits under a ground that is not.
+    const under = compositeOver(read(ground), [1, 1, 1]);
+    const wash = compositeOver({ ...ink, alpha: 0.1 }, under);
+    const value = contrastRatio(ink.srgb, wash);
+    expect(
+      value,
+      `--destructive-text on its 10% wash over ${ground} is ${fmtRatio(value)}, needs 4.5:1`,
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+/**
  * **A shaded control's reason, printed (ADR-0204).** A menu item prints it in `text-muted-foreground
  * text-xs` on `--popover`, and its hovered or focused item sits on `--accent`; a reason tip is the
  * same ink on the same panel. Small text, so 4.5:1. Held in the `page` scope because a menu and a tip

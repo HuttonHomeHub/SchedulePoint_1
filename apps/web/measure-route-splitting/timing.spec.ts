@@ -120,10 +120,7 @@ async function seed(browser: Browser): Promise<Seeded> {
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Programme');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-03-02');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-03-02');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Programme', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);

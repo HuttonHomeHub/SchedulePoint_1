@@ -169,6 +169,33 @@ describe('ReportedProgressPanel — how problems are reported', () => {
   });
 });
 
+describe('ReportedProgressPanel — what an actual finish does', () => {
+  it('says on the field that an actual finish completes the activity and leaves the percentage', () => {
+    renderProgress();
+    expect(screen.getByLabelText('Actual finish')).toHaveAccessibleDescription(
+      'Makes the activity complete. Percent complete is not changed for you.',
+    );
+  });
+
+  it('notes the percentage that stays, only while an actual finish sits beside a percentage under 100', () => {
+    renderProgress();
+    expect(screen.queryByText(/Percent complete is still/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '40' } });
+    expect(screen.queryByText(/Percent complete is still/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-01-12' } });
+    expect(screen.getByText('Percent complete is still 40 %.')).toBeInTheDocument();
+    expect(screen.getByText('Complete')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '100' } });
+    expect(screen.queryByText(/Percent complete is still/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '' } });
+    expect(screen.queryByText(/Percent complete is still/)).toBeNull();
+  });
+});
+
 describe('ValueMeasurePanel — how problems are reported', () => {
   it('shows a refused save beside Save measure, once', () => {
     render(<MeasureHost onSave={vi.fn()} error="This activity changed elsewhere." />);

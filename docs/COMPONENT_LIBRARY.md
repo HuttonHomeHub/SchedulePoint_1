@@ -146,6 +146,7 @@ Pass the refusal here and delete any `<p role="alert">` of your own at the top o
 - **Save is described by it** (`aria-describedby`, after any gate reason), so a screen-reader user on Save
   hears the refusal as the button's description. The Alert is `role="alert"`, so it is also announced once as
   it appears: do not announce it again from the caller.
+- **Its root carries `data-scope-save-bar`** and its props are exported as `ScopeSaveBarProps`; a test or journey finds the bar with `closest('[data-scope-save-bar]')`, never by counting parents.
 - **It never takes focus.** The reader is on Save. The bar scrolls itself into view (`block: 'nearest'`, once
   per new refusal; guarded for jsdom) and does nothing else.
 - **`action` is outside the alert and outside the description** (a "Refresh this section" button): it is a

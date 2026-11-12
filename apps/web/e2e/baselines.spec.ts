@@ -45,10 +45,7 @@ async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-05');
+  await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
   await takeThePen(page);
@@ -189,10 +186,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
 
   // Schedule the plan: a start date + one activity, then recalculate.
   await page.getByRole('button', { name: 'Edit plan details' }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel(/Planned start/)
-    .fill('2026-01-01');
+  await page.getByRole('dialog').getByLabel('Data date').fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
   await addActivity(page, 'Excavate');
   await recalculate(page);

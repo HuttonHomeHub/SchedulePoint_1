@@ -1112,6 +1112,8 @@ export function ActivityEditorSession({
                     onSave={saveProgress}
                     pending={saves.progressPending}
                     saved={savedSlots.progress === true}
+                    // A refusal the server attributed to a field is shown on that field (ADR-0217 D1); only a
+                    // field-less one, or one that could not be placed, reaches the Save bar through `error`.
                     error={progressAlert(panelErrors.progress)}
                     refusal={panelErrors.progress?.refusal ?? null}
                     formRef={progressFormRef}

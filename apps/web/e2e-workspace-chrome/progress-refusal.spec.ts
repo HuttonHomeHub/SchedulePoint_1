@@ -122,7 +122,8 @@ test.describe('Progress refusal', () => {
     // The sentence names both dates, and the field it hangs from is described by it.
     await expect(refusal).toContainText('12 Jan 2026');
     await expect(refusal).toContainText('05 Jan 2026');
-    await expect(refusal).toContainText('the Planned start box in Edit plan details');
+    await expect(refusal).toContainText('in Edit plan details, then save again');
+    await expect(refusal).not.toContainText('Planned start');
     expect(DATA_DATE, 'the fixture’s data date is the day the sentence quotes').toBe('2026-01-05');
     await expect(finish).toHaveAccessibleDescription(/data date/);
   });
@@ -192,8 +193,8 @@ test.describe('Progress refusal', () => {
       const button = Array.from(el.closest('form')?.querySelectorAll('button') ?? []).find(
         (b) => b.textContent?.trim() === saveLabel,
       );
-      // The bar is the button's row's container: row and refusal are its two children.
-      return button !== undefined && button.parentElement?.parentElement?.contains(el) === true;
+      const bar = button?.closest('[data-scope-save-bar]');
+      return bar?.contains(el) === true;
     }, 'Save general');
     expect(sameBar, 'the refusal is inside the Save button’s own bar').toBe(true);
 
@@ -219,5 +220,72 @@ test.describe('Progress refusal', () => {
     await expect(save, 'Refresh hands focus to the Save that stays').toBeFocused();
     await expect(editor.getByRole('alert').filter({ hasText: /\S/ })).toHaveCount(0);
     await expect(editor.getByLabel('Name')).toHaveValue('Dig footings');
+  });
+
+  test('a planner moves the data date, the foot row shows it at once, and the refused save succeeds', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Data date');
+    await ensurePen(page);
+
+    const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
+    const [dig] = seeded;
+    if (!dig) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    await findBar(page, dig.id);
+    await page.setViewportSize({ width: 1024, height: 600 });
+
+    // The refusal first, so the planner is sent to the plan's details by it.
+    const dock = page.getByRole('toolbar', { name: /^Actions for / });
+    await dock.getByRole('button', { name: 'Progress' }).click();
+    const editor = page.getByRole('dialog');
+    await editor.getByLabel('Actual start').fill(START_BEFORE);
+    await editor.getByLabel('Actual finish').fill(FINISH_AFTER);
+    await editor.getByRole('button', { name: 'Save progress' }).click();
+    await expect(editor.getByLabel('Actual finish')).toHaveAttribute('aria-invalid', 'true');
+    await expect(editor.getByText(/is after the plan.s data date/)).toContainText(
+      'Move the data date to 12 Jan 2026 or later in Edit plan details, then save again.',
+    );
+    // The draft is unsaved, so closing asks first; the planner has to discard it to go and move the date.
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Discard unsaved changes?' })
+      .getByRole('button', { name: 'Discard' })
+      .click();
+    await expect(editor).toBeHidden();
+
+    // The foot row reads the day the schedule was last given, and says so under its own name.
+    await expect(page.getByLabel('Data date: 05 Jan 2026')).toBeVisible();
+
+    // The field is called what the sentence calls it, and the hint says what the date does.
+    await page.getByRole('button', { name: 'Edit plan details' }).click();
+    const details = page.getByRole('dialog');
+    const dataDate = details.getByLabel('Data date');
+    await expect(dataDate, 'the plan’s date box is labelled Data date').toHaveValue(DATA_DATE);
+    await expect(dataDate).toHaveAccessibleDescription(/Progress can be reported up to it/);
+    await dataDate.fill(FINISH_AFTER);
+    await details.getByRole('button', { name: 'Save changes' }).click();
+    await expect(details).toBeHidden();
+
+    // Fresh without Recalculate and without a reload: the footer is not waiting for either.
+    await expect(
+      page.getByLabel('Data date: 12 Jan 2026'),
+      'the foot row shows the new data date straight away',
+    ).toBeVisible();
+
+    // And the save that was refused now goes through, with the same dates.
+    await findBar(page, dig.id);
+    await dock.getByRole('button', { name: 'Progress' }).click();
+    const again = page.getByRole('dialog');
+    await again.getByLabel('Actual start').fill(START_BEFORE);
+    await again.getByLabel('Actual finish').fill(FINISH_AFTER);
+    await again.getByRole('button', { name: 'Save progress' }).click();
+    await expect(again.getByText('Saved.')).toBeVisible();
+    await expect(again.getByLabel('Actual finish')).not.toHaveAttribute('aria-invalid', 'true');
   });
 });

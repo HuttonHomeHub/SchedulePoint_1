@@ -73,6 +73,10 @@ export function useUpdatePlan(orgSlug: string, projectId: string) {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
         queryClient.invalidateQueries({ queryKey: planKeys.detail(orgSlug, input.planId) }),
+        // The foot row's "Data date" reads the schedule summary, not the plan: without this it kept
+        // the old date until a recalculation or a reload, and the planner who had just moved it
+        // was told it had not changed.
+        queryClient.invalidateQueries({ queryKey: scheduleKeys.summary(orgSlug, input.planId) }),
       ]),
   });
 }
