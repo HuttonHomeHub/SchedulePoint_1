@@ -8,6 +8,7 @@
   armed trigger already says the same thing), ADR-0112 D1 (the pen's sentence keeps its live region
   but stops painting)
 - **Spec:** [`docs/specs/foot-row/`](../specs/foot-row/)
+- **Amended by:** ADR-0216 (2026-11-11) — D1 (an event strip may cost its own line while it waits) and D2 (the facts and the toggle are one trailing group).
 
 ## Context
 
@@ -361,3 +362,15 @@ Every fix carries a regression test verified red against the specific defect it 
 
 **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity gate
 is untouched by construction.
+
+## Amendment (2026-11-11) — one trailing group, and a drift stated (ADR-0216)
+
+**D2 says "the facts lead and the dock follows." That has been untrue since foot-row-and-deck M3**: the code puts the
+dock outlet first and the facts trailing (`activity-bottom-panel.tsx`, whose docblock records why D2's reason was
+false), and this ADR carried no note. It is stated here and D2 is amended to the code.
+
+**The facts and the panel toggle are now one trailing item** (`data-foot-trail`). With three separate items a
+wrapping row can leave the toggle alone on a line of its own for a band of foot-row width exactly the toggle's width
+plus a gap, at any floor value, which cost 48 to 120 px in the dock as it shipped (`docs/TECH_DEBT.md` #581, read
+in the M0d measuring pass). **D1's "never asked to wrap" gains one reading:** an event strip that marks itself
+`data-dock-row` may take a line of its own while it waits for an answer; every other strip is unchanged.

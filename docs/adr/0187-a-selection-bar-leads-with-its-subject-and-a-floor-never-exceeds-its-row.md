@@ -1,5 +1,6 @@
 # ADR-0187: A selection bar leads with its subject, and a floor never exceeds its row
 
+- **Amended by:** ADR-0216 (2026-11-11) — D3's own-row floor is no longer the selection bar's alone.
 - **Status:** Accepted — 2026-10-11. The product owner approved the spec's questions on 2026-10-11: Q1 yes (the bar
   leads with the activity's own actions on every selection), Q2 conditional on measurement (it did not pass),
   Q3 and Q4 close.
@@ -72,3 +73,12 @@ change, which moves the media queries as well, reads clean on both pointers.
   readings, including the plain selection at 1646 x 1097 that `dock.spec.ts` holds as an equality. The control stays an
   icon with its name and tooltip. No divider can start a wrapped line alone: a control always shares its line.
 - No flag (ADR-0088 D1); the rollback is the commit.
+
+## Amendment (2026-11-11) — a marked notice strip carries the 36 rem floor on any pointer (ADR-0216)
+
+D3 declined to extend the own-row floor to fine pointers, because for the selection bar it cost 40 px at 1120 to
+1250 px. That stands **for the selection bar** (`data-dock-wide`). ADR-0216 adds a second marker, `data-dock-row`,
+set by a notice strip that must be read whole (the follow-logic offer): an outlet holding one asks for
+`min(36rem, 100%)` on **any** pointer, as a floor and never a content basis, so the rejected content basis is
+still rejected. M0b to M0d of that epic measured it: 1,354 readings, extra at most 0 in every cell. The arbitrary
+`min(16rem, 100%)` floor of `NoticeStrip`'s `messageFit="wrap"` is recorded under D2 beside the two floors above.

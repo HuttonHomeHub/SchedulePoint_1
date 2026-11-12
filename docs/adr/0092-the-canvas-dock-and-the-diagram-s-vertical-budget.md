@@ -3,6 +3,7 @@
 - **Status:** Accepted (M1–M4 + M6 landed 2026-08-13; **M5 withdrawn by the product owner on the measurement**)
 - **Amended by:** ADR-0180 (2026-10-08) — the diagram's vertical budget is no longer always `CANVAS_MIN_HEIGHT`:
   when the body is too short to give the panel rows, the diagram yields the whole body.
+- **Amended by:** ADR-0216 (2026-11-11) — D2's "a row the workspace already pays for" bears an event strip's own line while it waits.
 - **Date:** 2026-08-13
 - **Supersedes:** nothing
 - **Amends:** ADR-0064 (§4 — where a transient statement lives), ADR-0031 (Fork-2 — the selection
@@ -300,3 +301,12 @@ bottom of the screen.
   each for a good local reason, and the unrecorded consequence was that the one placement rule a
   planner exercises by dragging a bar had no end-to-end coverage. That is exactly where D4's defect
   had been sitting.
+
+## Amendment (2026-11-11) — an event strip may cost its own line while it waits (ADR-0216)
+
+D2 docks every transient strip in a row the workspace already pays for, and a strip costs the diagram nothing.
+ADR-0216's follow-logic offer is a strip whose sentence must be read whole and which asks the planner a question,
+so when it does not fit beside the plan facts it takes a line of its own: about 50 to 60 px of the diagram at 1024 px
+on a mouse, and on a finger-sized 1024 x 600 window with a selection the 120 px stage floor is waived while it waits
+(ADR-0216 D8). It is gone on either button, the next edit, an undo or a redo, and the floor holds again. A
+strip that is not marked `data-dock-row` is unchanged.
