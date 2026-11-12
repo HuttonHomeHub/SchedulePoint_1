@@ -1,6 +1,6 @@
 # Feature Spec: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only).
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 ([`m5-measurement.md`](./m5-measurement.md)), M6 and M7 wait for the owner's look at its pictures.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, first severity-2 batch (chosen 2026-11-12): runbook steps 3.3,

@@ -1,0 +1,2825 @@
+{
+  "measuredAt": "2026-11-12T20:31:42.757Z",
+  "readings": {
+    "1024x600 b-no-pen-one": {
+      "size": "1024x600",
+      "state": "b-no-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 402
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 362
+        },
+        "foot": {
+          "top": 549,
+          "left": 277,
+          "width": 747,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 286
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 246
+        },
+        "foot": {
+          "top": 433,
+          "left": 277,
+          "width": 747,
+          "height": 167
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 05",
+            "top": 440,
+            "left": 285,
+            "width": 335.7,
+            "height": 156
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 4,
+      "yBefore": 304,
+      "canvasHeightBefore": 362,
+      "visibleHeightBefore": 362,
+      "visibleHeightAfter": 246,
+      "canvasHeightAfter": 246,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 156,
+        "lines": 4,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 172,
+      "barVisibleAfter": true,
+      "barPannedBy": -132,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 362,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 246
+      }
+    },
+    "1024x600 a-pen-one": {
+      "size": "1024x600",
+      "state": "a-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 402
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 362
+        },
+        "foot": {
+          "top": 549,
+          "left": 277,
+          "width": 747,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 286
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 246
+        },
+        "foot": {
+          "top": 433,
+          "left": 277,
+          "width": 747,
+          "height": 167
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 05",
+            "top": 440,
+            "left": 285,
+            "width": 348.1,
+            "height": 156
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 4,
+      "yBefore": 304,
+      "canvasHeightBefore": 362,
+      "visibleHeightBefore": 362,
+      "visibleHeightAfter": 246,
+      "canvasHeightAfter": 246,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 156,
+        "lines": 4,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 172,
+      "barVisibleAfter": true,
+      "barPannedBy": -132,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 362,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 246
+      }
+    },
+    "1024x600 c-contributor-one": {
+      "size": "1024x600",
+      "state": "c-contributor-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 402
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 362
+        },
+        "foot": {
+          "top": 549,
+          "left": 277,
+          "width": 747,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 286
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 246
+        },
+        "foot": {
+          "top": 433,
+          "left": 277,
+          "width": 747,
+          "height": 167
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 05",
+            "top": 440,
+            "left": 285,
+            "width": 330.2,
+            "height": 156
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 4,
+      "yBefore": 304,
+      "canvasHeightBefore": 362,
+      "visibleHeightBefore": 362,
+      "visibleHeightAfter": 246,
+      "canvasHeightAfter": 246,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 156,
+        "lines": 4,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 172,
+      "barVisibleAfter": true,
+      "barPannedBy": -132,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 362,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 246
+      }
+    },
+    "1024x600 d-pen-three": {
+      "size": "1024x600",
+      "state": "d-pen-three",
+      "selectedCount": 3,
+      "unselected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 402
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 362
+        },
+        "foot": {
+          "top": 549,
+          "left": 277,
+          "width": 747,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1024,
+          "h": 600
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 747,
+          "height": 280
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 747,
+          "height": 240
+        },
+        "foot": {
+          "top": 427,
+          "left": 277,
+          "width": 747,
+          "height": 173
+        },
+        "dockRows": [
+          {
+            "text": "3 activities selected — “Task 03” is the subject of single-activity actions.Dragging any of these, or pressing Alt with an arrow key, moves ",
+            "top": 434,
+            "left": 285,
+            "width": 731,
+            "height": 122
+          }
+        ],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 4,
+      "yBefore": 304,
+      "canvasHeightBefore": 362,
+      "visibleHeightBefore": 362,
+      "visibleHeightAfter": 240,
+      "canvasHeightAfter": 240,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "plural",
+        "rootHeight": 122,
+        "lines": 2,
+        "controls": [
+          {
+            "id": null,
+            "label": "Link in sequence…",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Clear selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      }
+    },
+    "1280x720 b-no-pen-one": {
+      "size": "1280x720",
+      "state": "b-no-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 522
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 482
+        },
+        "foot": {
+          "top": 669,
+          "left": 277,
+          "width": 1003,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 446
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 406
+        },
+        "foot": {
+          "top": 593,
+          "left": 277,
+          "width": 1003,
+          "height": 127
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 07",
+            "top": 600,
+            "left": 285,
+            "width": 591.7,
+            "height": 116
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 6,
+      "yBefore": 424,
+      "canvasHeightBefore": 482,
+      "visibleHeightBefore": 482,
+      "visibleHeightAfter": 406,
+      "canvasHeightAfter": 406,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 116,
+        "lines": 3,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 296,
+      "barVisibleAfter": true,
+      "barPannedBy": -128,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 482,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 406
+      }
+    },
+    "1280x720 a-pen-one": {
+      "size": "1280x720",
+      "state": "a-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 522
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 482
+        },
+        "foot": {
+          "top": 669,
+          "left": 277,
+          "width": 1003,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 446
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 406
+        },
+        "foot": {
+          "top": 593,
+          "left": 277,
+          "width": 1003,
+          "height": 127
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 07",
+            "top": 600,
+            "left": 285,
+            "width": 604.1,
+            "height": 116
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 6,
+      "yBefore": 424,
+      "canvasHeightBefore": 482,
+      "visibleHeightBefore": 482,
+      "visibleHeightAfter": 406,
+      "canvasHeightAfter": 406,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 116,
+        "lines": 3,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 296,
+      "barVisibleAfter": true,
+      "barPannedBy": -128,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 482,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 406
+      }
+    },
+    "1280x720 c-contributor-one": {
+      "size": "1280x720",
+      "state": "c-contributor-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 522
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 482
+        },
+        "foot": {
+          "top": 669,
+          "left": 277,
+          "width": 1003,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 446
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 406
+        },
+        "foot": {
+          "top": 593,
+          "left": 277,
+          "width": 1003,
+          "height": 127
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 07",
+            "top": 600,
+            "left": 285,
+            "width": 586.2,
+            "height": 116
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 6,
+      "yBefore": 424,
+      "canvasHeightBefore": 482,
+      "visibleHeightBefore": 482,
+      "visibleHeightAfter": 406,
+      "canvasHeightAfter": 406,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 116,
+        "lines": 3,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 296,
+      "barVisibleAfter": true,
+      "barPannedBy": -128,
+      "barBelowShrunkCanvas": true,
+      "canvasHeightAfterEscape": 482,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 406
+      }
+    },
+    "1280x720 d-pen-three": {
+      "size": "1280x720",
+      "state": "d-pen-three",
+      "selectedCount": 3,
+      "unselected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 522
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 482
+        },
+        "foot": {
+          "top": 669,
+          "left": 277,
+          "width": 1003,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1280,
+          "h": 720
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1003,
+          "height": 452
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1003,
+          "height": 412
+        },
+        "foot": {
+          "top": 599,
+          "left": 277,
+          "width": 1003,
+          "height": 121
+        },
+        "dockRows": [
+          {
+            "text": "3 activities selected — “Task 03” is the subject of single-activity actions.Dragging any of these, or pressing Alt with an arrow key, moves ",
+            "top": 606,
+            "left": 285,
+            "width": 604.1,
+            "height": 110
+          }
+        ],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 6,
+      "yBefore": 424,
+      "canvasHeightBefore": 482,
+      "visibleHeightBefore": 482,
+      "visibleHeightAfter": 412,
+      "canvasHeightAfter": 412,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "plural",
+        "rootHeight": 110,
+        "lines": 1,
+        "controls": [
+          {
+            "id": null,
+            "label": "Link in sequence…",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Clear selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      }
+    },
+    "1366x768 b-no-pen-one": {
+      "size": "1366x768",
+      "state": "b-no-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 570
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 530
+        },
+        "foot": {
+          "top": 717,
+          "left": 277,
+          "width": 1089,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 534
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 494
+        },
+        "foot": {
+          "top": 681,
+          "left": 277,
+          "width": 1089,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 08",
+            "top": 688,
+            "left": 285,
+            "width": 677.7,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 7,
+      "yBefore": 484,
+      "canvasHeightBefore": 530,
+      "visibleHeightBefore": 530,
+      "visibleHeightAfter": 494,
+      "canvasHeightAfter": 494,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 472,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 530,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 494
+      }
+    },
+    "1366x768 a-pen-one": {
+      "size": "1366x768",
+      "state": "a-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 570
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 530
+        },
+        "foot": {
+          "top": 717,
+          "left": 277,
+          "width": 1089,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 534
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 494
+        },
+        "foot": {
+          "top": 681,
+          "left": 277,
+          "width": 1089,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 08",
+            "top": 688,
+            "left": 285,
+            "width": 690.1,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 7,
+      "yBefore": 484,
+      "canvasHeightBefore": 530,
+      "visibleHeightBefore": 530,
+      "visibleHeightAfter": 494,
+      "canvasHeightAfter": 494,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 472,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 530,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 494
+      }
+    },
+    "1366x768 c-contributor-one": {
+      "size": "1366x768",
+      "state": "c-contributor-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 570
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 530
+        },
+        "foot": {
+          "top": 717,
+          "left": 277,
+          "width": 1089,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 534
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 494
+        },
+        "foot": {
+          "top": 681,
+          "left": 277,
+          "width": 1089,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 08",
+            "top": 688,
+            "left": 285,
+            "width": 672.2,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 7,
+      "yBefore": 484,
+      "canvasHeightBefore": 530,
+      "visibleHeightBefore": 530,
+      "visibleHeightAfter": 494,
+      "canvasHeightAfter": 494,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 472,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 530,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 494
+      }
+    },
+    "1366x768 d-pen-three": {
+      "size": "1366x768",
+      "state": "d-pen-three",
+      "selectedCount": 3,
+      "unselected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 570
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 530
+        },
+        "foot": {
+          "top": 717,
+          "left": 277,
+          "width": 1089,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1366,
+          "h": 768
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1089,
+          "height": 488
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1089,
+          "height": 448
+        },
+        "foot": {
+          "top": 635,
+          "left": 277,
+          "width": 1089,
+          "height": 133
+        },
+        "dockRows": [
+          {
+            "text": "3 activities selected — “Task 03” is the subject of single-activity actions.Dragging any of these, or pressing Alt with an arrow key, moves ",
+            "top": 642,
+            "left": 285,
+            "width": 690.1,
+            "height": 122
+          }
+        ],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 7,
+      "yBefore": 484,
+      "canvasHeightBefore": 530,
+      "visibleHeightBefore": 530,
+      "visibleHeightAfter": 448,
+      "canvasHeightAfter": 448,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "plural",
+        "rootHeight": 122,
+        "lines": 2,
+        "controls": [
+          {
+            "id": null,
+            "label": "Link in sequence…",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Clear selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      }
+    },
+    "1440x900 b-no-pen-one": {
+      "size": "1440x900",
+      "state": "b-no-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 702
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 662
+        },
+        "foot": {
+          "top": 849,
+          "left": 277,
+          "width": 1163,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 666
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 626
+        },
+        "foot": {
+          "top": 813,
+          "left": 277,
+          "width": 1163,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 10",
+            "top": 820,
+            "left": 285,
+            "width": 751.7,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 9,
+      "yBefore": 604,
+      "canvasHeightBefore": 662,
+      "visibleHeightBefore": 662,
+      "visibleHeightAfter": 626,
+      "canvasHeightAfter": 626,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 592,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 662,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 626
+      }
+    },
+    "1440x900 a-pen-one": {
+      "size": "1440x900",
+      "state": "a-pen-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 702
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 662
+        },
+        "foot": {
+          "top": 849,
+          "left": 277,
+          "width": 1163,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 666
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 626
+        },
+        "foot": {
+          "top": 813,
+          "left": 277,
+          "width": 1163,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 10",
+            "top": 820,
+            "left": 285,
+            "width": 764.1,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 9,
+      "yBefore": 604,
+      "canvasHeightBefore": 662,
+      "visibleHeightBefore": 662,
+      "visibleHeightAfter": 626,
+      "canvasHeightAfter": 626,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 592,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 662,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 626
+      }
+    },
+    "1440x900 c-contributor-one": {
+      "size": "1440x900",
+      "state": "c-contributor-one",
+      "clickHitTarget": true,
+      "unselected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 702
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 662
+        },
+        "foot": {
+          "top": 849,
+          "left": 277,
+          "width": 1163,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 666
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 626
+        },
+        "foot": {
+          "top": 813,
+          "left": 277,
+          "width": 1163,
+          "height": 87
+        },
+        "dockRows": [],
+        "singleBar": [
+          {
+            "name": "Actions for Task 10",
+            "top": 820,
+            "left": 285,
+            "width": 746.2,
+            "height": 76
+          }
+        ],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 9,
+      "yBefore": 604,
+      "canvasHeightBefore": 662,
+      "visibleHeightBefore": 662,
+      "visibleHeightAfter": 626,
+      "canvasHeightAfter": 626,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "single",
+        "rootHeight": 76,
+        "lines": 2,
+        "controls": [
+          {
+            "id": "open-logic",
+            "label": "Logic",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "notes",
+            "label": "Notes",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "progress",
+            "label": "Progress",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "resources",
+            "label": "Resources",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "edit",
+            "label": "Edit",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "duplicate",
+            "label": "Duplicate",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "delete",
+            "label": "Delete",
+            "shaded": true,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "zoom-to-selection",
+            "label": "Zoom to selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "isolate-logic",
+            "label": "Isolate logic path",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Isolate logic path options",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": "float-paths",
+            "label": "Float paths",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      },
+      "yAfter": 592,
+      "barVisibleAfter": true,
+      "barPannedBy": -12,
+      "barBelowShrunkCanvas": false,
+      "canvasHeightAfterEscape": 662,
+      "topLane": {
+        "hitTarget": true,
+        "yBefore": 64,
+        "yAfter": 64,
+        "visibleHeightAfter": 626
+      }
+    },
+    "1440x900 d-pen-three": {
+      "size": "1440x900",
+      "state": "d-pen-three",
+      "selectedCount": 3,
+      "unselected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 702
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 662
+        },
+        "foot": {
+          "top": 849,
+          "left": 277,
+          "width": 1163,
+          "height": 51
+        },
+        "dockRows": [],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "selected": {
+        "viewport": {
+          "w": 1440,
+          "h": 900
+        },
+        "panel": {
+          "top": 147,
+          "left": 277,
+          "width": 1163,
+          "height": 620
+        },
+        "scene": {
+          "top": 187,
+          "left": 277,
+          "width": 1163,
+          "height": 580
+        },
+        "foot": {
+          "top": 767,
+          "left": 277,
+          "width": 1163,
+          "height": 133
+        },
+        "dockRows": [
+          {
+            "text": "3 activities selected — “Task 03” is the subject of single-activity actions.Dragging any of these, or pressing Alt with an arrow key, moves ",
+            "top": 774,
+            "left": 285,
+            "width": 764.1,
+            "height": 122
+          }
+        ],
+        "singleBar": [],
+        "mainScrollTop": 0,
+        "mainScrollable": 0,
+        "windowScrollY": 0,
+        "docScrollable": {
+          "y": 0,
+          "x": 0
+        }
+      },
+      "lane": 9,
+      "yBefore": 604,
+      "canvasHeightBefore": 662,
+      "visibleHeightBefore": 662,
+      "visibleHeightAfter": 580,
+      "canvasHeightAfter": 580,
+      "canvasTopShift": 0,
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "actions": {
+        "present": true,
+        "kind": "plural",
+        "rootHeight": 122,
+        "lines": 2,
+        "controls": [
+          {
+            "id": null,
+            "label": "Link in sequence…",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Delete",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          },
+          {
+            "id": null,
+            "label": "Clear selection",
+            "shaded": false,
+            "visible": true,
+            "outsideWindow": false,
+            "outsideFoot": false
+          }
+        ]
+      }
+    }
+  }
+}
