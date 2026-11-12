@@ -3,7 +3,7 @@
 - **Status:** Accepted — 2026-11-11. The product owner approved the spec, the plan and amendments 1–3 on 2026-11-11 with
   all defaults (Q1 remove the placement, Q2 any edit, Q3 dock message only, Q4 rename to "Follow logic", Q5 no one-time
   explanation) and instructed "Drive this to completion and a release". M0, M0b, M0c and M0d (measurement) preceded it; M0d
-  passed every stop rule. D1–D5 and D7–D10 ship with M2 (the edit offer and the layout); D6 (the whole-plan offer) ships with M3.
+  passed every stop rule. D1–D5 and D7–D10 shipped with M2 (the edit offer and the layout); D6 (the whole-plan offer) shipped with M3.
 - **Date:** 2026-11-11
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Extends:** [ADR-0148](0148-visual-is-the-plan.md) (visual is the plan),
@@ -54,7 +54,23 @@ teaches it.
    lower dock strip. One strip, never two: the confirmation's sentence leads and the link's **Undo** stays beside
    **Follow logic**.
 6. **D6 — A plan with early-placed bars offers to let all of them follow**, as a dismissible standing condition in the dock
-   (the Arrange-offer pattern), never as a toolbar write in the `find` group. _(M3.)_
+   (the Arrange-offer pattern), never as a toolbar write in the `find` group. _(M3, shipped.)_ It is the **same strip** as the
+   edit offer (`FollowLogicStrip`, `variant="plan"`: **Follow logic** and **Dismiss**, a dashed border like the Arrange
+   offer's, `data-testid="canvas-follow-logic-plan-offer"` and the button `canvas-follow-logic-plan`) and the **same write**
+   (`followLogicRowsWrite`, one batch, one undo step), with the same visible phases (busy "Moving …", failed with **Try
+   again**, the confirmation with **Undo**) and the same shading (a shaded control says why, ADR-0204). What differs is that
+   it is a standing condition, so it **is not announced when it appears** (ADR-0132: it reads the same to somebody arriving
+   later; its failure and its outcome are announced) and has no timer while it asks. Its sentence is a count, not a name:
+   _"3 bars stay where they were placed, before their logic allows."_, and _"1 bar stays where it was placed, before its logic
+   allows."_ It counts the placed, flagged, **non-summary, unstarted** bars (`placedBeforeLogicIn`, one predicate shared with
+   the edit offer's `strandedBy`), so **its number can read lower than the conflict chip's**: the chip counts a summary placed
+   before the data date, which the batch route refuses, and a started bar, which Follow logic could not move (M0 C7). The
+   offer promises a move and counts only what it can deliver. It is omitted without the pen (ADR-0082), withdrawn by any
+   edit that lands on the undo stack after its confirmation, and **dismissed for this plan for this session, not persisted**
+   (the Arrange rule; a reload asks again). **Keep it here** on an edit offer also dismisses it, because the bar the planner
+   just chose to keep is exactly what it would ask about. More than 2,000 qualifying bars (the batch route's cap) shade
+   **Follow logic** with its reason, _"Too many to follow at once (2,001; the limit is 2,000). Follow logic still works on
+   each bar."_, and are never chunked into a non-atomic series.
 7. **D7 — No engine change, no schema change, no new endpoint, no flag** (ADR-0088 D1). The recalculation parity gate holds
    by construction.
 8. **D8 — The 120 px stage floor is waived while an event strip awaits an answer, on a coarse 1024 × 600 window with a
@@ -99,7 +115,7 @@ teaches it.
   trailing since foot-row-and-deck M3, and the docblock there records why D2's reason was false. This ADR amends D2 to the
   code.
 - **`resolveDockStrip`'s order:** conflict › history failure › mode, except a `linked` confirmation when an edit offer exists ›
-  history success › **follow-edit** › layout-resolved › empty › _follow-plan (M3)_ › arrange-offer › touch-hint.
+  history success › **follow-edit** › layout-resolved › empty › **follow-plan** (M3; a standing condition, so it does not take over a `linked` confirmation) › arrange-offer › touch-hint.
 
 ## Alternatives considered
 
@@ -111,7 +127,10 @@ specified as the fallback and **not built**: M0d passed.
 
 ## Consequences
 
-- Two new dock rungs (one in M2, one in M3); the remedy's label changed in every journey that names it (M1).
+- Two new dock rungs (one in M2, one in M3, both built); the remedy's label changed in every journey that names it (M1).
+- A planner who drags a bar early on purpose sees the whole-plan offer for it at once: it describes the plan, not their last act, so
+  it does not know the early start was meant. **Dismiss** is the answer, it costs one press, and nothing persists. If the owner finds
+  that noisy, a per-bar "kept" memory is a later, separate decision.
 - A cross-plan successor is not offered in the plan that drew the link; its own plan's whole-plan offer shows it when opened.
 - A strip that marks itself `data-dock-row` costs a line of the diagram at narrow widths while it waits (about 50–60 px at 1024
   on a mouse); the facts sit at the trailing edge of a line the outlet has taken for itself.

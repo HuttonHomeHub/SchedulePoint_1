@@ -438,7 +438,9 @@ keep `main` releasable.
   "Clear visual start" is renamed "Follow logic" (M1, web 1.1.2). **M2 ships the edit offer:** when an edit
   leaves a bar you placed starting before its logic allows, a message in the dock at the foot of the diagram and
   the Gantt offers **Follow logic** or **Keep it here**, with no time limit, one undo step per press, and the
-  Link tool's confirmation carrying it. M3, still to come, offers the same for a plan that already has such bars.
+  Link tool's confirmation carrying it. **M3 ships the whole-plan offer:** a plan that already has such bars shows "N bars stay where they were placed, before
+  their logic allows." with **Follow logic** (all of them, one write, one undo step) and **Dismiss** (for the session). Its
+  count excludes summaries and started bars, so it can read below the conflict chip's.
 
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
