@@ -12,6 +12,8 @@ import { seedMeasure, seedProgress } from './activity-editor-seeds';
 import { ReportedProgressPanel, ValueMeasurePanel } from './ActivityProgressPanels';
 import { useScopeForm } from './useScopeForm';
 
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
+
 /**
  * M0.5 — how the **Progress tab's** two form panels report their problems
  * (`ReportedProgressPanel` and `ValueMeasurePanel`). The third panel, `WeightedStepsPanel`, is
@@ -81,7 +83,13 @@ function ProgressHost({ onSave }: { onSave: (values: ProgressFormValues) => void
   );
 }
 
-function MeasureHost({ onSave }: { onSave: (values: ActivityMeasureValues) => void }) {
+function MeasureHost({
+  onSave,
+  error = null,
+}: {
+  onSave: (values: ActivityMeasureValues) => void;
+  error?: string | null;
+}) {
   const { form, isDirty } = useScopeForm<ActivityMeasureValues>(
     activityMeasureSchema,
     seedMeasure,
@@ -98,7 +106,7 @@ function MeasureHost({ onSave }: { onSave: (values: ActivityMeasureValues) => vo
       onSave={onSave}
       pending={false}
       saved={false}
-      error={null}
+      error={error}
     />
   );
 }
@@ -162,6 +170,14 @@ describe('ReportedProgressPanel — how problems are reported', () => {
 });
 
 describe('ValueMeasurePanel — how problems are reported', () => {
+  it('shows a refused save beside Save measure, once', () => {
+    render(<MeasureHost onSave={vi.fn()} error="This activity changed elsewhere." />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('This activity changed elsewhere.');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save measure' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
   it('states a single problem once, beside its field', async () => {
     renderMeasure();
     fireEvent.change(screen.getByLabelText('Physical % complete'), { target: { value: '150' } });

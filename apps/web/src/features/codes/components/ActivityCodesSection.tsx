@@ -77,7 +77,6 @@ export function ActivityCodesSection({
   const queryClient = useQueryClient();
   const baseId = useId();
   const titleId = `${baseId}-title`;
-  const errorId = `${baseId}-error`;
   const types = useCodeTypes(orgSlug, planId);
   const savedIds = (state.activity.codes ?? []).map((c) => c.codeValueId);
   const names = useCodeValueNames(orgSlug, planId, savedIds);
@@ -218,11 +217,6 @@ export function ActivityCodesSection({
         }}
         className="flex flex-col gap-4"
       >
-        {state.error ? (
-          <p id={errorId} role="alert" className="text-destructive-text text-sm">
-            {state.error}
-          </p>
-        ) : null}
         <FieldGateProvider gate={gate}>
           <FieldGrid>
             {list.map((type) => (
@@ -245,7 +239,7 @@ export function ActivityCodesSection({
             pending={state.saving || state.otherSaveInFlight}
             saved={state.saved}
             label="Save codes"
-            {...(state.error ? { alsoDescribedBy: errorId } : {})}
+            error={state.error ? { message: state.error } : null}
             {...(state.otherSaveInFlight && !state.saving
               ? { dirtyMessage: 'Another save is finishing.' }
               : {})}

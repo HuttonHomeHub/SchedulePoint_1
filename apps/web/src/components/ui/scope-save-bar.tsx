@@ -1,7 +1,14 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { useFieldGate } from '@/components/ui/field-gate';
+
+/** A save's refusal and, optionally, the control that recovers from it (ADR-0217 D2). */
+export interface ScopeSaveError {
+  message: string;
+  action?: React.ReactNode;
+}
 
 /**
  * One write scope's Save, with its reason when it cannot be used (ADR-0060 §6).
@@ -38,6 +45,25 @@ import { useFieldGate } from '@/components/ui/field-gate';
  * cannot drift from it" — true of the code, false of the accessibility tree, where proximity is not
  * association. A screen-reader user met a Save they could not use and no explanation at all: the
  * precise defect this epic exists to remove, reproduced by the fix for it.
+ *
+ * **A refusal belongs in the bar, beside the Save that was pressed** (ADR-0217 D2). Every caller used
+ * to print its own at the top of its scope. At the 1024 × 600 design floor a scope is scrolled until
+ * its fields fill the pane, so a refusal at the top sat above the fold, beside nothing the reader was
+ * looking at: Save seemed to do nothing. The `error` slot is the one place for it, and it keeps the
+ * three promises a refusal owes a reader who is still on Save:
+ *
+ * - **It describes Save** (`aria-describedby`), so a screen-reader user who presses Save and hears
+ *   nothing more finds the reason on the control they are on. The `role="alert"` Alert announces it
+ *   once, as it appears; its **action** sits outside that Alert, so the description is the sentence
+ *   alone and "Refresh this section" is not read out a second time as part of it.
+ * - **It scrolls into view** (`block: 'nearest'`, once per new refusal) — the whole bar, so the
+ *   refusal and the Save the reader will press again arrive together. Absent in jsdom, hence guarded.
+ * - **It never takes focus.** The reader's cursor is on Save; the `ServerError` rule (it unmounts
+ *   nothing, so nothing is displaced) holds here for the same reason.
+ *
+ * While a refusal shows it replaces the "Unsaved changes" / "Saved." sentence — a bar cannot honestly
+ * say both "saved" and "refused" — but never a gate reason, which explains why Save is inert and is
+ * still true.
  */
 export function ScopeSaveBar({
   gate,
@@ -48,7 +74,7 @@ export function ScopeSaveBar({
   pendingLabel = 'Saving…',
   dirtyMessage = 'Unsaved changes in this section.',
   savedMessage = 'Saved.',
-  alsoDescribedBy,
+  error = null,
 }: {
   /**
    * May the caller write, and — when not — why. Typed structurally so both the editor's `ScopeGate`
@@ -86,12 +112,22 @@ export function ScopeSaveBar({
   /** What to say after a successful write. Overridden for the same reason as {@link dirtyMessage}. */
   savedMessage?: string | null;
   /**
-   * Another node that explains the button's state, appended after the bar's own reason — for a
-   * refusal that renders away from the bar (a save error below a long list) while focus stays here.
+   * The refusal of the last save, or `null`. Shown in the bar, described-by on Save, scrolled into
+   * view and never focused (ADR-0217 D2). `action` is the way out — "Refresh this section" — rendered
+   * under the sentence and deliberately **outside** the live region and the description.
    */
-  alsoDescribedBy?: string | undefined;
+  error?: ScopeSaveError | null;
 }): React.ReactElement {
   const reasonId = useId();
+  const errorId = useId();
+  const barRef = useRef<HTMLDivElement>(null);
+  const message = error?.message ?? null;
+  // Keyed on the sentence, not the object: a caller rebuilding `{ message }` on every render must not
+  // re-scroll, and a refusal that clears and returns with the same words (a second failed attempt)
+  // still has to come back into view. `scrollIntoView` is absent in jsdom.
+  useEffect(() => {
+    if (message !== null) barRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [message]);
   const blocked = !gate.writable || !dirty || pending;
   // A `FieldGateProvider` above this bar has ALREADY rendered this scope's reason, above the fields
   // (ADR-0083 D4 — one node, N references). Printing it again beside Save is the same sentence
@@ -101,37 +137,53 @@ export function ScopeSaveBar({
   const inherited = useFieldGate();
   const groupReasonId = gate.writable ? undefined : inherited?.reasonId;
   const reason = gate.writable
-    ? dirty
-      ? dirtyMessage
-      : saved
-        ? savedMessage
-        : null
+    ? message !== null
+      ? null
+      : dirty
+        ? dirtyMessage
+        : saved
+          ? savedMessage
+          : null
     : groupReasonId
       ? null
       : gate.reason;
   const describedBy =
-    [groupReasonId ?? (reason ? reasonId : undefined), alsoDescribedBy].filter(Boolean).join(' ') ||
-    undefined;
+    [groupReasonId ?? (reason ? reasonId : undefined), message !== null ? errorId : undefined]
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
-    <div className="border-border flex items-center justify-between gap-4 border-t pt-4">
-      <p id={reasonId} className="text-muted-foreground text-sm">
-        {reason}
-      </p>
-      <Button
-        type="submit"
-        aria-disabled={blocked}
-        aria-busy={pending}
-        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
-        // Refuses a click while blocked: a pointer press, Enter or Space on this button, and Enter in
-        // a field (the browser's implicit submission is a click on the default button) all arrive here.
-        onClick={(event) => {
-          if (blocked) event.preventDefault();
-        }}
-        className="aria-busy:pointer-events-none"
-      >
-        {pending ? pendingLabel : label}
-      </Button>
+    // A column so the refusal gets the bar's whole width above the button instead of squeezing it
+    // (ADR-0114): a row that cannot shrink is never asked to wrap. Without a refusal the column holds
+    // one row and looks exactly as it did.
+    <div ref={barRef} className="border-border flex flex-col gap-3 border-t pt-4">
+      {error ? (
+        <div className="flex flex-col items-start gap-2">
+          <Alert id={errorId} purpose="event" tone="error" className="w-full">
+            {error.message}
+          </Alert>
+          {error.action}
+        </div>
+      ) : null}
+      <div className="flex items-center justify-between gap-4">
+        <p id={reasonId} className="text-muted-foreground text-sm">
+          {reason}
+        </p>
+        <Button
+          type="submit"
+          aria-disabled={blocked}
+          aria-busy={pending}
+          {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+          // Refuses a click while blocked: a pointer press, Enter or Space on this button, and Enter in
+          // a field (the browser's implicit submission is a click on the default button) all arrive here.
+          onClick={(event) => {
+            if (blocked) event.preventDefault();
+          }}
+          className="aria-busy:pointer-events-none"
+        >
+          {pending ? pendingLabel : label}
+        </Button>
+      </div>
     </div>
   );
 }

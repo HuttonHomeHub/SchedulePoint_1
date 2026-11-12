@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityEditorDialog } from './ActivityEditorDialog';
 
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import { deriveActivityEditorGating } from '@/features/activities/lib/activity-editor-gating';
 
 /**
@@ -145,7 +146,10 @@ describe('a Reported-progress save', () => {
     fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '55' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('This activity changed elsewhere.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This activity changed elsewhere.');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save progress' }));
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
     // Shown by the mounted session, so the live region is not asked to say it as well.
     expect(announce).not.toHaveBeenCalled();
 
@@ -407,7 +411,7 @@ describe('a Reported-progress save refused for an actual after the data date', (
     expect(announce).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps today’s top alert when the refusal names no field', async () => {
+  it('puts a refusal that names no field in the Save bar', async () => {
     progressResponse = {
       ok: false,
       status: 422,
@@ -417,6 +421,8 @@ describe('a Reported-progress save refused for an actual after the data date', (
     fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '55' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Something else was refused.');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Something else was refused.');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Save progress' }));
   });
 });

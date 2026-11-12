@@ -299,7 +299,7 @@ export function ActivityResourcesPanel({
             ...(displaced ? { displaced } : {}),
           });
         },
-        // Shown below the form from `create.isError`; there is nothing else to do with it.
+        // Shown in the Save bar from `create.isError`; there is nothing else to do with it.
         () => undefined,
       );
   });
@@ -398,11 +398,6 @@ export function ActivityResourcesPanel({
                   `disabled`, which is #64's defect. */}
               <FieldGateProvider gate={assignGate}>
                 <FormErrorSummary errors={errors} />
-                {create.isError ? (
-                  <p role="alert" className="text-destructive-text text-sm">
-                    {create.error.message}
-                  </p>
-                ) : null}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={resourceSelectId}>Resource</Label>
                   <Combobox
@@ -574,6 +569,7 @@ export function ActivityResourcesPanel({
                   pending={create.isPending}
                   label="Assign resource"
                   pendingLabel="Assigning…"
+                  error={create.isError ? { message: create.error.message } : null}
                 />
               </FieldGateProvider>
             </form>

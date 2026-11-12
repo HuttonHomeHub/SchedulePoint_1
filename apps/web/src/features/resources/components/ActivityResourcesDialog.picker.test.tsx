@@ -8,6 +8,7 @@ import { assignmentKeys } from '../api/use-resources';
 
 import { ActivityResourcesDialog } from './ActivityResourcesDialog';
 
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
 import type * as ApiClient from '@/lib/api/client';
 import { ApiFetchError, apiFetch, apiFetchAllPages, apiFetchEnvelope } from '@/lib/api/client';
 
@@ -197,7 +198,13 @@ describe('ActivityResourcesDialog — resource picker (flag on)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Assign resource' }));
 
-    expect(await screen.findByText(/This resource is archived/)).toBeInTheDocument();
+    // The mock rejects every request, so the unrelated assignments-load alert is on screen too: the
+    // refusal is the one inside the Assign form's own bar.
+    const alert = (await screen.findAllByRole('alert')).find((node) =>
+      /This resource is archived/.test(node.textContent),
+    );
+    if (!alert) throw new Error('the refusal was not shown');
+    expectRefusalBesideSave(alert, screen.getByRole('button', { name: 'Assign resource' }));
   });
 
   /**

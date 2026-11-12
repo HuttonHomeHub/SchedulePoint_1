@@ -442,6 +442,14 @@ keep `main` releasable.
   their logic allows." with **Follow logic** (all of them, one write, one undo step) and **Dismiss** (for the session). Its
   count excludes summaries and started bars, so it can read below the conflict chip's.
 
+- **A refused save is shown beside the Save that was pressed, and on its field** (decided and Accepted 2026-11-12
+  in [ADR-0217](adr/0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md); spec and plan at
+  [`docs/specs/progress-before-data-date/`](specs/progress-before-data-date/feature-spec.md)). A progress save
+  refused for an actual date after the data date names the date and who can move it, on the field (M1 API, M2).
+  **M3 gives every Save in the activity editor a refusal slot:** the message sits in the save bar above the button,
+  describes Save to a screen reader and never takes focus, so it is on screen at 1024 × 600. M4 renames the box and
+  refreshes the footer.
+
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
   [`docs/specs/baseline-float-frame/`](specs/baseline-float-frame/); closed `docs/TECH_DEBT.md` #318).

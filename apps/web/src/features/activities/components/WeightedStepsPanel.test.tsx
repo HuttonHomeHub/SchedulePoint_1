@@ -10,6 +10,8 @@ import { stepRowsFromSaved, stepsFormSchema, type StepsFormValues } from '../sch
 
 import { WeightedStepsPanel } from './ActivityProgressPanels';
 
+import { expectRefusalBesideSave } from '@/components/ui/scope-save-bar-assertions';
+
 /**
  * The **editor's** steps panel — the Progress tab's third scope (ADR-0060 §4), which is a different
  * component from the legacy `ActivityStepsDialog` its suite covers. That split is why this gap
@@ -52,10 +54,12 @@ function Host({
   gate,
   onSave,
   loading = false,
+  error = null,
 }: {
   gate: ScopeGate;
   onSave: (steps: StepsFormValues['steps']) => void;
   loading?: boolean;
+  error?: string | null;
 }): React.ReactElement {
   const [saved, setSaved] = useState(false);
   const form = useForm<StepsFormValues>({
@@ -78,7 +82,7 @@ function Host({
       }}
       pending={false}
       saved={saved}
-      error={null}
+      error={error}
       announce={vi.fn()}
     />
   );
@@ -107,6 +111,17 @@ function renderPanel() {
 }
 
 describe('WeightedStepsPanel', () => {
+  it('shows a refused save beside Save steps, once, and leaves focus where it was', () => {
+    render(<Host gate={OPEN_GATE} onSave={vi.fn()} error="This activity changed elsewhere." />);
+    const save = screen.getByRole('button', { name: 'Save steps' });
+    save.focus();
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('This activity changed elsewhere.');
+    expectRefusalBesideSave(alert, save);
+    expect(save).toHaveFocus();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
   it('keeps focus on the form when Enter saves, instead of dropping it to the page', async () => {
     // A save re-seeds the rows with new keys, so the input Enter was pressed in is replaced.
     renderPanel();
