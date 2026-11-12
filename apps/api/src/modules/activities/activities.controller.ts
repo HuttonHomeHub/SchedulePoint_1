@@ -127,11 +127,22 @@ export class ActivitiesController {
       'Contributor has but a Viewer does not. Status is derived from the numbers. Accepts ' +
       'percent complete, actual start/finish, an explicit remaining duration, and suspend/resume ' +
       'dates (M2, ADR-0035). Actuals are validated against the plan data date (N07) and ' +
-      'inconsistent completeness is repaired (N08/N18).',
+      'inconsistent completeness is repaired (N08/N18). A refusal (422) names the activity ' +
+      'field(s) at fault in `details.fields`, which may hold a stored value the request did not ' +
+      'send; an actual after the data date also carries `details.dataDate` ' +
+      'and `details.latestActual` as ISO calendar days. Details are additive: do not parse `message`.',
   })
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiConflictResponse({ description: 'Stale version — refresh and retry.' })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The merged progress is inconsistent. `details.reason` is ACTUAL_AFTER_DATA_DATE (an actual ' +
+      'after the plan data date), FINISH_WITHOUT_START, FINISH_BEFORE_START or ' +
+      'RESUME_BEFORE_SUSPEND; `details.fields` names the activity field(s) at fault, which may ' +
+      'hold a stored value the request did not send. ACTUAL_AFTER_DATA_DATE also carries ' +
+      '`details.dataDate` and `details.latestActual` as ISO calendar days.',
+  })
   async updateProgress(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,

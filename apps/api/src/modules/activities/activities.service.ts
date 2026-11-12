@@ -1754,20 +1754,36 @@ export class ActivitiesService {
     if (actualFinish !== null && actualStart === null) {
       throw new ValidationError('An actual finish needs an actual start.', {
         reason: 'FINISH_WITHOUT_START',
+        fields: ['actualFinish'],
       });
     }
     if (actualStart !== null && actualFinish !== null && actualFinish < actualStart) {
       throw new ValidationError('Actual finish cannot precede actual start.', {
         reason: 'FINISH_BEFORE_START',
+        fields: ['actualFinish'],
       });
     }
 
     // N07 — an actual date may not be in the future beyond the data date (ADR-0035 §6): reject.
+    // The details name the offending field(s) and both dates as calendar days so a client can mark
+    // the field and word the refusal without parsing `message` (additive; reason and message stay).
     if (dataDate !== null) {
-      const future = [actualStart, actualFinish].find((d) => d !== null && d > dataDate);
-      if (future) {
+      const fields = (
+        [
+          ['actualStart', actualStart],
+          ['actualFinish', actualFinish],
+        ] as const
+      ).filter(([, d]) => d !== null && d > dataDate);
+      if (fields.length > 0) {
+        const latest = fields.reduce<Date>(
+          (max, [, d]) => (d !== null && d > max ? d : max),
+          dataDate,
+        );
         throw new ValidationError('An actual date cannot be after the plan’s data date.', {
           reason: 'ACTUAL_AFTER_DATA_DATE',
+          fields: fields.map(([name]) => name),
+          dataDate: formatCalendarDate(dataDate),
+          latestActual: formatCalendarDate(latest),
         });
       }
     }
@@ -1804,6 +1820,7 @@ export class ActivitiesService {
     if (suspendDate !== null && resumeDate !== null && resumeDate < suspendDate) {
       throw new ValidationError('Resume date cannot precede the suspend date.', {
         reason: 'RESUME_BEFORE_SUSPEND',
+        fields: ['resumeDate'],
       });
     }
 

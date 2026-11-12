@@ -1,7 +1,7 @@
 # Implementation Plan: Reporting progress past the data date, and a refusal you can see
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft, awaiting approval before implementation.
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — approved, 2026-11-12.
+- **Status:** Approved by the product owner, 2026-11-12, with all three defaults (Q1 keep the rule, Q2 reword journey 2, Q3 separate dates not now). M1 in progress.
 - **Owner:** product owner; built by the **builder** agent milestone by milestone after approval.
 
 Written for the defaults in the spec (Q1 keep the rule, Q2 re-word the brief, Q3 not now). A different answer to Q1

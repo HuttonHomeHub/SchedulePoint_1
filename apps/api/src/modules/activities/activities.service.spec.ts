@@ -1639,6 +1639,124 @@ describe('ActivitiesService', () => {
       expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
     });
 
+    it('names the field and both dates when an actual is after the data date', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      const refusal = (dto: object) =>
+        service
+          .updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, { ...dto, version: 1 })
+          .then(
+            () => null,
+            (e: { message: string; details: unknown }) => e,
+          );
+
+      // Start only, finish only and both: `fields` lists start first, then finish.
+      const startOnly = await refusal({ actualStart: '2027-03-01' });
+      expect(startOnly?.details).toEqual({
+        reason: 'ACTUAL_AFTER_DATA_DATE',
+        fields: ['actualStart'],
+        dataDate: '2026-12-31',
+        latestActual: '2027-03-01',
+      });
+      // The message is a contract of its own: kept verbatim beside the new keys.
+      expect(startOnly?.message).toBe('An actual date cannot be after the plan’s data date.');
+      expect(
+        (await refusal({ actualStart: '2026-05-01', actualFinish: '2027-02-01' }))?.details,
+      ).toEqual({
+        reason: 'ACTUAL_AFTER_DATA_DATE',
+        fields: ['actualFinish'],
+        dataDate: '2026-12-31',
+        latestActual: '2027-02-01',
+      });
+      expect(
+        (await refusal({ actualStart: '2027-01-15', actualFinish: '2027-03-01' }))?.details,
+      ).toEqual({
+        reason: 'ACTUAL_AFTER_DATA_DATE',
+        fields: ['actualStart', 'actualFinish'],
+        dataDate: '2026-12-31',
+        latestActual: '2027-03-01',
+      });
+    });
+
+    it('names a stored value the request did not send, and only the offenders', async () => {
+      // The data date moved back after these actuals were stored: the request sends neither.
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({
+          actualStart: new Date('2026-05-01T00:00:00.000Z'),
+          actualFinish: new Date('2027-02-01T00:00:00.000Z'),
+        }),
+      );
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          percentComplete: 50,
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: {
+          reason: 'ACTUAL_AFTER_DATA_DATE',
+          fields: ['actualFinish'],
+          latestActual: '2027-02-01',
+        },
+      });
+
+      // Clearing the start leaves the stored finish orphaned: the field at fault is the finish.
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({
+          actualStart: new Date('2026-05-01T00:00:00.000Z'),
+          actualFinish: new Date('2026-06-01T00:00:00.000Z'),
+        }),
+      );
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: null,
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'FINISH_WITHOUT_START', fields: ['actualFinish'] },
+      });
+      expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
+    it('accepts an actual dated exactly on the data date', async () => {
+      activities.updateIfVersionMatches.mockResolvedValue({});
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: '2026-12-31',
+          version: 1,
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('names the field on the N06 and resume refusals', async () => {
+      activities.findActiveByIdInOrg.mockResolvedValue(activity());
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualFinish: '2026-06-01',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'FINISH_WITHOUT_START', fields: ['actualFinish'] },
+      });
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: '2026-06-01',
+          actualFinish: '2026-05-01',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'FINISH_BEFORE_START', fields: ['actualFinish'] },
+      });
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          suspendDate: '2026-06-01',
+          resumeDate: '2026-05-01',
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'RESUME_BEFORE_SUSPEND', fields: ['resumeDate'] },
+      });
+    });
+
     it('repairs a complete activity with no actual finish to the data date (M2 N08)', async () => {
       activities.updateIfVersionMatches.mockResolvedValue({});
       activities.findActiveByIdInOrg.mockResolvedValue(activity());

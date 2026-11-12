@@ -9349,3 +9349,19 @@ Pre-existing and unchanged by #569: the controls are reachable (their centres hi
 Seen once. That pull request changed the canvas dock and nothing in the activity editor; the journey has one seeded activity and no dock strip, so the change is unlikely to be the cause, but the cause was **not** established. The failure reads as a race between three quick Escape presses and the dialog's close.
 
 **Next:** reproduce by repeating that one case (`--repeat-each`) and read which of the two outcomes it lands in. **Trigger:** a second sighting on any pull request.
+
+### 583. A Contributor cannot report progress until a Planner has moved the data date
+
+**Status:** open · **Verified:** 2026-11-12, by reading `activities.service.ts` `updateProgress` (N07 refuses an actual after `plan.plannedStart`) and the owner's GUI review of 2026-11-10 (`docs/HANDOFF.md`, "What it found") · **Raised:** 2026-11-12 (`docs/specs/progress-before-data-date/`) · **Size:** M · **Owner:** web
+
+A progress save with an actual date after the plan's data date is refused (ADR-0035 §6, N07), and the data date is the plan's "Planned start", which only a Planner can change, so a Contributor following the brief's journey 2 in the brief's order cannot finish it. The owner kept the rule (spec Q1, option a); what is wrong is that nothing tells the reader which date to move or who can.
+
+**Next:** M1 (API, `details.fields`, `dataDate`, `latestActual`) is built; M2 words the refusal on the Progress tab and M4 re-words the brief's journey 2. **Closed by** M2 and M4 of `docs/specs/progress-before-data-date/`.
+
+### 584. A refused progress save is off the screen at 1024 × 600, so Save appears to do nothing
+
+**Status:** open · **Verified:** 2026-11-12, by the owner's GUI review of 2026-11-10 (`docs/HANDOFF.md`, "What it found"): the refusal renders above the six fields while Save is the `ScopeSaveBar` at the bottom, and at 1024 × 600 the message is outside the visible area · **Raised:** 2026-11-12 (`docs/specs/progress-before-data-date/`) · **Size:** M · **Owner:** web
+
+The message exists and is announced to assistive technology, but a sighted reader at the design floor sees no change after pressing Save. It changes `ScopeSaveBar`'s public contract, so it is a spec (ADR-0105), not a register row.
+
+**Next:** M3 (the save bar carries the refusal where Save is) and M2 (the field is marked and focused). **Closed by** M2 and M3 of `docs/specs/progress-before-data-date/`.
