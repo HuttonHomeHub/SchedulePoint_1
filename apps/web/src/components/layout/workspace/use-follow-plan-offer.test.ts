@@ -41,6 +41,7 @@ interface Harness {
   enabled: boolean;
   settled: number;
   pendingEdits: number;
+  planId: string;
 }
 
 function setup(initial: Partial<Harness> = {}) {
@@ -49,6 +50,7 @@ function setup(initial: Partial<Harness> = {}) {
     enabled: true,
     settled: 0,
     pendingEdits: 0,
+    planId: 'p1',
     ...initial,
   };
   const announce = vi.fn();
@@ -57,7 +59,7 @@ function setup(initial: Partial<Harness> = {}) {
       const history = usePlanEditHistory('p1');
       const plan = useFollowPlanOffer({
         enabled: props.enabled,
-        planId: 'p1',
+        planId: props.planId,
         activities: props.rows,
         settled: props.settled,
         pendingEdits: props.pendingEdits,
@@ -79,7 +81,7 @@ function setup(initial: Partial<Harness> = {}) {
 function pressAndLand(view: ReturnType<typeof setup>['view']): Command {
   const recorded = step('Follow logic for 2 activities');
   act(() => {
-    view.result.current.plan.start('B', 2);
+    view.result.current.plan.start('B', ['B', 'C']);
   });
   act(() => {
     view.result.current.history.record(recorded);
@@ -119,12 +121,68 @@ describe('useFollowPlanOffer', () => {
     expect(view.result.current.plan.offer).toBeNull();
   });
 
-  it('stays dismissed for the plan once dismissed, even as the count changes', () => {
+  it('stays dismissed for the bars it counted, and asks again only when a NEW bar is eligible', () => {
     const { view, rerender } = setup();
     act(() => view.result.current.plan.dismiss());
     expect(view.result.current.plan.offer).toBeNull();
-    rerender({ rows: [bar('B', early), bar('C', early), bar('D', early)] });
+    rerender({ rows: [bar('B', early), bar('C', early), bar('A')] });
     expect(view.result.current.plan.offer).toBeNull();
+    // **Verified red** by keying dismissal on the plan: a bar nobody has put away is then never asked about.
+    rerender({ rows: [bar('B', early), bar('C', early), bar('D', early)] });
+    expect(view.result.current.plan.offer?.count).toBe(1);
+    expect(view.result.current.plan.offer?.message).toBe(
+      '1 bar stays where it was placed, before its logic allows.',
+    );
+  });
+
+  it('Keep it here puts away only the bars that edit offer was about', () => {
+    const { view, state } = setup();
+    act(() => view.result.current.plan.dismissBars(['B']));
+    expect(view.result.current.plan.offer?.count).toBe(1);
+    expect(view.result.current.plan.select(state.rows).map((r) => r.id)).toEqual(['C']);
+  });
+
+  it('select reads the rows it is given and leaves the dismissed bars out', () => {
+    const { view } = setup();
+    act(() => view.result.current.plan.dismissBars(['C']));
+    const fresh = [bar('B', early), bar('C', early), bar('E', early)];
+    expect(view.result.current.plan.select(fresh).map((r) => r.id)).toEqual(['B', 'E']);
+  });
+
+  it('remembers a dismissal per plan, so leaving a plan and coming back does not ask again', () => {
+    const { view, rerender } = setup();
+    act(() => view.result.current.plan.dismiss());
+    rerender({ planId: 'p2' });
+    expect(view.result.current.plan.offer?.count, 'another plan asks for itself').toBe(2);
+    rerender({ planId: 'p1' });
+    expect(view.result.current.plan.offer).toBeNull();
+  });
+
+  it('Dismiss puts a FAILED offer away: the strip goes and nothing is written', () => {
+    // **Verified red** by returning the held branch regardless: the strip stayed up after Dismiss (B1).
+    const { view } = setup();
+    act(() => {
+      view.result.current.plan.start('B', ['B', 'C']);
+    });
+    act(() => view.result.current.plan.fail('Nothing was changed.'));
+    act(() => view.result.current.plan.dismiss());
+    expect(view.result.current.plan.offer).toBeNull();
+  });
+
+  it('ignores Dismiss while a press is in flight', () => {
+    const { view } = setup();
+    act(() => {
+      view.result.current.plan.start('B', ['B', 'C']);
+    });
+    act(() => view.result.current.plan.dismiss());
+    expect(view.result.current.plan.offer?.phase).toBe('busy');
+  });
+
+  it('keeps its identity across a refetch that changes nothing the strip says', () => {
+    const { view, rerender } = setup();
+    const first = view.result.current.plan.offer;
+    rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
+    expect(view.result.current.plan.offer).toBe(first);
   });
 
   it('flags a count over the batch route’s limit, so the host can shade the button', () => {
@@ -140,10 +198,10 @@ describe('useFollowPlanOffer', () => {
     let first: boolean | undefined;
     let second: boolean | undefined;
     act(() => {
-      first = view.result.current.plan.start('B', 2);
+      first = view.result.current.plan.start('B', ['B', 'C']);
     });
     act(() => {
-      second = view.result.current.plan.start('B', 2);
+      second = view.result.current.plan.start('B', ['B', 'C']);
     });
     expect(first).toBe(true);
     expect(second).toBe(false);
@@ -168,7 +226,7 @@ describe('useFollowPlanOffer', () => {
   it('keeps the offer and says why after a failure, and Try again can start it once more', () => {
     const { view } = setup();
     act(() => {
-      view.result.current.plan.start('B', 2);
+      view.result.current.plan.start('B', ['B', 'C']);
     });
     act(() =>
       view.result.current.plan.fail('Couldn’t move “B” and 1 other just now. Nothing was changed.'),
@@ -177,7 +235,7 @@ describe('useFollowPlanOffer', () => {
     expect(view.result.current.plan.offer?.message).toContain('Nothing was changed');
     let again: boolean | undefined;
     act(() => {
-      again = view.result.current.plan.start('B', 2);
+      again = view.result.current.plan.start('B', ['B', 'C']);
     });
     expect(again).toBe(true);
   });
@@ -185,7 +243,7 @@ describe('useFollowPlanOffer', () => {
   it('announces a failure once, because the strip itself has no live role', () => {
     const { view, announce } = setup();
     act(() => {
-      view.result.current.plan.start('B', 2);
+      view.result.current.plan.start('B', ['B', 'C']);
     });
     act(() => view.result.current.plan.fail('Nothing was changed.'));
     expect(announce).toHaveBeenCalledTimes(1);
@@ -195,7 +253,7 @@ describe('useFollowPlanOffer', () => {
   it('returns to asking when the pen was lost mid-press: the pen banner owns that message', () => {
     const { view } = setup();
     act(() => {
-      view.result.current.plan.start('B', 2);
+      view.result.current.plan.start('B', ['B', 'C']);
     });
     act(() => view.result.current.plan.restore());
     expect(view.result.current.plan.offer?.phase).toBe('idle');
@@ -221,7 +279,25 @@ describe('useFollowPlanOffer', () => {
     // fresh question, not the old confirmation, which a redo must not resurrect.
     act(() => view.result.current.plan.noteReplay());
     rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
-    expect(view.result.current.plan.offer?.phase).toBe('idle');
+    expect(view.result.current.plan.offer).toBeNull();
+  });
+
+  it('does not re-ask about the bars it moved once that step is undone', () => {
+    // **Verified red** by dropping the peekUndo match: the undone bars are flagged again and the offer
+    // asks the question the planner has just answered.
+    const { view, rerender } = setup();
+    pressAndLand(view);
+    rerender({ rows: [bar('A'), bar('B'), bar('C')], settled: 1 });
+    act(() => view.result.current.plan.noteReplay());
+    rerender({ rows: [bar('A'), bar('B', early), bar('C', early), bar('D', early)] });
+    expect(view.result.current.plan.offer?.count).toBe(1);
+  });
+
+  it('does not treat an undo of some OTHER step as this offer’s', () => {
+    const { view, rerender } = setup();
+    act(() => view.result.current.history.record(step('Another edit')));
+    act(() => view.result.current.plan.noteReplay());
+    rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
     expect(view.result.current.plan.offer?.count).toBe(2);
   });
 });

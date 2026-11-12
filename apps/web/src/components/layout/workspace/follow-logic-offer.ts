@@ -108,7 +108,7 @@ export function followPlanSentence(count: number): string {
 
 /** Why Follow logic is shaded when more bars qualify than one write may carry (printed, ADR-0204). */
 export function followPlanOverLimitReason(count: number): string {
-  return `Too many to follow at once (${count.toLocaleString('en-US')}; the limit is ${FOLLOW_PLAN_LIMIT.toLocaleString('en-US')}). Follow logic still works on each bar.`;
+  return `Too many to follow at once (${count.toLocaleString()}; the limit is ${FOLLOW_PLAN_LIMIT.toLocaleString()}). Follow logic still works on each bar.`;
 }
 
 type PlacementRow = Pick<
@@ -193,10 +193,19 @@ export function followFailedSentence(subject: string, count: number): string {
 /** What the two choices do, for a screen reader (the strip's visible copy is the spec's, verbatim). */
 export const FOLLOW_LOGIC_DESCRIPTION =
   'Removes the hand placement, so the bar moves to where its logic puts it and follows it from then on.';
+/**
+ * What the whole-plan Follow logic does, for a screen reader. The last sentence is always said: the
+ * count the strip shows leaves summaries and started bars out, so it can read below the conflict
+ * chip's, and a reader who hears the two numbers should hear why.
+ */
 export const FOLLOW_PLAN_DESCRIPTION =
-  'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on.';
+  'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on. Summaries and started bars are not moved.';
+/** What Dismiss does, for a screen reader: it is per bar and per session, so the bars stay flagged and a new one asks again. */
 export const DISMISS_PLAN_DESCRIPTION =
-  'Hides this offer for this plan until you reopen it. The bars stay flagged.';
+  'Hides this offer for these bars for this session. The bars stay flagged.';
+
+/** How long a strip waits for the recalculation after a successful write before it reports done (both offers). */
+export const MOVING_CEILING_MS = 8000;
 export const KEEP_IT_HERE_DESCRIPTION =
   'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.';
 

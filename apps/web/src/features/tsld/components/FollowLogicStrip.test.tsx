@@ -245,10 +245,10 @@ describe('FollowLogicStrip — the whole-plan variant', () => {
   it('describes what each choice does for every bar the count names', () => {
     plan();
     expect(screen.getByRole('button', { name: 'Follow logic' })).toHaveAccessibleDescription(
-      'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on.',
+      'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on. Summaries and started bars are not moved.',
     );
     expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAccessibleDescription(
-      'Hides this offer for this plan until you reopen it. The bars stay flagged.',
+      'Hides this offer for these bars for this session. The bars stay flagged.',
     );
   });
 

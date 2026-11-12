@@ -233,7 +233,7 @@ describe('followPlanOverLimitReason — the route takes 2,000 rows and the offer
   it('names the limit and the way out', () => {
     expect(FOLLOW_PLAN_LIMIT).toBe(2000);
     expect(followPlanOverLimitReason(2001)).toBe(
-      'Too many to follow at once (2,001; the limit is 2,000). Follow logic still works on each bar.',
+      `Too many to follow at once (${(2001).toLocaleString()}; the limit is ${(2000).toLocaleString()}). Follow logic still works on each bar.`,
     );
   });
 });

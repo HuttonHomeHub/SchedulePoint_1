@@ -212,24 +212,10 @@ test.describe('The whole-plan offer', () => {
     expect(requireRow(restored, 'Pour slab').visualStart).toBe(placedBefore.get('Pour slab'));
     expect(requireRow(restored, 'Steel beam').visualStart).toBe(placedBefore.get('Steel beam'));
     expect(requireRow(restored, 'Pour slab').constraintType).toBe('SNET');
-    await expect(
-      planOffer(page),
-      'the bars are early again, so the plan offers again; it is the question, not the old answer',
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(planOffer(page)).toContainText(TWO_BARS);
-
-    // ── Dismiss: gone for the session, nothing written, focus on a stable target ────────────────
-    const writesBeforeDismiss = patches;
-    await planOffer(page).getByRole('button', { name: 'Dismiss' }).click();
-    await expect(planOffer(page)).toHaveCount(0);
-    expect(
-      await page.evaluate(() => document.activeElement === document.body),
-      'focus did not fall to <body> when the strip left',
-    ).toBe(false);
-    await expect(diagramList(page)).toBeFocused();
-    await page.waitForTimeout(1500);
-    await expect(planOffer(page), 'it stays dismissed').toHaveCount(0);
-    expect(patches, 'Dismiss writes nothing').toBe(writesBeforeDismiss);
+    // The bars are flagged again (the chip counts them), but the planner has just taken the move
+    // back, so the standing offer does not ask the question they answered (ADR-0216 D6).
+    await page.waitForTimeout(2000);
+    await expect(planOffer(page), 'no re-ask after undoing the offer’s own step').toHaveCount(0);
     expect(await flaggedNames(page, orgSlug)).toEqual(['Pour slab', 'Steel beam']);
   });
 
@@ -293,6 +279,104 @@ test.describe('The whole-plan offer', () => {
     await expect(page.getByTestId('canvas-history-result')).toContainText(
       '“Pour slab” and 1 other now follow their logic; dates will update.',
     );
+    await expect(
+      diagramList(page),
+      'focus is on the plan surface after Try again succeeds, not on <body>',
+    ).toBeFocused();
+
+    // The strip's own Undo puts both back, leaves focus on the plan surface, and does not re-ask.
+    await page.getByTestId('canvas-history-result').getByRole('button', { name: 'Undo' }).click();
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), { timeout: 30_000 })
+      .toBe('Pour slab,Steel beam');
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+      'focus did not fall to <body> after the strip’s Undo',
+    ).toBe(false);
+    await expect(diagramList(page)).toBeFocused();
+    await page.waitForTimeout(1500);
+    await expect(planOffer(page), 'and the offer does not ask again').toHaveCount(0);
+  });
+
+  test('Dismiss puts a failed offer away; a reload asks again', async ({ page }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Whole plan dismiss failed');
+    await ensurePen(page);
+    await seedChain(page, orgSlug);
+    await placeEarly(page, orgSlug);
+    await expect(planOffer(page)).toBeVisible({ timeout: 15_000 });
+    const before = await activityRows(page, orgSlug);
+    await page.route('**/activities/placements', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: '{"error":{"code":"X","message":"boom"}}',
+      }),
+    );
+    let patches = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().endsWith('/activities/placements')) {
+        patches += 1;
+      }
+    });
+    await followPlan(page).click();
+    await expect(planOffer(page)).toHaveAttribute('data-phase', 'failed');
+    const attempted = patches;
+
+    await planOffer(page).getByRole('button', { name: 'Dismiss' }).click();
+    await expect(planOffer(page), 'Dismiss works in the failed phase too').toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+      'focus did not fall to <body> when the strip left',
+    ).toBe(false);
+    await expect(diagramList(page)).toBeFocused();
+    await page.waitForTimeout(1500);
+    await expect(planOffer(page), 'it stays dismissed').toHaveCount(0);
+    expect(patches, 'Dismiss writes nothing').toBe(attempted);
+    expect(
+      (await activityRows(page, orgSlug)).map((r) => [r.name, r.version, r.visualStart]),
+    ).toEqual(before.map((r) => [r.name, r.version, r.visualStart]));
+
+    // Not remembered across a reload: a known trade-off, recorded in ADR-0216.
+    await page.unroute('**/activities/placements');
+    await page.reload();
+    await ensurePen(page);
+    await expect(planOffer(page)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('under the Late-start overlay Follow logic is shaded with its reason, and Enter writes nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, STAMP + 3);
+    await createHierarchy(page);
+    await newPlan(page, 'Whole plan shaded');
+    await ensurePen(page);
+    await seedChain(page, orgSlug);
+    await placeEarly(page, orgSlug);
+    await expect(planOffer(page)).toBeVisible({ timeout: 15_000 });
+    let patches = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().endsWith('/activities/placements')) {
+        patches += 1;
+      }
+    });
+    const overlay = page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Late-start overlay' });
+    await overlay.click();
+    const shaded = followPlan(page);
+    await expect(shaded).toHaveAttribute('aria-disabled', 'true');
+    await expect(shaded).toHaveAccessibleDescription(/Late-start overlay/);
+    await shaded.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(800);
+    expect(patches, 'a shaded Follow logic writes nothing').toBe(0);
+    await expect(shaded, 'and focus stays on it').toBeFocused();
+    await overlay.click();
+    await expect(shaded).toHaveAttribute('aria-disabled', 'false');
   });
 });
 

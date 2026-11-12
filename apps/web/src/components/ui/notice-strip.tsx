@@ -13,8 +13,10 @@ import { cn } from '@/lib/utils';
  * `items-start` vs `items-center`) with no reason behind any of the differences, which is the shape
  * `docs/COMPONENT_LIBRARY.md` names as the extraction threshold.
  *
- * `tone` and `emphasis` are separate axes on purpose. A dashed border says "there is nothing here
- * yet"; a solid one says "here is something". That is orthogonal to whether the thing is neutral,
+ * `tone` and `emphasis` are separate axes on purpose. A dashed border says "nothing is wrong, this
+ * is an offer or an empty state" (the empty-plan notice, the Arrange and whole-plan Follow logic
+ * offers: a standing condition the reader may ignore); a solid one says "here is something that
+ * happened". That is orthogonal to whether the thing is neutral,
  * a warning, or the tool you currently have armed — and collapsing them into one `variant` list is
  * how a fifth caller ends up adding `neutralDashed`.
  *

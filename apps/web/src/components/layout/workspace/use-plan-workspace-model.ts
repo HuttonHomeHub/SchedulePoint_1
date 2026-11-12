@@ -18,7 +18,6 @@ import {
   followLogicLabel,
   followLogicRows,
   isPlacedBeforeLogic,
-  placedBeforeLogicIn,
 } from './follow-logic-offer';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 import { useFollowLogicOffer } from './use-follow-logic-offer';
@@ -2412,24 +2411,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // same visible phases as the edit offer's, over every bar the plan holds before its logic. The rows
   // are read at press time so the versions are the freshest the cache holds. More than the route's
   // 2,000 is refused here as well as shaded in the strip: a series of writes is not atomic.
-  // **Keep it here is also an answer to the standing offer.** The bar the planner just chose to keep
-  // is flagged and placed, so without this the whole-plan offer would ask the same question the
-  // moment the edit offer went. Dismissed for the session, like pressing Dismiss on it.
+  // **Keep it here is also an answer to the standing offer, for exactly the bars it was about.** They
+  // are flagged and placed, so without this the whole-plan offer would ask the same question the
+  // moment the edit offer went. Other flagged bars keep their offer.
   const keepFollowOffer = followOffer.keep;
   const dismissFollowPlan = followPlan.dismiss;
+  const dismissPlanBars = followPlan.dismissBars;
   const keepFollowEdit = useCallback((): void => {
-    keepFollowOffer();
-    dismissFollowPlan();
-  }, [keepFollowOffer, dismissFollowPlan]);
+    dismissPlanBars(keepFollowOffer());
+  }, [keepFollowOffer, dismissPlanBars]);
+  const selectFollowPlan = followPlan.select;
   const startFollowPlan = followPlan.start;
   const succeedFollowPlan = followPlan.succeed;
   const failFollowPlan = followPlan.fail;
   const restoreFollowPlan = followPlan.restore;
   const acceptFollowPlan = useCallback(async (): Promise<void> => {
-    const rows = placedBeforeLogicIn(activitiesRef.current ?? []);
+    const rows = selectFollowPlan(activitiesRef.current ?? []);
     const [first] = rows;
     if (first === undefined || rows.length > FOLLOW_PLAN_LIMIT) return;
-    if (!startFollowPlan(first.name, rows.length)) return;
+    if (
+      !startFollowPlan(
+        first.name,
+        rows.map((row) => row.id),
+      )
+    )
+      return;
     const outcome = await followLogicRowsWrite(rows, succeedFollowPlan);
     switch (outcome.status) {
       case 'ok':
@@ -2450,7 +2456,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         failFollowPlan(followFailedSentence(first.name, rows.length));
         return;
     }
-  }, [startFollowPlan, succeedFollowPlan, failFollowPlan, restoreFollowPlan, followLogicRowsWrite]);
+  }, [
+    selectFollowPlan,
+    startFollowPlan,
+    succeedFollowPlan,
+    failFollowPlan,
+    restoreFollowPlan,
+    followLogicRowsWrite,
+  ]);
 
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
   // — the selection bar's **Follow logic**. One write path with the dock offer's: a one-row batch

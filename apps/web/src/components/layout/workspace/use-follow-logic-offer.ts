@@ -7,6 +7,7 @@ import {
   followLogicDoneSentence,
   followMovingSentence,
   followSnapshotOf,
+  MOVING_CEILING_MS,
   strandedBy,
   type FollowSnapshot,
 } from './follow-logic-offer';
@@ -16,8 +17,6 @@ import type { PlanEditHistory } from '@/features/undo-redo/use-plan-edit-history
 
 const RETRY_MS = 250;
 const MAX_RETRIES = 40;
-/** How long the strip waits for the recalculation after a successful write before it reports done. */
-const MOVING_CEILING_MS = 8000;
 
 /**
  * Where the offer is in its life.
@@ -72,7 +71,8 @@ export interface FollowLogicOfferState {
   /** The pen was lost: the shared pen banner owns the message, so the offer goes back to asking. */
   restore: () => void;
   /** "Keep it here": the offer goes, says so, and nothing is written. */
-  keep: () => void;
+  /** Returns the ids the offer was about, so the whole-plan offer can stop asking about exactly those. */
+  keep: () => readonly string[];
   /** The confirmation is dismissed (or its 15 s are up), or the offer is withdrawn by something else. */
   dismiss: () => void;
 }
@@ -301,10 +301,12 @@ export function useFollowLogicOffer(params: {
     setOffer({ ...held, phase: 'idle', message: followEditSentence(held.subject, held.count) });
   }, [setOffer]);
 
-  const keep = useCallback((): void => {
+  const keep = useCallback((): readonly string[] => {
     const held = offerRef.current;
     setOffer(null);
-    if (held !== null) paramsRef.current.announce(followKeptSentence(held.subject, held.count));
+    if (held === null) return [];
+    paramsRef.current.announce(followKeptSentence(held.subject, held.count));
+    return held.ids;
   }, [setOffer]);
 
   const dismiss = useCallback((): void => {

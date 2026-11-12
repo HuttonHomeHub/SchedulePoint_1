@@ -65,10 +65,15 @@ teaches it.
    allows."_ It counts the placed, flagged, **non-summary, unstarted** bars (`placedBeforeLogicIn`, one predicate shared with
    the edit offer's `strandedBy`), so **its number can read lower than the conflict chip's**: the chip counts a summary placed
    before the data date, which the batch route refuses, and a started bar, which Follow logic could not move (M0 C7). The
-   offer promises a move and counts only what it can deliver. It is omitted without the pen (ADR-0082), withdrawn by any
-   edit that lands on the undo stack after its confirmation, and **dismissed for this plan for this session, not persisted**
-   (the Arrange rule; a reload asks again). **Keep it here** on an edit offer also dismisses it, because the bar the planner
-   just chose to keep is exactly what it would ask about. More than 2,000 qualifying bars (the batch route's cap) shade
+   offer promises a move and counts only what it can deliver. It is omitted without the pen (ADR-0082) and withdrawn
+   by any edit that lands on the undo stack after its confirmation. **Dismissal is per bar, per session, in memory:** Dismiss puts
+   away every bar counted at that moment (in any phase but a press in flight, so a failed offer can be put away), kept under
+   the plan's id so switching plans and back does not ask again; **Keep it here** on an edit offer puts away only the bars that
+   offer named, so other flagged bars keep their offer; and **undoing the offer's own step** puts away the bars it moved, so it
+   does not ask again the question the planner has just taken back. The offer returns only when a bar nobody has put away
+   becomes eligible, and Follow logic acts on the bars counted, not the dismissed ones. **A known trade-off:** the dismissal is
+   not remembered across a reload (a persisted per-device dismissal was suggested in review and is left for the owner to
+   decide). More than 2,000 qualifying bars (the batch route's cap) shade
    **Follow logic** with its reason, _"Too many to follow at once (2,001; the limit is 2,000). Follow logic still works on
    each bar."_, and are never chunked into a non-atomic series.
 7. **D7 — No engine change, no schema change, no new endpoint, no flag** (ADR-0088 D1). The recalculation parity gate holds
@@ -129,8 +134,8 @@ specified as the fallback and **not built**: M0d passed.
 
 - Two new dock rungs (one in M2, one in M3, both built); the remedy's label changed in every journey that names it (M1).
 - A planner who drags a bar early on purpose sees the whole-plan offer for it at once: it describes the plan, not their last act, so
-  it does not know the early start was meant. **Dismiss** is the answer, it costs one press, and nothing persists. If the owner finds
-  that noisy, a per-bar "kept" memory is a later, separate decision.
+  it does not know the early start was meant. **Dismiss** is the answer and it is per bar, so that bar is not asked about again this
+  session; after a reload it asks again.
 - A cross-plan successor is not offered in the plan that drew the link; its own plan's whole-plan offer shows it when opened.
 - A strip that marks itself `data-dock-row` costs a line of the diagram at narrow widths while it waits (about 50–60 px at 1024
   on a mouse); the facts sit at the trailing edge of a line the outlet has taken for itself.
