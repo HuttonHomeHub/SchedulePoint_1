@@ -330,6 +330,15 @@ test('a bar placed on top of its predecessor is moved to its own row (reported 2
   await recalculate(page, orgSlug);
   await ensurePen(page);
 
+  // `Frame` is placed three days before its logic allows, so the standing whole-plan Follow logic offer
+  // (ADR-0216 D6) ranks first in the dock, above the Arrange offer (`resolveDockStrip`). Putting it
+  // away is how the planner reaches the Arrange offer behind it; the offer is per bar, so it stays away.
+  const followPlan = page.getByTestId('canvas-follow-logic-plan-offer');
+  await expect(followPlan).toBeVisible();
+  await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
+  await followPlan.getByRole('button', { name: 'Dismiss' }).click();
+  await expect(followPlan).toBeHidden();
+
   const offer = page.getByTestId('canvas-arrange-offer');
   await expect(offer).toBeVisible();
   await expect(offer).toContainText('2 activities overlap others in their lanes.');
