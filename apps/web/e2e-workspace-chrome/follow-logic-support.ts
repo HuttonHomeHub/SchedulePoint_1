@@ -262,6 +262,48 @@ export async function footFigures(page: Page): Promise<{
   });
 }
 
+/**
+ * The same dock WITHOUT the strip, read in the same cell on the same runner: the strip is hidden and
+ * its `data-dock-row` marker removed (so the outlet loses the 36 rem floor it asks for, and the row
+ * is the one that shipped), measured, and put back. This is the journey's own base for "the strip
+ * costs at most its own height and gap", because an absolute figure from M0d is a statement about the
+ * container's fonts and the foot row sits on a knife edge at 1250 px (see `dock.spec.ts`).
+ */
+export async function footBase(page: Page): Promise<{ foot: number; stage: number }> {
+  return page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('[data-testid="canvas-follow-logic-offer"]');
+    const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
+    const stage = document.querySelector<HTMLElement>(
+      'section[aria-label="Time-scaled logic diagram"]',
+    );
+    if (!strip || !foot || !stage) throw new Error('the strip or the foot row is not on screen');
+    const display = strip.style.display;
+    strip.style.display = 'none';
+    strip.removeAttribute('data-dock-row');
+    const read = {
+      foot: Math.round(foot.getBoundingClientRect().height),
+      stage: Math.round(stage.getBoundingClientRect().height),
+    };
+    strip.setAttribute('data-dock-row', '');
+    strip.style.display = display;
+    return read;
+  });
+}
+
+/** How many lines the strip's sentence takes, and whether it is cut (an ellipsis or overflow). */
+export async function sentenceShape(page: Page): Promise<{ lines: number; cut: boolean }> {
+  return page.evaluate(() => {
+    const p = document.querySelector<HTMLElement>('[data-testid="canvas-follow-logic-offer"] > p');
+    if (!p) throw new Error('no strip sentence');
+    const box = p.getBoundingClientRect();
+    const style = getComputedStyle(p);
+    return {
+      lines: Math.round(box.height / parseFloat(style.lineHeight)),
+      cut: style.textOverflow === 'ellipsis' || p.scrollWidth > p.clientWidth + 1,
+    };
+  });
+}
+
 /** Whether a pointer at the button's centre lands on the button, after scrolling it into view. */
 export async function selfHit(button: Locator): Promise<boolean> {
   await button.scrollIntoViewIfNeeded();

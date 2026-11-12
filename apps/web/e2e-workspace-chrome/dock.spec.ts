@@ -4,7 +4,9 @@ import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
+  footBase,
   footFigures,
+  sentenceShape,
   raiseOfferByLinking,
   raiseOfferForPourSlab,
   selectInList,
@@ -446,30 +448,41 @@ async function expectOfferPressable(page: Page, label: string): Promise<void> {
   expect(await toggleOnFactsLine(page), `${label}: the toggle sits on the facts’ line`).toBe(true);
 }
 
-const MOUSE_AND_FINGER = [
-  {
-    pointer: 'mouse',
-    touch: false,
-    cells: {
-      wide: { foot: 205, strip: 50, stage: 448, outlet: 957 },
-      floorNone: { foot: 101, strip: 50, stage: 352, outlet: 731 },
-      floorFlagged: { foot: 205, strip: 50, stage: 248, outlet: 731 },
-      kept: { foot: 187, stage: 266 },
-    },
-  },
-  {
-    pointer: 'finger',
-    touch: true,
-    cells: {
-      wide: { foot: 229, strip: 62, stage: 404, outlet: 957 },
-      floorNone: { foot: 113, strip: 62, stage: 216, outlet: 731 },
-      floorFlagged: { foot: 277, strip: 62, stage: 52, outlet: 731 },
-      kept: { foot: 207, stage: 122 },
-    },
-  },
-] as const;
+/**
+ * **What this journey asserts, and what it deliberately does not** (CI failure on PR #1319).
+ *
+ * M0d read the injected offer to the pixel (a mouse at 1250 x 800 with the flagged bar selected: foot
+ * 205, strip 50, outlet 957, in the container). That is a statement about THAT machine's fonts, and at
+ * 1250 the foot row sits on a documented knife edge: the 36 rem floor plus the 375.5 px facts group is
+ * 959.5 px against a 957 px row, so 2.5 px of text-width difference puts the strip BESIDE the group
+ * (outlet 576, strip 58, foot 213) instead of above it (outlet 957, strip 50, foot 205). The CI runner
+ * landed on the other side of the edge in 3 of 3 attempts. **Both arrangements cost the diagram the
+ * same** (213 - 58 - 8 = 205 - 50 - 8 = 147, the dock's own height), so this is not a defect a user
+ * can hit. The exact figures stay in `m0-measurement.md` and the measuring probe, where they are
+ * readings; here the INVARIANTS are asserted, measured against a base read in the same cell on the same
+ * runner (`footBase`): the strip costs at most its own height plus the 8 px gap, every button is
+ * pressable, nothing scrolls sideways, the toggle sits on the facts' line, and the sentence is whole
+ * and in at most two lines.
+ */
+const STRIP_GAP = 8;
+const SLACK = 4;
 
-for (const { pointer, touch, cells } of MOUSE_AND_FINGER) {
+async function expectStripCostsItsOwnHeight(page: Page, label: string): Promise<void> {
+  const figures = await footFigures(page);
+  const base = await footBase(page);
+  expect(
+    figures.foot - base.foot,
+    `${label}: the strip costs the foot row at most its own height and gap (foot ${String(figures.foot)}, base ${String(base.foot)}, strip ${String(figures.strip)})`,
+  ).toBeLessThanOrEqual(figures.strip + STRIP_GAP + SLACK);
+  const sentence = await sentenceShape(page);
+  expect(sentence.cut, `${label}: the sentence is never cut`).toBe(false);
+  expect(sentence.lines, `${label}: the sentence takes at most two lines`).toBeLessThanOrEqual(2);
+}
+
+for (const { pointer, touch } of [
+  { pointer: 'mouse', touch: false },
+  { pointer: 'finger', touch: true },
+] as const) {
   test.describe(`the follow-logic offer in the foot row, ${pointer}`, () => {
     test.use({ hasTouch: touch });
 
@@ -491,25 +504,15 @@ for (const { pointer, touch, cells } of MOUSE_AND_FINGER) {
       await page.setViewportSize({ width: 1250, height: 800 });
       await selectInList(page, orgSlug, 'Pour slab');
       await expectOfferPressable(page, `${pointer} 1250 × 800, flagged bar selected`);
-      const wide = await footFigures(page);
-      expect(
-        wide,
-        `${pointer} 1250 × 800 against M0d’s A-double-prime reading (M0c read foot 253)`,
-      ).toEqual({
-        ...cells.wide,
-        sideways: false,
-      });
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1250 × 800, flagged bar selected`);
 
       // ── 1024 × 600, nothing selected, then the flagged bar selected ────────────────────────────
       await page.setViewportSize({ width: 1024, height: 600 });
       await canvas(page).press('Escape');
       await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
       await expectOfferPressable(page, `${pointer} 1024 × 600, nothing selected`);
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1024 × 600, nothing selected`);
       const none = await footFigures(page);
-      expect(none, `${pointer} 1024 × 600, nothing selected, against M0d`).toEqual({
-        ...cells.floorNone,
-        sideways: false,
-      });
       expect(
         none.stage,
         'with nothing selected the stage keeps its 120 px floor (D8: never waived)',
@@ -517,11 +520,9 @@ for (const { pointer, touch, cells } of MOUSE_AND_FINGER) {
 
       await selectInList(page, orgSlug, 'Pour slab');
       await expectOfferPressable(page, `${pointer} 1024 × 600, flagged bar selected`);
-      const flagged = await footFigures(page);
-      expect(flagged, `${pointer} 1024 × 600, flagged bar selected, against M0d`).toEqual({
-        ...cells.floorFlagged,
-        sideways: false,
-      });
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1024 × 600, flagged bar selected`);
+      const withStrip = await footFigures(page);
+      const base = await footBase(page);
 
       // ── The floor comes back with the strip: Keep it here, and the stage is whole again ───────────
       await page
@@ -531,11 +532,11 @@ for (const { pointer, touch, cells } of MOUSE_AND_FINGER) {
       await expect(page.getByTestId('canvas-follow-logic-offer')).toHaveCount(0);
       const kept = await footFigures(page);
       expect(kept.strip).toBe(0);
-      // The dock as it shipped, with the same selection: M0d's `base` reading for this cell.
-      expect(
-        { foot: kept.foot, stage: kept.stage },
-        `${pointer} 1024 × 600, flagged bar selected, strip gone, against M0d's base`,
-      ).toEqual(cells.kept);
+      // The dock as it shipped, with the same selection, is the base this cell read with the strip hidden.
+      expect(Math.abs(kept.foot - base.foot), 'the kept dock is the base dock').toBeLessThanOrEqual(
+        2,
+      );
+      expect(kept.stage).toBeGreaterThan(withStrip.stage - 1);
       expect(
         kept.stage,
         'the 120 px floor holds again once nothing awaits an answer',

@@ -910,10 +910,19 @@ test.describe('The edit offer', () => {
       'Couldn’t move “Pour slab” just now. Nothing was changed.',
     );
     await expect(offer(page).getByRole('button', { name: 'Try again' })).toBeVisible();
-    expect(
-      (await announced(page)).some((text) => text.startsWith('Couldn’t move “Pour slab”')),
-      'the failure is announced as well as shown',
-    ).toBe(true);
+    // Polled: `announce` writes the polite region on the NEXT animation frame (`announcer.tsx` clears
+    // it and sets it in a `requestAnimationFrame`), while the strip's text is visible on the commit, so a
+    // read straight after the strip shows can precede the frame on a slow runner.
+    await expect
+      .poll(
+        async () =>
+          (await announced(page)).some((text) => text.startsWith('Couldn’t move “Pour slab”')),
+        {
+          message: 'the failure is announced as well as shown',
+          timeout: 5000,
+        },
+      )
+      .toBe(true);
 
     // A stale version: the same sentence the selection bar uses, visible in the strip.
     await page.unroute('**/activities/placements');
