@@ -5,6 +5,7 @@ export type DockStrip =
   | 'conflict'
   | 'history'
   | 'mode'
+  | 'follow-edit'
   | 'layout-resolved'
   | 'empty'
   | 'arrange-offer'
@@ -42,6 +43,12 @@ export interface DockStripInput {
    * the top undo step (NetPoint-layout M3). Precedence only; the sentence is the host's.
    */
   readonly hasLayoutResolvedNotice: boolean;
+  /**
+   * Whether an edit just left a placed bar before its logic and the offer to let it follow is still
+   * bound to the top undo step (placed-bar-follows-link M2, ADR-0216). Precedence only; the sentence
+   * and the buttons are the host's.
+   */
+  readonly hasFollowEdit: boolean;
   /**
    * What the last undo/redo press left in the dock (undo-redo M1): `'failure'` for a step that did
    * not apply or a press that was refused, `'success'` for one that ran, `null` for neither. A
@@ -91,7 +98,18 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
    * be the one a mode band covers.
    */
   if (input.historyResult === 'failure') return 'history';
-  if (input.modeStatement) return 'mode';
+  /**
+   * **An armed tool outranks the offer, with one exception: a link confirmation.** The Link tool stays
+   * armed after a link (ADR-0064 §3), so its `linked` confirmation is what the dock shows in the
+   * commonest case, and the offer would sit behind it for ever. The offer therefore CARRIES the
+   * confirmation (its sentence leads and the link's Undo stays beside Follow logic) — one strip, never
+   * two (ADR-0216 D5). The statements that say a tool is waiting for a click (`adding`, `linking`,
+   * `marquee`, `linkPicking`) still outrank it: the planner has moved on to their next act, and the
+   * offer waits behind them until the next edit withdraws it.
+   */
+  if (input.modeStatement) {
+    return input.modeStatement.kind === 'linked' && input.hasFollowEdit ? 'follow-edit' : 'mode';
+  }
   /**
    * **A successful undo/redo ranks directly below `mode`, and above `layout-resolved`.** It
    * reports the planner's last act, and yields to an armed tool for the same reason the
@@ -109,6 +127,15 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
    * it waits: the empty notice cannot co-occur (a plan with an overlap has activities), and the
    * Arrange offer is a standing fact that does not expire.
    */
+  /**
+   * **The offer ranks above the overlap notice.** Both describe the planner's last edit, and the
+   * offer is the one that asks a question: "this bar is not where its logic puts it, what now?". The
+   * notice's Undo stays one `Ctrl+Z` away, which is the step the offer binds to when the resolution
+   * recorded one (the offer is decided after it, so it binds to the step on top). It sits below a
+   * successful undo/redo for the reason that one gives: the planner's newest act is what they ask
+   * about, and an undo has already withdrawn the offer it would have contradicted.
+   */
+  if (input.hasFollowEdit) return 'follow-edit';
   if (input.hasLayoutResolvedNotice) return 'layout-resolved';
   if (input.showDiagram && input.activityCount === 0 && input.mode === 'select') {
     return 'empty';

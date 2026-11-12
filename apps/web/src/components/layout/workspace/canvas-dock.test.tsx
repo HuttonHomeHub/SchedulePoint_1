@@ -158,6 +158,40 @@ describe('the data-dock-wide marker', () => {
 });
 
 /**
+ * **The `data-dock-row` marker** (placed-bar-follows-link M2, ADR-0216 D8). A strip that must be read
+ * whole marks itself and the outlet asks for 36 rem on any pointer. Same literal-class constraint
+ * as `data-dock-wide`, so the pair is pinned in the source: renaming either side would leave the
+ * offer without its own line and only a 1024 px window would show it.
+ */
+describe('the data-dock-row marker', () => {
+  const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8');
+
+  it('is set by the follow-logic strip and read by the outlet class under the same name', () => {
+    const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
+    const strip = read('src/features/tsld/components/FollowLogicStrip.tsx');
+    // `not-empty:` in the class is what beats the 18 rem floor by specificity rather than source order.
+    expect(outlet).toContain('not-empty:has-[[data-dock-row]]:min-w-[min(36rem,100%)]');
+    expect(strip).toMatch(/\n\s+data-dock-row=""/);
+  });
+
+  it('shares its 36 rem floor with the selection bar’s: the two literals are one decision (P4)', () => {
+    const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
+    const floors = [
+      /has-\[\[data-dock-row\]\]:min-w-(\[[^\]]+\])/.exec(outlet)?.[1],
+      /has-\[\[data-dock-wide\]\]:min-w-(\[[^\]]+\])/.exec(outlet)?.[1],
+    ];
+    expect(floors[0], 'the row marker has a floor').toBeDefined();
+    expect(floors[0]).toBe(floors[1]);
+  });
+
+  it('is a floor and never a content basis: the outlet stays basis zero', () => {
+    const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
+    expect(outlet).toMatch(/className="flex min-w-0 flex-1 flex-wrap/);
+    expect(outlet).not.toMatch(/basis-(auto|full)/);
+  });
+});
+
+/**
  * **A floor is capped at the row** (selection-bar-fit M1, #487). Both rem floors double with text
  * size, so an uncapped one can be wider than the foot row and push it sideways. A Tailwind class has to
  * be a literal, and jsdom has no layout, so the cap is pinned in the source; `e2e-workspace-fit`'s

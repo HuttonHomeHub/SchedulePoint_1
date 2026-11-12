@@ -16,6 +16,7 @@ export {
   type TsldEditOutcome,
 } from './components/TsldPanel';
 /** The dock strip for an edit's automatic overlap resolution (NetPoint-layout M3), built by the host. */
+export { FollowLogicStrip } from './components/FollowLogicStrip';
 export { LayoutResolvedStrip } from './components/LayoutResolvedStrip';
 /** The dock strip for what an undo or redo just did (undo-redo M1), built by the host for both views. */
 export { HistoryResultStrip } from './components/HistoryResultStrip';

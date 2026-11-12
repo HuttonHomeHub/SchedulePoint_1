@@ -67,6 +67,26 @@ describe('PlanActivitiesFootRow', () => {
     expect(row?.className).not.toMatch(/(^|\s)h-\d/);
   });
 
+  it('packs the facts and the toggle as ONE trailing item, in the unchanged DOM order', () => {
+    const { container } = render(
+      <PlanActivitiesFootRow toggle={<button type="button">Collapse</button>} />,
+    );
+    const row = container.querySelector('[data-activities-bar]');
+    const group = row?.querySelector(':scope > [data-foot-trail]');
+    // **Verified red** by moving the facts' outlet back out of the group: a wrapping flex row then
+    // tests the facts and the toggle as separate items and can strand the toggle on a line of its own
+    // (`docs/TECH_DEBT.md` #581). jsdom has no layout, so the structure is the checkable half and
+    // `dock.spec.ts` reads the toggle's line.
+    expect(group).not.toBeNull();
+    expect(group).toHaveClass('ml-auto', 'max-w-full', 'flex-wrap', 'shrink-0');
+    expect([...(row?.children ?? [])].map((c) => c.getAttribute('data-testid') ?? 'group')).toEqual(
+      ['dock-outlet', 'group'],
+    );
+    expect(
+      [...(group?.children ?? [])].map((c) => c.getAttribute('data-testid') ?? c.textContent),
+    ).toEqual(['facts-outlet', 'Collapse']);
+  });
+
   it('renders the toggle when given one, and nothing in its place when not', () => {
     const { rerender } = render(
       <PlanActivitiesFootRow toggle={<button type="button">Collapse</button>} />,

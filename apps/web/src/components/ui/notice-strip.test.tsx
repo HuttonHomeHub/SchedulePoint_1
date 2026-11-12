@@ -66,4 +66,64 @@ describe('NoticeStrip', () => {
     rerender(<NoticeStrip message="x" messageFit="grow" />);
     expect(container.firstElementChild).toHaveClass('min-w-0');
   });
+
+  describe('messageFit="wrap"', () => {
+    it('wraps the strip, floors the sentence and groups the buttons so they drop under it together', () => {
+      const { container } = render(
+        <NoticeStrip message="A long sentence." messageFit="wrap" density="comfortable">
+          <button type="button">One</button>
+          <button type="button">Two</button>
+        </NoticeStrip>,
+      );
+      const strip = container.firstElementChild;
+      // **Verified red** by giving `wrap` the `truncate` markup: the root loses `flex-wrap`, the
+      // paragraph truncates and the buttons are direct children. jsdom has no layout, so the classes
+      // are the checkable half; the journeys measure the lines.
+      expect(strip).toHaveClass('flex-wrap', 'min-w-0');
+      const paragraph = screen.getByText('A long sentence.');
+      expect(paragraph).toHaveClass('flex-1', 'min-w-[min(16rem,100%)]');
+      expect(paragraph).not.toHaveClass('truncate');
+      const group = screen.getByRole('button', { name: 'One' }).parentElement;
+      expect(group).toBe(screen.getByRole('button', { name: 'Two' }).parentElement);
+      expect(group).toHaveClass(
+        'ml-auto',
+        'flex',
+        'max-w-full',
+        'flex-wrap',
+        'justify-end',
+        'gap-2',
+      );
+      expect(group?.parentElement).toBe(strip);
+    });
+
+    it('renders no empty group when there are no buttons', () => {
+      const { container } = render(
+        <NoticeStrip message="x" messageFit="wrap">
+          {false}
+          {null}
+        </NoticeStrip>,
+      );
+      expect(container.firstElementChild?.children).toHaveLength(1);
+    });
+
+    it('leaves grow and truncate byte-identical: no wrapper, no wrap class', () => {
+      const { container, rerender } = render(
+        <NoticeStrip message="x">
+          <button type="button">Go</button>
+        </NoticeStrip>,
+      );
+      const strip = (): Element | null => container.firstElementChild;
+      expect(strip()).not.toHaveClass('flex-wrap');
+      expect(screen.getByText('x')).toHaveClass('min-w-0', 'truncate');
+      expect(screen.getByRole('button').parentElement).toBe(strip());
+      rerender(
+        <NoticeStrip message="x" messageFit="grow">
+          <button type="button">Go</button>
+        </NoticeStrip>,
+      );
+      expect(strip()).not.toHaveClass('flex-wrap');
+      expect(screen.getByText('x').className).toBe('flex-1');
+      expect(screen.getByRole('button').parentElement).toBe(strip());
+    });
+  });
 });

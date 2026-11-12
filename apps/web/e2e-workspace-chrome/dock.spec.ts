@@ -4,8 +4,18 @@ import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
+  footBase,
+  footFigures,
+  sentenceShape,
+  raiseOfferByLinking,
+  raiseOfferForPourSlab,
+  selectInList,
+  selfHit,
+} from './follow-logic-support';
+import {
   canvas,
   createHierarchy,
+  diagramList,
   ensurePen,
   findBar,
   newPlan,
@@ -389,4 +399,300 @@ test('an expanded activities panel leaves an open dock a usable height', async (
   // The pinned positive for the trade's other half: the panel is still open and still real — the
   // floor must be paid by clamping the panel, never by collapsing it.
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
+});
+
+/**
+ * **The foot row's two new rules, read against the real DOM** (placed-bar-follows-link M2, ADR-0216
+ * D8 and D9; `docs/TECH_DEBT.md` #581).
+ *
+ * M0d measured an INJECTED copy of the offer (a clone of the real `NoticeStrip` with the draft copy
+ * put in, and the foot row's group built in the page) at 1,354 readings. This is the same plan, the
+ * same viewport and the same selection, with the real component, so a figure that moves is the
+ * injection and the product disagreeing, and is reported as such rather than adjusted.
+ *
+ * **The figures** are `follow-logic-m0d-offer-row.{fine,coarse}.json`, mode `A-double-prime`,
+ * variant `edit-one`, view `diagram`: a mouse at 1250 × 800 with the flagged bar selected reads foot
+ * 205, strip 50, stage 448, outlet 957; at 1024 × 600 nothing selected 101 / 50 / 352 / 731 and the
+ * flagged bar selected 205 / 50 / 248; a finger at 1250 × 800 flagged 229 / 62 / 404 and at 1024 × 600
+ * flagged 277 / 62 / 52 (the waived floor, D8), nothing selected 113 / 62 / 216.
+ */
+
+/** Whether the foot row's toggle is on the same line as the plan facts (centres within half a line). */
+async function toggleOnFactsLine(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const group = document.querySelector<HTMLElement>('[data-activities-bar] > [data-foot-trail]');
+    const facts = group?.firstElementChild as HTMLElement | null;
+    const toggle = group?.querySelector<HTMLElement>('[data-activities-toggle]');
+    if (!group || !facts || !toggle) throw new Error('the foot row has no facts-and-toggle group');
+    const f = facts.getBoundingClientRect();
+    const t = toggle.getBoundingClientRect();
+    return (
+      Math.abs(f.top + f.height / 2 - (t.top + t.height / 2)) <= Math.max(f.height, t.height) / 2
+    );
+  });
+}
+
+/** Every button of the strip is pressable where it is, and the foot row does not scroll sideways. */
+async function expectOfferPressable(page: Page, label: string): Promise<void> {
+  const strip = page.getByTestId('canvas-follow-logic-offer');
+  const buttons = strip.getByRole('button');
+  expect(await buttons.count(), `${label}: the strip’s two buttons`).toBe(2);
+  for (const button of await buttons.all()) {
+    expect(
+      await selfHit(button),
+      `${label}: a pointer at the centre of “${await button.textContent()}”`,
+    ).toBe(true);
+  }
+  const figures = await footFigures(page);
+  expect(figures.sideways, `${label}: the foot row must not scroll sideways`).toBe(false);
+  expect(await toggleOnFactsLine(page), `${label}: the toggle sits on the facts’ line`).toBe(true);
+}
+
+/**
+ * **What this journey asserts, and what it deliberately does not** (CI failure on PR #1319).
+ *
+ * M0d read the injected offer to the pixel (a mouse at 1250 x 800 with the flagged bar selected: foot
+ * 205, strip 50, outlet 957, in the container). That is a statement about THAT machine's fonts, and at
+ * 1250 the foot row sits on a documented knife edge: the 36 rem floor plus the 375.5 px facts group is
+ * 959.5 px against a 957 px row, so 2.5 px of text-width difference puts the strip BESIDE the group
+ * (outlet 576, strip 58, foot 213) instead of above it (outlet 957, strip 50, foot 205). The CI runner
+ * landed on the other side of the edge in 3 of 3 attempts. **Both arrangements cost the diagram the
+ * same** (213 - 58 - 8 = 205 - 50 - 8 = 147, the dock's own height), so this is not a defect a user
+ * can hit. The exact figures stay in `m0-measurement.md` and the measuring probe, where they are
+ * readings; here the INVARIANTS are asserted, measured against a base read in the same cell on the same
+ * runner (`footBase`): the strip costs at most its own height plus the 8 px gap, every button is
+ * pressable, nothing scrolls sideways, the toggle sits on the facts' line, and the sentence is whole
+ * and in at most two lines.
+ */
+const STRIP_GAP = 8;
+const SLACK = 4;
+
+async function expectStripCostsItsOwnHeight(page: Page, label: string): Promise<void> {
+  const figures = await footFigures(page);
+  const base = await footBase(page);
+  expect(
+    figures.foot - base.foot,
+    `${label}: the strip costs the foot row at most its own height and gap (foot ${String(figures.foot)}, base ${String(base.foot)}, strip ${String(figures.strip)})`,
+  ).toBeLessThanOrEqual(figures.strip + STRIP_GAP + SLACK);
+  const sentence = await sentenceShape(page);
+  expect(sentence.cut, `${label}: the sentence is never cut`).toBe(false);
+  expect(sentence.lines, `${label}: the sentence takes at most two lines`).toBeLessThanOrEqual(2);
+}
+
+for (const { pointer, touch } of [
+  { pointer: 'mouse', touch: false },
+  { pointer: 'finger', touch: true },
+] as const) {
+  test.describe(`the follow-logic offer in the foot row, ${pointer}`, () => {
+    test.use({ hasTouch: touch });
+
+    test(`1250 and 1024 wide: every button pressable, no sideways scroll, the toggle on the facts’ line (${pointer})`, async ({
+      page,
+    }) => {
+      test.setTimeout(420_000);
+      const orgSlug = await onboard(page, STAMP + (touch ? 41 : 40));
+      await createHierarchy(page);
+      await newPlan(page, 'Offer row');
+      await ensurePen(page);
+      await raiseOfferForPourSlab(page, orgSlug);
+      expect(
+        await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
+        'the pointer this describe says it is',
+      ).toBe(touch);
+
+      // ── 1250 × 800, the flagged bar selected: the cell M0c fired on (+40 px, the toggle stranded) ──
+      await page.setViewportSize({ width: 1250, height: 800 });
+      await selectInList(page, orgSlug, 'Pour slab');
+      await expectOfferPressable(page, `${pointer} 1250 × 800, flagged bar selected`);
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1250 × 800, flagged bar selected`);
+
+      // ── 1024 × 600, nothing selected, then the flagged bar selected ────────────────────────────
+      await page.setViewportSize({ width: 1024, height: 600 });
+      await canvas(page).press('Escape');
+      await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
+      await expectOfferPressable(page, `${pointer} 1024 × 600, nothing selected`);
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1024 × 600, nothing selected`);
+      const none = await footFigures(page);
+      expect(
+        none.stage,
+        'with nothing selected the stage keeps its 120 px floor (D8: never waived)',
+      ).toBeGreaterThanOrEqual(120);
+
+      await selectInList(page, orgSlug, 'Pour slab');
+      await expectOfferPressable(page, `${pointer} 1024 × 600, flagged bar selected`);
+      await expectStripCostsItsOwnHeight(page, `${pointer} 1024 × 600, flagged bar selected`);
+      const withStrip = await footFigures(page);
+      const base = await footBase(page);
+
+      // ── The floor comes back with the strip: Keep it here, and the stage is whole again ───────────
+      await page
+        .getByTestId('canvas-follow-logic-offer')
+        .getByRole('button', { name: 'Keep it here' })
+        .click();
+      await expect(page.getByTestId('canvas-follow-logic-offer')).toHaveCount(0);
+      const kept = await footFigures(page);
+      expect(kept.strip).toBe(0);
+      // The dock as it shipped, with the same selection, is the base this cell read with the strip hidden.
+      expect(Math.abs(kept.foot - base.foot), 'the kept dock is the base dock').toBeLessThanOrEqual(
+        2,
+      );
+      expect(kept.stage).toBeGreaterThan(withStrip.stage - 1);
+      expect(
+        kept.stage,
+        'the 120 px floor holds again once nothing awaits an answer',
+      ).toBeGreaterThanOrEqual(120);
+    });
+  });
+}
+
+test.describe('the facts and the toggle are one item (docs/TECH_DEBT.md #581)', () => {
+  /**
+   * The shipped dock stranded the panel toggle on a line of its own, with a bar selected, in three
+   * states (M0d): the real stale sentence on a mouse at about 1220 to 1260, and the ordinary current
+   * facts on a FINGER at about 1210 to 1250. Both are driven here, with no offer at all, because the
+   * defect was never the offer's: it was the foot row's three-item line test, and the group removes it.
+   * **Verified red** by taking the group out of `PlanActivitiesFootRow`: the toggle reads on its own
+   * line (a foot row 80 px taller at 1240 on a mouse, 48 px at 1230 on a finger).
+   */
+  test('a real stale sentence beside a selection bar, on a mouse at 1240 × 800', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1240, height: 800 });
+    const orgSlug = await onboard(page, STAMP + 50);
+    await createHierarchy(page);
+    await newPlan(page, 'Stale facts');
+    await ensurePen(page);
+    const [dig] = await seedActivities(page, orgSlug, [
+      { name: 'Dig footings', laneIndex: 0 },
+      { name: 'Steel frame', laneIndex: 1 },
+    ]);
+    if (!dig) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    // An activity created AFTER the last calculation, then a reload: the plan reads "Edited since it
+    // was last calculated" with its Recalculate button, which is the wide state.
+    await seedActivities(page, orgSlug, [{ name: 'Late addition', laneIndex: 2 }]);
+    await page.reload();
+    await ensurePen(page);
+    await expect(page.locator('[data-schedule-state="stale"]')).toBeVisible({ timeout: 20_000 });
+    await findBar(page, dig.id);
+    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+    expect(await toggleOnFactsLine(page), 'the toggle shares the stale facts’ line').toBe(true);
+    expect((await footFigures(page)).sideways).toBe(false);
+  });
+
+  test.describe('on a finger', () => {
+    test.use({ hasTouch: true });
+
+    test('current facts beside a selection bar at 1230 × 800', async ({ page }) => {
+      test.setTimeout(240_000);
+      await page.setViewportSize({ width: 1230, height: 800 });
+      const orgSlug = await onboard(page, STAMP + 51);
+      await createHierarchy(page);
+      await newPlan(page, 'Finger facts');
+      await ensurePen(page);
+      const [dig] = await seedActivities(page, orgSlug, [
+        { name: 'Dig footings', laneIndex: 0 },
+        { name: 'Steel frame', laneIndex: 1 },
+      ]);
+      if (!dig) throw new Error('seeding returned no activity');
+      await recalculate(page, orgSlug);
+      await ensurePen(page);
+      expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
+      await findBar(page, dig.id);
+      await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+      await expect(page.locator('[data-schedule-state="current"]')).toBeVisible();
+      expect(await toggleOnFactsLine(page), 'the toggle shares the current facts’ line').toBe(true);
+      expect((await footFigures(page)).sideways).toBe(false);
+    });
+  });
+});
+
+test.describe('the follow-logic offer at 200 % text', () => {
+  test('every button can be reached by scrolling, and nothing scrolls sideways', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const orgSlug = await onboard(page, STAMP + 60);
+    await createHierarchy(page);
+    await newPlan(page, 'Offer 200');
+    await ensurePen(page);
+    await raiseOfferForPourSlab(page, orgSlug);
+
+    // Root font size, one of the two routes M0d read: the root font moves every rem floor, which is
+    // what the `min(<rem>, 100%)` caps exist for (selection-bar-fit M1). The bar is selected BEFORE
+    // the text grows, because at 200 % the stage is too short to walk a list in.
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await selectInList(page, orgSlug, 'Pour slab');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '32px';
+    });
+    for (const selection of ['the flagged bar', 'nothing'] as const) {
+      if (selection === 'nothing') {
+        // Back to 100 % to clear the selection (the stage is too short to focus at 200 %), then up again.
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '';
+        });
+        await diagramList(page).focus();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '32px';
+        });
+      }
+      const strip = page.getByTestId('canvas-follow-logic-offer');
+      await expect(strip).toBeVisible();
+      for (const button of await strip.getByRole('button').all()) {
+        expect(
+          await selfHit(button),
+          `200 %, ${selection}: “${await button.textContent()}” is reachable after scrolling it into view`,
+        ).toBe(true);
+      }
+      const figures = await footFigures(page);
+      expect(figures.sideways, `200 %, ${selection}: no sideways scroll`).toBe(false);
+      if (selection === 'nothing') {
+        expect(
+          figures.stage,
+          'with nothing selected the diagram keeps at least the 219 px M0d read',
+        ).toBeGreaterThanOrEqual(219);
+      }
+    }
+  });
+});
+
+test.describe('the follow-logic offer reflows at 320 CSS px (WCAG 1.4.10)', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  test('no sideways scroll, and every button of the link-plus-offer is still hit-testable', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, STAMP + 70);
+    await createHierarchy(page);
+    await newPlan(page, 'Offer reflow');
+    await ensurePen(page);
+    await raiseOfferByLinking(page, orgSlug);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    const strip = page.getByTestId('canvas-follow-logic-offer');
+    await expect(strip).toBeVisible();
+    for (const button of await strip.getByRole('button').all()) {
+      expect(
+        await selfHit(button),
+        `320 px: a pointer at the centre of “${await button.textContent()}” lands on it`,
+      ).toBe(true);
+    }
+    expect(
+      (await footFigures(page)).sideways,
+      '320 px: the foot row does not scroll sideways',
+    ).toBe(false);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+      '320 px: the page does not scroll sideways',
+    ).toBe(true);
+  });
 });

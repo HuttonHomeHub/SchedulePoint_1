@@ -3,6 +3,24 @@ import { type Page } from '@playwright/test';
 import { expect, test } from '../e2e-support/test';
 
 import {
+  activityRows,
+  constrainViaApi,
+  dayGap,
+  drawThreeBars,
+  flaggedNames,
+  footFigures,
+  lengthenBar,
+  linkWithTool,
+  announced,
+  raiseOfferByLinking,
+  raiseOfferForPourSlab,
+  recordAnnouncements,
+  requireRow,
+  selectInList,
+  selfHit,
+} from './follow-logic-support';
+import {
+  canvas,
   createHierarchy,
   diagramList,
   ensurePen,
@@ -191,6 +209,13 @@ test.describe('Conflict review', () => {
         { message: 'the engine never flagged the placement as a conflict', timeout: 25_000 },
       )
       .toBe(true);
+
+    // A bar the planner MOVED is where they put it, so the engine's flag raises no offer (ADR-0216
+    // D2; SC-2). Asserted here, where the flag is already proven live, rather than hoped for later.
+    await expect(
+      page.getByTestId('canvas-follow-logic-offer'),
+      'the placement this drag wrote is not offered back to the planner who wrote it',
+    ).toHaveCount(0);
 
     // ── 3 · The count is readable at rest, on both channels ──────────────────────────────────
     await expect
@@ -477,5 +502,454 @@ test.describe('Conflict review', () => {
         expectedReason[activity] ?? 'NO SUCH ACTIVITY',
       );
     }
+  });
+});
+
+/**
+ * **An edit that strands a placed bar offers to let it follow** (placed-bar-follows-link M2,
+ * ADR-0216; the owner's runbook steps 3.5 to 3.8 as a journey).
+ *
+ * Every bar here is DRAWN with the Add tool, because a drawn bar carries a placement and a seeded
+ * one follows its logic, which is how the first walkthrough was fooled. State is read from the API:
+ * the engine has to have flagged the bar before anything can be said about the dock.
+ */
+const FOLLOW_STAMP = Date.now() + 9000;
+
+/** The edit offer, wherever the dock draws it. */
+function offer(page: Page) {
+  return page.getByTestId('canvas-follow-logic-offer');
+}
+
+test.describe('The edit offer', () => {
+  test('lengthening the activity before strands a bar, offers it, and Follow logic is one undo step', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    const orgSlug = await onboard(page, FOLLOW_STAMP);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow logic');
+    await ensurePen(page);
+    await recordAnnouncements(page);
+    // The closest the chain's two bars sit, so one lengthening strands BOTH (the spec's chain case).
+    const bars = await drawThreeBars(page, orgSlug, [220, 300, 330]);
+    const rowsAfterDraw = bars.rows;
+    expect(
+      rowsAfterDraw.every((row) => row.visualStart !== null),
+      'every drawn bar carries a placement, which is the whole premise',
+    ).toBe(true);
+
+    // Link A→B and B→C with the Link tool, which stays armed between the two.
+    await linkWithTool(page, bars.A, bars.B);
+    await expect(page.getByTestId('canvas-mode-band')).toContainText('Linked', { timeout: 10_000 });
+    await linkWithTool(page, bars.B, bars.C, false);
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(0);
+    await expect(
+      offer(page),
+      'a link that strands nothing offers nothing: B is drawn after A finishes',
+    ).toHaveCount(0);
+    await canvas(page).press('Escape');
+
+    // A commitment on B, which the offer must leave exactly as it found it (SC-3).
+    const before = await activityRows(page, orgSlug);
+    const b0 = requireRow(before, 'Pour slab');
+    const snetDay = '2026-01-06';
+    await constrainViaApi(page, orgSlug, b0, { type: 'SNET', date: snetDay });
+
+    // Lengthen A across both bars.
+    const a0 = requireRow(before, 'Excavate');
+    const c0 = requireRow(before, 'Steel beam');
+    const gapToC = dayGap(a0.visualEffectiveStart ?? '', c0.visualEffectiveStart ?? '');
+    const pxPerDay =
+      (bars.B.r[0] - bars.A.r[0]) /
+      Math.max(1, dayGap(a0.visualEffectiveStart ?? '', b0.visualEffectiveStart ?? ''));
+    await lengthenBar(page, { y: bars.A.y, r: bars.A.r }, Math.round(pxPerDay * (gapToC + 3)));
+
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+        message: 'the engine never flagged the stranded bars',
+        timeout: 30_000,
+      })
+      .toBe('Pour slab,Steel beam');
+
+    // ── The offer: one strip, naming the stranded bars in the spec's words ───────────────────────
+    await expect(offer(page)).toBeVisible({ timeout: 15_000 });
+    await expect(offer(page)).toContainText(
+      '“Pour slab” and 1 other stay where you placed them, before their logic allows.',
+    );
+    await expect(offer(page).getByRole('button', { name: 'Follow logic' })).toBeVisible();
+    await expect(offer(page).getByRole('button', { name: 'Keep it here' })).toBeVisible();
+    expect(
+      await offer(page).getAttribute('role'),
+      'no live role: the workspace announced the sentence once, and a role would say it twice',
+    ).toBeNull();
+    await expect(
+      page.getByTestId('canvas-follow-logic'),
+      'the dock strip’s Follow logic is addressable, and there is one',
+    ).toHaveCount(1);
+
+    // ── What a screen reader was told: the ask, once, and only when the strip was on screen ──────
+    expect(
+      (await announced(page)).filter((text) => /stay where you placed them/.test(text)),
+      'the offer is announced exactly once',
+    ).toHaveLength(1);
+
+    // ── Keyboard: Tab from the diagram's list reaches the strip, and Shift+Tab comes back ───────
+    const inStrip = (): Promise<boolean> =>
+      page.evaluate(
+        () =>
+          document.activeElement?.closest('[data-testid="canvas-follow-logic-offer"]') !== null &&
+          document.activeElement?.closest('[data-testid="canvas-follow-logic-offer"]') !==
+            undefined,
+      );
+    await diagramList(page).focus();
+    let tabs = 0;
+    while (!(await inStrip()) && tabs < 30) {
+      await page.keyboard.press('Tab');
+      tabs += 1;
+    }
+    expect(await inStrip(), 'Tab from the list reaches the strip').toBe(true);
+    for (let i = 0; i < tabs; i += 1) await page.keyboard.press('Shift+Tab');
+    await expect(diagramList(page), 'and Shift+Tab returns to the list').toBeFocused();
+
+    // ── Late-start overlay: Follow logic is shaded WITH its reason, and Enter writes nothing ────
+    let patches = 0;
+    page.on('request', (request) => {
+      if (request.method() === 'PATCH' && request.url().endsWith('/activities/placements')) {
+        patches += 1;
+      }
+    });
+    const overlay = page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Late-start overlay' });
+    await overlay.click();
+    const shadedFollow = offer(page).getByTestId('canvas-follow-logic');
+    await expect(shadedFollow).toHaveAttribute('aria-disabled', 'true');
+    await expect(shadedFollow).toHaveAccessibleDescription(/Late-start overlay/);
+    await shadedFollow.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(800);
+    expect(patches, 'a shaded Follow logic writes nothing').toBe(0);
+    await expect(shadedFollow, 'and focus stays on it').toBeFocused();
+    await overlay.click();
+    await expect(shadedFollow).toHaveAttribute('aria-disabled', 'false');
+
+    // ── Follow logic: bars move, the commitment stays, nothing else is touched ──────────────────
+    // The write is held for a moment so the busy strip can be read: it stays, says "Moving …", both
+    // buttons are aria-disabled, and a second press starts nothing (B2).
+    await page.route('**/activities/placements', async (route) => {
+      await new Promise((done) => setTimeout(done, 2500));
+      await route.continue();
+    });
+    const placedBefore = new Map(
+      (await activityRows(page, orgSlug)).map((row) => [row.name, row.visualStart]),
+    );
+    await page.getByTestId('canvas-follow-logic').click();
+    await expect(offer(page)).toHaveAttribute('data-phase', 'busy');
+    await expect(offer(page)).toContainText('Moving “Pour slab” and 1 other…');
+    for (const button of await offer(page).getByRole('button').all()) {
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+    }
+    await expect(
+      page.getByTestId('canvas-follow-logic'),
+      'focus is kept on the control that was pressed while it works',
+    ).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).length, {
+        message: 'one press of Follow logic left a flagged bar behind',
+        timeout: 30_000,
+      })
+      .toBe(0);
+    await page.unroute('**/activities/placements');
+    expect(patches, 'two presses, one write: no double-submit').toBe(1);
+    await expect(offer(page), 'the ask is replaced once the bars have moved').toHaveCount(0);
+
+    // The confirmation: the existing result strip, with Undo, and its sentence said once.
+    const done = page.getByTestId('canvas-history-result');
+    await expect(done).toContainText(
+      '“Pour slab” and 1 other now follow their logic; dates will update.',
+    );
+    await expect(done.getByRole('button', { name: 'Undo' })).toBeVisible();
+    expect(
+      (await announced(page)).filter((text) => /now follow their logic/.test(text)),
+      'the outcome is announced exactly once',
+    ).toHaveLength(1);
+    await expect(
+      diagramList(page),
+      'focus landed on the diagram’s list when the strip it was on went (ADR-0135)',
+    ).toBeFocused();
+    const followed = await activityRows(page, orgSlug);
+    expect(requireRow(followed, 'Pour slab').visualStart).toBeNull();
+    expect(requireRow(followed, 'Steel beam').visualStart).toBeNull();
+    expect(
+      requireRow(followed, 'Excavate').visualStart,
+      'a bar the offer did not name keeps its placement',
+    ).toBe(placedBefore.get('Excavate'));
+    expect(
+      [
+        requireRow(followed, 'Pour slab').constraintType,
+        requireRow(followed, 'Pour slab').constraintDate?.slice(0, 10),
+      ],
+      'the commitment on B survives: the batch sends it back as stored, never null',
+    ).toEqual(['SNET', snetDay]);
+
+    // ── One Ctrl+Z puts both placements back (and flags them again); the second undoes A ─────────
+    await diagramList(page).focus();
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+        message: 'undoing Follow logic did not restore both placements in one step',
+        timeout: 30_000,
+      })
+      .toBe('Pour slab,Steel beam');
+    const restored = await activityRows(page, orgSlug);
+    expect(requireRow(restored, 'Pour slab').visualStart).toBe(placedBefore.get('Pour slab'));
+    expect(requireRow(restored, 'Steel beam').visualStart).toBe(placedBefore.get('Steel beam'));
+    expect(
+      requireRow(restored, 'Pour slab').constraintType,
+      'and the commitment is still there after the undo',
+    ).toBe('SNET');
+    await expect(
+      offer(page),
+      'a consumed offer does not come back when an undo puts its step on top again',
+    ).toHaveCount(0);
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(async () => requireRow(await activityRows(page, orgSlug), 'Excavate').durationDays, {
+        message: 'the second undo did not undo the lengthening',
+        timeout: 30_000,
+      })
+      .toBe(a0.durationDays);
+
+    // ── SC-2: a bar the planner moves is never asked about ──────────────────────────────────────
+    // B is not flagged now (A is short again). Moving B to before A finishes places it before its logic,
+    // which the engine flags — and the offer must stay away, because the edit wrote B's placement.
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 30_000 })
+      .toBe(0);
+    // At this scale a bar is about 14 px wide, which is all end-handle, so the nudge is the keyboard's:
+    // the same write as a drag (a `visualStart`), without aiming at a target smaller than the pointer.
+    await canvas(page).press('Escape');
+    await selectInList(page, orgSlug, 'Pour slab');
+    for (let i = 0; i < 6; i += 1) await page.keyboard.press('Alt+ArrowLeft');
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+        message: 'the nudge never produced a flagged bar',
+        timeout: 30_000,
+      })
+      .toContain('Pour slab');
+    await page.waitForTimeout(1500);
+    await expect(offer(page), 'a dragged bar is where its planner put it').toHaveCount(0);
+  });
+
+  test('the link’s own confirmation carries the offer, and Keep it here writes nothing', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, FOLLOW_STAMP + 1);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow logic link');
+    await ensurePen(page);
+    await recordAnnouncements(page);
+    // B is drawn LEFT of A, so linking A to B strands B at the moment of the link itself.
+    const bars = await drawThreeBars(page, orgSlug, [440, 220, 660]);
+
+    await linkWithTool(page, bars.A, bars.B);
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+        message: 'the link never stranded the bar drawn before its predecessor',
+        timeout: 30_000,
+      })
+      .toBe('Pour slab');
+
+    // The Link tool is still armed, so its confirmation is what the dock shows. The offer rides on
+    // it: one strip, the link's sentence leading, never a second strip hidden behind the first.
+    await expect(offer(page)).toBeVisible({ timeout: 15_000 });
+    await expect(offer(page)).toContainText(
+      'Linked “Excavate” → “Pour slab” (FS) — but “Pour slab” stays where you placed it, before its logic allows.',
+    );
+    // Both sentences were heard, in order: the link's confirmation, then the offer, once strip was shown.
+    const heard = await announced(page);
+    const linkedAt = heard.findIndex((text) => text.startsWith('Linked “Excavate”'));
+    const offerAt = heard.findIndex((text) =>
+      text.startsWith('“Pour slab” stays where you placed it'),
+    );
+    expect(linkedAt, 'the link confirmation was announced').toBeGreaterThanOrEqual(0);
+    expect(offerAt, 'and the offer after it').toBeGreaterThan(linkedAt);
+    await expect(
+      page.getByTestId('canvas-mode-band'),
+      'one strip, never two: the bare confirmation is replaced by the offer that carries it',
+    ).toHaveCount(0);
+    await expect(
+      offer(page).getByRole('button'),
+      'the link’s Undo stays beside Follow logic and Keep it here',
+    ).toHaveText(['Undo link', 'Follow logic', 'Keep it here']);
+
+    // At the 1024 px floor the confirmation, its offer and three buttons still fit: every button is
+    // pressable, the foot row does not scroll sideways, and the sentence takes at most three lines
+    // (M0d's limit for this wording; the strip takes a line of its own rather than being cut).
+    await page.setViewportSize({ width: 1024, height: 600 });
+    for (const button of await offer(page).getByRole('button').all()) {
+      expect(
+        await selfHit(button),
+        `a pointer at the centre of “${await button.textContent()}” lands on it at 1024 × 600`,
+      ).toBe(true);
+    }
+    expect((await footFigures(page)).sideways, 'no sideways scroll at 1024 × 600').toBe(false);
+    const lines = await offer(page)
+      .locator('p')
+      .evaluate((p) =>
+        Math.round(p.getBoundingClientRect().height / parseFloat(getComputedStyle(p).lineHeight)),
+      );
+    expect(lines, 'the sentence is whole, in at most three lines').toBeLessThanOrEqual(3);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+
+    const beforeKeep = await activityRows(page, orgSlug);
+    await offer(page).getByRole('button', { name: 'Keep it here' }).click();
+    await expect(offer(page)).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: /^Linking/ }),
+      'focus went somewhere stable and the Link tool is still armed',
+    ).toBeVisible();
+    // Nothing was written: the same versions, the same placements, the bar still flagged.
+    await page.waitForTimeout(1500);
+    const afterKeep = await activityRows(page, orgSlug);
+    expect(afterKeep.map((r) => [r.name, r.version, r.visualStart])).toEqual(
+      beforeKeep.map((r) => [r.name, r.version, r.visualStart]),
+    );
+    expect(await flaggedNames(page, orgSlug)).toEqual(['Pour slab']);
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+      'focus did not fall to <body> when the strip left',
+    ).toBe(false);
+    expect(
+      (await announced(page)).some((text) =>
+        text.startsWith('Kept “Pour slab” where you placed it; it stays flagged'),
+      ),
+      'Keep it here does not end in silence',
+    ).toBe(true);
+  });
+
+  test('Undo link puts focus on the plan surface and removes the link', async ({ page }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, FOLLOW_STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow logic undo link');
+    await ensurePen(page);
+    await raiseOfferByLinking(page, orgSlug);
+    await offer(page).getByRole('button', { name: 'Undo link' }).click();
+    await expect(offer(page)).toHaveCount(0);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            async ({ org, plan }: { org: string; plan: string }) => {
+              const response = await fetch(
+                `/api/v1/organizations/${org}/plans/${plan}/dependencies`,
+                { credentials: 'include' },
+              );
+              return ((await response.json()) as { data: unknown[] }).data.length;
+            },
+            { org: orgSlug, plan: /\/plans\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '' },
+          ),
+        { timeout: 20_000 },
+      )
+      .toBe(0);
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+      'focus did not fall to <body> when the strip left',
+    ).toBe(false);
+    await expect(diagramList(page)).toBeFocused();
+  });
+
+  test('Ctrl+Z while focus is inside the strip withdraws it and leaves focus on the plan surface', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, FOLLOW_STAMP + 3);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow logic ctrl z');
+    await ensurePen(page);
+    await raiseOfferByLinking(page, orgSlug);
+    await offer(page).getByTestId('canvas-follow-logic').focus();
+    await page.keyboard.press('Control+z');
+    await expect(offer(page)).toHaveCount(0);
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+      'focus did not fall to <body> when Ctrl+Z withdrew the strip under it',
+    ).toBe(false);
+    await expect(diagramList(page)).toBeFocused();
+  });
+
+  test('a failed Follow logic stays in the strip, says why, and Try again works', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, FOLLOW_STAMP + 4);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow logic failure');
+    await ensurePen(page);
+    await recordAnnouncements(page);
+    await raiseOfferForPourSlab(page, orgSlug);
+    const before = await activityRows(page, orgSlug);
+    const follow = offer(page).getByTestId('canvas-follow-logic');
+
+    // A broken write: the strip stays, in plain English, with Try again. Nothing was changed.
+    await page.route('**/activities/placements', (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: '{"error":{"code":"X","message":"boom"}}',
+      }),
+    );
+    await follow.click();
+    await expect(offer(page)).toHaveAttribute('data-phase', 'failed');
+    await expect(offer(page)).toContainText(
+      'Couldn’t move “Pour slab” just now. Nothing was changed.',
+    );
+    await expect(offer(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+    // Polled: `announce` writes the polite region on the NEXT animation frame (`announcer.tsx` clears
+    // it and sets it in a `requestAnimationFrame`), while the strip's text is visible on the commit, so a
+    // read straight after the strip shows can precede the frame on a slow runner.
+    await expect
+      .poll(
+        async () =>
+          (await announced(page)).some((text) => text.startsWith('Couldn’t move “Pour slab”')),
+        {
+          message: 'the failure is announced as well as shown',
+          timeout: 5000,
+        },
+      )
+      .toBe(true);
+
+    // A stale version: the same sentence the selection bar uses, visible in the strip.
+    await page.unroute('**/activities/placements');
+    await page.route('**/activities/placements', (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: '{"error":{"code":"CONFLICT","message":"stale"}}',
+      }),
+    );
+    await offer(page).getByRole('button', { name: 'Try again' }).click();
+    await expect(offer(page)).toContainText(
+      'Couldn’t follow logic: this plan changed since you opened it. Nothing was changed.',
+    );
+    expect(
+      (await activityRows(page, orgSlug)).map((r) => [r.name, r.version, r.visualStart]),
+      'a refused write changed nothing',
+    ).toEqual(before.map((r) => [r.name, r.version, r.visualStart]));
+
+    // Try again, with the route let through, and it works.
+    await page.unroute('**/activities/placements');
+    await offer(page).getByRole('button', { name: 'Try again' }).click();
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 30_000 })
+      .toBe(0);
+    await expect(page.getByTestId('canvas-history-result')).toContainText(
+      '“Pour slab” now follows its logic; dates will update.',
+    );
   });
 });

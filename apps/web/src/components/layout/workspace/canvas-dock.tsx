@@ -130,10 +130,22 @@ export function CanvasDockOutlet(): React.ReactElement {
   // `docs/specs/selection-bar-fit/m0-measurement.md`: the cap changes nothing at 100 % text (the same
   // lines and foot-row height in every one of 284 readings) and removes the overflow at 200 %. A
   // text-only default-font change, which moves the media queries as well, never reached the floor.
+  //
+  // **A strip that marks itself `data-dock-row` asks for 36 rem on ANY pointer** (placed-bar-follows-link
+  // M2, ADR-0216 D8, amendments 1-3). A sentence that must be read whole (the follow-logic offer, which
+  // is an answer awaited) cannot be squeezed beside the facts: at 1024 the outlet's share is about 350 px
+  // and its two buttons alone take 200 px of it, so no copy could fit. Where 36 rem does not fit beside
+  // the facts the outlet takes a line of its own, at a cost of one line (about 50-60 px at 1024, measured
+  // in M0d, 1,354 readings). It is a FLOOR and never a content basis: the outlet's basis stays zero, which
+  // is the alternative ADR-0187 rejected and M0b re-measured (+94 to +98 px at 1912 with a bar selected).
+  // `not-empty:` is in the class so it beats the 18 rem floor by specificity, not by source order.
+  // **The two `min(36rem,100%)` literals are one decision** (`data-dock-wide` on a finger, `data-dock-row`
+  // on any pointer): a Tailwind class has to be a literal, so a constant cannot carry the value, and
+  // `canvas-dock.test.tsx` asserts the two are the same string.
   return (
     <div
       ref={ref}
-      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-[min(18rem,100%)] sm:pointer-coarse:has-[[data-dock-wide]]:min-w-[min(36rem,100%)]"
+      className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-[min(18rem,100%)] not-empty:has-[[data-dock-row]]:min-w-[min(36rem,100%)] sm:pointer-coarse:has-[[data-dock-wide]]:min-w-[min(36rem,100%)]"
     />
   );
 }

@@ -958,6 +958,29 @@ all), and a primitive that announced both would make the second one speak every 
 Its `messageFit` defaults to `'truncate'`; pass `'grow'` where the sentence must wrap rather than
 lose its second half.
 
+**`messageFit="wrap"`** (placed-bar-follows-link M2, ADR-0216) is for a sentence that must be read whole,
+beside buttons, in a narrow dock. The strip wraps; the sentence is `flex-1` with a floor of
+`min(16rem, 100%)`; the buttons are **one** group (`ml-auto flex max-w-full flex-wrap justify-end gap-2`)
+that drops under the sentence together and never leaves one stranded beside it. Pair it with
+`density="comfortable"`. `grow` and `truncate` render the markup they always did. The floor is an
+arbitrary value, recorded here and on ADR-0216 beside ADR-0187 D2's two floors: it is a CSS function of
+the row, which no spacing token expresses.
+
+**`data-dock-row`** marks a strip that must be read whole, beside `data-dock-wide` (the selection bar's
+marker). `CanvasDockOutlet` reads it: an outlet holding a marked strip asks for `min(36rem, 100%)` on
+**any** pointer (`not-empty:has-[[data-dock-row]]:min-w-…`), so a row too narrow for the strip and the
+plan facts gives the strip a line of its own. It is a **floor, never a content basis**: the outlet
+stays `basis 0`, the alternative ADR-0187 rejected. Only `FollowLogicStrip` sets it today
+(`docs/TECH_DEBT.md` #580 adds four more).
+
+**The foot row's trailing group** (`PlanActivitiesFootRow`): the plan facts' outlet and the panel
+toggle are one flex item, `data-foot-trail`, `ml-auto max-w-full shrink-0 flex-wrap`. A wrapping row
+fills each line with each item's hypothetical size, and for the dock outlet that is its floor, so with
+the toggle a separate item a band of foot-row width exactly the toggle's width plus a gap leaves the
+toggle alone on a line of its own, at any floor value (`docs/TECH_DEBT.md` #581). With the pair in
+one item the outlet is beside both or above both. DOM and tab order are unchanged (outlet, facts,
+toggle); on a line of its own the facts now trail beside the toggle.
+
 ## Primitives: the console set — `SectionGroup`, `SubSection`, `KeyValueList`, `Disclosure`, `ConditionStrip`, `CopyButton` (ADR-0178)
 
 Added by the staff console redesign (M2); each was written once because the console had hand-rolled

@@ -19,6 +19,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     hasTouchGestureHint: false,
     hasArrangeOffer: false,
     hasLayoutResolvedNotice: false,
+    hasFollowEdit: false,
     historyResult: null,
     ...overrides,
   };
@@ -122,6 +123,55 @@ describe('resolveDockStrip', () => {
     });
   });
 
+  /**
+   * The edit offer (placed-bar-follows-link M2, ADR-0216). Each case has two claimants and names
+   * which one it expects to have beaten, because "the offer is absent" cannot tell a higher rung from a
+   * broken offer (ADR-0093's shape).
+   */
+  describe('the follow-logic offer', () => {
+    const offer = { hasFollowEdit: true };
+    const LINKED = {
+      kind: 'linked',
+      predecessorName: 'A',
+      successorName: 'B',
+      linkType: 'FS',
+    } as const;
+
+    it('shows on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input(offer))).toBe('follow-edit');
+    });
+
+    it('beats the overlap notice, the empty notice, the Arrange offer and the touch tip', () => {
+      expect(resolveDockStrip(input({ ...offer, hasLayoutResolvedNotice: true }))).toBe(
+        'follow-edit',
+      );
+      expect(resolveDockStrip(input({ ...offer, activityCount: 0 }))).toBe('follow-edit');
+      expect(resolveDockStrip(input({ ...offer, hasArrangeOffer: true }))).toBe('follow-edit');
+      expect(resolveDockStrip(input({ ...offer, hasTouchGestureHint: true }))).toBe('follow-edit');
+    });
+
+    it('loses to a conflict, to either history result and to an armed tool waiting for a click', () => {
+      expect(resolveDockStrip(input({ ...offer, hasConflict: true }))).toBe('conflict');
+      expect(resolveDockStrip(input({ ...offer, historyResult: 'failure' }))).toBe('history');
+      expect(resolveDockStrip(input({ ...offer, historyResult: 'success' }))).toBe('history');
+      for (const modeStatement of [
+        ARMED,
+        { kind: 'linking', linkType: 'FS' },
+        { kind: 'linkPicking', linkType: 'FS', predecessorName: 'A' },
+        { kind: 'adding', typeLabel: 'Task', gesture: 'drag' },
+      ] as const) {
+        expect(resolveDockStrip(input({ ...offer, modeStatement }))).toBe('mode');
+      }
+    });
+
+    it('takes over from the link confirmation, which it then carries', () => {
+      // The Link tool stays armed after a link, so the confirmation is the commonest thing in the
+      // dock. Without this the offer would be hidden behind it until the next edit withdrew it.
+      expect(resolveDockStrip(input({ ...offer, modeStatement: LINKED }))).toBe('follow-edit');
+      expect(resolveDockStrip(input({ modeStatement: LINKED }))).toBe('mode');
+    });
+  });
+
   /** The undo/redo result (undo-redo M1): a failure ranks with `conflict`, a success just below `mode`. */
   describe('the history result', () => {
     it('shows on an otherwise settled canvas, for either outcome', () => {
@@ -178,6 +228,7 @@ describe('resolveDockStrip', () => {
       ['an undo success', { historyResult: 'success' }, 'history'],
       ['an undo failure', { historyResult: 'failure' }, 'history'],
       ['a layout-resolved notice', { hasLayoutResolvedNotice: true }, 'layout-resolved'],
+      ['a follow-logic offer', { hasFollowEdit: true }, 'follow-edit'],
       ['the empty-plan notice', { activityCount: 0 }, 'empty'],
       ['the Arrange offer', { hasArrangeOffer: true }, 'arrange-offer'],
     ];

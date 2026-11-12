@@ -430,6 +430,16 @@ keep `main` releasable.
   code that existed only for rows older versions wrote. The owner moves to a new empty database by
   [`start-fresh-on-1-1.md`](guides/start-fresh-on-1-1.md), still marked a draft until the rehearsal has run.
 
+- **A bar you placed stays put, and an edit that leaves it behind offers to let it follow** (decided and
+  Accepted 2026-11-11 in
+  [ADR-0216](adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md),
+  extending ADR-0148; spec and plan at
+  [`docs/specs/placed-bar-follows-link/`](specs/placed-bar-follows-link/feature-spec.md)). The per-bar
+  "Clear visual start" is renamed "Follow logic" (M1, web 1.1.2). **M2 ships the edit offer:** when an edit
+  leaves a bar you placed starting before its logic allows, a message in the dock at the foot of the diagram and
+  the Gantt offers **Follow logic** or **Keep it here**, with no time limit, one undo step per press, and the
+  Link tool's confirmation carrying it. M3, still to come, offers the same for a plan that already has such bars.
+
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
   [`docs/specs/baseline-float-frame/`](specs/baseline-float-frame/); closed `docs/TECH_DEBT.md` #318).

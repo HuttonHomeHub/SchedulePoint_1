@@ -36,6 +36,9 @@ vi.mock('@/features/undo-redo', async (importOriginal) => ({
     clear: h.clear,
     canUndo: false,
     canRedo: false,
+    // The follow-logic offer reads the step on top when a settle is decided; nothing is on this stack.
+    peekUndo: () => undefined,
+    isTop: () => false,
   }),
 }));
 

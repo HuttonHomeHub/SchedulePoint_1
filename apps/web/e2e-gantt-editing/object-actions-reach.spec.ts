@@ -282,3 +282,158 @@ test('Make milestone… converts from a Gantt selection and returns focus to its
     )
     .toBe('START_MILESTONE');
 });
+
+/**
+ * **The edit offer reaches the Gantt's dock** (placed-bar-follows-link M2, ADR-0216).
+ *
+ * The Gantt creates no links, but a duration typed into its grid can leave a bar the planner placed
+ * before its logic allows, and `beginLayoutEdit` is taken by that path like every other. So the offer
+ * must show in THIS dock too (`plan-workspace-toolbar.tsx`, the Gantt branch's own strip chain), and
+ * its Follow logic must work here: a canvas-only offer would leave the view with the same silent
+ * defect the diagram had.
+ *
+ * Placement is set up through the REST API, as every other write in a fixture is: a seeded activity
+ * carries no `visualStart` and so follows its logic, and the journey's subject is what the Gantt
+ * does about a placed one, not how the placement got there (the diagram's journey draws its bars).
+ */
+test('a duration typed into the grid offers the bar it strands, and Follow logic lets it follow', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const orgSlug = await onboard(page, Date.now());
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+
+  type Row = {
+    id: string;
+    name: string;
+    visualStart: string | null;
+    earlyStart: string | null;
+    visualConflictReason: string | null;
+    version: number;
+  };
+  const rows = async (): Promise<Row[]> =>
+    page.evaluate(
+      async ({ org, plan }: { org: string; plan: string }) => {
+        const res = await fetch(`/api/v1/organizations/${org}/plans/${plan}/activities?limit=100`, {
+          credentials: 'include',
+        });
+        return ((await res.json()) as { data: Row[] }).data;
+      },
+      { org: orgSlug, plan: openPlanId(page) },
+    );
+  const byName = async (name: string): Promise<Row> => {
+    const row = (await rows()).find((r) => r.name === name);
+    if (!row) throw new Error(`no ${name}`);
+    return row;
+  };
+
+  // Seeded 0 → Seeded 1, then Seeded 1 PLACED a fortnight after its logic date: a deliberate gap, so
+  // nothing is flagged until the predecessor grows past it.
+  const [first, second] = [await byName('Seeded 0'), await byName('Seeded 1')];
+  const linkError = await page.evaluate(
+    async ({ org, plan, from, to }: { org: string; plan: string; from: string; to: string }) => {
+      const res = await fetch(`/api/v1/organizations/${org}/plans/${plan}/dependencies`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ predecessorId: from, successorId: to, type: 'FS' }),
+      });
+      return res.ok ? null : `${String(res.status)} ${await res.text()}`;
+    },
+    { org: orgSlug, plan: openPlanId(page), from: first.id, to: second.id },
+  );
+  expect(linkError).toBeNull();
+  await recalculate(page);
+  await expect
+    .poll(async () => (await byName('Seeded 1')).earlyStart, { timeout: 20_000 })
+    .not.toBeNull();
+  const logicDay = new Date((await byName('Seeded 1')).earlyStart ?? '');
+  logicDay.setUTCDate(logicDay.getUTCDate() + 14);
+  const placedError = await page.evaluate(
+    async ({
+      org,
+      id,
+      version,
+      day,
+    }: {
+      org: string;
+      id: string;
+      version: number;
+      day: string;
+    }) => {
+      const res = await fetch(`/api/v1/organizations/${org}/activities/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visualStart: day, version }),
+      });
+      return res.ok ? null : `${String(res.status)} ${await res.text()}`;
+    },
+    {
+      org: orgSlug,
+      id: second.id,
+      version: (await byName('Seeded 1')).version,
+      day: logicDay.toISOString().slice(0, 10),
+    },
+  );
+  expect(placedError).toBeNull();
+  await recalculate(page);
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualStart, { timeout: 20_000 })
+    .not.toBeNull();
+  expect(
+    (await byName('Seeded 1')).visualConflictReason,
+    'placed after its logic, so not flagged',
+  ).toBeNull();
+
+  await syncClient(page);
+  await showGantt(page);
+  const offer = page.getByTestId('canvas-follow-logic-offer');
+  await expect(offer, 'nothing has been edited yet').toHaveCount(0);
+
+  // The edit: a duration typed into Seeded 0's cell, long enough to pass Seeded 1's placement.
+  await ganttRow(page, 'Seeded 0').getByRole('gridcell').nth(2).dblclick();
+  const field = page.getByRole('textbox', { name: /Duration, Seeded 0/ });
+  await expect(field).toBeVisible();
+  await field.fill('60d');
+  await field.press('Enter');
+
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualConflictReason, {
+      message: 'the engine never flagged the bar the typed duration stranded',
+      timeout: 30_000,
+    })
+    .toBe('EARLIER_THAN_LOGIC');
+  await expect(offer, 'the Gantt dock carries the offer too').toBeVisible({ timeout: 15_000 });
+  await expect(offer).toContainText(
+    '“Seeded 1” stays where you placed it, before its logic allows.',
+  );
+  const follow = page.getByTestId('canvas-follow-logic');
+  const hit = await follow.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return top !== null && button.contains(top);
+  });
+  expect(hit, 'a pointer at Follow logic’s centre must land on it').toBe(true);
+
+  await follow.click();
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualStart, {
+      message: 'Follow logic never cleared the placement from the Gantt',
+      timeout: 30_000,
+    })
+    .toBeNull();
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualConflictReason, { timeout: 30_000 })
+    .toBeNull();
+  await expect(offer).toHaveCount(0);
+  // Focus went to the grid when the strip left (ADR-0135), not to <body>.
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.closest('[role="treegrid"]') !== null))
+    .toBe(true);
+});

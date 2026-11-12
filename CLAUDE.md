@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 28 API modules
-> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1885 web
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1891 web
 > source files with 48 Playwright suites beside the base journey, and
-> 215 ADRs.
+> 216 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -490,7 +490,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0089** _(Accepted)_ — One activity field vocabulary, and what a field group is → [`0089-activity-field-vocabulary.md`](docs/adr/0089-activity-field-vocabulary.md)
 - **ADR-0090** _(Accepted)_ — The plan-workspace command surface — a row is a budget, and `order` is not a priority → [`0090-the-plan-workspace-command-surface.md`](docs/adr/0090-the-plan-workspace-command-surface.md)
 - **ADR-0091** _(Proposed D1–D5; D6 Accepted; D3 amended by ADR-0185)_ — A mode is not a command — surface scopes for the plan workspace's command band → [`0091-modes-density-and-the-command-band.md`](docs/adr/0091-modes-density-and-the-command-band.md)
-- **ADR-0092** _(Accepted; M5 withdrawn; vertical budget amended by ADR-0180)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
+- **ADR-0092** _(Accepted; M5 withdrawn; vertical budget amended by ADR-0180; D2 amended by ADR-0216)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted; D5 amended by ADR-0186; D5/D6 remedy label renamed 2026-11-11)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
 - **ADR-0095** _(Accepted; amended by ADR-0170 and ADR-0177)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
@@ -513,7 +513,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0111** _(Accepted)_ — A shared primitive's keyboard contract is reviewed before release, not after → [`0111-a-primitives-keyboard-contract-is-reviewed-before-release.md`](docs/adr/0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)
 - **ADR-0112** _(Accepted)_ — A header row wraps, and a pen sentence is a fact → [`0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md`](docs/adr/0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md)
 - **ADR-0113** _(Accepted)_ — Measure the problem, not just the remedy → [`0113-measure-the-problem-before-designing-the-remedy.md`](docs/adr/0113-measure-the-problem-before-designing-the-remedy.md)
-- **ADR-0114** _(Accepted)_ — A row that cannot shrink is never asked to wrap → [`0114-a-row-that-cannot-shrink-never-wraps.md`](docs/adr/0114-a-row-that-cannot-shrink-never-wraps.md)
+- **ADR-0114** _(Accepted; D1 and D2 amended by ADR-0216)_ — A row that cannot shrink is never asked to wrap → [`0114-a-row-that-cannot-shrink-never-wraps.md`](docs/adr/0114-a-row-that-cannot-shrink-never-wraps.md)
 - **ADR-0115** _(Accepted)_ — A bound governs what it encloses, and the wrap was measured from one state → [`0115-a-bound-governs-what-it-encloses.md`](docs/adr/0115-a-bound-governs-what-it-encloses.md)
 - **ADR-0116** _(Accepted)_ — A health finding is not a conflict, and a report never omits a check → [`0116-a-health-finding-is-not-a-conflict.md`](docs/adr/0116-a-health-finding-is-not-a-conflict.md)
 - **ADR-0117** _(Accepted; `purpose` set extended by ADR-0204)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
@@ -589,7 +589,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0184** _(Accepted; extends ADR-0146 D3/D4 to list rows)_ — A row's subject wraps; it never clips → [`0184-a-rows-subject-wraps-it-never-clips.md`](docs/adr/0184-a-rows-subject-wraps-it-never-clips.md)
 - **ADR-0185** _(Accepted; amends ADR-0031, ADR-0091 D3, ADR-0100 and ADR-0109 D1; D3 and D8 V1–V4 amended by ADR-0189; D5 amended by ADR-0213)_ — The toolbar promotes what fits, and says what moved → [`0185-the-toolbar-promotes-what-fits-and-says-what-moved.md`](docs/adr/0185-the-toolbar-promotes-what-fits-and-says-what-moved.md)
 - **ADR-0186** _(Accepted; amends ADR-0094 D5; amended by ADR-0187; D2 remedy label renamed 2026-11-11)_ — The reason a conflict exists is stated on the object, and the toolbar chip stays a count → [`0186-the-reason-a-conflict-exists-is-stated-on-the-object.md`](docs/adr/0186-the-reason-a-conflict-exists-is-stated-on-the-object.md)
-- **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
+- **ADR-0187** _(Accepted; amends ADR-0031 and ADR-0186's first Tab stop; D3 amended by ADR-0216)_ — A selection bar leads with its subject, and a floor never exceeds its row → [`0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md`](docs/adr/0187-a-selection-bar-leads-with-its-subject-and-a-floor-never-exceeds-its-row.md)
 - **ADR-0188** _(Accepted; amends ADR-0118 D1, ADR-0183 D7 and ADR-0173)_ — A divider has a single-pointer twin, and its strip follows the finger → [`0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md`](docs/adr/0188-a-divider-has-a-single-pointer-twin-and-its-strip-follows-the-finger.md)
 - **ADR-0189** _(Accepted; amends ADR-0185 D3 and D8 V1–V4)_ — A shape on the toolbar is a control → [`0189-a-shape-on-the-toolbar-is-a-control.md`](docs/adr/0189-a-shape-on-the-toolbar-is-a-control.md)
 - **ADR-0190** _(Accepted; one-time exception recorded by ADR-0215)_ — What 1.0 promises → [`0190-what-1-0-promises.md`](docs/adr/0190-what-1-0-promises.md)
@@ -618,6 +618,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
 - **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194; amended by ADR-0215)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
 - **ADR-0215** _(Accepted; amends ADR-0018, ADR-0192, ADR-0194, ADR-0107 D2, ADR-0025, ADR-0212 D4 and ADR-0214; records a one-time exception to ADR-0190)_ — A fresh start is a new database, and the image refuses the old one → [`0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md`](docs/adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)
+- **ADR-0216** _(Accepted; extends ADR-0148, ADR-0153 and ADR-0094; amends ADR-0187 D3, ADR-0092 D2, ADR-0114 D1 and D2)_ — A bar you placed stays put, and an edit that leaves it behind offers to let it follow → [`0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md`](docs/adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
