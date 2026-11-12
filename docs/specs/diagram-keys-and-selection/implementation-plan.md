@@ -1,7 +1,8 @@
 # Implementation Plan: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only; Firefox and
+  WebKit are not installed here and remain unverified, see `m0-verification.md`).
 - **Owner:** product owner; built by `builder` agents, one milestone per pull request.
 
 ## Breakdown
@@ -61,7 +62,8 @@ probe and a markdown record only. No changeset.
   2. Prototype in the probe (via `page.evaluate`) a `listbox.focus({preventScroll:true})` on `pointerup`: does focus
      stay there after `click`? Same with a touch-emulated tap.
   3. Record whether `dblclick` reaches the scene canvas for mouse and for touch emulation (spec D-f).
-  4. Reproduce Ctrl-click with and without the pen (spec P4); confirm the replace happens only with it.
+  4. Reproduce Ctrl-click with and without the pen (spec P4). **Result: it replaces both ways**; Shift-click only with the
+     pen (`m0-verification.md`).
   5. Confirm Delete in a single selection opens a confirmation (`use-plan-workspace-model.ts:300`).
   6. Check whether a click on a Gantt bar leaves focus where the workspace root hears it.
   7. Write the record; if anything contradicts the spec, stop and report.
@@ -105,7 +107,8 @@ announcement and the API count; `e2e-multi-select/multi-select.spec.ts` — clic
 
 - **Development steps:**
   1. `TsldCanvas`: a new optional `onPressComplete()` called at the end of every `onPointerUp` branch
-     (`TsldCanvas.tsx:2960-3032`) except Add mode and `pending`.
+     (`TsldCanvas.tsx:2960-3032`) **and from an `onClick`** (M0: for touch the compatibility `mousedown` after
+     `pointerup` takes focus back, `click` is after it), except Add mode and `pending`.
   2. `TsldPanel`: `focusListFromPointer()` = set the suppression flag, `listboxRef.current?.focus({preventScroll:true})`.
   3. Shortcuts sheet: no new row (the keys are not new); `docs/UX_STANDARDS.md` gains one sentence.
   4. accessibility-reviewer before release; changeset `@repo/web` patch ("keys work after clicking the diagram").

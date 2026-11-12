@@ -1,0 +1,294 @@
+{
+  "measuredAt": "2026-11-12T16:46:34.524Z",
+  "viewport": "1024x600",
+  "engine": "chromium",
+  "readings": {
+    "P1.2 after click on a bar": {
+      "element": "main#main",
+      "role": null,
+      "label": null,
+      "text": "Keys2026Jan345678910115 JanData dateData",
+      "inToolbar": null,
+      "inGrid": false,
+      "isBody": false,
+      "isMain": true,
+      "insideWorkspaceRoot": false,
+      "containsWorkspaceRoot": true
+    },
+    "P1.2 after a drag of a bar": {
+      "element": "main#main",
+      "role": null,
+      "label": null,
+      "text": "Keys2026Jan345678910116 JanData dateData",
+      "inToolbar": null,
+      "inGrid": false,
+      "isBody": false,
+      "isMain": true,
+      "insideWorkspaceRoot": false,
+      "containsWorkspaceRoot": true
+    },
+    "P1.2 after a click on empty scene ground": {
+      "element": "main#main",
+      "role": null,
+      "label": null,
+      "text": "Keys2026Jan345678910116 JanData dateData",
+      "inToolbar": null,
+      "inGrid": false,
+      "isBody": false,
+      "isMain": true,
+      "insideWorkspaceRoot": false,
+      "containsWorkspaceRoot": true
+    },
+    "P1.2 after a press on empty foot-row space": {
+      "element": "main#main",
+      "role": null,
+      "label": null,
+      "text": "Keys2026Jan345678910116 JanData dateData",
+      "inToolbar": null,
+      "inGrid": false,
+      "isBody": false,
+      "isMain": true,
+      "insideWorkspaceRoot": false,
+      "containsWorkspaceRoot": true
+    },
+    "P1.3 Ctrl+Z after a mouse click (today)": {
+      "versionBefore": 2,
+      "versionAfter": 2,
+      "undone": false
+    },
+    "P1.3 Ctrl+C, Ctrl+V after a mouse click (today)": {
+      "countBefore": 3,
+      "countAfter": 3
+    },
+    "P1.4 Escape after a mouse click (today)": {
+      "selectedOptionsAfter": 1,
+      "announcer": "“Alpha” now 05 Jan 2026 to 07 Jan 2026."
+    },
+    "step2 prototype: focus after a mouse click on a bar": {
+      "atClick": {
+        "element": "ul#_r_2r_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      },
+      "after400ms": {
+        "element": "ul#_r_2r_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      },
+      "mainScrollBefore": 0,
+      "mainScrollAfter": 0,
+      "selected": "01a1d0a6-e42f-76d1-b555-84ef7501bc8f"
+    },
+    "step2 prototype: Escape after the focus move": {
+      "selectedOptionsAfter": 0,
+      "announcer": "",
+      "active": {
+        "element": "ul#_r_2r_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    },
+    "step2 prototype: empty-ground click with nothing selected (risk 1)": {
+      "selected": "01a1d0a6-e3f0-7631-9ad1-2ed0846b7cd9",
+      "selectedOptions": 1,
+      "active": {
+        "element": "ul#_r_2r_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    },
+    "step2 prototype: empty-ground click after a selection": {
+      "selected": "01a1d0a6-e3f0-7631-9ad1-2ed0846b7cd9",
+      "selectedOptions": 1,
+      "active": {
+        "element": "ul#_r_2r_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    },
+    "step2 prototype: focus after a drag": {
+      "element": "ul#_r_2r_",
+      "role": "listbox",
+      "label": "Activities in the diagram",
+      "text": "Alpha, 3 working days, 06 Jan 2026 to 08",
+      "inToolbar": null,
+      "inGrid": false,
+      "isBody": false,
+      "isMain": false,
+      "insideWorkspaceRoot": true,
+      "containsWorkspaceRoot": false
+    },
+    "step3 mouse dblclick reaches the scene canvas": 1,
+    "step4 Ctrl-click, pen held": {
+      "selectedOptions": 1,
+      "primary": "Bravo",
+      "pluralBarVisible": false
+    },
+    "step4 Shift-click, pen held": {
+      "selectedOptions": 1,
+      "primary": "Bravo"
+    },
+    "step4 Ctrl-click, no pen": {
+      "selectedOptions": 1,
+      "primary": "Bravo",
+      "pluralBarVisible": false
+    },
+    "step4 Shift-click, no pen": {
+      "selectedOptions": 2,
+      "primary": "Bravo"
+    },
+    "step5 Delete key on a single selection (today)": {
+      "dialogOpen": 0,
+      "activityCount": 3
+    },
+    "step5 the Delete button opens a confirmation": {
+      "alertdialog": true,
+      "text": "Delete activityDelete “Alpha”? You can restore it later.CancelDelete"
+    },
+    "step6 focus after a click on a Gantt bar": {
+      "element": "button",
+      "role": null,
+      "label": null,
+      "text": "Gantt",
+      "inToolbar": "Plan view",
+      "inGrid": false,
+      "isBody": false,
+      "isMain": false,
+      "insideWorkspaceRoot": false,
+      "containsWorkspaceRoot": false
+    },
+    "step6 note": "insideWorkspaceRoot=true means the React root handler hears Ctrl+Z; containsWorkspaceRoot=true means only the widened fallback can.",
+    "mouse: a drag of a bar, click-time prototype": {
+      "events": {
+        "pointerup": 1,
+        "click": 1,
+        "dblclick": 0
+      },
+      "active": {
+        "element": "ul#_r_3il_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 4 working days, 05 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    },
+    "mouse: a pan (empty-ground drag), click-time prototype": {
+      "events": {
+        "pointerup": 1,
+        "click": 1,
+        "dblclick": 0
+      },
+      "active": {
+        "element": "ul#_r_3il_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 4 working days, 05 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    },
+    "touch: one tap on a bar, prototype on pointerup": {
+      "selectedOptions": 1,
+      "active": {
+        "element": "main#main",
+        "role": null,
+        "label": null,
+        "text": "Keys2026Jan345678910115 JanData dateData",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": true,
+        "insideWorkspaceRoot": false,
+        "containsWorkspaceRoot": true
+      },
+      "events": {
+        "pointerup": 1,
+        "click": 1,
+        "dblclick": 0
+      }
+    },
+    "touch: one tap on a bar, prototype on click": {
+      "selectedOptions": 1,
+      "active": {
+        "element": "ul#_r_31_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 4 working days, 05 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      },
+      "events": {
+        "pointerup": 1,
+        "click": 1,
+        "dblclick": 0
+      }
+    },
+    "touch: two taps 60 ms apart": {
+      "events": {
+        "pointerup": 2,
+        "click": 2,
+        "dblclick": 1
+      },
+      "active": {
+        "element": "ul#_r_31_",
+        "role": "listbox",
+        "label": "Activities in the diagram",
+        "text": "Alpha, 4 working days, 05 Jan 2026 to 08",
+        "inToolbar": null,
+        "inGrid": false,
+        "isBody": false,
+        "isMain": false,
+        "insideWorkspaceRoot": true,
+        "containsWorkspaceRoot": false
+      }
+    }
+  }
+}
