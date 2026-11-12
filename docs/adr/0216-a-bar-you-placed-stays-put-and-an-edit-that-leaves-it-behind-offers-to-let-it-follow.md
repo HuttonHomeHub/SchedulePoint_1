@@ -121,3 +121,7 @@ specified as the fallback and **not built**: M0d passed.
   **Taken up (2026-11-12):** `CanvasModeBand`, `HistoryResultStrip`, `LayoutResolvedStrip` and `BulkSelectionBar` now use
   `messageFit="wrap"`, `density="comfortable"` and `data-dock-row`, so no dock sentence is cut. The decision is
   unchanged; it was extended to four more strips, and the `title` stop-gaps on three of them were removed.
+  **One exception:** `CanvasModeBand`'s armed-tool statements (`adding`, `linking`, `marquee`; only `marquee` is painted today, ADR-0091) name no activity and
+  stay up for as long as the tool is armed, so they wrap without `data-dock-row` and keep the compact density; a row
+  of their own would cost the diagram a line for the whole time a tool is armed (ADR-0092). Only `linkPicking` and
+  `linked` take the own row.

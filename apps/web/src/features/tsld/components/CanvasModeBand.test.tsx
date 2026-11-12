@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CanvasModeBand, modeStatementText } from './CanvasModeBand';
 
+import { expectDockRow } from '@/test/dock-row';
+
 /**
  * The mode statement band (ADR-0064 T4/T5). Its job is to make "which tool is armed, and what does
  * the next click mean" readable without looking at the toolbar — the question the epic's founding
@@ -117,10 +119,24 @@ describe('CanvasModeBand', () => {
     { kind: 'linked', predecessorName: 'Set out', successorName: 'Reinforce', linkType: 'FS' },
   ] as const)('a $kind statement takes a dock row that wraps', (statement) => {
     render(<CanvasModeBand statement={statement} />);
-    const band = screen.getByTestId('canvas-mode-band');
-    expect(band).toHaveAttribute('data-dock-row');
-    expect(band).toHaveClass('flex-wrap', 'min-w-0');
-    expect(band).not.toHaveAttribute('title');
-    expect(screen.getByText(modeStatementText(statement))).not.toHaveClass('truncate');
+    expectDockRow(
+      screen.getByTestId('canvas-mode-band'),
+      screen.getByText(modeStatementText(statement)),
+    );
+  });
+
+  // An armed tool's hint names nothing and stays up the whole time, so it must not cost the diagram
+  // a line (ADR-0092): it wraps, but asks the outlet for no row of its own.
+  it.each([
+    { kind: 'adding', typeLabel: 'Task', gesture: 'drag' },
+    { kind: 'linking', linkType: 'FS' },
+    { kind: 'marquee' },
+  ] as const)('a $kind statement wraps but takes no row of its own', (statement) => {
+    render(<CanvasModeBand statement={statement} />);
+    expectDockRow(
+      screen.getByTestId('canvas-mode-band'),
+      screen.getByText(modeStatementText(statement)),
+      { ownRow: false },
+    );
   });
 });

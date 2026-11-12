@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HISTORY_RESULT_TIMEOUT_MS, HistoryResultStrip } from './HistoryResultStrip';
 
+import { expectDockRow } from '@/test/dock-row';
+
 function renderStrip(overrides: Partial<React.ComponentProps<typeof HistoryResultStrip>> = {}) {
   const calls: string[] = [];
   const props = {
@@ -193,15 +195,19 @@ describe('HistoryResultStrip', () => {
 
   // #580: the sentence names the step, so it wraps on its own row instead of being cut, and the
   // hover-only `title` stop-gap is gone because nothing is left to reveal.
-  it.each(['success', 'failure'] as const)(
-    'a %s takes a dock row that wraps, with no title stop-gap',
-    (kind) => {
-      renderStrip({ kind });
-      const strip = screen.getByTestId('canvas-history-result');
-      expect(strip).toHaveAttribute('data-dock-row');
-      expect(strip).toHaveClass('flex-wrap', 'min-w-0');
-      expect(strip).not.toHaveAttribute('title');
-      expect(screen.getByText('Undid add “Foundations”.')).not.toHaveClass('truncate');
-    },
-  );
+  it('a success takes a dock row that wraps, with no title stop-gap', () => {
+    renderStrip();
+    expectDockRow(
+      screen.getByTestId('canvas-history-result'),
+      screen.getByText('Undid add “Foundations”.'),
+    );
+  });
+
+  it('a failure is an alert that takes a dock row that wraps, with no title stop-gap', () => {
+    const message = 'Couldn’t undo just now. Please try again.';
+    renderStrip({ kind: 'failure', message });
+    const strip = screen.getByRole('alert');
+    expect(strip).toHaveAttribute('data-testid', 'canvas-history-result');
+    expectDockRow(strip, screen.getByText(message));
+  });
 });

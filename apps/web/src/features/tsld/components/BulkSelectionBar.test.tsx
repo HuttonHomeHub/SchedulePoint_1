@@ -5,6 +5,8 @@ import { pluralMoveHint } from '../model/reposition-announcement';
 
 import { BulkSelectionBar, type BulkActionGate } from './BulkSelectionBar';
 
+import { expectDockRow } from '@/test/dock-row';
+
 /**
  * The bulk selection bar's four gate states (`docs/specs/canvas-multi-select/` M4-T7).
  *
@@ -213,9 +215,6 @@ describe('the sentence is never cut (docs/TECH_DEBT.md #580)', () => {
   it('takes a dock row that wraps, so a long subject name is read whole', () => {
     const name = 'Fabricate and erect precast stair cores, blk B';
     renderBar({ primaryName: name });
-    const bar = screen.getByTestId('bulk-selection-bar');
-    expect(bar).toHaveAttribute('data-dock-row');
-    expect(bar).toHaveClass('flex-wrap', 'min-w-0');
-    expect(screen.getByText(new RegExp(name))).not.toHaveClass('truncate');
+    expectDockRow(screen.getByTestId('bulk-selection-bar'), screen.getByText(new RegExp(name)));
   });
 });

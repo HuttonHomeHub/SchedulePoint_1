@@ -720,19 +720,28 @@ const LONG = [
 async function expectStripReadWhole(page: Page, testId: string, label: string): Promise<void> {
   const strip = page.getByTestId(testId);
   await expect(strip, `${label}: the strip is on screen`).toBeVisible();
-  // A pointer inside pauses the undo result's 15 s timer, so a slow sweep cannot lose the strip.
-  await strip.hover();
+  // Focus inside pauses the undo result's 15 s timer, so a slow sweep cannot lose the strip. Focus,
+  // not hover: a hover is a no-op on the touch project, and a strip without buttons has nothing to
+  // expire.
+  const firstButton = strip.getByRole('button').first();
+  if ((await firstButton.count()) > 0) await firstButton.focus();
   const sentence = await strip.evaluate((el) => {
     const p = el.querySelector<HTMLElement>(':scope > p');
     if (!p) throw new Error('the strip has no sentence');
     const box = p.getBoundingClientRect();
     const outer = el.getBoundingClientRect();
+    const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
+    if (!foot) throw new Error('the foot row is not on screen');
     return {
       clipped: p.scrollWidth > p.clientWidth + 1,
       ellipsis: getComputedStyle(p).textOverflow === 'ellipsis',
       outside: box.right > outer.right + 1 || box.left < outer.left - 1,
+      // Under wrap the checks above are near-vacuous: a cut sentence is a strip pushed past the foot
+      // row, not a clipped line, so the strip's foot must not fall below the foot row's.
+      belowFoot: outer.bottom > foot.getBoundingClientRect().bottom + 1,
     };
   });
+  expect(sentence.belowFoot, `${label}: the strip is not clipped below the foot row`).toBe(false);
   expect(sentence.ellipsis, `${label}: the sentence is not ellipsised`).toBe(false);
   expect(sentence.clipped, `${label}: the sentence is not clipped`).toBe(false);
   expect(sentence.outside, `${label}: the sentence stays inside its strip`).toBe(false);
@@ -741,11 +750,57 @@ async function expectStripReadWhole(page: Page, testId: string, label: string): 
       await selfHit(button),
       `${label}: a pointer at the centre of “${await button.textContent()}” lands on it`,
     ).toBe(true);
+    expect(
+      await button.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          r.left >= 0 &&
+          r.top >= 0 &&
+          r.right <= window.innerWidth &&
+          r.bottom <= window.innerHeight
+        );
+      }),
+      `${label}: “${await button.textContent()}” lies inside the viewport`,
+    ).toBe(true);
   }
   expect(
     (await footFigures(page)).sideways,
     `${label}: the foot row does not scroll sideways`,
   ).toBe(false);
+}
+
+/**
+ * The armed-tool band, read against the foot row as it was with no band (`idleFoot`, taken on this
+ * runner just before). It asks for no row of its own and its sentence is never cut; when it does not
+ * fit beside the plan facts it may take a second LINE of text (so "Esc to stop" is not lost) and costs
+ * the foot row no more than that one line, never a whole strip's row.
+ */
+async function expectArmedHintCostsNothing(
+  page: Page,
+  idleFoot: number,
+  label: string,
+): Promise<void> {
+  const band = page.getByTestId('canvas-mode-band');
+  await expect(band).toBeVisible();
+  expect(await band.getAttribute('data-dock-row'), `${label}: no row of its own`).toBeNull();
+  const shape = await band.evaluate((el) => {
+    const p = el.querySelector<HTMLElement>(':scope > p');
+    if (!p) throw new Error('the band has no sentence');
+    const parsed = Number.parseFloat(getComputedStyle(p).lineHeight);
+    const lineHeight = Number.isFinite(parsed) ? parsed : 20;
+    return {
+      cut: getComputedStyle(p).textOverflow === 'ellipsis' || p.scrollWidth > p.clientWidth + 1,
+      lineHeight,
+      lines: Math.round(p.getBoundingClientRect().height / lineHeight),
+    };
+  });
+  expect(shape.cut, `${label}: the sentence is not truncated`).toBe(false);
+  expect(shape.lines, `${label}: the sentence takes at most two lines`).toBeLessThanOrEqual(2);
+  const foot = (await footFigures(page)).foot;
+  expect(
+    foot,
+    `${label}: the foot row grows by at most the sentence's extra line (idle ${String(idleFoot)})`,
+  ).toBeLessThanOrEqual(idleFoot + (shape.lines - 1) * shape.lineHeight + 4);
 }
 
 /** The strip at 1024 × 600, at 200 % text, and at 320 CSS px, leaving the viewport at 1024 × 600. */
@@ -814,10 +869,16 @@ for (const { pointer, touch } of [
       await canvas(page).click({
         position: { x: (stage?.width ?? 600) / 2, y: (stage?.height ?? 200) - 40 },
       });
-      await page
-        .getByRole('toolbar', { name: 'Plan commands' })
-        .getByRole('button', { name: 'Link', exact: true })
-        .click();
+      // An armed tool's hint names nothing and stays up the whole time, so it must cost the diagram no
+      // line (ADR-0092): the foot row is no taller than with no band, measured here on this runner.
+      const idleFoot = (await footFigures(page)).foot;
+      const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+      await toolbar.getByRole('button', { name: 'Select', exact: true }).click();
+      await expect(page.getByTestId('canvas-mode-band')).toContainText('Marquee select');
+      await expectArmedHintCostsNothing(page, idleFoot, `${pointer} Select tool armed`);
+      await canvas(page).press('Escape');
+      await expect(page.getByTestId('canvas-mode-band')).toHaveCount(0);
+      await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
       await canvas(page).click({ position: firstPoint });
       await canvas(page).click({ position: secondPoint });
       await expect(page.getByTestId('canvas-mode-band')).toContainText(
