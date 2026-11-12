@@ -69,12 +69,12 @@ describe('ToolbarSplitButton — per-half gating', () => {
     // Verified red: before the fix `document.activeElement` stayed on the primary.
     const { primary, caret, onOpenMenu } = renderSplit({
       caretDisabled: true,
-      caretDisabledReason: "Set the plan's start date first",
+      caretDisabledReason: "Set the plan's data date first",
     });
     fireEvent.keyDown(primary, { key: 'ArrowDown' });
     expect(onOpenMenu).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(caret);
-    expect(caret).toHaveAccessibleDescription("Set the plan's start date first");
+    expect(caret).toHaveAccessibleDescription("Set the plan's data date first");
   });
 
   it('shades the caret visibly, not only in the accessibility tree', () => {
@@ -165,10 +165,10 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
       primaryDisabled: true,
       caretDisabled: true,
       primaryDisabledReason: 'Add an activity first',
-      caretDisabledReason: "Set the plan's start date first",
+      caretDisabledReason: "Set the plan's data date first",
     });
     expect(reasonOf(primary)).toBe('Add an activity first');
-    expect(reasonOf(caret)).toBe("Set the plan's start date first");
+    expect(reasonOf(caret)).toBe("Set the plan's data date first");
   });
 
   it('shows each shut half’s reason as a tip on focus and on a press, with no native title (ADR-0204)', () => {
@@ -176,7 +176,7 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
       primaryDisabled: true,
       caretDisabled: true,
       primaryDisabledReason: 'Add an activity first',
-      caretDisabledReason: "Set the plan's start date first",
+      caretDisabledReason: "Set the plan's data date first",
     });
     expect(primary).not.toHaveAttribute('title');
     expect(caret).not.toHaveAttribute('title');
@@ -185,10 +185,10 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
     expect(document.querySelector('[data-tooltip]')).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(caret);
     expect(document.querySelector('[data-tooltip]')).toHaveTextContent(
-      "Set the plan's start date first",
+      "Set the plan's data date first",
     );
     // Description unchanged and announced once: the tip adds no `aria-describedby` of its own.
-    expect(reasonOf(caret)).toBe("Set the plan's start date first");
+    expect(reasonOf(caret)).toBe("Set the plan's data date first");
   });
 
   it('keeps the accessible name off the reason', () => {

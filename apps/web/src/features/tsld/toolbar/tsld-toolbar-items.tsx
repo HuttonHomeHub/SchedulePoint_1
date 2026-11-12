@@ -883,7 +883,7 @@ function GoToTodayControl({
         primaryDisabled={primaryDisabled}
         caretDisabled={caretDisabled}
         {...(primaryReason ? { primaryDisabledReason: primaryReason } : {})}
-        caretDisabledReason="Set the plan's start date first"
+        caretDisabledReason="Set the plan's data date first"
         haspopup="dialog"
         labelState={api.labelState}
         quietIcons={api.quietIcons}

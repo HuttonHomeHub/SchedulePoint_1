@@ -110,7 +110,7 @@ describe('ScheduleSummaryStrip', () => {
       summary({ dataDate: null, projectFinish: null, activityCount: 0, criticalCount: 0 }),
     );
     renderStrip();
-    await waitFor(() => expect(screen.getByText(/Set the plan’s start date/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Set the plan’s data date/)).toBeInTheDocument());
   });
 
   it('surfaces a load error', async () => {

@@ -78,7 +78,7 @@ describe('RecalculateButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Recalculate' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(/Set the plan’s start date/),
+      expect(screen.getByRole('alert')).toHaveTextContent(/Set the plan’s data date/),
     );
     // The prompt is programmatically associated with the button.
     const button = screen.getByRole('button', { name: 'Recalculate' });
