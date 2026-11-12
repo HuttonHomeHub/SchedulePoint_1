@@ -5,6 +5,7 @@ import {
   PrintSurface,
   printAlt,
   printDiagramImage,
+  PRINT_IMAGE_READY_MS,
   PRINT_TEARDOWN_FALLBACK_MS,
 } from './PrintSurface';
 
@@ -78,6 +79,12 @@ describe('printDiagramImage carries the swimlanes into the printed picture', () 
   const blob = new Blob(['png'], { type: 'image/png' });
 
   beforeEach(() => {
+    // jsdom has no `HTMLImageElement.decode`; stand in for a browser that decodes at once.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      value: vi.fn(() => Promise.resolve()),
+      configurable: true,
+      writable: true,
+    });
     Object.defineProperty(URL, 'createObjectURL', {
       value: vi.fn(() => MOCK_URL),
       configurable: true,
@@ -91,6 +98,7 @@ describe('printDiagramImage carries the swimlanes into the printed picture', () 
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(HTMLImageElement.prototype, 'decode');
     Reflect.deleteProperty(URL, 'createObjectURL');
     Reflect.deleteProperty(URL, 'revokeObjectURL');
     document.querySelector('.tsld-print-container')?.remove();
@@ -100,9 +108,9 @@ describe('printDiagramImage carries the swimlanes into the printed picture', () 
     [4, 'Diagram of North Tower, divided into 4 swimlanes'],
     [0, 'Diagram of North Tower'],
     [undefined, 'Diagram of North Tower'],
-  ])('swimlaneCount %s words the image’s alt as "%s"', (swimlaneCount, alt) => {
-    act(() => {
-      printDiagramImage(
+  ])('swimlaneCount %s words the image’s alt as "%s"', async (swimlaneCount, alt) => {
+    await act(async () => {
+      await printDiagramImage(
         {
           blob,
           title: 'North Tower',
@@ -122,6 +130,12 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
   const print = vi.fn();
 
   beforeEach(() => {
+    // jsdom has no `HTMLImageElement.decode`; stand in for a browser that decodes at once.
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      value: vi.fn(() => Promise.resolve()),
+      configurable: true,
+      writable: true,
+    });
     // jsdom implements neither `URL.createObjectURL`/`revokeObjectURL` nor `window.print`; stub them.
     Object.defineProperty(URL, 'createObjectURL', {
       value: createObjectURL,
@@ -139,6 +153,7 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
   });
 
   afterEach(() => {
+    Reflect.deleteProperty(HTMLImageElement.prototype, 'decode');
     Reflect.deleteProperty(URL, 'createObjectURL');
     Reflect.deleteProperty(URL, 'revokeObjectURL');
     // Clear any surface a test left mounted (a teardown that didn't run).
@@ -152,7 +167,7 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     return document.querySelector('.tsld-print-container');
   }
 
-  it('mounts the surface, opens the print dialog, then tears down on `afterprint` and restores focus', () => {
+  it('mounts the surface, opens the print dialog, then tears down on `afterprint` and restores focus', async () => {
     // A control that "held focus" when Print was activated — focus must return to it after printing.
     const trigger = document.createElement('button');
     trigger.textContent = 'Print';
@@ -160,8 +175,11 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     trigger.focus();
     expect(document.activeElement).toBe(trigger);
 
-    act(() => {
-      printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print });
+    await act(async () => {
+      await printDiagramImage(
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+        { print },
+      );
     });
 
     // Mounted: the container is in the DOM with the image, the object URL was created, and the dialog
@@ -182,9 +200,9 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     trigger.remove();
   });
 
-  it('says the resource loading is in the picture when it is (ADR-0122)', () => {
-    act(() => {
-      printDiagramImage(
+  it('says the resource loading is in the picture when it is (ADR-0122)', async () => {
+    await act(async () => {
+      await printDiagramImage(
         { blob, title: 'North Tower', subtitle: 'As of 2026-01-01', resourceStripStatus: 'ready' },
         { print },
       );
@@ -199,9 +217,12 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     });
   });
 
-  it('keeps the prior alt text when the strip is not in the picture', () => {
-    act(() => {
-      printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print });
+  it('keeps the prior alt text when the strip is not in the picture', async () => {
+    await act(async () => {
+      await printDiagramImage(
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+        { print },
+      );
     });
     expect(container()?.querySelector('img')).toHaveAttribute('alt', 'Diagram of North Tower');
     act(() => {
@@ -209,10 +230,13 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     });
   });
 
-  it('tears down on the fallback timeout when `afterprint` never fires', () => {
+  it('tears down on the fallback timeout when `afterprint` never fires', async () => {
     vi.useFakeTimers();
-    act(() => {
-      printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print });
+    await act(async () => {
+      await printDiagramImage(
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+        { print },
+      );
     });
     expect(container()).not.toBeNull();
 
@@ -224,10 +248,13 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith(MOCK_URL);
   });
 
-  it('tears down only once — `afterprint` then the fallback timer do not double-revoke', () => {
+  it('tears down only once — `afterprint` then the fallback timer do not double-revoke', async () => {
     vi.useFakeTimers();
-    act(() => {
-      printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print });
+    await act(async () => {
+      await printDiagramImage(
+        { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+        { print },
+      );
     });
     act(() => {
       window.dispatchEvent(new Event('afterprint'));
@@ -240,10 +267,10 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
   });
 
-  it('honours an injected fallback delay', () => {
+  it('honours an injected fallback delay', async () => {
     vi.useFakeTimers();
-    act(() => {
-      printDiagramImage(
+    await act(async () => {
+      await printDiagramImage(
         { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
         { print, fallbackMs: 500 },
       );
@@ -256,5 +283,88 @@ describe('printDiagramImage (mount / teardown lifecycle)', () => {
       vi.advanceTimersByTime(1);
     });
     expect(container()).toBeNull();
+  });
+
+  it('does not open the print dialog until the image has decoded', async () => {
+    let finishDecode: () => void = () => undefined;
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      value: vi.fn(() => new Promise<void>((resolve) => (finishDecode = resolve))),
+      configurable: true,
+      writable: true,
+    });
+
+    let settled = false;
+    const printing = printDiagramImage(
+      { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+      { print },
+    ).then(() => {
+      settled = true;
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Mounted, but the picture is not ready: nothing may be snapshotted yet.
+    expect(container()).not.toBeNull();
+    expect(print).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+
+    await act(async () => {
+      finishDecode();
+      await printing;
+    });
+    expect(print).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new Event('afterprint'));
+    });
+  });
+
+  it('prints nothing, tears down and rejects when the image cannot be decoded', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      value: vi.fn(() => Promise.reject(new Error('EncodingError'))),
+      configurable: true,
+      writable: true,
+    });
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    await act(async () => {
+      await expect(
+        printDiagramImage({ blob, title: 'North Tower', subtitle: 'As of 2026-01-01' }, { print }),
+      ).rejects.toThrow('EncodingError');
+    });
+
+    expect(print).not.toHaveBeenCalled();
+    expect(container()).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith(MOCK_URL);
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+
+  it('gives up with a rejection when the image never arrives', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      value: vi.fn(() => new Promise<void>(() => undefined)),
+      configurable: true,
+      writable: true,
+    });
+
+    const outcome = printDiagramImage(
+      { blob, title: 'North Tower', subtitle: 'As of 2026-01-01' },
+      { print },
+    ).then(
+      () => 'printed',
+      (error: unknown) => (error instanceof Error ? error.message : 'unknown'),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PRINT_IMAGE_READY_MS);
+    });
+
+    expect(await outcome).toBe('The diagram image took too long to load.');
+    expect(print).not.toHaveBeenCalled();
+    expect(container()).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith(MOCK_URL);
   });
 });

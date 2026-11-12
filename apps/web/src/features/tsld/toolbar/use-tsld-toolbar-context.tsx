@@ -919,7 +919,7 @@ export function useTsldToolbarContext({
         setExportNotice(null);
         announce('Preparing the diagram to print…');
         void built.promise
-          .then(({ blob }) => {
+          .then(({ blob }) =>
             printDiagramImage({
               blob,
               title: plan.name,
@@ -930,7 +930,9 @@ export function useTsldToolbarContext({
               // better home for them because it is real, selectable text a reader can copy, and
               // `formatCalendarDate` is the format the rest of the product uses.
               subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)} · Generated ${formatCalendarDate(todayIso)}`,
-            });
+            }),
+          )
+          .then(() => {
             announce(`Printing ${plan.name}.`);
           })
           .catch(() => {

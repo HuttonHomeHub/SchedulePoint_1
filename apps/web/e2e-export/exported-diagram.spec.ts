@@ -504,6 +504,65 @@ test.describe('The exported diagram', () => {
   });
 
   /**
+   * **The print window opens on a picture, not on an empty frame** (TECH_DEBT #585).
+   *
+   * `window.print()` snapshots the DOM at the instant it is called. The diagram prints as an
+   * `<img>` of a blob URL, and the first version called `print()` in the same task that mounted
+   * it — before the image had loaded — so a planner's print preview was the title and a blank
+   * page. Only a browser can say whether an image has loaded, so `print` is replaced with a
+   * recorder that reads the mounted image at the moment it is called. Nothing here is a pixel
+   * figure: loaded, decoded and non-empty are machine-independent facts.
+   */
+  test('Print… opens the print window only once the diagram image has loaded', async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.addInitScript(() => {
+      const probe = globalThis as unknown as { __printSeen?: unknown[] };
+      probe.__printSeen = [];
+      globalThis.print = () => {
+        const img = document.querySelector<HTMLImageElement>('.tsld-print-container img');
+        probe.__printSeen?.push(
+          img
+            ? { complete: img.complete, naturalWidth: img.naturalWidth }
+            : { complete: false, naturalWidth: 0 },
+        );
+      };
+    });
+    const orgSlug = await onboard(page, STAMP + 4);
+    await createHierarchy(page);
+    await newPlan(page, 'Print timing');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
+    await recalculate(page, orgSlug);
+    await expect(
+      page.getByRole('listbox', { name: 'Activities in the diagram' }).getByRole('option').first(),
+    ).toBeAttached({ timeout: 30_000 });
+
+    await page
+      .getByRole('button', { name: /^(share & )?export$/i })
+      .first()
+      .click();
+    const print = page.getByRole('menuitem', { name: 'Print…', exact: true });
+    await expect(print).not.toHaveAttribute('aria-disabled', 'true');
+    await print.click();
+
+    await expect
+      .poll(() => page.evaluate(() => (globalThis as { __printSeen?: unknown[] }).__printSeen), {
+        message: 'window.print was never called',
+        timeout: 30_000,
+      })
+      .toHaveLength(1);
+    const seen = await page.evaluate(
+      () =>
+        (globalThis as { __printSeen?: { complete: boolean; naturalWidth: number }[] }).__printSeen,
+    );
+    expect(seen?.[0]?.complete, 'the image was not loaded when the print window opened').toBe(true);
+    expect(
+      seen?.[0]?.naturalWidth,
+      'the image was empty when the print window opened',
+    ).toBeGreaterThan(0);
+  });
+
+  /**
    * **The resource strip in the exported and printed picture** (TECH_DEBT #223, ADR-0200).
    *
    * The strip is painted on its own canvas from its own ref, and the export composer never read
