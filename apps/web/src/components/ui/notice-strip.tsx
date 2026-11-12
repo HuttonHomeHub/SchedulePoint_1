@@ -1,4 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
+import { Children } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -65,8 +66,14 @@ export interface NoticeStripProps
    * `truncate` cuts a one-line sentence with an ellipsis rather than let it push its buttons out of
    * a narrow container (it needs the strip's own `min-w-0` to do so); `grow` lets a two-line
    * conflict message use the room and keeps its buttons hard right.
+   *
+   * `wrap` is for a sentence that must be read whole (placed-bar-follows-link, ADR-0216): the strip
+   * wraps, so when the sentence and its buttons do not fit on one line the buttons drop UNDER the
+   * sentence, grouped and trailing, instead of the sentence being cut. The message's floor is
+   * `min(16rem, 100%)` (see ADR-0187 D2: a floor never wider than the row it sits in), so it takes
+   * a line of its own before it narrows past a readable measure. Pair it with `density="comfortable"`.
    */
-  messageFit?: 'grow' | 'truncate';
+  messageFit?: 'grow' | 'truncate' | 'wrap';
   /** Buttons, in reading order. Anything falsy renders nothing, so a caller can pass a condition. */
   children?: React.ReactNode;
 }
@@ -100,6 +107,22 @@ export function NoticeStrip({
   children,
   ...props
 }: NoticeStripProps): React.ReactElement {
+  if (messageFit === 'wrap') {
+    return (
+      <div
+        className={cn(noticeStripVariants({ tone, emphasis, density }), 'flex-wrap', className)}
+        {...props}
+      >
+        {/* The 16 rem floor, capped at the strip's own width, is the point at which the sentence stops
+            sharing a line with its buttons; an arbitrary value because no token names a measure. */}
+        <p className="min-w-[min(16rem,100%)] flex-1">{message}</p>
+        {Children.toArray(children).length > 0 ? (
+          // One group, so the buttons wrap together and never leave one stranded beside the text.
+          <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">{children}</div>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className={cn(noticeStripVariants({ tone, emphasis, density }), className)} {...props}>
       <p className={messageFit === 'grow' ? 'flex-1' : 'min-w-0 truncate'}>{message}</p>

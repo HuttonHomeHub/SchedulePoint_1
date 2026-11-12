@@ -487,6 +487,18 @@ export const ActivityBottomPanel = memo(function ActivityBottomPanel({
  * always reachable. The row stays `shrink-0` with `min-h-9` as a floor only, so the body gives up
  * the height for a second line rather than clipping it.
  *
+ * **The facts and the toggle are ONE item, and the reason is arithmetic** (ADR-0216 D9; measured in
+ * `docs/specs/placed-bar-follows-link/m0-measurement.md`, M0c and M0d). A wrapping flex row fills each
+ * line greedily with each item's HYPOTHETICAL size, and for the dock outlet that is its zero basis
+ * clamped up by its floor, never its content. With the facts and the toggle as separate items the
+ * test has a third outcome: the outlet and the facts share a line when `floor + 8 + facts <= row`,
+ * and the toggle joins them only when `floor + 8 + facts + 8 + toggle <= row`, so for a band of
+ * foot-row width exactly the toggle's width plus a gap the toggle, and only the toggle, wraps onto a
+ * line of its own. That band is the same width at EVERY floor value, so no floor removes it. It cost
+ * 48 to 120 px in the dock as it shipped (`docs/TECH_DEBT.md` #581). With the pair in one item the
+ * outlet is beside both or above both, and the third outcome does not exist. On a line of its own the
+ * facts now trail beside the toggle rather than starting at the leading edge.
+ *
  * **Both slot outlets are unconditional.** The prop that withheld them for the below-`md`
  * single-pane layout (`hostsPlanSlots`) is gone with that layout: there is no longer a pane that is
  * `display: none` by default for an outlet to register inside.
@@ -560,8 +572,17 @@ export function PlanActivitiesFootRow({
           different subjects at opposite ends of the panel; but the justification as written was
           false in the state M4 introduced, and is corrected rather than quietly kept. */}
       <CanvasDockOutlet />
-      <PlanFactsOutlet />
-      {toggle}
+      {/* **One trailing item, so the toggle can never be left alone on a line** (ADR-0216 D9; see the
+          docblock). `ml-auto` keeps the pair at the trailing edge of whichever line it lands on and
+          `max-w-full flex-wrap` keeps the 320 px reflow: the facts take the group's line and wrap
+          inside it, the toggle wraps under them. DOM and tab order are the outlet, the facts, the toggle. */}
+      <div
+        data-foot-trail
+        className="ml-auto flex max-w-full shrink-0 flex-wrap items-center gap-x-2 gap-y-0"
+      >
+        <PlanFactsOutlet />
+        {toggle}
+      </div>
     </Surface>
   );
 }
