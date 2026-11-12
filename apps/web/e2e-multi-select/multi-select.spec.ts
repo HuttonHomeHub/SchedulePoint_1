@@ -18,6 +18,7 @@ import {
   mapBars,
   mapBarsAcross,
   placements,
+  searchField,
 } from './support';
 
 /**
@@ -590,5 +591,88 @@ test('Escape clears a selection made with the mouse, and empty ground selects no
     await expect
       .poll(() => diagramList(page).getAttribute('aria-activedescendant'))
       .not.toBe(before);
+  });
+});
+
+/**
+ * **The Delete key** (`docs/specs/diagram-keys-and-selection/` M2, ADR-0218 D3).
+ *
+ * Delete and Backspace on the diagram's list ask the same "Are you sure?" the bar's Delete button asks,
+ * for one activity or several, and are refused aloud (not silently) with the button's own reason when
+ * the pen is not held. They live on the list, so a key typed anywhere else is the field's.
+ */
+test('Delete and Backspace ask first, confirm deletes, undo restores, and typing is left alone', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Delete key ${stamp}`);
+  await ensurePen(page);
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Excavate', durationDays: 3 },
+    { name: 'Pour slab', durationDays: 3 },
+  ]);
+  const first = seeded[0];
+  if (!first) throw new Error('seeding returned no activity');
+  await ensurePen(page);
+
+  const stored = async (): Promise<number> => (await placements(page, orgSlug)).size;
+  const confirm = (name: RegExp | string) => page.getByRole('alertdialog', { name });
+
+  await test.step('Delete on a clicked bar asks first, and Escape cancels', async () => {
+    await findBar(page, first.id);
+    await expect(diagramList(page)).toBeFocused();
+    await page.keyboard.press('Delete');
+    await expect(confirm('Delete activity')).toContainText('Excavate');
+    await page.keyboard.press('Escape');
+    await expect(confirm('Delete activity')).toBeHidden();
+    await expect(diagramList(page)).toBeFocused();
+    expect(await stored()).toBe(2);
+  });
+
+  await test.step('Backspace asks the same, confirming deletes, and Ctrl+Z brings it back', async () => {
+    await page.keyboard.press('Backspace');
+    const dialog = confirm('Delete activity');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect.poll(stored).toBe(1);
+    await expect(diagramList(page)).toBeFocused();
+    await page.keyboard.press('Control+z');
+    await expect.poll(stored).toBe(2);
+  });
+
+  await test.step('two selected: Delete asks about both', async () => {
+    await findBar(page, first.id);
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('[role="option"][aria-selected="true"]')).toHaveCount(2);
+    await page.keyboard.press('Delete');
+    await expect(confirm('Delete 2 activities?')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(confirm('Delete 2 activities?')).toBeHidden();
+    expect(await stored()).toBe(2);
+  });
+
+  await test.step('Backspace typed in the search box deletes a character and nothing else', async () => {
+    await searchField(page).click();
+    await page.keyboard.type('ab');
+    await page.keyboard.press('Backspace');
+    await expect(searchField(page)).toHaveValue('a');
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await page.keyboard.press('Delete');
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(await stored()).toBe(2);
+    await searchField(page).fill('');
+  });
+
+  await test.step('without the pen the key is refused aloud and deletes nothing', async () => {
+    await page.getByRole('button', { name: 'Stop editing' }).click();
+    await findBar(page, first.id);
+    await expect(diagramList(page)).toBeFocused();
+    await page.keyboard.press('Delete');
+    await announced(page, /Start editing to change this activity/);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(await stored()).toBe(2);
   });
 });

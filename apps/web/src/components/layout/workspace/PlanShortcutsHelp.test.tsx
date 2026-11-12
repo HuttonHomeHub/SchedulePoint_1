@@ -20,6 +20,12 @@ import { PlanShortcutsHelp } from './PlanShortcutsHelp';
  */
 
 describe('the plan shortcuts sheet', () => {
+  it('lists the Delete key under the diagram sheet, saying where it works and that it asks first', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="tsld" />);
+    expect(screen.getByText('Delete / Backspace (in the diagram)')).toBeInTheDocument();
+    expect(screen.getByText(/asks first; Undo restores them/)).toBeInTheDocument();
+  });
+
   it('shows the GANTT bindings, named for that view, when the chart is on screen', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
     // The title has to name the view: the two sheets share key NAMES and not meanings — Enter opens

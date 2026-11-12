@@ -133,6 +133,7 @@ import { Surface } from '@/components/ui/surface';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import {
   SelectionActionsBar,
+  deleteRefusal,
   type SelectionBarContext,
   type SelectionCanvasContext,
 } from '@/features/plan-actions/selection-actions';
@@ -2433,6 +2434,49 @@ export function TsldPanel({
       if (current) {
         event.preventDefault();
         onOpenLogic(current);
+      }
+      return;
+    }
+    /**
+     * **Delete / Backspace — delete the selection, after the question the Delete button asks**
+     * (ADR-0218 D3). One activity opens the host's single confirmation; two or more open the plural
+     * one, each through the very path its button uses, so the dialog, the focus return and the undo
+     * are the button's. Refused ALOUD with the button's own reason rather than silently (ADR-0204).
+     *
+     * On the listbox, not the root, for Ctrl+A's reason: this handler runs only when the list has
+     * focus, so a Backspace typed into the search box or a field is structurally the field's. The
+     * armed tool does not matter (the bar stays on screen and its button works); a held key repeats
+     * into the modal, not the plan. A modified press (Ctrl+Backspace and the like) is not ours.
+     */
+    if (
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      // Nothing wired to answer it (a host without the object actions, or two selected with no bulk
+      // operations): there is no button to mirror and no sentence the product has for it, so the key
+      // is left unclaimed rather than swallowed to no effect.
+      const count = selection.ids.length;
+      const answerable = count === 0 || (count === 1 ? selectionCtx !== null : bulk !== undefined);
+      if (!answerable) return;
+      event.preventDefault();
+      // A held key repeats: the first press opened the modal or said the refusal, and a repeat must
+      // not re-announce it on every tick (the modal takes the repeats once open).
+      if (event.repeat) return;
+      if (count === 0) {
+        announce('Nothing is selected to delete.');
+      } else if (selectionCtx !== null && count === 1) {
+        const refusal = deleteRefusal(selectionCtx);
+        if (refusal !== null) announce(refusal);
+        else selectionCtx.onDelete();
+      } else if (bulk) {
+        if (!bulk.gate.writable) announce(bulk.gate.reason ?? 'You can’t delete these right now.');
+        else {
+          setBulkError(null);
+          setConfirmBulkDelete(true);
+        }
       }
       return;
     }
