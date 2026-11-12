@@ -676,3 +676,69 @@ test('Delete and Backspace ask first, confirm deletes, undo restores, and typing
     expect(await stored()).toBe(2);
   });
 });
+
+/**
+ * **Ctrl/Cmd-click toggles and Shift-click extends, with the pen and without it**
+ * (`docs/specs/diagram-keys-and-selection/` M4, ADR-0218 D5).
+ *
+ * A press on a bar runs the gesture machine whenever the pen is held, and whenever Ctrl is held (the
+ * marquee chord arms it for every reader). Its unmoved release used to call `onSelect(id)` with no
+ * modifier, so the second click REPLACED the selection. The plain click path never had the problem,
+ * which is why the plural journeys, driven through the list, never saw it.
+ */
+test('Ctrl-click toggles and Shift-click extends, with the pen and without it', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Ctrl click ${stamp}`);
+  await ensurePen(page);
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Excavate', durationDays: 3 },
+    { name: 'Pour slab', durationDays: 3 },
+    { name: 'Cure', durationDays: 3 },
+  ]);
+  await ensurePen(page);
+  const bars = await mapBars(page);
+  const [a, b, c] = seeded.map((row) => {
+    const point = bars.get(row.id);
+    if (!point) throw new Error(`no probed point hit ${row.name}`);
+    return point;
+  });
+  if (!a || !b || !c) throw new Error('seeding returned fewer than three activities');
+
+  const selected = page.locator('[role="option"][aria-selected="true"]');
+  const bulkBar = page.getByTestId('bulk-selection-bar');
+
+  await test.step('with the pen: Ctrl-click adds a second bar, and again removes it', async () => {
+    await clearSelection(page);
+    await canvas(page).click({ position: a });
+    await expect(selected).toHaveCount(1);
+    await canvas(page).click({ position: b, modifiers: ['Control'] });
+    await expect(selected).toHaveCount(2);
+    await expect(bulkBar).toContainText('2 activities selected');
+    await canvas(page).click({ position: b, modifiers: ['Control'] });
+    await expect(selected).toHaveCount(1);
+    await expect(bulkBar).toHaveCount(0);
+  });
+
+  await test.step('with the pen: Shift-click selects the run between', async () => {
+    await clearSelection(page);
+    await canvas(page).click({ position: a });
+    await canvas(page).click({ position: c, modifiers: ['Shift'] });
+    await expect(selected).toHaveCount(3);
+    await expect(bulkBar).toContainText('3 activities selected');
+  });
+
+  await test.step('without the pen: Ctrl-click adds a second bar too', async () => {
+    await page.getByRole('button', { name: 'Stop editing' }).click();
+    await clearSelection(page);
+    await canvas(page).click({ position: a });
+    await expect(selected).toHaveCount(1);
+    await canvas(page).click({ position: b, modifiers: ['Control'] });
+    await expect(selected).toHaveCount(2);
+    await expect(bulkBar).toContainText('2 activities selected');
+  });
+});
