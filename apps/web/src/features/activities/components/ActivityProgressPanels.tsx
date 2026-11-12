@@ -4,6 +4,7 @@ import { useWatch, type UseFieldArrayReturn, type UseFormReturn } from 'react-ho
 
 import type { ScopeGate } from '../lib/activity-editor-gating';
 import { durationInputProps } from '../model/duration-field';
+import { fieldsClearedByEdit, type ProgressRefusal } from '../model/progress-refusal';
 import {
   REMAINING_NEEDS_WHOLE_DAYS,
   remainingHelp,
@@ -75,6 +76,8 @@ export function ReportedProgressPanel({
   pending,
   saved,
   error,
+  refusal,
+  formRef,
 }: {
   form: UseFormReturn<ProgressFormValues>;
   isDirty: boolean;
@@ -91,6 +94,10 @@ export function ReportedProgressPanel({
   saved: boolean;
   /** The last save's failure, held by the host so it cannot outlive the opening. */
   error: string | null;
+  /** The held refusal, derived once by the host: what an edit clears depends on its reason. */
+  refusal: ProgressRefusal | null;
+  /** The host reads the form's elements to place a refusal and to judge whether moving focus is safe. */
+  formRef: React.Ref<HTMLFormElement>;
 }): React.ReactElement {
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
@@ -98,19 +105,24 @@ export function ReportedProgressPanel({
   // scope's save bumps it, and a stale one would 409 every time after the first.
   const onSubmit = form.handleSubmit(onSave);
 
-  // A refusal the server attributed to a field (ADR-0217 D1) stays until the reader edits one of the
-  // fields it names; react-hook-form clears a manual error only on the next submit, which would leave
-  // "after the data date" under a date that has already been changed.
+  // A refusal the server attributed to a field (ADR-0217 D1) stays until the reader edits the field
+  // it is on; react-hook-form clears a manual error only on the next submit, which would leave
+  // "after the data date" under a date that has already been changed. Only THAT field's error goes —
+  // except a finish/start relation, which clears from either end (`fieldsClearedByEdit`).
   useEffect(() => {
     const subscription = form.watch((_, { name }) => {
-      if (name === undefined || form.getFieldState(name).error?.type !== 'server') return;
-      form.clearErrors(['actualStart', 'actualFinish', 'resumeDate']);
+      if (name === undefined) return;
+      const stale = fieldsClearedByEdit(refusal, name).filter(
+        (field) => form.getFieldState(field).error?.type === 'server',
+      );
+      if (stale.length > 0) form.clearErrors(stale);
     });
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, refusal]);
 
   return (
     <form
+      ref={formRef}
       noValidate
       onSubmit={(event) => {
         event.preventDefault();

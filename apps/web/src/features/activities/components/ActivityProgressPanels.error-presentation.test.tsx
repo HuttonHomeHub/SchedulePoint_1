@@ -75,6 +75,8 @@ function ProgressHost({ onSave }: { onSave: (values: ProgressFormValues) => void
       pending={false}
       saved={false}
       error={null}
+      refusal={null}
+      formRef={null}
     />
   );
 }

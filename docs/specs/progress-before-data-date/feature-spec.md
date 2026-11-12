@@ -171,8 +171,8 @@ No save in the activity editor can fail silently at 1024 × 600, and the data da
 
 > **US-2** — As a **Planner**, I want the same refusal to tell me where to move the data date.
 >
-> - **Given** I can edit the plan **then** the sentence's second half reads "Move the data date to 14 Nov 2026 or
->   later in Edit plan details, then save again."
+> - **Given** I can edit the plan **then** the sentence's second half reads "Move the data date (the Planned start box in
+>   Edit plan details) to 14 Nov 2026 or later, then save again." (until M4 renames the box; the parenthetical then goes)
 
 > **US-3** — As **anyone saving in the activity editor**, I want any refusal I cannot pin to a field to appear by
 > the Save I pressed.

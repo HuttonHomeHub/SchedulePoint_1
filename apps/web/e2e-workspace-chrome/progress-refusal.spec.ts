@@ -77,6 +77,15 @@ test.describe('Progress refusal', () => {
     );
     await expect(finish, 'and holds focus, so the reader can type the fix').toBeFocused();
 
+    // 1b. Nothing covers the focused field: a sticky bar or the dock over it would leave the cursor in
+    // a box the reader cannot see. The element at the field's centre is the field or inside it.
+    const covered = await finish.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return hit !== null && (hit === el || el.contains(hit)) ? null : (hit?.tagName ?? 'nothing');
+    });
+    expect(covered, 'the focused field is not covered by anything').toBeNull();
+
     // 2. The refusal is on screen, not above the fold of a panel scrolled past it.
     await expect(refusal, 'the refusal is inside the viewport').toBeInViewport();
 
@@ -112,6 +121,7 @@ test.describe('Progress refusal', () => {
     // The sentence names both dates, and the field it hangs from is described by it.
     await expect(refusal).toContainText('12 Jan 2026');
     await expect(refusal).toContainText('05 Jan 2026');
+    await expect(refusal).toContainText('the Planned start box in Edit plan details');
     expect(DATA_DATE, 'the fixture’s data date is the day the sentence quotes').toBe('2026-01-05');
     await expect(finish).toHaveAccessibleDescription(/data date/);
   });

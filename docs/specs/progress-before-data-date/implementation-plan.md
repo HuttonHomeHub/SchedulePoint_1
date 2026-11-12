@@ -124,7 +124,9 @@ workspace — ADR-0081 wants the real product's entry point.
     `progressRefusal(error, { canMovePlanDates }) → { fields: ('actualStart'|'actualFinish'|'resumeDate')[]; sentence }`.
     Sentence (Contributor): "Actual finish, 14 Nov 2026, is after the plan's data date, 10 Nov 2026. A planner needs
     to move the data date to 14 Nov 2026 or later first. What you typed stays here until you close the editor."
-    Planner: second sentence "Move the data date to 14 Nov 2026 or later in Edit plan details, then save again."
+    Planner: second sentence "Move the data date (the Planned start box in Edit plan details) to 14 Nov 2026 or
+    later, then save again." — the parenthetical stays until M4 renames the box. A second field carries "Also after
+    the data date. See Actual start."
     Dates through the existing `formatCalendarDate`. Unknown reason or no `fields` → `fields: []` and the server
     message (falls to the save bar in M3; until M3 lands it stays where it is today).
   - `ReportedProgressPanel`: on a refusal with fields, `form.setError(field, { type: 'server', message })` for each
@@ -169,6 +171,11 @@ definition-scope conflict.
 > **Risks:** shared component used by ten callers → component-reviewer + accessibility-reviewer **before release**
 > (ADR-0111 applies in spirit: what describes Save and where its refusal lives is its contract).
 > **Testing requirements:** unit for the bar and each caller; journey for two scopes.
+>
+> **Carried from M2's review (not done in M2):** M2 decodes a field-attributed refusal for the nine-field-less panels
+> by hand in `ActivityEditorSession`/`ActivityProgressPanels`. M3 splits (a) a generic `fieldRefusal` decoder out of
+> `progress-refusal.ts` and (b) a `useClearServerErrorsOnEdit` hook (the clear-on-edit rule: only the edited field's
+> server error clears, except a relation between two fields clears from either end), for the other nine panels.
 
 ##### Task 1 — the bar (≈ one PR with Task 2)
 
@@ -229,7 +236,11 @@ the new date **without** pressing Recalculate or reloading; then the M2 flow sav
 
 ##### Task 1 — labels and footer (≈ one PR)
 
-- **Description:** `PlanFormDialog.tsx:146-151` → edit: "Data date" with hint "Activities are scheduled from this date.
+- **Description:** **drop the parenthetical** `DATA_DATE_BOX` ("(the Planned start box in Edit plan details)") from
+  `apps/web/src/features/activities/model/progress-refusal.ts` — M2 added it because the box is still labelled
+  "Planned start" until this task; one constant, one edit, and update the sentence asserted in
+  `progress-refusal.test.ts`, `ActivityEditorDialog.progress-saves.test.tsx` and the journey.
+  `PlanFormDialog.tsx:146-151` → edit: "Data date" with hint "Activities are scheduled from this date.
   Progress can be reported up to it."; create: "Start date" with hint "This is also the plan's data date."
   `plan-chrome-dialogs.tsx:85`, `PlansTable.tsx:70` → "Data date". Toolbar description
   (`tsld-toolbar-items.tsx:3422`) → "…status, data date and description". `use-plans.ts:72-76` also invalidates

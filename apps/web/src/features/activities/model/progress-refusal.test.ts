@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { progressRefusal } from './progress-refusal';
+import { fieldsClearedByEdit, progressRefusal } from './progress-refusal';
 
 import { ApiFetchError } from '@/lib/api/client';
 
@@ -17,12 +17,13 @@ describe('progressRefusal', () => {
   it('names the finish, both dates, and the planner’s own remedy', () => {
     expect(
       progressRefusal(refused({ ...AFTER, fields: ['actualFinish'] }), { canMovePlanDates: true }),
-    ).toEqual({
+    ).toMatchObject({
       fields: ['actualFinish'],
+      reason: 'ACTUAL_AFTER_DATA_DATE',
       sentence:
         'Actual finish, 14 Nov 2026, is after the plan’s data date, 10 Nov 2026. ' +
-        'Move the data date to 14 Nov 2026 or later in Edit plan details, then save again. ' +
-        'What you typed stays here until you close the editor.',
+        'Move the data date (the Planned start box in Edit plan details) to 14 Nov 2026 or later, ' +
+        'then save again. What you typed stays here until you close the editor.',
     });
   });
 
@@ -48,6 +49,10 @@ describe('progressRefusal', () => {
     expect(refusal.sentence).toMatch(
       /^Actual start and Actual finish are after the plan’s data date/,
     );
+    expect(refusal.fieldMessages).toEqual({
+      actualStart: refusal.sentence,
+      actualFinish: 'Also after the data date. See Actual start.',
+    });
   });
 
   it('places another field rule on its field and keeps the server’s sentence', () => {
@@ -59,9 +64,11 @@ describe('progressRefusal', () => {
         ),
         { canMovePlanDates: true },
       ),
-    ).toEqual({
+    ).toMatchObject({
       fields: ['actualFinish'],
+      reason: 'FINISH_BEFORE_START',
       sentence: 'Actual finish cannot precede actual start.',
+      fieldMessages: { actualFinish: 'Actual finish cannot precede actual start.' },
     });
     expect(
       progressRefusal(refused({ reason: 'RESUME_BEFORE_SUSPEND', fields: ['resumeDate'] }), {
@@ -71,7 +78,12 @@ describe('progressRefusal', () => {
   });
 
   it('keeps the server’s message and no field when details are missing, unknown or malformed', () => {
-    const none = { fields: [], sentence: 'The server’s own sentence.' };
+    const none = {
+      fields: [],
+      sentence: 'The server’s own sentence.',
+      reason: null,
+      fieldMessages: {},
+    };
     for (const details of [
       undefined,
       null,
@@ -88,7 +100,7 @@ describe('progressRefusal', () => {
       progressRefusal(refused({ reason: AFTER.reason, fields: ['actualFinish'] }), {
         canMovePlanDates: true,
       }),
-    ).toEqual({ fields: ['actualFinish'], sentence: 'The server’s own sentence.' });
+    ).toMatchObject({ fields: ['actualFinish'], sentence: 'The server’s own sentence.' });
   });
 
   it('ignores anything that is not a 422 from the API', () => {
@@ -96,9 +108,33 @@ describe('progressRefusal', () => {
     expect(
       progressRefusal(refused(details, 'Conflict', 409), { canMovePlanDates: true }).fields,
     ).toEqual([]);
-    expect(progressRefusal(new Error('network down'), { canMovePlanDates: true })).toEqual({
+    expect(progressRefusal(new Error('network down'), { canMovePlanDates: true })).toMatchObject({
       fields: [],
       sentence: 'network down',
     });
+  });
+});
+
+describe('fieldsClearedByEdit', () => {
+  const finishRefusal = (reason: string) =>
+    progressRefusal(refused({ reason, fields: ['actualFinish'] }), { canMovePlanDates: true });
+
+  it('clears only the edited field’s own error', () => {
+    const refusal = progressRefusal(refused({ ...AFTER, fields: ['actualFinish'] }), {
+      canMovePlanDates: true,
+    });
+    expect(fieldsClearedByEdit(refusal, 'actualFinish')).toEqual(['actualFinish']);
+    expect(fieldsClearedByEdit(refusal, 'actualStart')).toEqual(['actualStart']);
+    expect(fieldsClearedByEdit(refusal, 'percentComplete')).toEqual([]);
+    expect(fieldsClearedByEdit(null, 'resumeDate')).toEqual(['resumeDate']);
+  });
+
+  it('lets either end of a finish/start relation clear it', () => {
+    for (const reason of ['FINISH_BEFORE_START', 'FINISH_WITHOUT_START']) {
+      const refusal = finishRefusal(reason);
+      expect(fieldsClearedByEdit(refusal, 'actualStart')).toEqual(['actualStart', 'actualFinish']);
+      expect(fieldsClearedByEdit(refusal, 'actualFinish')).toEqual(['actualFinish']);
+      expect(fieldsClearedByEdit(refusal, 'resumeDate')).toEqual(['resumeDate']);
+    }
   });
 });
