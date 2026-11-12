@@ -8,6 +8,7 @@ export type DockStrip =
   | 'follow-edit'
   | 'layout-resolved'
   | 'empty'
+  | 'follow-plan'
   | 'arrange-offer'
   | 'touch-hint'
   | null;
@@ -49,6 +50,13 @@ export interface DockStripInput {
    * and the buttons are the host's.
    */
   readonly hasFollowEdit: boolean;
+  /**
+   * Whether the plan holds placed bars before their logic, the reader could press Follow logic for
+   * them, and they have not dismissed the offer, or a press of it is still being answered
+   * (placed-bar-follows-link M3, ADR-0216 D6). Precedence only; the sentence and the buttons are the
+   * host's. Like `hasArrangeOffer` it is omitted without the pen rather than shaded.
+   */
+  readonly hasFollowPlan: boolean;
   /**
    * What the last undo/redo press left in the dock (undo-redo M1): `'failure'` for a step that did
    * not apply or a press that was refused, `'success'` for one that ran, `null` for neither. A
@@ -140,6 +148,15 @@ export function resolveDockStrip(input: DockStripInput): DockStrip {
   if (input.showDiagram && input.activityCount === 0 && input.mode === 'select') {
     return 'empty';
   }
+  /**
+   * **The whole-plan offer sits below `empty` and above the Arrange offer.** It is a standing fact
+   * about the plan, not about the planner's last act, so everything above it (a failure, a tool, an
+   * undo, the edit offer, the overlap notice) outranks it and it waits, dismissible and back the
+   * moment the dock is quiet. It outranks the Arrange offer because it is the one that explains
+   * flagged bars, which the count chip is already telling the reader about. It does NOT take over a
+   * `linked` confirmation: that carry is the edit offer's, which describes the edit just made.
+   */
+  if (input.hasFollowPlan) return 'follow-plan';
   /**
    * **Below the empty notice, above the touch tip.** A plan with no activities has nothing to
    * arrange, so `hasArrangeOffer` is false there by construction and the two cannot genuinely

@@ -11,6 +11,7 @@ import {
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { focusOutsideInert, planSurfaceTarget } from './focus-reachable';
+import { followPlanOverLimitReason } from './follow-logic-offer';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
@@ -1266,6 +1267,56 @@ export function ToolbarPlanWorkspace({
     undoFollowEdit,
   ]);
   /**
+   * **The whole-plan offer** (placed-bar-follows-link M3, ADR-0216 D6): a standing condition, built
+   * here for the reason the edit offer is — it renders in BOTH views' docks. A node and not a
+   * function, because nothing carries it. Shaded with the shared gate's reason while the Late-start
+   * overlay is on, and with its own when more bars qualify than one write may carry (the overlay's
+   * reason leads: it is the one the planner can act on at once). Not announced on mount (ADR-0132:
+   * the sentence reads the same to somebody arriving later); a failure and the confirmation are.
+   */
+  const followPlan = model.followPlan;
+  const followPlanOverLimit = model.followPlanOverLimit;
+  const { acceptFollowPlan, dismissFollowPlan, closeFollowPlanConfirmation } = model;
+  const followPlanReason =
+    followEditShutReason ??
+    (followPlanOverLimit && followPlan !== null
+      ? followPlanOverLimitReason(followPlan.count)
+      : null);
+  const followPlanNotice = useMemo(() => {
+    if (followPlan === null) return null;
+    if (followPlan.phase === 'done') {
+      return (
+        <HistoryResultStrip
+          kind="success"
+          message={followPlan.message}
+          action={followPlan.undoable ? { label: 'Undo', onClick: undoFollowEdit } : undefined}
+          onDismiss={closeFollowPlanConfirmation}
+          restoreTarget={planSurfaceTarget}
+        />
+      );
+    }
+    return (
+      <FollowLogicStrip
+        variant="plan"
+        message={followPlan.message}
+        phase={
+          followPlan.phase === 'busy' || followPlan.phase === 'moving' ? 'busy' : followPlan.phase
+        }
+        onFollow={() => void acceptFollowPlan()}
+        onKeep={dismissFollowPlan}
+        followReason={followPlanReason}
+        restoreTarget={planSurfaceTarget}
+      />
+    );
+  }, [
+    followPlan,
+    followPlanReason,
+    acceptFollowPlan,
+    dismissFollowPlan,
+    closeFollowPlanConfirmation,
+    undoFollowEdit,
+  ]);
+  /**
    * **Undo and redo are live only when the planner can author right now** — pen
    * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the
    * strip's follow-up button and the refusal below, so they cannot disagree about it.
@@ -1572,6 +1623,7 @@ export function ToolbarPlanWorkspace({
       touchGestureHint={touchGestureHint}
       layoutResolvedNotice={layoutResolvedNotice}
       followEditNotice={followEditNotice}
+      followPlanNotice={followPlanNotice}
       historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
       swimlanes={swimlaneScene.input}
@@ -2041,6 +2093,7 @@ export function ToolbarPlanWorkspace({
           {historyResultNotice?.node ??
             followEditNotice?.() ??
             layoutResolvedNotice ??
+            followPlanNotice ??
             touchGestureHint}
         </CanvasDock>
       </>

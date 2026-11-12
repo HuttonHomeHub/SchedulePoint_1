@@ -206,3 +206,93 @@ describe('FollowLogicStrip', () => {
     expect(onFollow).not.toHaveBeenCalled();
   });
 });
+
+describe('FollowLogicStrip — the whole-plan variant', () => {
+  const PLAN_MESSAGE = '3 bars stay where they were placed, before their logic allows.';
+
+  function plan(props: Partial<React.ComponentProps<typeof FollowLogicStrip>> = {}) {
+    const onFollow = vi.fn();
+    const onKeep = vi.fn();
+    const restoreTarget = vi.fn(() => null);
+    const view = render(
+      <FollowLogicStrip
+        variant="plan"
+        message={PLAN_MESSAGE}
+        onFollow={onFollow}
+        onKeep={onKeep}
+        restoreTarget={restoreTarget}
+        {...props}
+      />,
+    );
+    return { ...view, onFollow, onKeep, restoreTarget };
+  }
+
+  it('is its own entry point: Follow logic and Dismiss, no role, a dashed standing offer', () => {
+    const { container } = plan();
+    const strip = screen.getByTestId('canvas-follow-logic-plan-offer');
+    expect(strip).not.toHaveAttribute('role');
+    expect(container.querySelector('[role]')).toBeNull();
+    expect(strip).toHaveAttribute('data-dock-row');
+    expect(strip).toHaveClass('border-dashed');
+    expect(screen.getByRole('button', { name: 'Follow logic' })).toBe(
+      screen.getByTestId('canvas-follow-logic-plan'),
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Keep it here' })).toBeNull();
+    expect(screen.queryByTestId('canvas-follow-logic-offer')).toBeNull();
+  });
+
+  it('describes what each choice does for every bar the count names', () => {
+    plan();
+    expect(screen.getByRole('button', { name: 'Follow logic' })).toHaveAccessibleDescription(
+      'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on.',
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAccessibleDescription(
+      'Hides this offer for this plan until you reopen it. The bars stay flagged.',
+    );
+  });
+
+  it('moves focus first for Dismiss, which removes the strip, and writes nothing', () => {
+    const { onFollow, onKeep, restoreTarget } = plan();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(restoreTarget).toHaveBeenCalled();
+    expect(onKeep).toHaveBeenCalledTimes(1);
+    expect(onFollow).not.toHaveBeenCalled();
+  });
+
+  it('is busy, then offers Try again after a failure, as the edit variant does', () => {
+    const { onFollow, rerender } = plan({ phase: 'busy', message: 'Moving “A” and 2 others…' });
+    const follow = screen.getByTestId('canvas-follow-logic-plan');
+    expect(follow).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(follow);
+    expect(onFollow).not.toHaveBeenCalled();
+    rerender(
+      <FollowLogicStrip
+        variant="plan"
+        phase="failed"
+        message="Couldn’t move “A” and 2 others just now. Nothing was changed."
+        onFollow={onFollow}
+        onKeep={vi.fn()}
+        restoreTarget={() => null}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onFollow).toHaveBeenCalledTimes(1);
+  });
+
+  it('shades Follow logic with its reason printed and described, and Dismiss stays open', () => {
+    const { onFollow } = plan({ followReason: 'Too many to follow at once.' });
+    const follow = screen.getByTestId('canvas-follow-logic-plan');
+    expect(follow).toHaveAttribute('aria-disabled', 'true');
+    expect(follow).toHaveAttribute(
+      'aria-describedby',
+      screen.getByText('Too many to follow at once.').id,
+    );
+    fireEvent.click(follow);
+    expect(onFollow).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+});

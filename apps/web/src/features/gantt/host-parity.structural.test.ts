@@ -187,9 +187,9 @@ describe('the two plan hosts receive the same facts about the plan', () => {
     );
     expect(ganttBranch.length, 'could not locate the Gantt branch').toBeGreaterThan(200);
     // Rendered alone, or as the fallback of the notices that outrank it (NetPoint M3, undo-redo M1,
-    // the follow-logic offer); it is last of all.
+    // the follow-logic offers); it is last of all.
     expect(
-      /\{(?:historyResultNotice\?\.node\s+\?\?\s+)?(?:followEditNotice\?\.\(\)\s+\?\?\s+)?(?:layoutResolvedNotice\s+\?\?\s+)?touchGestureHint\}/.test(
+      /\{(?:historyResultNotice\?\.node\s+\?\?\s+)?(?:followEditNotice\?\.\(\)\s+\?\?\s+)?(?:layoutResolvedNotice\s+\?\?\s+)?(?:followPlanNotice\s+\?\?\s+)?touchGestureHint\}/.test(
         ganttBranch,
       ),
       'the Gantt view no longer renders the touch tip',
@@ -227,6 +227,23 @@ describe('the two plan hosts receive the same facts about the plan', () => {
       source.indexOf('    ) : ('),
     );
     expect(ganttBranch.includes('followEditNotice'), 'the Gantt view no longer renders it').toBe(
+      true,
+    );
+  });
+
+  /**
+   * **The whole-plan offer is a plan fact in both views** (placed-bar-follows-link M3, ADR-0216 D6). A
+   * plan opened with early-placed bars asks about them whichever view it opens in; the canvas receives
+   * the strip as a prop (the panel decides its dock precedence) and the Gantt renders the same node in
+   * its own `CanvasDock`, below the edit offer and the overlap notice.
+   */
+  it('renders the whole-plan follow-logic offer in both the canvas and the Gantt', () => {
+    expect(tsld.has('followPlanNotice'), 'TsldPanel no longer receives the offer').toBe(true);
+    const ganttBranch = source.slice(
+      source.indexOf("ctx.planView === 'gantt'"),
+      source.indexOf('    ) : ('),
+    );
+    expect(ganttBranch.includes('followPlanNotice'), 'the Gantt view no longer renders it').toBe(
       true,
     );
   });

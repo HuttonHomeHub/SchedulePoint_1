@@ -1,7 +1,9 @@
 import { useEffect, useId } from 'react';
 
 import {
+  DISMISS_PLAN_DESCRIPTION,
   FOLLOW_LOGIC_DESCRIPTION,
+  FOLLOW_PLAN_DESCRIPTION,
   KEEP_IT_HERE_DESCRIPTION,
 } from '@/components/layout/workspace/follow-logic-offer';
 import { Button } from '@/components/ui/button';
@@ -9,6 +11,13 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 
 export interface FollowLogicStripProps {
+  /**
+   * `edit` (the default) is the event offer after an edit: Follow logic and Keep it here. `plan` is the
+   * standing whole-plan offer (ADR-0216 D6): Follow logic and Dismiss, a dashed border like the
+   * Arrange offer's, its own test ids, and no lead or Undo link. It is one strip with two faces, so
+   * the busy, failed and shaded states cannot drift apart.
+   */
+  variant?: 'edit' | 'plan';
   /**
    * The sentence to show NOW: the ask, then "Moving …" while the write and the recalculation run, then
    * the failure when one broke. The workspace announced the ask when this first mounted, and
@@ -32,7 +41,7 @@ export interface FollowLogicStripProps {
   onUndo?: (() => void) | undefined;
   /** Let the named bars follow their logic. The host takes the offer and writes. */
   onFollow: () => void;
-  /** "Keep it here": the offer goes and nothing is written. */
+  /** "Keep it here" (or "Dismiss", in the plan variant): the offer goes and nothing is written. */
   onKeep: () => void;
   /**
    * Why Follow logic is shut right now, or `null` (the Late-start overlay is read-only). Printed in
@@ -67,6 +76,7 @@ export interface FollowLogicStripProps {
  * could fit it beside the facts (`docs/specs/placed-bar-follows-link/m0-measurement.md`, C12).
  */
 export function FollowLogicStrip({
+  variant = 'edit',
   message,
   phase = 'idle',
   onShown,
@@ -88,6 +98,7 @@ export function FollowLogicStrip({
   }, [onShown]);
   const busy = phase === 'busy';
   const failed = phase === 'failed';
+  const plan = variant === 'plan';
   const shaded = followReason != null;
   // Printed and wired in EVERY phase: the button can be shaded by the overlay whether it is asking,
   // busy or offering Try again, and a shaded control says why to every input (ADR-0204).
@@ -105,10 +116,11 @@ export function FollowLogicStrip({
     // `contents`: the wrapper the hook needs is not a box, so the strip lays out exactly as before.
     <div className="contents" {...wrapperProps}>
       <NoticeStrip
-        data-testid="canvas-follow-logic-offer"
+        data-testid={plan ? 'canvas-follow-logic-plan-offer' : 'canvas-follow-logic-offer'}
         data-phase={phase}
         data-dock-row=""
         tone={failed ? 'warning' : 'muted'}
+        emphasis={plan ? 'dashed' : 'solid'}
         density="comfortable"
         messageFit="wrap"
         message={
@@ -138,7 +150,7 @@ export function FollowLogicStrip({
           type="button"
           variant="secondary"
           size="sm"
-          data-testid="canvas-follow-logic"
+          data-testid={plan ? 'canvas-follow-logic-plan' : 'canvas-follow-logic'}
           aria-disabled={followShut}
           aria-describedby={reasonShown ? reasonId : followId}
           onClick={(event) => {
@@ -169,14 +181,14 @@ export function FollowLogicStrip({
             onKeep();
           }}
         >
-          Keep it here
+          {plan ? 'Dismiss' : 'Keep it here'}
         </Button>
         {/* What each choice does, for a screen reader: the visible copy is the spec's, verbatim. */}
         <span id={followId} className="sr-only">
-          {FOLLOW_LOGIC_DESCRIPTION}
+          {plan ? FOLLOW_PLAN_DESCRIPTION : FOLLOW_LOGIC_DESCRIPTION}
         </span>
         <span id={keepId} className="sr-only">
-          {KEEP_IT_HERE_DESCRIPTION}
+          {plan ? DISMISS_PLAN_DESCRIPTION : KEEP_IT_HERE_DESCRIPTION}
         </span>
       </NoticeStrip>
     </div>

@@ -46,6 +46,16 @@ export function followSnapshotOf(rows: readonly SnapshotRow[]): FollowSnapshot {
 type DiffRow = SnapshotRow & Pick<ActivitySummary, 'type' | 'actualStart'>;
 
 /**
+ * Whether Follow logic may be offered for this bar at all: placed, not a summary and not started.
+ * One predicate for both offers, so the edit offer and the whole-plan offer cannot disagree about a
+ * bar. The reasons are `strandedBy`'s: the batch route refuses a summary, and actuals freeze a
+ * started bar, so clearing its placement would clear the flag and move nothing.
+ */
+function canFollowLogic(row: Pick<DiffRow, 'type' | 'visualStart' | 'actualStart'>): boolean {
+  return row.type !== 'WBS_SUMMARY' && row.visualStart !== null && row.actualStart === null;
+}
+
+/**
  * The activities an edit **newly** left before their logic, in the order of `after`.
  *
  * A bar qualifies only when it is placed, is flagged now and was not before, is not a summary (the
@@ -64,14 +74,41 @@ type DiffRow = SnapshotRow & Pick<ActivitySummary, 'type' | 'actualStart'>;
 export function strandedBy(before: FollowSnapshot, after: readonly DiffRow[]): string[] {
   const stranded: string[] = [];
   for (const row of after) {
-    if (row.type === 'WBS_SUMMARY' || row.visualStart === null || row.actualStart !== null)
-      continue;
-    if (!isPlacedBeforeLogic(row)) continue;
+    if (!canFollowLogic(row) || !isPlacedBeforeLogic(row)) continue;
     const was = before.get(row.id);
     if (was === undefined || was.flagged || was.visualStart !== row.visualStart) continue;
     stranded.push(row.id);
   }
   return stranded;
+}
+
+/**
+ * **Every bar the whole-plan offer would let follow** (ADR-0216 D6): placed, flagged
+ * `EARLIER_THAN_LOGIC` now, not a summary, not started, in the order of `rows`. This is the standing
+ * condition, so unlike `strandedBy` it has no "before".
+ *
+ * **It can read below the conflict chip's count, and that is deliberate.** The chip counts every
+ * flagged bar, including a summary placed before the data date (which the batch route refuses) and a
+ * started bar (which Follow logic could not move); the offer promises a move, so it counts only what
+ * it can deliver (spec edge cases; `m0-measurement.md` C7).
+ */
+export function placedBeforeLogicIn<T extends DiffRow>(rows: readonly T[]): T[] {
+  return rows.filter((row) => canFollowLogic(row) && isPlacedBeforeLogic(row));
+}
+
+/** The batch route's cap on rows (`update-placements.dto.ts`); a larger set is never chunked, because a series is not atomic. */
+export const FOLLOW_PLAN_LIMIT = 2000;
+
+/** The whole-plan offer's sentence: a standing condition, so it counts and does not name. */
+export function followPlanSentence(count: number): string {
+  return count === 1
+    ? '1 bar stays where it was placed, before its logic allows.'
+    : `${String(count)} bars stay where they were placed, before their logic allows.`;
+}
+
+/** Why Follow logic is shaded when more bars qualify than one write may carry (printed, ADR-0204). */
+export function followPlanOverLimitReason(count: number): string {
+  return `Too many to follow at once (${count.toLocaleString('en-US')}; the limit is ${FOLLOW_PLAN_LIMIT.toLocaleString('en-US')}). Follow logic still works on each bar.`;
 }
 
 type PlacementRow = Pick<
@@ -156,6 +193,10 @@ export function followFailedSentence(subject: string, count: number): string {
 /** What the two choices do, for a screen reader (the strip's visible copy is the spec's, verbatim). */
 export const FOLLOW_LOGIC_DESCRIPTION =
   'Removes the hand placement, so the bar moves to where its logic puts it and follows it from then on.';
+export const FOLLOW_PLAN_DESCRIPTION =
+  'Removes the hand placement from every bar counted here, so each moves to where its logic puts it and follows it from then on.';
+export const DISMISS_PLAN_DESCRIPTION =
+  'Hides this offer for this plan until you reopen it. The bars stay flagged.';
 export const KEEP_IT_HERE_DESCRIPTION =
   'Leaves the bar where you placed it. It stays flagged as placed before its logic allows.';
 

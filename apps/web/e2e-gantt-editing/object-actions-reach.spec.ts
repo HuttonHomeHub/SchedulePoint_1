@@ -437,3 +437,133 @@ test('a duration typed into the grid offers the bar it strands, and Follow logic
     .poll(() => page.evaluate(() => document.activeElement?.closest('[role="treegrid"]') !== null))
     .toBe(true);
 });
+
+/**
+ * **The whole-plan offer reaches the Gantt's dock** (placed-bar-follows-link M3, ADR-0216 D6).
+ *
+ * A plan opened with a bar already placed before its logic shows the standing offer in THIS view's
+ * dock too (the Gantt branch's own strip chain), and its Follow logic works here. The placement is
+ * made through the REST API, as in the case above: the subject is what the Gantt does about a plan
+ * in that state, not how the state arose.
+ */
+test('a plan opened with an early-placed bar offers it, and Follow logic lets it follow', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const orgSlug = await onboard(page, Date.now() + 1);
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+
+  type Row = {
+    id: string;
+    name: string;
+    visualStart: string | null;
+    earlyStart: string | null;
+    visualConflictReason: string | null;
+    version: number;
+  };
+  const rows = async (): Promise<Row[]> =>
+    page.evaluate(
+      async ({ org, plan }: { org: string; plan: string }) => {
+        const res = await fetch(`/api/v1/organizations/${org}/plans/${plan}/activities?limit=100`, {
+          credentials: 'include',
+        });
+        return ((await res.json()) as { data: Row[] }).data;
+      },
+      { org: orgSlug, plan: openPlanId(page) },
+    );
+  const byName = async (name: string): Promise<Row> => {
+    const row = (await rows()).find((r) => r.name === name);
+    if (!row) throw new Error(`no ${name}`);
+    return row;
+  };
+  const send = (path: string, method: string, body: unknown): Promise<string | null> =>
+    page.evaluate(
+      async ({ url, verb, payload }: { url: string; verb: string; payload: unknown }) => {
+        const res = await fetch(url, {
+          method: verb,
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        return res.ok ? null : `${String(res.status)} ${await res.text()}`;
+      },
+      { url: path, verb: method, payload: body },
+    );
+
+  const [first, second] = [await byName('Seeded 0'), await byName('Seeded 1')];
+  expect(
+    await send(`/api/v1/organizations/${orgSlug}/plans/${openPlanId(page)}/dependencies`, 'POST', {
+      predecessorId: first.id,
+      successorId: second.id,
+      type: 'FS',
+    }),
+  ).toBeNull();
+  await recalculate(page);
+  await expect
+    .poll(async () => (await byName('Seeded 1')).earlyStart, { timeout: 20_000 })
+    .not.toBeNull();
+  // On the day its predecessor STARTS: a working day, on or after the data date, and strictly before
+  // the day its logic allows (the predecessor must finish first).
+  const predecessorStart = (await byName('Seeded 0')).earlyStart ?? '';
+  expect(
+    await send(`/api/v1/organizations/${orgSlug}/activities/${second.id}`, 'PATCH', {
+      visualStart: predecessorStart.slice(0, 10),
+      version: (await byName('Seeded 1')).version,
+    }),
+  ).toBeNull();
+  // The API's own recalculation: the toolbar helper only presses Recalculate once the client has
+  // noticed the plan is stale, and a PATCH made behind its back has not told it.
+  expect(
+    await send(
+      `/api/v1/organizations/${orgSlug}/plans/${openPlanId(page)}/schedule/recalculate`,
+      'POST',
+      {},
+    ),
+  ).toBeNull();
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualConflictReason, {
+      message: 'the engine never flagged the early placement',
+      timeout: 30_000,
+    })
+    .toBe('EARLIER_THAN_LOGIC');
+
+  await syncClient(page);
+  await showGantt(page);
+  const offer = page.getByTestId('canvas-follow-logic-plan-offer');
+  await expect(offer, 'the Gantt dock carries the whole-plan offer too').toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(offer).toContainText('1 bar stays where it was placed, before its logic allows.');
+  await expect(offer.getByRole('button')).toHaveText(['Follow logic', 'Dismiss']);
+  const follow = page.getByTestId('canvas-follow-logic-plan');
+  const hit = await follow.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return top !== null && button.contains(top);
+  });
+  expect(hit, 'a pointer at Follow logic’s centre must land on it').toBe(true);
+
+  await follow.click();
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualStart, {
+      message: 'Follow logic never cleared the placement from the Gantt',
+      timeout: 30_000,
+    })
+    .toBeNull();
+  await expect
+    .poll(async () => (await byName('Seeded 1')).visualConflictReason, { timeout: 30_000 })
+    .toBeNull();
+  await expect(offer).toHaveCount(0);
+  await expect(page.getByTestId('canvas-history-result')).toContainText(
+    '“Seeded 1” now follows its logic; dates will update.',
+  );
+  // Focus went to the grid when the strip left (ADR-0135), not to <body>.
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.closest('[role="treegrid"]') !== null))
+    .toBe(true);
+});

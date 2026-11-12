@@ -20,6 +20,7 @@ function input(overrides: Partial<DockStripInput> = {}): DockStripInput {
     hasArrangeOffer: false,
     hasLayoutResolvedNotice: false,
     hasFollowEdit: false,
+    hasFollowPlan: false,
     historyResult: null,
     ...overrides,
   };
@@ -172,6 +173,46 @@ describe('resolveDockStrip', () => {
     });
   });
 
+  /**
+   * The whole-plan offer (placed-bar-follows-link M3, ADR-0216 D6): a standing condition, below
+   * `empty` and above the Arrange offer. Each case names the claimant it expects to have beaten.
+   */
+  describe('the whole-plan follow-logic offer', () => {
+    const plan = { hasFollowPlan: true };
+
+    it('shows on an otherwise settled canvas', () => {
+      expect(resolveDockStrip(input(plan))).toBe('follow-plan');
+    });
+
+    it('beats the Arrange offer and the touch tip, which describe nothing about the planner’s last act', () => {
+      // **Verified red** by moving the rung below `arrange-offer`.
+      expect(resolveDockStrip(input({ ...plan, hasArrangeOffer: true }))).toBe('follow-plan');
+      expect(resolveDockStrip(input({ ...plan, hasTouchGestureHint: true }))).toBe('follow-plan');
+    });
+
+    it('loses to everything about the planner’s last act, and to the empty-plan notice', () => {
+      expect(resolveDockStrip(input({ ...plan, hasConflict: true }))).toBe('conflict');
+      expect(resolveDockStrip(input({ ...plan, historyResult: 'failure' }))).toBe('history');
+      expect(resolveDockStrip(input({ ...plan, historyResult: 'success' }))).toBe('history');
+      expect(resolveDockStrip(input({ ...plan, modeStatement: ARMED }))).toBe('mode');
+      expect(resolveDockStrip(input({ ...plan, hasFollowEdit: true }))).toBe('follow-edit');
+      expect(resolveDockStrip(input({ ...plan, hasLayoutResolvedNotice: true }))).toBe(
+        'layout-resolved',
+      );
+      expect(resolveDockStrip(input({ ...plan, activityCount: 0 }))).toBe('empty');
+    });
+
+    it('does not take over the link confirmation: only the edit offer does', () => {
+      const linked = {
+        kind: 'linked',
+        predecessorName: 'A',
+        successorName: 'B',
+        linkType: 'FS',
+      } as const;
+      expect(resolveDockStrip(input({ ...plan, modeStatement: linked }))).toBe('mode');
+    });
+  });
+
   /** The undo/redo result (undo-redo M1): a failure ranks with `conflict`, a success just below `mode`. */
   describe('the history result', () => {
     it('shows on an otherwise settled canvas, for either outcome', () => {
@@ -231,6 +272,7 @@ describe('resolveDockStrip', () => {
       ['a follow-logic offer', { hasFollowEdit: true }, 'follow-edit'],
       ['the empty-plan notice', { activityCount: 0 }, 'empty'],
       ['the Arrange offer', { hasArrangeOffer: true }, 'arrange-offer'],
+      ['the whole-plan Follow logic offer', { hasFollowPlan: true }, 'follow-plan'],
     ];
     it.each(others)('loses to %s', (_name, overrides, expected) => {
       expect(resolveDockStrip(input({ hasTouchGestureHint: true, ...overrides }))).toBe(expected);

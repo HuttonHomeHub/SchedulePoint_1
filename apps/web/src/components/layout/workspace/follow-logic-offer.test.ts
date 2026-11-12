@@ -8,9 +8,13 @@ import {
   followMovingSentence,
   followLogicDoneSentence,
   followLogicLabel,
+  FOLLOW_PLAN_LIMIT,
   followLogicRows,
+  followPlanOverLimitReason,
+  followPlanSentence,
   followSnapshotOf,
   isPlacedBeforeLogic,
+  placedBeforeLogicIn,
   strandedBy,
 } from './follow-logic-offer';
 
@@ -173,5 +177,63 @@ describe('the sentences', () => {
     );
     expect(followLogicLabel(1)).toBe('Follow logic');
     expect(followLogicLabel(3)).toBe('Follow logic for 3 activities');
+  });
+});
+
+describe('placedBeforeLogicIn — the bars the whole-plan offer lets follow', () => {
+  it('names every placed, flagged, unstarted bar, in the order of the plan', () => {
+    const rows = [bar('A'), bar('B', early), bar('C', early), bar('D')];
+    expect(placedBeforeLogicIn(rows).map((r) => r.id)).toEqual(['B', 'C']);
+  });
+
+  it('leaves out a summary, which the batch route refuses, so it can read below the conflict chip', () => {
+    // **Verified red** by dropping the type test: the offer then counts a summary the route answers
+    // 422 for, and the whole press is refused for a bar it never could have moved (M0 C7).
+    const rows = [bar('B', early), bar('S', { type: 'WBS_SUMMARY', ...early })];
+    expect(placedBeforeLogicIn(rows).map((r) => r.id)).toEqual(['B']);
+  });
+
+  it('leaves out a started bar: actuals freeze it, so Follow logic would move nothing', () => {
+    const rows = [bar('B', early), bar('C', { ...early, actualStart: '2026-01-20' })];
+    expect(placedBeforeLogicIn(rows).map((r) => r.id)).toEqual(['B']);
+  });
+
+  it('leaves out an unplaced bar and a bar flagged for a ceiling, not for being early', () => {
+    const rows = [
+      bar('B', { ...early, visualStart: null }),
+      bar('C', { visualConflictReason: 'LATER_THAN_BOUND' }),
+    ];
+    expect(placedBeforeLogicIn(rows)).toEqual([]);
+  });
+
+  it('agrees with the edit offer’s own eligibility, so the two offers cannot disagree about a bar', () => {
+    const rows = [
+      bar('B', early),
+      bar('S', { type: 'WBS_SUMMARY', ...early }),
+      bar('C', { ...early, actualStart: '2026-01-20' }),
+    ];
+    const calm = followSnapshotOf(rows.map((r) => ({ ...r, visualConflictReason: null })));
+    expect(placedBeforeLogicIn(rows).map((r) => r.id)).toEqual(strandedBy(calm, rows));
+  });
+});
+
+describe('followPlanSentence — the standing offer’s count', () => {
+  it('says one bar in the singular', () => {
+    expect(followPlanSentence(1)).toBe('1 bar stays where it was placed, before its logic allows.');
+  });
+
+  it('says several bars in the plural', () => {
+    expect(followPlanSentence(3)).toBe(
+      '3 bars stay where they were placed, before their logic allows.',
+    );
+  });
+});
+
+describe('followPlanOverLimitReason — the route takes 2,000 rows and the offer never chunks it', () => {
+  it('names the limit and the way out', () => {
+    expect(FOLLOW_PLAN_LIMIT).toBe(2000);
+    expect(followPlanOverLimitReason(2001)).toBe(
+      'Too many to follow at once (2,001; the limit is 2,000). Follow logic still works on each bar.',
+    );
   });
 });
