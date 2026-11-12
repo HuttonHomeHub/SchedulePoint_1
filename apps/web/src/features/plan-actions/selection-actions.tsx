@@ -298,6 +298,24 @@ export function deleteRefusal(ctx: SelectionActionContext): string | null {
   return penRefusal(ctx) ?? 'You can’t change this activity right now.';
 }
 
+/**
+ * Where a double-click on the selected bar goes (ADR-0218 D4): the editor's General page when the bar's
+ * Edit is usable, else its Progress page when Progress is, else nowhere, with **Edit's own refusal** to
+ * say so. It reads the two items' own gates (`canEditSchedule`, `canReportProgress`) and Edit's own
+ * sentence (`penRefusal`), so the gesture and the buttons cannot disagree about who may do what.
+ */
+export type DoubleClickRoute =
+  { kind: 'edit' } | { kind: 'progress' } | { kind: 'refused'; reason: string };
+
+export function doubleClickRoute(ctx: SelectionActionContext): DoubleClickRoute {
+  if (ctx.canEditSchedule) return { kind: 'edit' };
+  if (ctx.canReportProgress) return { kind: 'progress' };
+  return {
+    kind: 'refused',
+    reason: penRefusal(ctx) ?? 'You can’t change this activity right now.',
+  };
+}
+
 export const SET_CODE_LABEL = 'Set code…';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 // The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt

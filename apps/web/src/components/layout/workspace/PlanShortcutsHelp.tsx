@@ -12,6 +12,11 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Home / End', action: 'First / last activity' },
   { keys: '[ / ]', action: 'Jump to the driving predecessor / successor (then trace the path)' },
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
+  {
+    keys: 'Double-click (a bar)',
+    action:
+      'Open its editor: General where you can edit, Progress where you can only report progress',
+  },
   { keys: '?', action: 'Show this help' },
   { keys: 'Esc', action: 'Disarm the current tool, cancel a gesture, or close a popover' },
 ];

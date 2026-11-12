@@ -26,6 +26,16 @@ describe('the plan shortcuts sheet', () => {
     expect(screen.getByText(/asks first; Undo restores them/)).toBeInTheDocument();
   });
 
+  it('lists double-click on a bar in the diagram sheet, as a pointer row and not a touch gesture', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="tsld" />);
+    expect(screen.getByText('Double-click (a bar)')).toBeInTheDocument();
+    expect(
+      screen.getByText(/General where you can edit, Progress where you can only report/),
+    ).toBeInTheDocument();
+    // Not verified on a device, so never claimed as a touch gesture (the Gantt's "Double-tap a cell" precedent).
+    expect(screen.queryByText(/double-tap/i)).not.toBeInTheDocument();
+  });
+
   it('shows the GANTT bindings, named for that view, when the chart is on screen', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
     // The title has to name the view: the two sheets share key NAMES and not meanings — Enter opens
