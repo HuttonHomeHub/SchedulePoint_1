@@ -38,9 +38,12 @@ export function LayoutResolvedStrip({
     <NoticeStrip
       data-testid="canvas-layout-resolved"
       tone="muted"
+      // Own row, never cut (`docs/TECH_DEBT.md` #580): the sentence names the bar that moved, so it is
+      // shown whole rather than left to a hover-only `title`.
+      data-dock-row=""
       message={message}
-      // The sentence truncates in a narrow dock; the full text is a hover convenience only.
-      title={message}
+      messageFit="wrap"
+      density="comfortable"
     >
       <Button
         type="button"

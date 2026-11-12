@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HISTORY_RESULT_TIMEOUT_MS, HistoryResultStrip } from './HistoryResultStrip';
 
+import { expectDockRow } from '@/test/dock-row';
+
 function renderStrip(overrides: Partial<React.ComponentProps<typeof HistoryResultStrip>> = {}) {
   const calls: string[] = [];
   const props = {
@@ -191,11 +193,21 @@ describe('HistoryResultStrip', () => {
     expect(screen.queryByRole('button', { name: 'Redo' })).toBeNull();
   });
 
-  it('shows the full sentence as a tooltip for a success, whose message truncates', () => {
+  // #580: the sentence names the step, so it wraps on its own row instead of being cut, and the
+  // hover-only `title` stop-gap is gone because nothing is left to reveal.
+  it('a success takes a dock row that wraps, with no title stop-gap', () => {
     renderStrip();
-    expect(screen.getByTestId('canvas-history-result')).toHaveAttribute(
-      'title',
-      'Undid add “Foundations”.',
+    expectDockRow(
+      screen.getByTestId('canvas-history-result'),
+      screen.getByText('Undid add “Foundations”.'),
     );
+  });
+
+  it('a failure is an alert that takes a dock row that wraps, with no title stop-gap', () => {
+    const message = 'Couldn’t undo just now. Please try again.';
+    renderStrip({ kind: 'failure', message });
+    const strip = screen.getByRole('alert');
+    expect(strip).toHaveAttribute('data-testid', 'canvas-history-result');
+    expectDockRow(strip, screen.getByText(message));
   });
 });

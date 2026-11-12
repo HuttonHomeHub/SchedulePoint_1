@@ -5,6 +5,8 @@ import { pluralMoveHint } from '../model/reposition-announcement';
 
 import { BulkSelectionBar, type BulkActionGate } from './BulkSelectionBar';
 
+import { expectDockRow } from '@/test/dock-row';
+
 /**
  * The bulk selection bar's four gate states (`docs/specs/canvas-multi-select/` M4-T7).
  *
@@ -206,5 +208,13 @@ describe('Set code… (the host-supplied codeAction slot)', () => {
     const at = names.indexOf('Set code…');
     expect(at).toBeGreaterThan(names.indexOf('Link in sequence…'));
     expect(at).toBeLessThan(names.indexOf('Delete'));
+  });
+});
+
+describe('the sentence is never cut (docs/TECH_DEBT.md #580)', () => {
+  it('takes a dock row that wraps, so a long subject name is read whole', () => {
+    const name = 'Fabricate and erect precast stair cores, blk B';
+    renderBar({ primaryName: name });
+    expectDockRow(screen.getByTestId('bulk-selection-bar'), screen.getByText(new RegExp(name)));
   });
 });

@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CanvasModeBand, modeStatementText } from './CanvasModeBand';
 
+import { expectDockRow } from '@/test/dock-row';
+
 /**
  * The mode statement band (ADR-0064 T4/T5). Its job is to make "which tool is armed, and what does
  * the next click mean" readable without looking at the toolbar — the question the epic's founding
@@ -107,6 +109,34 @@ describe('CanvasModeBand', () => {
     // which the band paints and the panel announces through this exact function.
     expect(modeStatementText({ kind: 'marquee' })).toBe(
       'Marquee select · drag to select, Ctrl to add · Esc to stop',
+    );
+  });
+
+  // #580: a statement that names activities is shown whole, so the band wraps on its own row and
+  // carries no hover-only title.
+  it.each([
+    { kind: 'linkPicking', linkType: 'FS', predecessorName: 'Set out' },
+    { kind: 'linked', predecessorName: 'Set out', successorName: 'Reinforce', linkType: 'FS' },
+  ] as const)('a $kind statement takes a dock row that wraps', (statement) => {
+    render(<CanvasModeBand statement={statement} />);
+    expectDockRow(
+      screen.getByTestId('canvas-mode-band'),
+      screen.getByText(modeStatementText(statement)),
+    );
+  });
+
+  // An armed tool's hint names nothing and stays up the whole time, so it must not cost the diagram
+  // a line (ADR-0092): it wraps, but asks the outlet for no row of its own.
+  it.each([
+    { kind: 'adding', typeLabel: 'Task', gesture: 'drag' },
+    { kind: 'linking', linkType: 'FS' },
+    { kind: 'marquee' },
+  ] as const)('a $kind statement wraps but takes no row of its own', (statement) => {
+    render(<CanvasModeBand statement={statement} />);
+    expectDockRow(
+      screen.getByTestId('canvas-mode-band'),
+      screen.getByText(modeStatementText(statement)),
+      { ownRow: false },
     );
   });
 });

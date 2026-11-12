@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { LayoutResolvedStrip } from './LayoutResolvedStrip';
 
+import { expectDockRow } from '@/test/dock-row';
+
 const MESSAGE = 'Moved “Clad” to lane 2 so it no longer overlaps another activity.';
 
 function renderStrip() {
@@ -44,5 +46,11 @@ describe('LayoutResolvedStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(onDismiss).toHaveBeenCalledOnce();
     expect(calls).toEqual(['focus', 'dismiss']);
+  });
+
+  // #580: the sentence names the bar that moved; it wraps on its own row and needs no hover title.
+  it('takes a dock row that wraps, and carries no title stop-gap', () => {
+    renderStrip();
+    expectDockRow(screen.getByTestId('canvas-layout-resolved'), screen.getByText(MESSAGE));
   });
 });

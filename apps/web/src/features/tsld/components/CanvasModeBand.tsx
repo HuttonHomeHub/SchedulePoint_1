@@ -104,15 +104,24 @@ export function CanvasModeBand({
   if (!statement) return null;
   const confirmation = statement.kind === 'linked';
   const text = modeStatementText(statement);
+  // Only a statement that names activities asks for a line of its own. The armed-tool hints
+  // (`adding`, `linking`, `marquee`) name nothing, stay up the whole time a tool is armed, and so
+  // must not cost the diagram a line (ADR-0092): they wrap beside the plan facts, which keeps the
+  // "Esc to stop" tail from being cut when space is short.
+  const namesActivities = statement.kind === 'linkPicking' || statement.kind === 'linked';
   return (
     // No `role` is passed, so this is NOT a live region. `TsldPanel` already announces every one of
     // these transitions through the app's single polite region; a second one here would say the
     // same sentence twice, which is the double-speak the plan named as this task's risk.
     <NoticeStrip
       data-testid="canvas-mode-band"
+      // Never cut (`docs/TECH_DEBT.md` #580, ADR-0216): a `title` on a truncated line is reachable only
+      // by a mouse. A name-bearing sentence (the Linked confirmation, the link pick) also takes its
+      // own row: `data-dock-row` is the outlet's 36 rem floor.
+      {...(namesActivities ? { 'data-dock-row': '' } : {})}
       message={text}
-      // The sentence truncates in a narrow dock; the full text is a hover convenience only.
-      title={text}
+      messageFit="wrap"
+      density={namesActivities ? 'comfortable' : 'compact'}
       tone={confirmation ? 'muted' : 'accent'}
     >
       {confirmation && onUndo ? (

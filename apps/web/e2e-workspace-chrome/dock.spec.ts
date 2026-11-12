@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { placeRelativeTo } from '../e2e-arrange/support';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
@@ -696,3 +697,228 @@ test.describe('the follow-logic offer reflows at 320 CSS px (WCAG 1.4.10)', () =
     ).toBe(true);
   });
 });
+
+/**
+ * **The four existing foot messages are read whole** (`docs/TECH_DEBT.md` #580, closed by the own-row
+ * treatment M2 landed for the offer): the bare Linked band, the undo-result strip, the layout-resolved
+ * notice and the multi-select bar all wrap on a row of their own, so no sentence is cut and no
+ * subject name is lost.
+ *
+ * Each is raised for real with 46-character names, then read at the three conditions the offer's
+ * journeys use: 1024 × 600, 200 % text (root font 32 px) and 320 CSS px (WCAG 1.4.10). A strip is
+ * "read whole" when its sentence has no clipped overflow and is not cut by an ellipsis, every one of
+ * its buttons receives a pointer at its own centre, and neither the foot row nor the page scrolls
+ * sideways. Mouse and finger both, because a coarse pointer grows every control (ADR-0183).
+ */
+const LONG = [
+  'Install structural steel to level 3 west wings',
+  'Fabricate and erect precast stair cores, blk B',
+  'Commission the mechanical plant room, level 4',
+  'Waterproof and screed the podium roof terrace',
+] as const;
+
+async function expectStripReadWhole(page: Page, testId: string, label: string): Promise<void> {
+  const strip = page.getByTestId(testId);
+  await expect(strip, `${label}: the strip is on screen`).toBeVisible();
+  // Focus inside pauses the undo result's 15 s timer, so a slow sweep cannot lose the strip. Focus,
+  // not hover: a hover is a no-op on the touch project, and a strip without buttons has nothing to
+  // expire.
+  const firstButton = strip.getByRole('button').first();
+  if ((await firstButton.count()) > 0) await firstButton.focus();
+  const sentence = await strip.evaluate((el) => {
+    const p = el.querySelector<HTMLElement>(':scope > p');
+    if (!p) throw new Error('the strip has no sentence');
+    const box = p.getBoundingClientRect();
+    const outer = el.getBoundingClientRect();
+    const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
+    if (!foot) throw new Error('the foot row is not on screen');
+    return {
+      clipped: p.scrollWidth > p.clientWidth + 1,
+      ellipsis: getComputedStyle(p).textOverflow === 'ellipsis',
+      outside: box.right > outer.right + 1 || box.left < outer.left - 1,
+      // Under wrap the checks above are near-vacuous: a cut sentence is a strip pushed past the foot
+      // row, not a clipped line, so the strip's foot must not fall below the foot row's.
+      belowFoot: outer.bottom > foot.getBoundingClientRect().bottom + 1,
+    };
+  });
+  expect(sentence.belowFoot, `${label}: the strip is not clipped below the foot row`).toBe(false);
+  expect(sentence.ellipsis, `${label}: the sentence is not ellipsised`).toBe(false);
+  expect(sentence.clipped, `${label}: the sentence is not clipped`).toBe(false);
+  expect(sentence.outside, `${label}: the sentence stays inside its strip`).toBe(false);
+  for (const button of await strip.getByRole('button').all()) {
+    expect(
+      await selfHit(button),
+      `${label}: a pointer at the centre of “${await button.textContent()}” lands on it`,
+    ).toBe(true);
+    expect(
+      await button.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          r.left >= 0 &&
+          r.top >= 0 &&
+          r.right <= window.innerWidth &&
+          r.bottom <= window.innerHeight
+        );
+      }),
+      `${label}: “${await button.textContent()}” lies inside the viewport`,
+    ).toBe(true);
+  }
+  expect(
+    (await footFigures(page)).sideways,
+    `${label}: the foot row does not scroll sideways`,
+  ).toBe(false);
+}
+
+/**
+ * The armed-tool band, read against the foot row as it was with no band (`idleFoot`, taken on this
+ * runner just before). It asks for no row of its own and its sentence is never cut; when it does not
+ * fit beside the plan facts it may take a second LINE of text (so "Esc to stop" is not lost) and costs
+ * the foot row no more than that one line, never a whole strip's row.
+ */
+async function expectArmedHintCostsNothing(
+  page: Page,
+  idleFoot: number,
+  label: string,
+): Promise<void> {
+  const band = page.getByTestId('canvas-mode-band');
+  await expect(band).toBeVisible();
+  expect(await band.getAttribute('data-dock-row'), `${label}: no row of its own`).toBeNull();
+  const shape = await band.evaluate((el) => {
+    const p = el.querySelector<HTMLElement>(':scope > p');
+    if (!p) throw new Error('the band has no sentence');
+    const parsed = Number.parseFloat(getComputedStyle(p).lineHeight);
+    const lineHeight = Number.isFinite(parsed) ? parsed : 20;
+    return {
+      cut: getComputedStyle(p).textOverflow === 'ellipsis' || p.scrollWidth > p.clientWidth + 1,
+      lineHeight,
+      lines: Math.round(p.getBoundingClientRect().height / lineHeight),
+    };
+  });
+  expect(shape.cut, `${label}: the sentence is not truncated`).toBe(false);
+  expect(shape.lines, `${label}: the sentence takes at most two lines`).toBeLessThanOrEqual(2);
+  const foot = (await footFigures(page)).foot;
+  expect(
+    foot,
+    `${label}: the foot row grows by at most the sentence's extra line (idle ${String(idleFoot)})`,
+  ).toBeLessThanOrEqual(idleFoot + (shape.lines - 1) * shape.lineHeight + 4);
+}
+
+/** The strip at 1024 × 600, at 200 % text, and at 320 CSS px, leaving the viewport at 1024 × 600. */
+async function expectStripAtAllWidths(page: Page, testId: string, name: string): Promise<void> {
+  await page.setViewportSize({ width: 1024, height: 600 });
+  await expectStripReadWhole(page, testId, `${name}, 1024 × 600`);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '32px';
+  });
+  await expectStripReadWhole(page, testId, `${name}, 200 % text`);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '';
+  });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expectStripReadWhole(page, testId, `${name}, 320 CSS px`);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+    `${name}, 320 CSS px: the page does not scroll sideways`,
+  ).toBe(true);
+  await page.setViewportSize({ width: 1024, height: 600 });
+}
+
+for (const { pointer, touch } of [
+  { pointer: 'mouse', touch: false },
+  { pointer: 'finger', touch: true },
+] as const) {
+  test.describe(`the four existing foot messages are read whole, ${pointer}`, () => {
+    test.use({ hasTouch: touch, acknowledgeViewportNotice: true });
+
+    test('the multi-select bar, the Linked band, the undo result and the layout notice', async ({
+      page,
+    }) => {
+      test.setTimeout(540_000);
+      await page.setViewportSize({ width: 1024, height: 600 });
+      const orgSlug = await onboard(page, STAMP + (touch ? 91 : 90));
+      await createHierarchy(page);
+      await newPlan(page, 'Row 580');
+      await ensurePen(page);
+      const seeded = await seedActivities(page, orgSlug, [
+        { name: LONG[0], laneIndex: 0 },
+        { name: LONG[1], laneIndex: 1 },
+        { name: LONG[2], laneIndex: 2, durationDays: 5 },
+        { name: LONG[3], laneIndex: 2, durationDays: 5 },
+      ]);
+      const [first, second] = seeded;
+      if (!first || !second) throw new Error('seeding returned too few activities');
+      await recalculate(page, orgSlug);
+      await ensurePen(page);
+      // Far enough after the third that nothing overlaps until the third is lengthened.
+      await placeRelativeTo(page, orgSlug, LONG[3], LONG[2], 8);
+      await recalculate(page, orgSlug);
+      await ensurePen(page);
+
+      // Found before anything resizes the window: a resize moves where the bars are drawn.
+      const firstPoint = await findBar(page, first.id);
+      const secondPoint = await findBar(page, second.id);
+
+      // The bare Linked band: the Link tool armed, nothing selected.
+      await canvas(page).press('Escape');
+      await canvas(page).press('Escape');
+      // Mid-canvas, clear of its edges: on a finger the panel divider's hit strip is a control-height
+      // wide and covers the left edge, so a click at x = 20 never reaches the scene.
+      const stage = await canvas(page).boundingBox();
+      await canvas(page).click({
+        position: { x: (stage?.width ?? 600) / 2, y: (stage?.height ?? 200) - 40 },
+      });
+      // An armed tool's hint names nothing and stays up the whole time, so it must cost the diagram no
+      // line (ADR-0092): the foot row is no taller than with no band, measured here on this runner.
+      const idleFoot = (await footFigures(page)).foot;
+      const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
+      await toolbar.getByRole('button', { name: 'Select', exact: true }).click();
+      await expect(page.getByTestId('canvas-mode-band')).toContainText('Marquee select');
+      await expectArmedHintCostsNothing(page, idleFoot, `${pointer} Select tool armed`);
+      await canvas(page).press('Escape');
+      await expect(page.getByTestId('canvas-mode-band')).toHaveCount(0);
+      await toolbar.getByRole('button', { name: 'Link', exact: true }).click();
+      await canvas(page).click({ position: firstPoint });
+      await canvas(page).click({ position: secondPoint });
+      await expect(page.getByTestId('canvas-mode-band')).toContainText(
+        'Linked “Install structural',
+      );
+      await expectStripAtAllWidths(page, 'canvas-mode-band', `${pointer} Linked band`);
+
+      // The undo result: disarm, then undo the link from the keyboard.
+      await canvas(page).press('Escape');
+      await canvas(page).press('Escape');
+      await expect(page.getByTestId('canvas-mode-band')).toHaveCount(0);
+      await diagramList(page).focus();
+      await page.keyboard.press('Control+z');
+      await expectStripAtAllWidths(page, 'canvas-history-result', `${pointer} undo result`);
+      await page
+        .getByTestId('canvas-history-result')
+        .getByRole('button', { name: 'Dismiss' })
+        .click();
+      await expect(page.getByTestId('canvas-history-result')).toHaveCount(0);
+
+      // The multi-select bar: two selected, the subject's long name in the sentence.
+      await diagramList(page).focus();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('Shift+ArrowDown');
+      const bulk = page.getByTestId('bulk-selection-bar');
+      await expect(bulk).toContainText(/activities selected — “.{40,}” is the subject/);
+      await expectStripAtAllWidths(page, 'bulk-selection-bar', `${pointer} multi-select bar`);
+      await diagramList(page).focus();
+      await page.keyboard.press('Escape');
+      await expect(bulk).toHaveCount(0);
+
+      // The layout-resolved notice: lengthen the third into the fourth, one day at a time.
+      await selectInList(page, orgSlug, LONG[2]);
+      const notice = page.getByTestId('canvas-layout-resolved');
+      for (let i = 0; i < 6 && (await notice.count()) === 0; i += 1) {
+        await page.keyboard.press('Shift+ArrowRight');
+        await page.waitForTimeout(1_500);
+      }
+      await expect(notice).toContainText(`Moved “${LONG[2]}” to lane`);
+      await expectStripAtAllWidths(page, 'canvas-layout-resolved', `${pointer} layout notice`);
+    });
+  });
+}

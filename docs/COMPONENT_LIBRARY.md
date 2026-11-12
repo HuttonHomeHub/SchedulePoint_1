@@ -970,8 +970,12 @@ the row, which no spacing token expresses.
 marker). `CanvasDockOutlet` reads it: an outlet holding a marked strip asks for `min(36rem, 100%)` on
 **any** pointer (`not-empty:has-[[data-dock-row]]:min-w-…`), so a row too narrow for the strip and the
 plan facts gives the strip a line of its own. It is a **floor, never a content basis**: the outlet
-stays `basis 0`, the alternative ADR-0187 rejected. Only `FollowLogicStrip` sets it today
-(`docs/TECH_DEBT.md` #580 adds four more).
+stays `basis 0`, the alternative ADR-0187 rejected. Five strips set it: `FollowLogicStrip` and, since
+`docs/TECH_DEBT.md` #580 closed, `CanvasModeBand`, `HistoryResultStrip`, `LayoutResolvedStrip` and
+`BulkSelectionBar`, all with `messageFit="wrap"` and `density="comfortable"` (`CanvasModeBand` only for
+the two statements that name activities; its armed-tool hint (Select; Add and Link state their mode on the toolbar button) wraps with no marker and keep the compact
+density, so they cost the diagram no line, ADR-0092). None carries a hover-only `title` stop-gap any more,
+because none can cut its sentence.
 
 **The foot row's trailing group** (`PlanActivitiesFootRow`): the plan facts' outlet and the panel
 toggle are one flex item, `data-foot-trail`, `ml-auto max-w-full shrink-0 flex-wrap`. A wrapping row
