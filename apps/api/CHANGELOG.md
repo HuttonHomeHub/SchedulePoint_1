@@ -1,5 +1,11 @@
 # @repo/api
 
+## 1.2.0
+
+### Minor Changes
+
+- [#1327](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1327) [`7888f7b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/7888f7b751a6e65f95b90833eda4c53dda93e75d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A refused progress save now says which date field it refused and, for an actual date after the plan's data date, what the data date and the latest actual date are.
+
 ## 1.1.1
 
 ### Patch Changes
