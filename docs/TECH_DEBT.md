@@ -9341,3 +9341,11 @@ At 100 % text the landing's content runs past the bottom of the shell in a short
 Pre-existing and unchanged by #569: the controls are reachable (their centres hit), but a finger landing on the covered corner presses the neighbour. The #569 journey therefore probes each control's own centre and corners after scrolling it into view and records this exception rather than asserting all 55.
 
 **Next:** identify the covering element from the readings and decide whether the bar's gap or the neighbour's box should change. **Trigger:** a report of a mis-pressed selection-bar control on a touch screen, or the next change to the selection bar's layout.
+
+### 582. The "Escape, Escape, Escape on a dirty editor" journey failed once on CI and passed on retry
+
+**Status:** open · **Verified:** 2026-11-12, by reading the job log of PR #1319's first head (`217c5d0`, "End-to-end tests (web shard 1)", job `130960850213`): `e2e-activity-editor/activity-editor.spec.ts:538` failed its first attempt with "OUTCOME A: editor still open after the third Escape, so the guard must be showing its confirmation" and passed on Playwright's retry, so the suite reported `1 flaky` · **Raised:** 2026-11-12 (the "Follow logic" epic, M2) · **Size:** S · **Owner:** web
+
+Seen once. That pull request changed the canvas dock and nothing in the activity editor; the journey has one seeded activity and no dock strip, so the change is unlikely to be the cause, but the cause was **not** established. The failure reads as a race between three quick Escape presses and the dialog's close.
+
+**Next:** reproduce by repeating that one case (`--repeat-each`) and read which of the two outcomes it lands in. **Trigger:** a second sighting on any pull request.

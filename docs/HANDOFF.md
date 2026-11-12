@@ -3,8 +3,8 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, brought up to date 2026-11-10 (after #577 shipped as PR #1302, then the GUI review session
-of the same day), after **1.1.0 was released and the owner's server was switched to it**. The fresh-start epic
+**Written:** 2026-11-09, brought up to date 2026-11-10 and again 2026-11-12 (after the "Follow logic" epic closed at web 1.3.0),
+after **1.1.0 was released and the owner's server was switched to it**. The fresh-start epic
 ([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
 [`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
 still stands: nothing that needs the owner to run or check anything on their server or devices (a decision question
@@ -96,21 +96,42 @@ is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do no
     offers "Follow logic" / "Keep it here" in the dock, adds a whole-plan offer for plans already in that state, and
     renames "Clear visual start". Approved 2026-11-11 with all five defaults. Four milestones, one PR each: M0
     measure and verify (nothing user-facing), M1 the rename, M2 the message (files ADR-0216), M3 the whole-plan
-    message. No schema or API change. Ask the owner before merging each non-docs PR.
-  - **Where "Follow logic" stands (2026-11-11, evening).** M0 (measure) and M1 (the rename) are done: the rename
-    shipped as web 1.1.2 (PR #1313). M2 (the message) is **not** built. M0 found the offer does not fit the dock at
-    1024 px; amendment 1 (a line of its own) was approved, measured in a second pass (M0b) and **held**, because three
-    of its stop rules fired: a thin column of up to 11 lines at 200 % text, and an extra line of cost on wide screens
-    with a bar selected. Amendment 2 revises the design (a width floor on the outlet instead of a content basis, and
-    buttons that drop under the sentence) and was approved the same evening with all defaults. Next, in order: the
-    fix for the existing strips (below), then a third measuring pass (M0c) of the revised design, then M2 if no stop
-    rule fires. Everything is in `docs/specs/placed-bar-follows-link/`: `m0-measurement.md` (M0, M0b and the M1
-    reading), `amendment-1-offer-at-1024.md`, `amendment-2-after-m0b.md`, and the probes under
-    `apps/web/measure-toolbar/follow-logic-m0*.spec.ts`. Neither amendment is folded into the spec or plan yet.
-  - **A shipped defect M0b found, approved to fix first.** At 1024 px with long activity names the dock's existing
-    messages (the "Linked" band, the undo result, the layout-resolved notice) overflow their outlet and their
-    buttons cannot be pressed; `truncate` never engages because `NoticeStrip` has no `min-w-0`
-    (`notice-strip.tsx`). One class fixes all 47 overflowing readings. It ships as its own small PR with a journey.
+    message. No schema or API change. All four shipped (below).
+  - **"Follow logic" is finished and released (2026-11-12).** The spec and plan are marked shipped and
+    [ADR-0216](adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md) records the decisions. Four web releases carried it:
+    - **1.1.2** (PR #1313): "Clear visual start" renamed "Follow logic".
+    - **1.1.3** (PR #1315): the dock's existing messages no longer push their buttons off screen at 1024 px with
+      long names (`NoticeStrip` gained `min-w-0`).
+    - **1.2.0** (PR #1319): the edit offer. When an edit leaves a placed bar before its logic, the dock offers
+      "Follow logic" / "Keep it here"; one batch write, one undo step; "Moving…", a confirmation with Undo, and a
+      visible failure with "Try again". A bar with an actual start is never offered. `NoticeStrip` gained
+      `messageFit="wrap"`, and the foot row's plan facts and Expand toggle became one trailing group (closed #581).
+    - **1.2.1** (PR #1321): the four older dock messages wrap instead of truncating (closed #580). The Select tool's
+      hint stays beside the plan facts and wraps there, which makes the foot row about 14 px taller at 1024 px while
+      Select is armed.
+    - **1.3.0** (PR #1323): the whole-plan offer, "N bars stay where they were placed, before their logic allows."
+      with "Follow logic" / "Dismiss". Dismissal is per bar and per session. **It is not shown on a window 704 px
+      high or less**: on its own dock row it left the diagram 312 px against the 350 px floor at 1024 × 600, and a
+      compact form was worse (304). It ranks above the Arrange offer.
+  - **How the design got there.** Three measuring passes after M0 (M0b, M0c, M0d) and three amendments, all in
+    `docs/specs/placed-bar-follows-link/` and all folded into the spec and plan. The shipped shape is amendment 3's
+    "A double-prime": a 36 rem floor on the dock outlet when it holds a `data-dock-row` strip, the sentence wrapping,
+    the buttons dropping under it. The probes are `apps/web/measure-toolbar/follow-logic-m0*.spec.ts`.
+  - **Three choices left for the owner**, none of them a defect: whether "Dismiss" should be remembered across a
+    reload (it is not; ADR-0216 records the trade-off); whether the whole-plan offer should have some form on a short
+    window; and whether the Select hint should be shortened so it fits one line at 1024 px.
+  - **Two lessons that cost a CI round each.** (1) A journey that asserts exact pixel figures passes locally and
+    fails on GitHub's runner, where text is a few pixels wider and flips a wrap (PR #1319, first head): assert
+    invariants measured on the same runner (nothing truncated, every button pressable, no sideways scroll, a strip
+    costing at most its own height) and keep the figures in the measurement record. Poll for announcer text, which
+    is written on the next animation frame. (2) A change to the dock is not proved by `web:workspace-chrome` alone:
+    the whole-plan strip passed there and broke `web:workspace-fit`'s 350 px floor and `web:arrange`. Run
+    workspace-fit, gantt-editing, narrow-shell, multi-select, undo, arrange, authoring-flow, authoring and swimlanes
+    too, one at a time.
+  - **Two CI oddities, neither caused by a change here.** On PR #1315 two web e2e shards hung past the 30-minute
+    limit and the run (`43091973035`) then refused both a cancel (409) and a re-run (403); a new commit on the branch
+    got a clean run. And `e2e-activity-editor/activity-editor.spec.ts:538` ("Escape, Escape, Escape on a dirty
+    editor") failed once and passed on retry on PR #1319; it is registered as `docs/TECH_DEBT.md` #582.
   - **GitHub's runners could not reach Ubuntu's mirrors for about three hours on 2026-11-11** (roughly 14:00 to
     17:15 UTC): "Install Playwright browsers" failed with `Temporary failure resolving 'archive.ubuntu.com'` in all
     four web e2e shards, three times, on PR #1312. No test ran in any of them. It cleared without a change here. If
@@ -138,8 +159,18 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 
 ## What is next
 
-**The GUI review is part done: the pages exist, the owner is at step 3.11 of 150, and has not yet chosen what to
-fix.** In order:
+**The GUI review is part done: the pages exist, the owner is at step 3.11 of 150, and "Follow logic" (the first
+thing they asked to have fixed) is released.** The owner keeps the 2026-11-10/12 session for the runbook only and
+starts a new one for fixes. The runbook is https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma (chapter 3 was
+brought up to date for the releases above) and the walkthrough with its ranked list is
+https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo (109 problems: 4 of the first severity, 50 of the second).
+
+**The agreed focus of the next session is that list, highest severity first.** Of the four first-severity
+problems, two are done (a milestone could not be picked with the Link tool, fixed in web 1.1.1, PR #1309; bars
+never move and nothing says so, answered by the releases above). The two open ones belong together: a Contributor
+cannot report progress until a Planner has moved the data date, and at 1024 × 600 that refusal is off the screen so
+Save appears to do nothing. Check each against the code first, then `feature-analyst` and the owner's approval
+before building. In order after that:
 
 - **Read the owner's runbook answers again** (how is in "What shipped"); those up to step 3.8 are already on the
   ranked list. Every later "Struggled" and every note is a finding: add it to the list with "Found by" set to
