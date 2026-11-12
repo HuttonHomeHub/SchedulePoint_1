@@ -1,5 +1,13 @@
 # @repo/web
 
+## 1.2.0
+
+### Minor Changes
+
+- [#1319](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1319) [`c15ec17`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c15ec171eb1f72bb3bd2d11139674ee51c89c5ea) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When an edit leaves a bar you placed by hand starting before its logic allows, a message at the foot of the diagram and the Gantt now says so and offers "Follow logic" (the bar moves to where its logic puts it, as one undo step) or "Keep it here". The message shows "Moving…" while it works, says plainly if the move failed and lets you try again, and confirms with an Undo once the bar has moved.
+  
+  Separately, the panel's Expand button no longer drops onto a line of its own beside the plan facts at some window widths.
+
 ## 1.1.3
 
 ### Patch Changes
