@@ -308,6 +308,13 @@ export interface TsldCanvasProps {
    * own field must keep focus. May be called twice for one press.
    */
   onPressComplete?: () => void;
+  /**
+   * A double-click on a bar or milestone in the Select tool (ADR-0218 D4): the host opens the editor
+   * the reader can use. Fired only when BOTH presses of the double-click were plain selects of the
+   * same bar, so a drag, a resize, a Ctrl/Shift-click, a click in another tool, a click on a link or on
+   * empty ground never reaches it. The first click's selection has already been made.
+   */
+  onActivateBar?: (id: string) => void;
   /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
   fitSignal: number;
   /** M2: enable on-canvas editing. Absent/false → the M1 read-only surface, unchanged. */
@@ -910,6 +917,7 @@ export function TsldCanvas({
   onSelect,
   onSelectRegion,
   onPressComplete,
+  onActivateBar,
   fitSignal,
   editing = false,
   mode = 'select',
@@ -2555,6 +2563,16 @@ export function TsldCanvas({
   }, [writeBusy]);
 
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  // The bar the last run of presses plain-selected, and how many in a row (ADR-0218 D4). A `dblclick`
+  // is only an activation when this reads two on one bar: a press that moved the bar, resized it,
+  // dragged the ground, swept a marquee, picked a link end or carried a modifier resets it, so the
+  // browser's `dblclick` after a drag or in another tool finds a count below two and does nothing.
+  const plainSelectRef = useRef<{ id: string; count: number } | null>(null);
+  const notePlainSelect = (id: string | null): void => {
+    const last = plainSelectRef.current;
+    plainSelectRef.current =
+      id === null ? null : { id, count: last?.id === id ? last.count + 1 : 1 };
+  };
   const localPoint = (e: React.PointerEvent | React.MouseEvent): Point => {
     const rect = canvasRef.current!.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -2638,12 +2656,14 @@ export function TsldCanvas({
       // routing it to `onIntent` would put it behind the host's in-flight-write guard, where
       // a planner mid-save could not re-select. Resolved here — the canvas owns the viewport.
       if (intent?.kind === 'marquee') {
+        plainSelectRef.current = null;
         onSelectRegion?.(
           idsIntersecting(sceneRef.current.activities, intent.rect, viewRef.current, dataDate),
           intent.additive,
         );
         return;
       }
+      notePlainSelect(!intent && select && !selectModifier ? select : null);
       if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
       else if (select) {
         // The modifier the press CARRIED, captured by the machine at press (ADR-0218 D5): an unmoved
@@ -2656,13 +2676,17 @@ export function TsldCanvas({
     }
     const wasDrag = drag.current?.moved ?? false;
     drag.current = null;
-    if (wasDrag) return;
+    if (wasDrag) {
+      plainSelectRef.current = null;
+      return;
+    }
     const p = localPoint(e);
     // Link tool (M5) / LOE tool (Stage D): a click picks the first endpoint, then the second —
     // the gesture machine holds the pick between clicks. Panning still works (a drag returns
     // above); only a stationary click reaches here. Other modes keep the plain M1 select-on-click.
     // A `link`/`loeSpan` commit rides `intent`; the LOE tool's per-pick prompts ride `loe`.
     if (editing && (mode === 'link' || mode === 'loe')) {
+      plainSelectRef.current = null;
       const { state, intent, loe } = reduce(
         gestureRef.current,
         { type: 'click', hit: classifyAt(p) },
@@ -2684,6 +2708,7 @@ export function TsldCanvas({
     // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
     const modifier = selectModifierOf(e);
     const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
+    notePlainSelect(modifier ? null : target);
     if (modifier) onSelect(target, modifier);
     else onSelect(target);
   };
@@ -2699,6 +2724,13 @@ export function TsldCanvas({
   const pressComplete = (): void => {
     if (mode === 'add-activity' || pending) return;
     onPressComplete?.();
+  };
+
+  const activateBar = (): void => {
+    const last = plainSelectRef.current;
+    plainSelectRef.current = null;
+    if (mode !== 'select' || pending || last === null || last.count < 2) return;
+    onActivateBar?.(last.id);
   };
 
   const column = (
@@ -3059,6 +3091,7 @@ export function TsldCanvas({
           pressComplete();
         }}
         onClick={pressComplete}
+        onDoubleClick={activateBar}
         onPointerLeave={() => {
           // Drop the hover ring when the pointer leaves the surface (M4). Flag-off the ref is
           // never set, so this is a no-op — today's behaviour byte-for-byte.

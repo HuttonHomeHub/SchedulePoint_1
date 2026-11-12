@@ -134,6 +134,7 @@ import { buildSelectionBarContext } from '@/features/plan-actions/build-selectio
 import {
   SelectionActionsBar,
   deleteRefusal,
+  doubleClickRoute,
   type SelectionBarContext,
   type SelectionCanvasContext,
 } from '@/features/plan-actions/selection-actions';
@@ -2105,6 +2106,20 @@ export function TsldPanel({
   };
 
   /**
+   * A double-click on a bar (ADR-0218 D4): open the editor where the reader can work, or say why not.
+   * The first click has already made this bar the selection, so the object bar's context IS this bar's;
+   * if it is not (the selection moved or went plural in between) there is nothing to open. The routing
+   * is `doubleClickRoute`'s, over the same gates the Edit and Progress buttons use.
+   */
+  const activateBar = (id: string): void => {
+    if (selectionCtx === null || selectedId !== id) return;
+    const route = doubleClickRoute(selectionCtx);
+    if (route.kind === 'edit') selectionCtx.onEdit();
+    else if (route.kind === 'progress') selectionCtx.onProgress();
+    else announce(route.reason);
+  };
+
+  /**
    * A committed marquee sweep, already resolved to ids by the canvas.
    *
    * ONE announcement, on COMMIT — never per frame. A marquee moves ~60 times a second and a polite
@@ -3722,6 +3737,7 @@ export function TsldPanel({
               onSelect={selectFromPointer}
               onSelectRegion={selectRegion}
               onPressComplete={focusListFromPointer}
+              {...(selectionActionsWired ? { onActivateBar: activateBar } : {})}
               // The plural set only when it IS plural: at one selected the canvas
               // receives `undefined` and builds the scene it always built.
               selectedIds={selection.ids.length > 1 ? selection.ids : undefined}

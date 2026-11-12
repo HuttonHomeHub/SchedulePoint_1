@@ -2,7 +2,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { resourcedReason } from './make-milestone-gate';
-import { SelectionActionsBar, type SelectionBarContext } from './selection-actions';
+import {
+  doubleClickRoute,
+  SelectionActionsBar,
+  type SelectionBarContext,
+} from './selection-actions';
 
 /**
  * **One sentence for one refusal across the selection bar** (`docs/TECH_DEBT.md` #397).
@@ -94,5 +98,34 @@ describe('the selection bar words a role refusal one way', () => {
       />,
     );
     expect([...shadedReasons().keys()]).toEqual(['make-milestone']);
+  });
+});
+
+describe('where a double-click on the bar goes (ADR-0218 D4)', () => {
+  it('goes to Edit when the reader can edit right now, even if they could also report progress', () => {
+    expect(doubleClickRoute(ctx({ canEditSchedule: true, canReportProgress: true }))).toEqual({
+      kind: 'edit',
+    });
+  });
+
+  it('goes to Progress when the reader cannot edit but can report progress (a Contributor)', () => {
+    expect(doubleClickRoute(ctx({ canEditSchedule: false, canReportProgress: true }))).toEqual({
+      kind: 'progress',
+    });
+  });
+
+  it('refuses with the sentence the Edit button shades itself with when neither is open', () => {
+    const route = doubleClickRoute(ctx({ canReportProgress: false }));
+    expect(route).toEqual({ kind: 'refused', reason: ROLE });
+    render(<SelectionActionsBar context={ctx({ canReportProgress: false })} />);
+    expect(shadedReasons().get('edit')).toBe(ROLE);
+  });
+
+  it('never refuses silently: a host that supplies no reason still gets a sentence', () => {
+    const route = doubleClickRoute(
+      ctx({ canReportProgress: false, definitionGate: null, scheduleRefusal: () => null }),
+    );
+    expect(route.kind).toBe('refused');
+    if (route.kind === 'refused') expect(route.reason).not.toBe('');
   });
 });

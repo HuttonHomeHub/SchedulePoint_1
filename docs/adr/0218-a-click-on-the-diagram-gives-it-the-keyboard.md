@@ -1,7 +1,7 @@
 # ADR-0218: A click on the diagram gives it the keyboard
 
 - **Status:** Accepted — 2026-11-12. The product owner approved the spec and the plan on 2026-11-12 with all four
-  defaults. D1 and D2 ship with M1; D3 (M2) and D5 (M4) are added as dated amendments (D4, the double-click, follows with M3) to this file.
+  defaults. D1 and D2 ship with M1; D3 (M2), D4 (M3) and D5 (M4) are added as dated amendments to this file.
 - **Date:** 2026-11-12
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:** [ADR-0048](0048-undo-redo-command-stack.md) M5 (the undo accelerators' body-only document fallback is
@@ -90,6 +90,34 @@ Each goes through the button's own path, so the dialog, the focus return and the
   button's absence does.
 - **No `aria-keyshortcuts` on the buttons.** The key acts only with the list focused; advertising it on a button a reader
   is standing on would promise a press that does nothing there. The shortcuts sheet lists it ("Delete / Backspace").
+
+### D4 — A double-click on a bar opens the editor the reader can use (added 2026-11-12, M3)
+
+Double-clicking a bar or milestone on the diagram, in the Select tool, opens the activity editor: on **General** for
+someone who can edit right now, on **Progress** for someone who cannot edit but can report progress (a Contributor),
+and for anyone else it opens nothing and **announces why**, in the words the Edit button shades itself with.
+
+- **One routing rule, the buttons' own gates.** `doubleClickRoute` (in `selection-actions.tsx`, beside `deleteRefusal`)
+  reads `canEditSchedule` for Edit and `canReportProgress` for Progress and takes the refusal from `penRefusal`, so the
+  gesture and the two buttons cannot disagree. Progress is chosen by the role gate alone: a Planner who has not taken
+  the pen can report progress, so the gesture lands there rather than refusing (the spec's order, "Edit usable, else
+  Progress usable, else the reason").
+- **Both presses must have been plain selects of the same bar.** The canvas counts, per release, what the press actually
+  did (`plainSelectRef`): a select of a bar counts, and a move, a resize, a pan, a marquee, a link pick, a press that
+  carried Ctrl or Shift, a click on empty ground or on a different bar resets it. The `dblclick` the browser sends after
+  any two clicks is an activation only when the count reads two on one bar, so a drag's two releases, a Ctrl-click pair
+  and a click pair in another tool open nothing. The unmoved presses of a double-click start no move or resize (the
+  machine returns `select`, never an intent, for an unmoved release), and the first click's selection stands.
+- **Select tool only, and not under a create popover.** Not in the Link, Add, level-of-effort or Marquee tools (the
+  tool's own two clicks stand), not on a link, not on empty ground. A host that wired no object actions (the guest
+  share view) passes no handler, so nothing happens there.
+- **The Gantt is out** (a cell's double-click edits the cell); it has no canvas handler.
+- **Focus.** The press-complete focus move (D1) ran on the first click's release; the dialog takes focus on open and
+  returns it to the list on close, as it does for the Edit button.
+- **Touch.** A double-tap reaches the canvas as `dblclick` where the browser delivers it (the M0 emulation did: two taps,
+  one `dblclick`), so it works. It is **not** listed as a touch gesture on the shortcuts sheet: that was not verified on
+  a device, the precedent being the Gantt's "Double-tap a cell" (`PlanShortcutsHelp.tsx`). The sheet's "Double-click
+  (a bar)" row is a pointer row in the diagram's list.
 
 ### D5 — A press on a bar carries its select modifier (added 2026-11-12, M4)
 

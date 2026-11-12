@@ -1,6 +1,8 @@
+import { activityEditor } from '../e2e-support/activity-editor';
 import { expect, test } from '../e2e-support/test';
 
 import {
+  canvas,
   createHierarchy,
   ensurePen,
   findBar,
@@ -99,5 +101,117 @@ test.describe('The activity editor chrome', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     const focusedTag = await page.evaluate(() => document.activeElement?.tagName ?? 'BODY');
     expect(focusedTag, 'focus must not drop to <body> on dismissal').not.toBe('BODY');
+  });
+
+  /**
+   * **Double-click a bar opens its editor** (ADR-0218 D4, `docs/specs/diagram-keys-and-selection/` M3).
+   *
+   * The canvas had no `dblclick` at all. What the journey pins is where it lands (General for someone
+   * who can edit now), that focus is inside the dialog it opened, and the four places it must do
+   * nothing: empty ground, the Link tool, and (in the unit tier) a drag. The negatives sit in the same
+   * test as the positive that precedes them, so a build that never opened anything could not pass them.
+   */
+  test('double-clicking a bar with the pen opens its editor on General, and not in the Link tool or on empty ground', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const orgSlug = await onboard(page, STAMP + 1);
+    await createHierarchy(page);
+    await newPlan(page, 'Double-click editor');
+    await ensurePen(page);
+
+    const seeded = await seedActivities(page, orgSlug, [
+      { name: 'Dig footings', laneIndex: 0 },
+      { name: 'Steel frame', laneIndex: 1 },
+    ]);
+    const [dig, steel] = seeded;
+    if (!dig || !steel) throw new Error('seeding returned no activities');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+
+    // ── The bar's editor opens on General, for that activity. ─────────────────────────────────
+    const at = await findBar(page, dig.id);
+    await canvas(page).dblclick({ position: at });
+    const editor = activityEditor(page);
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: dig.name })).toBeVisible();
+    await expect(editor.getByRole('tab', { name: 'General', selected: true })).toBeVisible();
+    await expect
+      .poll(() => editor.evaluate((el) => el.contains(document.activeElement)))
+      .toBe(true);
+    await editor.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // ── Empty ground opens nothing. ───────────────────────────────────────────────────────────
+    const box = await canvas(page).boundingBox();
+    if (!box) throw new Error('canvas has no bounding box');
+    await canvas(page).dblclick({ position: { x: Math.floor(box.width / 2), y: box.height - 30 } });
+    await expect(canvas(page)).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // ── The Link tool owns its two clicks. ────────────────────────────────────────────────────
+    const commands = page.getByRole('toolbar', { name: 'Plan commands' });
+    await commands.getByRole('button', { name: 'Link', exact: true }).click();
+    await expect(commands.getByRole('button', { name: /^Linking/ })).toBeVisible();
+    await canvas(page).dblclick({ position: at });
+    await expect(commands.getByRole('button', { name: /^Linking/ })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('double-clicking a bar as a Contributor opens Progress, which is all they can report', async ({
+    browser,
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 2);
+    const mateEmail = `chrome-mate-${STAMP}@example.com`;
+
+    // Invite a Contributor, who can report progress and cannot edit the schedule.
+    await page
+      .getByRole('navigation', { name: 'Organisation' })
+      .getByRole('link', { name: 'Members', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Invite member' }).click();
+    const invite = page.getByRole('dialog');
+    await invite.getByLabel('Email').fill(mateEmail);
+    await invite.getByLabel('Role', { exact: true }).selectOption('CONTRIBUTOR');
+    await invite.getByRole('button', { name: /send invitation/i }).click();
+    const acceptUrl = await page.getByLabel('Invitation link').inputValue();
+    await invite
+      .getByRole('button', { name: /close|done/i })
+      .first()
+      .click();
+
+    await createHierarchy(page);
+    await newPlan(page, 'Double-click contributor');
+    await ensurePen(page);
+    const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
+    const [dig] = seeded;
+    if (!dig) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    const planPath = new URL(page.url()).pathname;
+
+    const mateContext = await browser.newContext();
+    const mate = await mateContext.newPage();
+    await mate.goto('/sign-up');
+    await mate.getByLabel('Full name').fill('Chrome Mate');
+    await mate.getByLabel('Email').fill(mateEmail);
+    await mate.getByLabel('Password').fill('correct-horse-battery');
+    await mate.getByRole('button', { name: /create an account/i }).click();
+    await expect(mate.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    await mate.goto(acceptUrl);
+    await mate.getByRole('button', { name: /accept and join/i }).click();
+    await expect(mate).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
+
+    await mate.goto(planPath);
+    const at = await findBar(mate, dig.id);
+    await canvas(mate).dblclick({ position: at });
+    const editor = activityEditor(mate);
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: dig.name })).toBeVisible();
+    await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
+    await mateContext.close();
   });
 });
