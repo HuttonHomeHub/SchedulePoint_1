@@ -1,6 +1,6 @@
 # Feature Spec: Reporting progress past the data date, and a refusal you can see
 
-- **Status:** Approved by the product owner, 2026-11-12, with all three defaults (Q1 keep the rule, Q2 reword journey 2, Q3 separate dates not now). M1 in progress.
+- **Status:** Approved by the product owner, 2026-11-12, with all three defaults (Q1 keep the rule, Q2 reword journey 2, Q3 separate dates not now). M1 built, M2 in progress.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, the two open first-severity problems on the ranked list

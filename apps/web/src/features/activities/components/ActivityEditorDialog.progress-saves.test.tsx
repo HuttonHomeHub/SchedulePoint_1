@@ -49,6 +49,7 @@ let holdProgress: Promise<void> | null;
 
 beforeEach(() => {
   announce.mockReset();
+  gatingUnderTest = GATING;
   holdProgress = null;
   progressResponse = { ok: true, status: 200, body: { data: { ...ROW, percentComplete: 55 } } };
   vi.stubGlobal(
@@ -66,6 +67,30 @@ beforeEach(() => {
   );
 });
 
+const CONTRIBUTOR_GATING = deriveActivityEditorGating({
+  holdsPen: false,
+  canWrite: false,
+  canProgress: true,
+  canReadCost: false,
+});
+
+/** The API's 422 for an actual after the data date, carrying what M1 added to `details`. */
+function afterDataDate(fields: string[], latestActual: string): typeof progressResponse {
+  return {
+    ok: false,
+    status: 422,
+    body: {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'An actual date cannot be after the plan’s data date.',
+        details: { reason: 'ACTUAL_AFTER_DATA_DATE', fields, dataDate: '2026-11-10', latestActual },
+      },
+    },
+  };
+}
+
+let gatingUnderTest = GATING;
+
 function Host(): React.ReactElement {
   const [open, setOpen] = useState(true);
   return (
@@ -78,7 +103,7 @@ function Host(): React.ReactElement {
         onClose={() => setOpen(false)}
         activity={open ? ROW : undefined}
         intent={{ activityId: ROW.id, tab: 'progress' }}
-        gating={GATING}
+        gating={gatingUnderTest}
       />
     </>
   );
@@ -156,5 +181,84 @@ describe('a Reported-progress save that fails while the reader is on another tab
     // And the failure is waiting where it belongs when the reader comes back.
     fireEvent.click(screen.getByRole('tab', { name: /^Progress/ }));
     expect(screen.getByRole('alert')).toHaveTextContent('This activity changed elsewhere.');
+  });
+});
+
+describe('a Reported-progress save refused for an actual after the data date', () => {
+  it('marks the field, moves the cursor there and says who can move the data date', async () => {
+    progressResponse = afterDataDate(['actualFinish'], '2026-11-14');
+    mount();
+    fireEvent.change(screen.getByLabelText('Actual start'), { target: { value: '2026-11-02' } });
+    fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-11-14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+
+    const finish = screen.getByLabelText('Actual finish');
+    await waitFor(() => expect(finish).toHaveAttribute('aria-invalid', 'true'));
+    expect(finish).toHaveFocus();
+    expect(finish).toHaveAccessibleDescription(
+      'Actual finish, 14 Nov 2026, is after the plan’s data date, 10 Nov 2026. ' +
+        'Move the data date to 14 Nov 2026 or later in Edit plan details, then save again. ' +
+        'What you typed stays here until you close the editor.',
+    );
+    // The sentence lives on the field, so the panel's top alert is not a second copy of it.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Actual start')).not.toHaveAttribute('aria-invalid');
+    expect(finish).toHaveValue('2026-11-14');
+  });
+
+  it('tells a Contributor to ask a planner, since they cannot move the data date', async () => {
+    gatingUnderTest = CONTRIBUTOR_GATING;
+    progressResponse = afterDataDate(['actualFinish'], '2026-11-14');
+    mount();
+    fireEvent.change(screen.getByLabelText('Actual start'), { target: { value: '2026-11-02' } });
+    fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-11-14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Actual finish')).toHaveAccessibleDescription(
+        /A planner needs to move the data date to 14 Nov 2026 or later first\./,
+      ),
+    );
+  });
+
+  it('marks both fields when both are after it, and the sentence appears once', async () => {
+    progressResponse = afterDataDate(['actualStart', 'actualFinish'], '2026-11-14');
+    mount();
+    fireEvent.change(screen.getByLabelText('Actual start'), { target: { value: '2026-11-12' } });
+    fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-11-14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+
+    const start = screen.getByLabelText('Actual start');
+    await waitFor(() => expect(start).toHaveAttribute('aria-invalid', 'true'));
+    expect(start).toHaveFocus();
+    expect(screen.getByLabelText('Actual finish')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getAllByText(/Actual start and Actual finish are after/)).toHaveLength(1);
+  });
+
+  it('clears the refusal when the reader edits the field it names', async () => {
+    progressResponse = afterDataDate(['actualFinish'], '2026-11-14');
+    mount();
+    fireEvent.change(screen.getByLabelText('Actual start'), { target: { value: '2026-11-02' } });
+    fireEvent.change(screen.getByLabelText('Actual finish'), { target: { value: '2026-11-14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+    const finish = screen.getByLabelText('Actual finish');
+    await waitFor(() => expect(finish).toHaveAttribute('aria-invalid', 'true'));
+
+    fireEvent.change(finish, { target: { value: '2026-11-10' } });
+
+    await waitFor(() => expect(finish).not.toHaveAttribute('aria-invalid'));
+  });
+
+  it('keeps today’s top alert when the refusal names no field', async () => {
+    progressResponse = {
+      ok: false,
+      status: 422,
+      body: { error: { code: 'VALIDATION_ERROR', message: 'Something else was refused.' } },
+    };
+    mount();
+    fireEvent.change(screen.getByLabelText('Percent complete'), { target: { value: '55' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save progress' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Something else was refused.');
   });
 });

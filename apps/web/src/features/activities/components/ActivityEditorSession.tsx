@@ -8,6 +8,7 @@ import { useActivitySteps } from '../api/use-activity-steps';
 import { activityContextFacts } from '../lib/activity-editor-context';
 import type { ActivityEditorTab } from '../lib/activity-editor-intent';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
+import { progressRefusal } from '../model/progress-refusal';
 import { seedRemainingText } from '../model/remaining-field';
 import { useDurationSeed, useLateSeed } from '../model/use-duration-seed';
 import {
@@ -172,10 +173,10 @@ export function ActivityEditorSession({
    * message and nothing else — held here, not in the mutation, because the mutation outlives the
    * session (ADR-0169 D-10) and its error would greet the next opening.
    */
-  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelSlot, string>>>({});
-  const setPanelError = (slot: PanelSlot, message: string | null): void =>
+  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelSlot, Error>>>({});
+  const setPanelError = (slot: PanelSlot, failure: Error | null): void =>
     setPanelErrors((held) => {
-      if (message !== null) return { ...held, [slot]: message };
+      if (failure !== null) return { ...held, [slot]: failure };
       const { [slot]: _cleared, ...rest } = held;
       return rest;
     });
@@ -571,14 +572,39 @@ export function ActivityEditorSession({
   };
 
   /**
+   * Whether the reader may move the plan's dates, which decides whether a refused progress save tells
+   * them to do it or to ask a planner. The definition gate is denied by role exactly when the reader
+   * lacks `activity:update`, the role set that holds `plan:update` (pinned in `org-permissions.spec.ts`).
+   */
+  const canMovePlanDates = gating.general.roleDenied !== true;
+  const progressRefusalNow = panelErrors.progress
+    ? progressRefusal(panelErrors.progress, { canMovePlanDates })
+    : null;
+
+  /**
    * A panel's failure is shown inside the panel, which is only on screen while Progress is — so with
    * the reader on another tab it would be invisible and the live region is the one signal left. The
    * frame announces the same sentence when the whole session is gone.
    */
   const panelFailed = (slot: PanelSlot, label: string, error: Error): void => {
     if (slot === 'measure') markSaving(slot, false);
-    setPanelError(slot, error.message);
-    if (activeRef.current !== 'progress') announce(`${label} not saved: ${error.message}`);
+    setPanelError(slot, error);
+    let message = error.message;
+    if (slot === 'progress') {
+      // A refusal about a field goes on that field and takes the cursor there (ADR-0217 D1): set on
+      // the session-held form, so it is there when the reader comes back from another tab too.
+      const refusal = progressRefusal(error, { canMovePlanDates });
+      message = refusal.sentence;
+      refusal.fields.forEach((field, index) =>
+        progress.form.setError(field, {
+          type: 'server',
+          message: index === 0 ? refusal.sentence : 'See the message above.',
+        }),
+      );
+      const [first] = refusal.fields;
+      if (first !== undefined && activeRef.current === 'progress') progress.form.setFocus(first);
+    }
+    if (activeRef.current !== 'progress') announce(`${label} not saved: ${message}`);
   };
 
   const saveMeasure = (values: ActivityMeasureValues): void =>
@@ -1017,7 +1043,9 @@ export function ActivityEditorSession({
                     onSave={saveProgress}
                     pending={saves.progressPending}
                     saved={savedSlots.progress === true}
-                    error={panelErrors.progress ?? null}
+                    error={
+                      progressRefusalNow?.fields.length === 0 ? progressRefusalNow.sentence : null
+                    }
                   />
                   <ValueMeasurePanel
                     form={measure.form}
@@ -1027,7 +1055,7 @@ export function ActivityEditorSession({
                     onSave={saveMeasure}
                     pending={saves.fieldsPending || codesSaving}
                     saved={savedSlots.measure === true}
-                    error={panelErrors.measure ?? null}
+                    error={panelErrors.measure?.message ?? null}
                     {...othersSaving('measure')}
                   />
                   <WeightedStepsPanel
@@ -1040,7 +1068,7 @@ export function ActivityEditorSession({
                     onSave={saveSteps}
                     pending={saves.stepsPending}
                     saved={savedSlots.steps === true}
-                    error={panelErrors.steps ?? null}
+                    error={panelErrors.steps?.message ?? null}
                     announce={announce}
                     // Only the **Steps** entry point asks for this. Landing at the top of a
                     // three-panel tab would make that action feel like it opened the wrong thing.

@@ -98,6 +98,17 @@ export function ReportedProgressPanel({
   // scope's save bumps it, and a stale one would 409 every time after the first.
   const onSubmit = form.handleSubmit(onSave);
 
+  // A refusal the server attributed to a field (ADR-0217 D1) stays until the reader edits one of the
+  // fields it names; react-hook-form clears a manual error only on the next submit, which would leave
+  // "after the data date" under a date that has already been changed.
+  useEffect(() => {
+    const subscription = form.watch((_, { name }) => {
+      if (name === undefined || form.getFieldState(name).error?.type !== 'server') return;
+      form.clearErrors(['actualStart', 'actualFinish', 'resumeDate']);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
   return (
     <form
       noValidate
@@ -138,7 +149,12 @@ export function ReportedProgressPanel({
             }
             {...form.register('remaining')}
           />
-          <TextField label="Actual start" type="date" {...form.register('actualStart')} />
+          <TextField
+            label="Actual start"
+            type="date"
+            error={form.formState.errors.actualStart?.message}
+            {...form.register('actualStart')}
+          />
           <TextField
             label="Actual finish"
             type="date"
