@@ -133,6 +133,7 @@ import { Surface } from '@/components/ui/surface';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
 import {
   SelectionActionsBar,
+  deleteRefusal,
   type SelectionBarContext,
   type SelectionCanvasContext,
 } from '@/features/plan-actions/selection-actions';
@@ -2433,6 +2434,41 @@ export function TsldPanel({
       if (current) {
         event.preventDefault();
         onOpenLogic(current);
+      }
+      return;
+    }
+    /**
+     * **Delete / Backspace — delete the selection, after the question the Delete button asks**
+     * (ADR-0218 D3). One activity opens the host's single confirmation; two or more open the plural
+     * one, each through the very path its button uses, so the dialog, the focus return and the undo
+     * are the button's. Refused ALOUD with the button's own reason rather than silently (ADR-0204).
+     *
+     * On the listbox, not the root, for Ctrl+A's reason: this handler runs only when the list has
+     * focus, so a Backspace typed into the search box or a field is structurally the field's. The
+     * armed tool does not matter (the bar stays on screen and its button works); a held key repeats
+     * into the modal, not the plan. A modified press (Ctrl+Backspace and the like) is not ours.
+     */
+    if (
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      if (selection.ids.length === 0) {
+        announce('Nothing is selected to delete.');
+      } else if (selection.ids.length === 1) {
+        if (selectionCtx === null) return;
+        const refusal = deleteRefusal(selectionCtx);
+        if (refusal !== null) announce(refusal);
+        else selectionCtx.onDelete();
+      } else if (bulk) {
+        if (!bulk.gate.writable) announce(bulk.gate.reason ?? 'You can’t delete these right now.');
+        else {
+          setBulkError(null);
+          setConfirmBulkDelete(true);
+        }
       }
       return;
     }

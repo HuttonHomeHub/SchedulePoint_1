@@ -44,6 +44,10 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
     action: 'Move every selected activity by the same step',
   },
   {
+    keys: 'Delete / Backspace',
+    action: 'Delete the selected activity or activities (asks first; Undo restores them)',
+  },
+  {
     keys: 'n',
     action: 'Create an activity in the focused lane and start (uses the armed Add type)',
   },

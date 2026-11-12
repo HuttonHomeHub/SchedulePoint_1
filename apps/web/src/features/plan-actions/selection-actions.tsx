@@ -286,6 +286,18 @@ const PEN_ACTION = 'change this activity';
 function penRefusal(ctx: SelectionActionContext): string | undefined {
   return ctx.definitionGate?.reason ?? ctx.scheduleRefusal(PEN_ACTION) ?? undefined;
 }
+
+/**
+ * Why the Delete key is refused for the selected activity, or `null` when it is open — **the same
+ * answer the bar's Delete button shades itself with** (`penGated` plus {@link penRefusal}), exported so
+ * the key and the button cannot disagree about when deleting is allowed or what to say when it is not
+ * (ADR-0218 D3). The fallback sentence is for a host that supplies no reason; a refusal is never silent.
+ */
+export function deleteRefusal(ctx: SelectionActionContext): string | null {
+  if (ctx.canEditSchedule) return null;
+  return penRefusal(ctx) ?? 'You can’t change this activity right now.';
+}
+
 export const SET_CODE_LABEL = 'Set code…';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
 // The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt

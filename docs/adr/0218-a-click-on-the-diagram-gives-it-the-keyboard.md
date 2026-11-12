@@ -69,6 +69,28 @@ above the root" and "focus inside the root's DOM" are disjoint, and focus on a p
 tree but is not an ancestor, so only the React handler has it. This covers a press on non-focusable chrome (the ruler, the
 foot row, the Gantt, where a bar press does not move focus at all) that D1 does not reach.
 
+### D3 — Delete and Backspace on the list ask the Delete button's question (added 2026-11-12, M2)
+
+Delete and Backspace pressed while the diagram's **list** has focus open the same confirmation the selection bar's Delete
+button opens: the host's single confirmation for one selected activity, the plural "Delete N activities?" for two or more.
+Each goes through the button's own path, so the dialog, the focus return and the one-step Undo are the button's.
+
+- **Always ask**, never delete on the key (the product owner, Q2). Undo restores afterwards.
+- **On the list, not the root**, for Ctrl+A's reason: the handler runs only when the list has focus, so a Backspace typed
+  into the search box or any field is structurally that field's, with no `closest('input')` test to keep in step. A press
+  with Ctrl, Meta, Alt or Shift is not ours. The key is claimed (`preventDefault`) so Backspace never navigates back.
+- **Refused aloud, never silently.** One selected: `deleteRefusal`, exported from the selection bar's module and built from
+  the very `penGated` + `penRefusal` the shaded button uses, so key and button cannot disagree (no pen, role, read-only,
+  Late-start overlay) and say the same sentence. Plural: the bar's `bulk.gate.reason`. Nothing selected: "Nothing is selected
+  to delete."
+- **An armed tool does not matter**: the bar and its Delete button stay on screen in the Link, LOE and Marquee tools, so the
+  key behaves as the button does. A held key repeats into the modal, not the plan.
+- **Not in the Gantt, not in the activities table** (spec D-c, D-d: a Gantt cell already uses its own keys; the table has
+  row menus). A host that wired no bulk operations has no plural bar, so two selected and the key do nothing, as the
+  button's absence does.
+- **No `aria-keyshortcuts` on the buttons.** The key acts only with the list focused; advertising it on a button a reader
+  is standing on would promise a press that does nothing there. The shortcuts sheet lists it ("Delete / Backspace").
+
 ## Alternatives considered
 
 - **Make `<main>`, or a new wrapper, the key scope.** `<main>` is the shell's and plan-unaware (ADR-0029); a focusable
