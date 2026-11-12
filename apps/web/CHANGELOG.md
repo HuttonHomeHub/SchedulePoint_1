@@ -1,5 +1,19 @@
 # @repo/web
 
+## 1.4.0
+
+### Minor Changes
+
+- [#1333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1333) [`a6bc8c5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a6bc8c5e2b5b6fa1d8a4a50fed168414ca2719d4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan's start date is now called "Data date" in the plans table, Plan details and Edit plan details, and the plan footer shows a new data date as soon as you save it, without recalculating or reloading. The progress form now says that an actual finish marks the activity complete and leaves the percentage as you typed it.
+
+- [#1331](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1331) [`962886f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/962886f1e5885621bb7a6fb495e223b87dfd6743) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When the activity editor refuses a save (for example because someone else changed the activity first), the message now appears right above the Save button you pressed, so it is on screen even in a small window. Screen readers hear it as the button's description, and "Refresh this section" sits underneath it.
+
+- [#1330](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1330) [`03772c7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/03772c794acb04a5901a389979b267807b57fa67) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When a progress save is refused because an actual date is after the plan's data date, the date box is now marked and ready to correct, and the message names both dates and says who can move the data date.
+
+### Patch Changes
+
+- [#1332](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1332) [`252e07b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/252e07b4eff869f8d81474f9f85f21d8c6879c47) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Printing the diagram no longer opens the print window on a blank page: it now waits until the picture is ready, and says so if the picture can't be made.
+
 ## 1.3.0
 
 ### Minor Changes
