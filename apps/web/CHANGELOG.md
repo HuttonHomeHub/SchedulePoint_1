@@ -1,5 +1,19 @@
 # @repo/web
 
+## 1.5.0
+
+### Minor Changes
+
+- [#1337](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1337) [`de54fe9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/de54fe92e9d55ff5a57f1a1f9b7698b44beb5de5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Delete or Backspace on the diagram now deletes the selected activity or activities, after the same "Are you sure?" the Delete button asks, and says why aloud when you are not allowed to.
+
+- [#1335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1335) [`a2be60e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a2be60efc2f5552d29c206e2525dfc43cac437f5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+V, Escape and the arrow keys now work straight after you click or drag on the diagram, and undo, redo, copy and paste also work from the page body in the Gantt as well.
+
+### Patch Changes
+
+- [#1338](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1338) [`08b9a49`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/08b9a49f5ceb4ee49905694bca2a3cb840c19caa) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ctrl-click (or Cmd-click) on a diagram bar now adds it to the selection or takes it out again, and Shift-click extends the run, whether or not you hold the pen; before, the second click replaced the selection.
+
+- [#1335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1335) [`a2be60e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/a2be60efc2f5552d29c206e2525dfc43cac437f5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Ctrl+Z, Ctrl+V and ? no longer act on the plan beneath the open "Name the new activity" popover or an open menu after you click its blank padding, and a click on the diagram is spoken once by a screen reader instead of twice.
+
 ## 1.4.0
 
 ### Minor Changes
