@@ -230,22 +230,30 @@ export function dayGap(from: string, to: string): number {
   );
 }
 
+/** The two strips this file measures: the edit offer's, and the whole-plan offer's (M3). */
+export const EDIT_STRIP = 'canvas-follow-logic-offer';
+export const PLAN_STRIP = 'canvas-follow-logic-plan-offer';
+type StripTestId = typeof EDIT_STRIP | typeof PLAN_STRIP;
+
 /**
  * The foot row and the offer's strip as the dock lays them out, from the browser: the foot row's
  * height, the strip's, and whether the row scrolls sideways. These are the figures M0d read
  * (`docs/specs/placed-bar-follows-link/m0-measurement.md`, "M0d"), so a journey that asserts them
  * is asserting the injected measurement against the real DOM.
  */
-export async function footFigures(page: Page): Promise<{
+export async function footFigures(
+  page: Page,
+  stripTestId: StripTestId = EDIT_STRIP,
+): Promise<{
   foot: number;
   strip: number;
   stage: number;
   outlet: number;
   sideways: boolean;
 }> {
-  return page.evaluate(() => {
+  return page.evaluate((testId) => {
     const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
-    const strip = document.querySelector<HTMLElement>('[data-testid="canvas-follow-logic-offer"]');
+    const strip = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
     // The section, as M0d's `stageH` was read: it is the box the foot row's height comes out of.
     const stage = document.querySelector<HTMLElement>(
       'section[aria-label="Time-scaled logic diagram"]',
@@ -259,7 +267,7 @@ export async function footFigures(page: Page): Promise<{
       outlet: Math.round(outlet.getBoundingClientRect().width * 10) / 10,
       sideways: foot.scrollWidth > foot.clientWidth,
     };
-  });
+  }, stripTestId);
 }
 
 /**
@@ -269,9 +277,12 @@ export async function footFigures(page: Page): Promise<{
  * costs at most its own height and gap", because an absolute figure from M0d is a statement about the
  * container's fonts and the foot row sits on a knife edge at 1250 px (see `dock.spec.ts`).
  */
-export async function footBase(page: Page): Promise<{ foot: number; stage: number }> {
-  return page.evaluate(() => {
-    const strip = document.querySelector<HTMLElement>('[data-testid="canvas-follow-logic-offer"]');
+export async function footBase(
+  page: Page,
+  stripTestId: StripTestId = EDIT_STRIP,
+): Promise<{ foot: number; stage: number }> {
+  return page.evaluate((testId) => {
+    const strip = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
     const foot = document.querySelector<HTMLElement>('[data-activities-bar]');
     const stage = document.querySelector<HTMLElement>(
       'section[aria-label="Time-scaled logic diagram"]',
@@ -287,13 +298,16 @@ export async function footBase(page: Page): Promise<{ foot: number; stage: numbe
     strip.setAttribute('data-dock-row', '');
     strip.style.display = display;
     return read;
-  });
+  }, stripTestId);
 }
 
 /** How many lines the strip's sentence takes, and whether it is cut (an ellipsis or overflow). */
-export async function sentenceShape(page: Page): Promise<{ lines: number; cut: boolean }> {
-  return page.evaluate(() => {
-    const p = document.querySelector<HTMLElement>('[data-testid="canvas-follow-logic-offer"] > p');
+export async function sentenceShape(
+  page: Page,
+  stripTestId: StripTestId = EDIT_STRIP,
+): Promise<{ lines: number; cut: boolean }> {
+  return page.evaluate((testId) => {
+    const p = document.querySelector<HTMLElement>(`[data-testid="${testId}"] > p`);
     if (!p) throw new Error('no strip sentence');
     const box = p.getBoundingClientRect();
     const style = getComputedStyle(p);
@@ -301,7 +315,7 @@ export async function sentenceShape(page: Page): Promise<{ lines: number; cut: b
       lines: Math.round(box.height / parseFloat(style.lineHeight)),
       cut: style.textOverflow === 'ellipsis' || p.scrollWidth > p.clientWidth + 1,
     };
-  });
+  }, stripTestId);
 }
 
 /** Whether a pointer at the button's centre lands on the button, after scrolling it into view. */

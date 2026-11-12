@@ -371,6 +371,13 @@ export interface TsldPanelProps {
     | null
     | undefined;
   /**
+   * The whole-plan offer (placed-bar-follows-link M3, ADR-0216 D6), or `null`: the plan holds placed
+   * bars before their logic and the reader has not dismissed the offer to let them follow. A standing
+   * condition rather than an event, so a node, and the dock's rung for it sits below the empty notice.
+   * Omitted by the host without the pen.
+   */
+  followPlanNotice?: React.ReactNode | null | undefined;
+  /**
    * What the last undo/redo press left behind (undo-redo M1), built by the host for the reason
    * `layoutResolvedNotice` is: the step and its lifetime belong to the workspace model, and the Gantt
    * dock renders the same strip. `kind` is what the panel needs for precedence — a failure outranks
@@ -682,6 +689,7 @@ export function TsldPanel({
   touchGestureHint,
   layoutResolvedNotice,
   followEditNotice,
+  followPlanNotice,
   historyResultNotice,
   recalcHold,
   dropLinkPickSignal = 0,
@@ -1874,6 +1882,7 @@ export function TsldPanel({
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
     hasFollowEdit: followEditNotice != null,
+    hasFollowPlan: followPlanNotice != null,
     historyResult: historyResultNotice?.kind ?? null,
   });
 
@@ -3517,6 +3526,10 @@ export function TsldPanel({
           : null}
 
         {dockStrip === 'layout-resolved' ? layoutResolvedNotice : null}
+
+        {/* The whole-plan Follow logic offer (ADR-0216 D6): below the empty notice, above the Arrange
+            offer — see `resolveDockStrip`. */}
+        {dockStrip === 'follow-plan' ? followPlanNotice : null}
 
         {dockStrip === 'arrange-offer' ? (
           <NoticeStrip

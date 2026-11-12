@@ -14,6 +14,7 @@ const base: DockStripInput = {
   hasArrangeOffer: false,
   hasLayoutResolvedNotice: false,
   hasFollowEdit: false,
+  hasFollowPlan: false,
   historyResult: 'failure',
 };
 const failure = { id: 1, kind: 'failure' as const, message: 'Couldn’t undo just now.' };

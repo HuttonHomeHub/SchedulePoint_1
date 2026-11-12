@@ -337,7 +337,11 @@ describe('useFollowLogicOffer', () => {
     planEdit('Lengthen A');
     act(() => settle({ rows: [bar('A'), bar('B', early), bar('C')] }));
     await waitFor(() => expect(view.result.current.follow.offer).not.toBeNull());
-    act(() => view.result.current.follow.keep());
+    let kept: readonly string[] = [];
+    act(() => {
+      kept = view.result.current.follow.keep();
+    });
+    expect(kept, 'hands back the bars it was about, for the whole-plan offer').toEqual(['B']);
     expect(view.result.current.follow.offer).toBeNull();
     expect(view.result.current.follow.start()).toBeNull();
     expect(announce).toHaveBeenCalledWith('Kept “B” where you placed it; it stays flagged.');

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   FOLLOW_LOGIC_CONFLICT,
+  FOLLOW_PLAN_LIMIT,
   followFailedSentence,
   followLogicDoneSentence,
   followLogicLabel,
@@ -20,6 +21,7 @@ import {
 } from './follow-logic-offer';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
 import { useFollowLogicOffer } from './use-follow-logic-offer';
+import { useFollowPlanOffer } from './use-follow-plan-offer';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
@@ -684,6 +686,20 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     history: editHistory,
     announce,
   });
+  /**
+   * **The whole-plan offer** (ADR-0216 D6): the standing counterpart of the edit offer, read from the
+   * live list. It shares the edit offer's write (`followLogicRowsWrite`) and its phases, not its
+   * snapshot lifecycle.
+   */
+  const followPlan = useFollowPlanOffer({
+    enabled: canEditSchedule,
+    planId,
+    activities: activities.data,
+    settled: autoRecalc.settled,
+    pendingEdits: autoRecalc.pendingEdits,
+    history: editHistory,
+    announce,
+  });
   const autoResolve = useAutoResolveOverlaps({
     enabled: canEditSchedule,
     settled: autoRecalc.settled,
@@ -717,10 +733,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    */
   const noteResolveReplay = autoResolve.noteReplay;
   const noteFollowReplay = followOffer.noteReplay;
+  const noteFollowPlanReplay = followPlan.noteReplay;
   const noteReplay = useCallback((): void => {
     noteResolveReplay();
     noteFollowReplay();
-  }, [noteResolveReplay, noteFollowReplay]);
+    noteFollowPlanReplay();
+  }, [noteResolveReplay, noteFollowReplay, noteFollowPlanReplay]);
   const undoRedo = useMemo(
     () => ({
       ...plainUndoRedo,
@@ -2389,6 +2407,64 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     followLogicRowsWrite,
   ]);
 
+  // The whole-plan offer's **Follow logic** (ADR-0216 D6): the same write, the same outcomes and the
+  // same visible phases as the edit offer's, over every bar the plan holds before its logic. The rows
+  // are read at press time so the versions are the freshest the cache holds. More than the route's
+  // 2,000 is refused here as well as shaded in the strip: a series of writes is not atomic.
+  // **Keep it here is also an answer to the standing offer, for exactly the bars it was about.** They
+  // are flagged and placed, so without this the whole-plan offer would ask the same question the
+  // moment the edit offer went. Other flagged bars keep their offer.
+  const keepFollowOffer = followOffer.keep;
+  const dismissFollowPlan = followPlan.dismiss;
+  const dismissPlanBars = followPlan.dismissBars;
+  const keepFollowEdit = useCallback((): void => {
+    dismissPlanBars(keepFollowOffer());
+  }, [keepFollowOffer, dismissPlanBars]);
+  const selectFollowPlan = followPlan.select;
+  const startFollowPlan = followPlan.start;
+  const succeedFollowPlan = followPlan.succeed;
+  const failFollowPlan = followPlan.fail;
+  const restoreFollowPlan = followPlan.restore;
+  const acceptFollowPlan = useCallback(async (): Promise<void> => {
+    const rows = selectFollowPlan(activitiesRef.current ?? []);
+    const [first] = rows;
+    if (first === undefined || rows.length > FOLLOW_PLAN_LIMIT) return;
+    if (
+      !startFollowPlan(
+        first.name,
+        rows.map((row) => row.id),
+      )
+    )
+      return;
+    const outcome = await followLogicRowsWrite(rows, succeedFollowPlan);
+    switch (outcome.status) {
+      case 'ok':
+        return;
+      case 'lock':
+        restoreFollowPlan();
+        return;
+      case 'conflict':
+        failFollowPlan(FOLLOW_LOGIC_CONFLICT);
+        return;
+      case 'none':
+        restoreFollowPlan();
+        return;
+      case 'error':
+        console.error('Follow logic could not be applied to the plan', outcome.error, {
+          activities: rows.map((row) => row.id),
+        });
+        failFollowPlan(followFailedSentence(first.name, rows.length));
+        return;
+    }
+  }, [
+    selectFollowPlan,
+    startFollowPlan,
+    succeedFollowPlan,
+    failFollowPlan,
+    restoreFollowPlan,
+    followLogicRowsWrite,
+  ]);
+
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
   // — the selection bar's **Follow logic**. One write path with the dock offer's: a one-row batch
   // (ADR-0216; its undo step is `bulkPlacementCommand`'s where it used to be `visualStartCommand`'s).
@@ -3267,9 +3343,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
      */
     followEdit: followOffer.offer,
     acceptFollowEdit,
-    keepFollowEdit: followOffer.keep,
+    keepFollowEdit,
     dismissFollowEdit: followOffer.dismiss,
     announceFollowEditShown: followOffer.announceShown,
+    /**
+     * The whole-plan offer (ADR-0216 D6): every placed bar the plan holds before its logic, with
+     * **Follow logic** (`acceptFollowPlan`, one undo step) and **Dismiss**, or null. A standing
+     * condition: not announced, dismissible for the session, omitted without the pen.
+     */
+    followPlan: followPlan.offer,
+    followPlanOverLimit: followPlan.overLimit,
+    acceptFollowPlan,
+    dismissFollowPlan,
+    closeFollowPlanConfirmation: followPlan.closeConfirmation,
     /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
     bulkOperations,
     applyLevelling,

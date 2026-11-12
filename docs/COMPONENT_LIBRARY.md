@@ -977,6 +977,13 @@ the two statements that name activities; its armed-tool hint (Select; Add and Li
 density, so they cost the diagram no line, ADR-0092). None carries a hover-only `title` stop-gap any more,
 because none can cut its sentence.
 
+**`FollowLogicStrip` has two faces** (placed-bar-follows-link M3, ADR-0216 D6), chosen by `variant`: `edit` (the default; an
+event: **Follow logic** and **Keep it here**, the Link tool's confirmation carried through `lead` and `onUndo`) and `plan` (a
+standing condition: **Follow logic** and **Dismiss**, a dashed border, `canvas-follow-logic-plan-offer` and
+`canvas-follow-logic-plan`, no `lead`). One component, so the busy, failed (**Try again**) and shaded states cannot drift apart.
+`onKeep` is the second button's press in both faces. A dashed border on a `NoticeStrip` says "an offer or an empty state": nothing has gone wrong, and the reader may ignore it (the empty-plan notice, the Arrange offer, this plan face). The `plan` face is not announced when it mounts: the host passes no
+`onShown`, because a standing condition reads the same to somebody arriving later (ADR-0132).
+
 **The foot row's trailing group** (`PlanActivitiesFootRow`): the plan facts' outlet and the panel
 toggle are one flex item, `data-foot-trail`, `ml-auto max-w-full shrink-0 flex-wrap`. A wrapping row
 fills each line with each item's hypothetical size, and for the dock outlet that is its floor, so with
