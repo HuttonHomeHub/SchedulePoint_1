@@ -239,7 +239,9 @@ describe('the panel drives the bulk bar', () => {
       const trigger = screen.getByRole('button', { name: /link in sequence/i });
       expect(trigger).toHaveAttribute('aria-disabled', 'false');
       fireEvent.click(trigger);
-      expect(screen.getByRole('alert')).toHaveTextContent(
+      // A standing fact, not a failure: a polite status, not an alert (ADR-0132).
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(within(screen.getByRole('dialog')).getByRole('status')).toHaveTextContent(
         'These 3 activities are already linked in this order. Nothing to add.',
       );
       const create = screen.getByRole('button', { name: /create 0 links/i });

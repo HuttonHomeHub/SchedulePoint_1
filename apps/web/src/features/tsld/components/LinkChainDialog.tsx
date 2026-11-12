@@ -80,7 +80,9 @@ export function LinkChainDialog({
       title="Link in sequence"
       description={
         refusal
-          ? 'Review the order below.'
+          ? refusal.kind === 'alreadyLinked'
+            ? 'There is nothing to create.'
+            : 'Review the order below.'
           : `This will create ${linkCount} finish-to-start ${linkCount === 1 ? 'link' : 'links'}, in the order shown.${
               existingCount > 0
                 ? ` ${existingCount} ${existingCount === 1 ? 'pair is' : 'pairs are'} already linked and will be left as ${existingCount === 1 ? 'it is' : 'they are'}.`
@@ -90,16 +92,20 @@ export function LinkChainDialog({
     >
       <div className="flex flex-col gap-4">
         {/*
-          `role="alert"` on both: `NoticeStrip` deliberately does not derive a role from its tone
+          `role="alert"` on the refusals and the write failure: `NoticeStrip` deliberately does not derive a role from its tone
           ("the role is the caller's"), so without this the refusal and the write failure are plain
           divs — on screen and silent to assistive tech. Every sibling failure surface in the
           product passes it (`EditConflictBanner`, `WbsBulkAssignBar`, `ConfirmDialog`'s error
           path); these two were the exception until the UX review over this epic's diff.
+
+          **`alreadyLinked` is the exception to the exception: `role="status"`** (ADR-0132). It is a standing
+          fact the planner asked about, not a failure, and nothing happened to them that needs interrupting;
+          the polite region says it once and the Create button's `aria-describedby` still points at it.
         */}
         {refusal ? (
           <NoticeStrip
             id={noticeId}
-            role="alert"
+            role={refusal.kind === 'alreadyLinked' ? 'status' : 'alert'}
             tone={refusal.kind === 'alreadyLinked' ? 'info' : 'warning'}
             // Wraps: the default truncates, and these sentences are the whole point of the strip — the
             // already-linked one was cut to "Nothing…" in a 1024 px dialog, and the cycle one is longer.
