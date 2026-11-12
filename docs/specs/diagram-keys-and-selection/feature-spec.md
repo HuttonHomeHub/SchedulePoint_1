@@ -1,6 +1,6 @@
 # Feature Spec: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only).
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, first severity-2 batch (chosen 2026-11-12): runbook steps 3.3,
@@ -96,10 +96,12 @@ reaches `onSelect(target, modifier)` with the modifier (`TsldCanvas.tsx:3024-303
 machine, which it does whenever editing with a reposition handler wired, or whenever Ctrl is held
 (`marqueeArmable`, `:2786-2787`), a bar-body press becomes `repositioning` (`gesture-machine.ts:459-479`), and a
 release that did not move returns `select: activityId` (`:654-655`; the resize branch the same at `:679-680`). The
-canvas then calls **`onSelect(select)` with no modifier** (`TsldCanvas.tsx:2997`), which is a replace. Without the pen
-the body press stays idle and falls through to the modifier path, so Ctrl-click works. That matches the record:
-failed at steps 7.14 and in the walkthrough (pen held), worked at 8.4 (**M0 check**: whether the pen was held at 8.4
-cannot be read from here; the reproduction is the test).
+canvas then calls **`onSelect(select)` with no modifier** (`TsldCanvas.tsx:2997`), which is a replace.
+**Corrected by M0 (2026-11-12, [`m0-verification.md`](./m0-verification.md)):** this paragraph said the replace happens
+only with the pen. It does not. Ctrl arms the machine for every reader (`marqueeArmable`) and `canReposition` is always
+wired, so **Ctrl-click replaces with or without the pen**; only **Shift-click** is lost with the pen alone (without it the
+press stays idle and the modifier path runs). Measured in Chromium: Ctrl, pen held 1 selected; Ctrl, no pen 1; Shift, pen
+held 1; Shift, no pen 2.
 
 **P5 — At 1024 × 600 a selection takes a quarter to a third of the screen (problem 5).** The single-selection bar is
 a wrapping `Toolbar` with up to about fifteen items (registered at `selection-actions.tsx:743-1255`: remedy, Logic,
