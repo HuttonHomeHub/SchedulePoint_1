@@ -45,6 +45,16 @@ test.describe.configure({ mode: 'serial' });
 
 const STAMP = Date.now() + 12_000;
 
+/** The diagram's documented minimum at the design floor (ADR-0092; `e2e-workspace-fit/floor-states.spec.ts`). */
+const CANVAS_MIN_PX = 350;
+
+/** The scene canvas's rendered height, from the browser. */
+async function canvasHeight(page: Page): Promise<number> {
+  return page.evaluate(
+    () => document.querySelector('main canvas')?.getBoundingClientRect().height ?? 0,
+  );
+}
+
 /** The whole-plan offer, wherever the dock draws it. */
 function planOffer(page: Page) {
   return page.getByTestId(PLAN_STRIP);
@@ -415,7 +425,7 @@ for (const { pointer, touch } of [
   test.describe(`The whole-plan offer in the foot row, ${pointer}`, () => {
     test.use({ hasTouch: touch });
 
-    test(`1250 and 1024 wide: every button pressable, no sideways scroll, the strip costs its own height (${pointer})`, async ({
+    test(`1250 and 1024 wide: every button pressable, no sideways scroll, the diagram keeps its floor, omitted on a short window (${pointer})`, async ({
       page,
     }) => {
       test.setTimeout(420_000);
@@ -435,20 +445,42 @@ for (const { pointer, touch } of [
       await expectPlanOfferFits(page, `${pointer} 1250 × 800, flagged bar selected`);
       await expectCostsItsOwnHeight(page, `${pointer} 1250 × 800, flagged bar selected`);
 
-      await page.setViewportSize({ width: 1024, height: 600 });
+      // A window tall enough to show the offer (above the `short` line, 44 rem): nothing selected.
+      await page.setViewportSize({ width: 1024, height: 720 });
       await diagramList(page).focus();
       await page.keyboard.press('Escape');
       await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
-      await expectPlanOfferFits(page, `${pointer} 1024 × 600, nothing selected`);
-      await expectCostsItsOwnHeight(page, `${pointer} 1024 × 600, nothing selected`);
-      expect(
-        (await footFigures(page, PLAN_STRIP)).stage,
-        'with nothing selected the stage keeps its 120 px floor',
-      ).toBeGreaterThanOrEqual(120);
+      await expectPlanOfferFits(page, `${pointer} 1024 × 720, nothing selected`);
+      await expectCostsItsOwnHeight(page, `${pointer} 1024 × 720, nothing selected`);
+      if (!touch) {
+        expect(
+          await canvasHeight(page),
+          'with the offer showing the diagram keeps the floor ADR-0092 owes it (floor-states.spec.ts)',
+        ).toBeGreaterThanOrEqual(CANVAS_MIN_PX);
+      }
 
       await selectInList(page, orgSlug, 'Pour slab');
-      await expectPlanOfferFits(page, `${pointer} 1024 × 600, flagged bar selected`);
-      await expectCostsItsOwnHeight(page, `${pointer} 1024 × 600, flagged bar selected`);
+      await expectPlanOfferFits(page, `${pointer} 1024 × 720, flagged bar selected`);
+      await expectCostsItsOwnHeight(page, `${pointer} 1024 × 720, flagged bar selected`);
+
+      // The 1024 × 600 design floor is a short window: the standing offer is not shown, so it cannot
+      // cost the diagram the height it is owed. The planner still has the chip and the selection bar.
+      await page.setViewportSize({ width: 1024, height: 600 });
+      await diagramList(page).focus();
+      await page.keyboard.press('Escape');
+      await expect(planOffer(page), `${pointer} 1024 × 600: omitted on a short window`).toHaveCount(
+        0,
+      );
+      if (!touch) {
+        await page.waitForTimeout(500);
+        expect(
+          await canvasHeight(page),
+          'at 1024 × 600 with a conflict the diagram keeps its floor',
+        ).toBeGreaterThanOrEqual(CANVAS_MIN_PX);
+      }
+      await page.setViewportSize({ width: 1024, height: 720 });
+      await selectInList(page, orgSlug, 'Pour slab');
+      await expectPlanOfferFits(page, `${pointer} back to 1024 × 720`);
 
       // Dismissing gives the height back: the dock is the base dock again.
       const base = await footBase(page, PLAN_STRIP);
@@ -481,7 +513,7 @@ test.describe('The whole-plan offer at 200 % text', () => {
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
 
-    await page.setViewportSize({ width: 1024, height: 600 });
+    await page.setViewportSize({ width: 1024, height: 800 });
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '32px';
     });
@@ -511,7 +543,7 @@ test.describe('The whole-plan offer reflows at 320 CSS px (WCAG 1.4.10)', () => 
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
 
-    await page.setViewportSize({ width: 320, height: 640 });
+    await page.setViewportSize({ width: 320, height: 900 });
     await expectPlanOfferFits(page, '320 px');
     expect(
       await page.evaluate(

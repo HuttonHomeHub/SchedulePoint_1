@@ -12,6 +12,8 @@ import {
   PROMOTION_STAGE_REMS,
   PROMOTION_STAGES,
   promotionStageQuery,
+  SHORT_MAX_HEIGHT_REM,
+  SHORT_QUERY,
   SQUAT_CONTAINER,
   SQUAT_MAX_HEIGHT_REM,
   SQUAT_QUERY,
@@ -128,5 +130,17 @@ describe('DECK_TAIL_ROOM_QUERY (toolbar-grid M3)', () => {
   it('is not spelled as any stage query, so the harness that stubs the stages leaves it alone', () => {
     // `M5_UNPROMOTED` answers "not reached" by exact string; an equal string would be stubbed with them.
     expect(PROMOTION_STAGE_REMS.map(promotionStageQuery)).not.toContain(DECK_TAIL_ROOM_QUERY);
+  });
+});
+
+describe('SHORT_QUERY', () => {
+  it('is the stylesheet’s `short` variant, so the two cannot drift', () => {
+    const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+    expect(globals).toContain(`@custom-variant short (@media ${SHORT_QUERY});`);
+  });
+
+  it('puts the 1024 x 600 design floor inside it and a 1280 x 800 window outside', () => {
+    expect(600).toBeLessThanOrEqual(SHORT_MAX_HEIGHT_REM * 16);
+    expect(800).toBeGreaterThan(SHORT_MAX_HEIGHT_REM * 16);
   });
 });

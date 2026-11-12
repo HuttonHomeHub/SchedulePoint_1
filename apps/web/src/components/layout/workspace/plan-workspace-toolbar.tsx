@@ -56,6 +56,7 @@ import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { useMediaQuery } from '@/components/ui/use-media-query';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
@@ -165,6 +166,7 @@ import {
 } from '@/features/undo-redo';
 import { useReparentActivities } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
+import { SHORT_QUERY } from '@/lib/breakpoints';
 import { activitySchedulingHoursPerDay } from '@/lib/effective-hours-per-day';
 import { cn } from '@/lib/utils';
 
@@ -1282,8 +1284,16 @@ export function ToolbarPlanWorkspace({
     (followPlanOverLimit && followPlan !== null
       ? followPlanOverLimitReason(followPlan.count)
       : null);
+  // **On a short window the standing offer is omitted** (ADR-0216 D6, ADR-0092): asking, it takes a
+  // dock row of its own (the buttons alone are 200 px of an outlet about 350 px wide, so no copy fits
+  // beside the facts), and at 1024 x 600 that leaves the diagram 312 px against the 350 it is owed.
+  // The planner reaches the same action per bar, through the conflict chip and the selection bar's
+  // Follow logic, exactly as before. Its busy, failed and done phases are events the planner started
+  // and may use the row; a press can only have been made on a window tall enough to show it.
+  const shortFrame = useMediaQuery(SHORT_QUERY);
   const followPlanNotice = useMemo(() => {
     if (followPlan === null) return null;
+    if (shortFrame && followPlan.phase === 'idle') return null;
     if (followPlan.phase === 'done') {
       return (
         <HistoryResultStrip
@@ -1310,6 +1320,7 @@ export function ToolbarPlanWorkspace({
     );
   }, [
     followPlan,
+    shortFrame,
     followPlanReason,
     acceptFollowPlan,
     dismissFollowPlan,

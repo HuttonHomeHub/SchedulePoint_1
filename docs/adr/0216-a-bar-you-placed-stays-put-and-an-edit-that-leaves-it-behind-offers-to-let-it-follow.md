@@ -73,7 +73,18 @@ teaches it.
    does not ask again the question the planner has just taken back. The offer returns only when a bar nobody has put away
    becomes eligible, and Follow logic acts on the bars counted, not the dismissed ones. **A known trade-off:** the dismissal is
    not remembered across a reload (a persisted per-device dismissal was suggested in review and is left for the owner to
-   decide). More than 2,000 qualifying bars (the batch route's cap) shade
+   decide). **On a short window (at most 44 rem high, the stylesheet's `short` variant, `SHORT_QUERY`) the standing offer is not shown**, and the
+   planner reaches the same action per bar, through the conflict chip and the selection bar's Follow logic, as before M3. Measured
+   first (ADR-0142), in the 1024 wide, one-conflict plan of `floor-states.spec.ts` with the strip's own row and nothing selected:
+   the diagram is **312 px at 600 high against the 350 px it is owed** (ADR-0092), a mouse; **304 px** when the strip is compact and
+   has no row of its own, because beside the facts the outlet is about 350 px wide and the two buttons alone take 200 of it, so
+   the sentence wraps and the strip is 98 px tall instead of 50. No copy fits, so the row cannot be avoided and the offer is
+   omitted instead: **362 px at 600 (omitted), 466 at 704 (omitted), 417 at 705 and 512 at 800 (shown)**. A finger reads 238, 342,
+   281 and 376, where the 350 floor was never owed. Its busy, failed and done phases are events the planner started and keep the
+   row. The query is a media query, so it answers `rem` at the browser's initial size (ADR-0213's reason for the `squat`
+   container query): an enlarged-text reader in a tall window keeps the offer and its row. D8's waiver is for transient
+   event strips and does not extend to a standing one.
+   More than 2,000 qualifying bars (the batch route's cap) shade
    **Follow logic** with its reason, _"Too many to follow at once (2,001; the limit is 2,000). Follow logic still works on
    each bar."_, and are never chunked into a non-atomic series.
 7. **D7 — No engine change, no schema change, no new endpoint, no flag** (ADR-0088 D1). The recalculation parity gate holds

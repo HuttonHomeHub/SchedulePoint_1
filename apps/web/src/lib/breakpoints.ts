@@ -62,6 +62,20 @@ export const SQUAT_CONTAINER = 'app-shell';
 export const SQUAT_QUERY = '(width < 64rem) and (height <= 26rem)';
 
 /**
+ * **`short`** — a window at most `44rem` (704 px at the default font) high: the `short` variant in
+ * `globals.css`, the one the Project Explorer's destinations already tighten under. It is the same
+ * query, spelled once more for the places that must change STRUCTURE rather than style: a standing
+ * dock offer that would take its own row (the whole-plan Follow logic offer, ADR-0216 D6) is omitted
+ * under it, because at 1024 x 600 that row leaves the diagram 312 px against the 350 px it is owed
+ * (ADR-0092; `e2e-workspace-fit/floor-states.spec.ts`). `breakpoints.test.ts` pins this to the
+ * stylesheet, so the two cannot drift. A media query answers `rem` at the browser's initial size,
+ * not the reader's root size (ADR-0213's reason for the `squat` container query): a reader whose
+ * text is enlarged by a style sheet in a tall window keeps the offer and its own row.
+ */
+export const SHORT_MAX_HEIGHT_REM = 44;
+export const SHORT_QUERY = `(max-height: ${String(SHORT_MAX_HEIGHT_REM)}rem)`;
+
+/**
  * **The promotion stages** (toolbar-redesign M5, spec §4.11): the viewport widths, in rem, at which
  * a menu command may come out onto the command deck, narrowest first — **the one list**: the stage
  * names, the rem values, the media queries and the stage count all derive from it, so adding a stage
