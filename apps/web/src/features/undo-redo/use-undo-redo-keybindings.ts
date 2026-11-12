@@ -28,14 +28,10 @@ import { isTextEntryTarget } from './text-entry';
  * (`modalOpen`) — otherwise `Ctrl+Z` would mutate plan state underneath an open
  * `ConfirmDialog`/`ActivityCreateDialog` (e.g. focus on a confirm's Cancel button).
  *
- * **Body fallback** (undo-redo M5, spec F-4). A React handler on the workspace root never hears a
- * keystroke while focus is on `<body>` — which is where it lands after a deselect, a closed dialog
- * or a click on empty chrome — so Ctrl+Z was dead exactly when a planner had just clicked away. One
- * document `keydown` listener, installed for the life of the host, covers that case and ONLY that
- * case: it acts when `document.activeElement` is the body. Focus anywhere inside the workspace is
- * the React handler's, so the two can never both fire for one keystroke. The listener is also inert
- * while any modal `<dialog>` is open, so a flag the host forgot to fold into `modalOpen` still
- * cannot mutate the plan from beneath it.
+ * **The document fallback lives in the workspace's key scope, not here** (ADR-0218 D2). This hook used
+ * to install its own `keydown` listener that acted only while `<body>` had focus (undo-redo M5, spec
+ * F-4). It stood down for `<main>`, which is where a click on the diagram leaves focus, and copy/paste
+ * had none at all, so one scope-level fallback replaced it. The hook is now only the handler.
  *
  * **Disabled is not silent when there was something to undo** (undo-redo M1-T4). A planner who
  * presses `Ctrl+Z` without the pen — or with the Late-start overlay on — used to get nothing at all,
@@ -59,7 +55,7 @@ export function useUndoRedoKeybindings(params: {
    * would have run and the refusal has been posted; `false` to leave the key alone.
    */
   onBlocked?: (direction: 'undo' | 'redo') => boolean;
-}): React.KeyboardEventHandler<HTMLElement> {
+}): (event: KeyLike) => void {
   const { enabled, modalOpen = false, undo, redo, onBlocked } = params;
   // Track `modalOpen` in a ref so the handler identity does not change every time a dialog opens
   // (it is composed with the `?` scope and bound once on the workspace root). Synced in an effect,
@@ -117,26 +113,6 @@ export function useUndoRedoKeybindings(params: {
     },
     [enabled, undo, redo, hasBlocked],
   );
-
-  // The latest handler, read by the one document listener so it is installed once rather than
-  // re-bound every time `undo`/`redo` change identity.
-  const handleRef = useRef(handle);
-  useEffect(() => {
-    handleRef.current = handle;
-  }, [handle]);
-
-  useEffect(() => {
-    const onDocumentKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented) return;
-      // `activeElement` is null in a document with nothing focusable yet; that is body focus too.
-      const active = document.activeElement;
-      if (active !== null && active !== document.body) return;
-      if (document.querySelector('dialog[open]') !== null) return;
-      handleRef.current(event);
-    };
-    document.addEventListener('keydown', onDocumentKeyDown);
-    return () => document.removeEventListener('keydown', onDocumentKeyDown);
-  }, []);
 
   return handle;
 }

@@ -69,6 +69,9 @@ export function CreateActivityPopover({
   return (
     <form
       aria-label="Name the new activity"
+      // Read by the workspace key scope's document fallback (ADR-0218 D2): this form is not a
+      // `<dialog>`, so without the marker a press on its label would hand Ctrl+Z to the plan.
+      data-key-scope-block=""
       style={{ left: x, top: y }}
       className="border-border bg-card absolute z-10 flex w-56 flex-col gap-2 rounded-lg border p-2 shadow-md"
       onSubmit={(event) => {

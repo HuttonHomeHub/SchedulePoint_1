@@ -140,6 +140,63 @@ test.describe('the canvas says what it is doing', () => {
     expect(rows[0]).toMatchObject({ predecessorId: a.id, successorId: b.id });
   });
 
+  test('a press that opens the create popover keeps its focus in the name field', async () => {
+    await newPlan(page, 'Popover focus');
+    await ensurePen(page);
+    await armAdd(page, 'Task');
+    await canvas(page).click({ position: { x: 240, y: 120 } });
+    const form = page.getByRole('form', { name: 'Name the new activity' });
+    const name = form.getByLabel('Name');
+    // ADR-0218 D1: the diagram takes the keyboard on a release, but never from the field the press
+    // itself opened. Typed with the keyboard, not filled, so a stolen focus loses the characters.
+    await expect(name).toBeFocused();
+    await page.keyboard.type('Typed not filled');
+    await expect(name).toHaveValue('Typed not filled');
+    await page.keyboard.press('Escape');
+    await expect(form).toBeHidden();
+  });
+
+  test("a press on the open create popover's padding does not hand the plan its keys", async () => {
+    await newPlan(page, 'Popover keys');
+    await ensurePen(page);
+    await armAdd(page, 'Task');
+    await canvas(page).click({ position: { x: 240, y: 120 } });
+    const form = page.getByRole('form', { name: 'Name the new activity' });
+    await expect(form).toBeVisible();
+    // The form's padding is not focusable, so the press leaves focus on <main>, where the workspace's
+    // document fallback listens (ADR-0218 D2). The popover is not a <dialog>, so it must stand the
+    // fallback down itself: `?` would open the shortcuts sheet and Ctrl+Z would undo beneath it.
+    await form.click({ position: { x: 2, y: 2 } });
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: /shortcuts/i })).toHaveCount(0);
+    await expect(form).toBeVisible();
+  });
+
+  test('a click in the Link tool gives the diagram the keyboard, and Escape drops the pick', async () => {
+    await newPlan(page, 'Link keys');
+    await ensurePen(page);
+    const [a] = await seedActivities(page, orgSlug, [
+      { name: 'Set out', laneIndex: 0 },
+      { name: 'Reinforce', laneIndex: 1 },
+    ]);
+    if (!a) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    const map = await mapBars(page);
+    const first = requireBarPoint(map, a.id, a.name);
+
+    await clearSelection(page);
+    await armLink(page);
+    await canvas(page).click({ position: first });
+    await expect(band()).toContainText('Linking FS from “Set out”');
+    await expect(diagramList(page)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(band()).toHaveCount(0);
+    // The tool stays armed: Escape took the pick, the first rung of the ladder (ADR-0064).
+    await expect(doToolbar(page).getByRole('button', { name: /^Linking/ })).toBeVisible();
+  });
+
   test('Add stays armed for a run of activities, and Escape ends it', async () => {
     await newPlan(page, 'Run');
     await ensurePen(page);

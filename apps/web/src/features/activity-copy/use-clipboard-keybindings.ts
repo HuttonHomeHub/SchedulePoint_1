@@ -35,7 +35,7 @@ export function useClipboardKeybindings(params: {
   modalOpen?: boolean;
   onCopy: () => void;
   onPaste: () => void;
-}): React.KeyboardEventHandler<HTMLElement> {
+}): (event: KeyLike) => void {
   const { enabled, modalOpen = false, onCopy, onPaste } = params;
   const modalOpenRef = useRef(modalOpen);
   useEffect(() => {
@@ -43,7 +43,7 @@ export function useClipboardKeybindings(params: {
   }, [modalOpen]);
 
   return useCallback(
-    (event: React.KeyboardEvent<HTMLElement>): void => {
+    (event: KeyLike): void => {
       if (!enabled) return;
       if (modalOpenRef.current) return;
       if (!event.metaKey && !event.ctrlKey) return;
@@ -76,3 +76,9 @@ export function useClipboardKeybindings(params: {
     [enabled, onCopy, onPaste],
   );
 }
+
+/** The slice of a keyboard event the handler reads — a React synthetic event and a native one both fit. */
+type KeyLike = Pick<
+  KeyboardEvent,
+  'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'target' | 'preventDefault'
+>;

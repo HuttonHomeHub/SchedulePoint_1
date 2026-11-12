@@ -301,6 +301,13 @@ export interface TsldCanvasProps {
    * `additive` came from the modifier held at **press**. Absent, no marquee is ever committed.
    */
   onSelectRegion?: (ids: readonly string[], additive: boolean) => void;
+  /**
+   * A press on the scene has finished (released, or its `click` arrived), whatever it did — select,
+   * move, pan, marquee, link pick. The host uses it to give the diagram's list the keyboard
+   * (ADR-0218 D1). Not called in the Add tool or while a create popover is open, where the popover's
+   * own field must keep focus. May be called twice for one press.
+   */
+  onPressComplete?: () => void;
   /** Bump to re-fit the viewport to the content (the toolbar's "Fit" button). */
   fitSignal: number;
   /** M2: enable on-canvas editing. Absent/false → the M1 read-only surface, unchanged. */
@@ -902,6 +909,7 @@ export function TsldCanvas({
   selectedIds,
   onSelect,
   onSelectRegion,
+  onPressComplete,
   fitSignal,
   editing = false,
   mode = 'select',
@@ -2604,6 +2612,88 @@ export function TsldCanvas({
     return classifyHit(sceneRef.current.activities, p, viewRef.current, dataDate, options);
   };
 
+  const onSceneRelease = (e: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (gestureActiveRef.current) {
+      gestureActiveRef.current = false;
+      drag.current = null;
+      const p = localPoint(e);
+      const { width, height } = sizeRef.current;
+      // Releasing outside the canvas cancels the gesture (US-4) — no intent. Skip the
+      // check until the surface has a real measured size (avoids a degenerate 1×1).
+      const measured = width > 1 && height > 1;
+      const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
+      const { state, intent, select } = reduce(
+        gestureRef.current,
+        outOfBounds ? { type: 'escape' } : { type: 'pointerUp' },
+        machineCtx(),
+      );
+      gestureRef.current = state;
+      syncGestureSource();
+      interactionDirtyRef.current = true;
+      if (canvasRef.current) canvasRef.current.style.cursor = '';
+      // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
+      setActiveLagId(null);
+      // A marquee is a SELECTION, not an edit, so it leaves through the selection channel:
+      // routing it to `onIntent` would put it behind the host's in-flight-write guard, where
+      // a planner mid-save could not re-select. Resolved here — the canvas owns the viewport.
+      if (intent?.kind === 'marquee') {
+        onSelectRegion?.(
+          idsIntersecting(sceneRef.current.activities, intent.rect, viewRef.current, dataDate),
+          intent.additive,
+        );
+        return;
+      }
+      if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
+      else if (select) onSelect(select);
+      return;
+    }
+    const wasDrag = drag.current?.moved ?? false;
+    drag.current = null;
+    if (wasDrag) return;
+    const p = localPoint(e);
+    // Link tool (M5) / LOE tool (Stage D): a click picks the first endpoint, then the second —
+    // the gesture machine holds the pick between clicks. Panning still works (a drag returns
+    // above); only a stationary click reaches here. Other modes keep the plain M1 select-on-click.
+    // A `link`/`loeSpan` commit rides `intent`; the LOE tool's per-pick prompts ride `loe`.
+    if (editing && (mode === 'link' || mode === 'loe')) {
+      const { state, intent, loe } = reduce(
+        gestureRef.current,
+        { type: 'click', hit: classifyAt(p) },
+        machineCtx(),
+      );
+      gestureRef.current = state;
+      syncGestureSource();
+      interactionDirtyRef.current = true;
+      if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
+      if (loe) onLoeSpanStep?.(loe);
+      if (mode === 'link') {
+        onLinkPickStep?.(state.kind === 'linkPicking' ? state.predecessorId : null);
+      }
+      return;
+    }
+    // Ctrl/Cmd toggles one bar in or out; Shift extends from the primary. Flag-off the
+    // modifier is never computed, so this call is the one-argument call it has always been —
+    // and `Shift` in particular MUST stay unclaimed there, because the legacy link chord
+    // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
+    const modifier = selectModifierOf(e);
+    const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
+    if (modifier) onSelect(target, modifier);
+    else onSelect(target);
+  };
+
+  /**
+   * The press is over — hand the keyboard to the diagram's list (ADR-0218 D1). Called from BOTH the
+   * pointer release and the `click` that follows it: a mouse release is enough, but on touch the
+   * browser sends its compatibility `mousedown` AFTER `pointerup`, and that mousedown moves focus
+   * back to the shell's `<main>`, undoing a focus made on release (measured, `m0-verification.md`).
+   * `click` comes after it. The host treats a second call as a no-op when the list already has focus.
+   * Never in the Add tool, where the release opens the create popover whose field must keep focus.
+   */
+  const pressComplete = (): void => {
+    if (mode === 'add-activity' || pending) return;
+    onPressComplete?.();
+  };
+
   const column = (
     <div
       ref={columnRef}
@@ -2958,78 +3048,10 @@ export function TsldCanvas({
           interactionDirtyRef.current = true;
         }}
         onPointerUp={(e) => {
-          if (gestureActiveRef.current) {
-            gestureActiveRef.current = false;
-            drag.current = null;
-            const p = localPoint(e);
-            const { width, height } = sizeRef.current;
-            // Releasing outside the canvas cancels the gesture (US-4) — no intent. Skip the
-            // check until the surface has a real measured size (avoids a degenerate 1×1).
-            const measured = width > 1 && height > 1;
-            const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
-            const { state, intent, select } = reduce(
-              gestureRef.current,
-              outOfBounds ? { type: 'escape' } : { type: 'pointerUp' },
-              machineCtx(),
-            );
-            gestureRef.current = state;
-            syncGestureSource();
-            interactionDirtyRef.current = true;
-            if (canvasRef.current) canvasRef.current.style.cursor = '';
-            // The drag is over — the next idle move re-emphasises whatever the pointer rests on.
-            setActiveLagId(null);
-            // A marquee is a SELECTION, not an edit, so it leaves through the selection channel:
-            // routing it to `onIntent` would put it behind the host's in-flight-write guard, where
-            // a planner mid-save could not re-select. Resolved here — the canvas owns the viewport.
-            if (intent?.kind === 'marquee') {
-              onSelectRegion?.(
-                idsIntersecting(
-                  sceneRef.current.activities,
-                  intent.rect,
-                  viewRef.current,
-                  dataDate,
-                ),
-                intent.additive,
-              );
-              return;
-            }
-            if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
-            else if (select) onSelect(select);
-            return;
-          }
-          const wasDrag = drag.current?.moved ?? false;
-          drag.current = null;
-          if (wasDrag) return;
-          const p = localPoint(e);
-          // Link tool (M5) / LOE tool (Stage D): a click picks the first endpoint, then the second —
-          // the gesture machine holds the pick between clicks. Panning still works (a drag returns
-          // above); only a stationary click reaches here. Other modes keep the plain M1 select-on-click.
-          // A `link`/`loeSpan` commit rides `intent`; the LOE tool's per-pick prompts ride `loe`.
-          if (editing && (mode === 'link' || mode === 'loe')) {
-            const { state, intent, loe } = reduce(
-              gestureRef.current,
-              { type: 'click', hit: classifyAt(p) },
-              machineCtx(),
-            );
-            gestureRef.current = state;
-            syncGestureSource();
-            interactionDirtyRef.current = true;
-            if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
-            if (loe) onLoeSpanStep?.(loe);
-            if (mode === 'link') {
-              onLinkPickStep?.(state.kind === 'linkPicking' ? state.predecessorId : null);
-            }
-            return;
-          }
-          // Ctrl/Cmd toggles one bar in or out; Shift extends from the primary. Flag-off the
-          // modifier is never computed, so this call is the one-argument call it has always been —
-          // and `Shift` in particular MUST stay unclaimed there, because the legacy link chord
-          // reads it as start-to-start (M0-T1's derived flag makes the overlap impossible).
-          const modifier = selectModifierOf(e);
-          const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
-          if (modifier) onSelect(target, modifier);
-          else onSelect(target);
+          onSceneRelease(e);
+          pressComplete();
         }}
+        onClick={pressComplete}
         onPointerLeave={() => {
           // Drop the hover ring when the pointer leaves the surface (M4). Flag-off the ref is
           // never set, so this is a no-op — today's behaviour byte-for-byte.

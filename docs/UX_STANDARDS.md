@@ -409,6 +409,9 @@ reader acts (edits the field, retries or refreshes), and is not also announced b
   1024 × 600 floor; below it the diagram may scroll in both directions (a
   two-dimensional surface under 1.4.10), and every canvas affordance keeps its
   keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
+  **A click or drag on the diagram gives its list the keyboard** (ADR-0218), so Ctrl+Z, Ctrl+C/V,
+  Escape and the arrows act on what was just clicked; the workspace's key scope also answers from the
+  page body or the shell, never in a text field or under a dialog.
 
 ### Free space is used by commands that were in a menu (toolbar-redesign M5, R9)
 

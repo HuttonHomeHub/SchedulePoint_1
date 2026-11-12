@@ -90,8 +90,10 @@ describe('TsldPanel finish-edge resize (ADR-0052 M2)', () => {
     const { canvas, onResize } = renderPanel();
     fireEvent.pointerDown(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
     fireEvent.pointerUp(canvas, { clientX: 78, clientY: LANE0_Y, pointerId: 1 });
-    // Selection is announced via the option description; no resize write is issued.
-    expect(announceSpy).toHaveBeenCalled();
+    // The press selected the bar and handed the list focus, which speaks the option; no resize write
+    // is issued (ADR-0218 D1: the live region does not tell it a second time).
+    expect(screen.getByRole('listbox')).toHaveFocus();
+    expect(document.querySelectorAll('[role="option"][aria-selected="true"]')).toHaveLength(1);
     expect(onResize).not.toHaveBeenCalled();
   });
 

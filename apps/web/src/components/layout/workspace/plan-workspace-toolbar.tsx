@@ -1489,6 +1489,7 @@ export function ToolbarPlanWorkspace({
   // the user can author (holds the pen, not the read-only Late overlay) — the same predicate the
   // toolbar's pen-gated cluster uses, so keyboard and buttons gate identically.
   const onWorkspaceKeyDown = usePlanWorkspaceKeyScope({
+    rootRef,
     modalOpen: anotherDialogOpen,
     onShowShortcuts: showShortcuts,
     undoRedoEnabled: undoRedoLive,
