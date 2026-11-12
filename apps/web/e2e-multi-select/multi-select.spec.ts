@@ -155,9 +155,13 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
     await list.press('Home');
     await list.press('Shift+ArrowDown');
     await expect(bar).toBeVisible();
-    await expect(bar).toContainText(/2 activities selected/);
-    // The primary is named, because the singular affordances still act on exactly one bar.
-    await expect(bar).toContainText(/is the subject of single-activity actions/);
+    await expect(bar).toContainText(/^2 selected/);
+    // The primary is named for assistive technology, not on screen: the bar is one line (M7), so
+    // the sentence is its accessible description. The singular affordances still act on one bar.
+    await expect(bar).toHaveAccessibleDescription(
+      /2 activities selected — “.+” is the subject of single-activity actions\./,
+    );
+    await expect(bar).not.toContainText(/is the subject of single-activity actions/);
   });
 
   await test.step('the chain preview shows the order it will write, and Reverse flips it', async () => {
@@ -718,7 +722,7 @@ test('Ctrl-click toggles and Shift-click extends, with the pen and without it', 
     await expect(selected).toHaveCount(1);
     await canvas(page).click({ position: b, modifiers: ['Control'] });
     await expect(selected).toHaveCount(2);
-    await expect(bulkBar).toContainText('2 activities selected');
+    await expect(bulkBar).toContainText('2 selected');
     await canvas(page).click({ position: b, modifiers: ['Control'] });
     await expect(selected).toHaveCount(1);
     await expect(bulkBar).toHaveCount(0);
@@ -729,7 +733,7 @@ test('Ctrl-click toggles and Shift-click extends, with the pen and without it', 
     await canvas(page).click({ position: a });
     await canvas(page).click({ position: c, modifiers: ['Shift'] });
     await expect(selected).toHaveCount(3);
-    await expect(bulkBar).toContainText('3 activities selected');
+    await expect(bulkBar).toContainText('3 selected');
   });
 
   await test.step('without the pen: Ctrl-click adds a second bar too', async () => {
@@ -739,6 +743,154 @@ test('Ctrl-click toggles and Shift-click extends, with the pen and without it', 
     await expect(selected).toHaveCount(1);
     await canvas(page).click({ position: b, modifiers: ['Control'] });
     await expect(selected).toHaveCount(2);
-    await expect(bulkBar).toContainText('2 activities selected');
+    await expect(bulkBar).toContainText('2 selected');
+  });
+});
+
+/**
+ * **The plural bar, and Link in sequence on a chain that is already linked** (diagram-keys-and-
+ * selection M7, `docs/specs/diagram-keys-and-selection/`).
+ *
+ * Written before the bar changed and red against it: the old bar was a 122 px strip with a sentence
+ * and a drag hint, dearer than the single-selection bar at the same window, and a second Link in
+ * sequence on a linked chain went to the server and came back as a failure.
+ *
+ * **Invariants, never a pixel figure** (`docs/HANDOFF.md`, environment notes). The cost is read
+ * against the single-selection bar in the same run, at the same size.
+ */
+test('the plural bar is one short line, and a second chain over the same activities adds nothing', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Plural bar ${stamp}`);
+  await ensurePen(page);
+  await seedActivities(page, orgSlug, [
+    { name: 'Excavate', startOn: '2026-01-05', durationDays: 2 },
+    { name: 'Pour slab', startOn: '2026-01-07', durationDays: 2 },
+    { name: 'Cure', startOn: '2026-01-09', durationDays: 2 },
+  ]);
+  const planId = openPlanId(page);
+  await ensurePen(page);
+
+  const storedCount = async (): Promise<number> =>
+    page.evaluate(
+      async ({ org, id }: { org: string; id: string }) => {
+        const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/dependencies`, {
+          credentials: 'include',
+        });
+        return ((await response.json()) as { data: unknown[] }).data.length;
+      },
+      { org: orgSlug, id: planId },
+    );
+
+  /** The foot row's height once the dock has stopped changing (two equal reads 250 ms apart). */
+  const settledFoot = async (): Promise<number> => {
+    const read = (): Promise<number> =>
+      page.evaluate(
+        () => document.querySelector('[data-activities-bar]')?.getBoundingClientRect().height ?? 0,
+      );
+    let last = -1;
+    let stable = 0;
+    for (let i = 0; i < 40 && stable < 2; i += 1) {
+      await page.waitForTimeout(250);
+      const now = await read();
+      stable = now === last ? stable + 1 : 0;
+      last = now;
+    }
+    return last;
+  };
+
+  const list = diagramList(page);
+  const bar = page.getByTestId('bulk-selection-bar');
+  const actionNames = [/^link in sequence/i, /^delete$/i, /^clear selection$/i];
+
+  for (const size of [
+    { width: 1024, height: 600 },
+    { width: 1440, height: 900 },
+  ]) {
+    await test.step(`at ${String(size.width)} x ${String(size.height)}: three selected read "3 selected", every action is there, nothing is cut`, async () => {
+      await page.setViewportSize(size);
+      await expect(canvas(page)).toBeVisible();
+      await list.focus();
+      await list.press('Escape');
+      await list.press('Home');
+      await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+      const single = await settledFoot();
+
+      await list.press('Control+a');
+      await expect(bar).toBeVisible();
+      await expect(bar).toContainText(/^3 selected/);
+      const plural = await settledFoot();
+
+      for (const name of actionNames) {
+        const button = bar.getByRole('button', { name });
+        await expect(button).toBeVisible();
+        await expect(button).toBeInViewport({ ratio: 1 });
+        await expect(button).not.toHaveAttribute('aria-disabled', 'true');
+      }
+      // Nothing clipped by the foot row, and nothing pushed the page or the row sideways.
+      const fit = await page.evaluate(() => {
+        const foot = document.querySelector('[data-activities-bar]');
+        const box = foot?.getBoundingClientRect();
+        const strip = document.querySelector('[data-testid="bulk-selection-bar"]');
+        const outside = [...(strip?.querySelectorAll('button') ?? [])].filter((el) => {
+          const b = el.getBoundingClientRect();
+          return (
+            !box ||
+            b.top < box.top - 0.5 ||
+            b.bottom > box.bottom + 0.5 ||
+            b.right > box.right + 0.5
+          );
+        }).length;
+        const tops = new Set(
+          [...(strip?.querySelectorAll('button') ?? [])].map((el) =>
+            Math.round(el.getBoundingClientRect().top / 4),
+          ),
+        );
+        return {
+          rows: tops.size,
+          outside,
+          pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          footX: foot ? foot.scrollWidth - foot.clientWidth : 0,
+        };
+      });
+      expect(fit.rows, 'three actions and a caption fit on one line').toBe(1);
+      expect(fit.outside, 'a control lies outside the foot row').toBe(0);
+      expect(fit.pageX, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+      expect(fit.footX, 'the foot row scrolls sideways').toBeLessThanOrEqual(0);
+      // The cost: no more than the bar this selection replaced costs the diagram, same run, same size.
+      expect(plural, 'the plural bar costs more than the single-selection bar').toBeLessThanOrEqual(
+        single,
+      );
+    });
+  }
+
+  await test.step('Link in sequence creates the two links', async () => {
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await bar.getByRole('button', { name: /^link in sequence/i }).click();
+    await page.getByRole('button', { name: /^create 2 links$/i }).click();
+    await announced(page, /2 links created in sequence/);
+    expect(await storedCount()).toBe(2);
+  });
+
+  await test.step('pressing it again says it is already linked, and creates nothing', async () => {
+    await list.focus();
+    await bar.getByRole('button', { name: /^link in sequence/i }).click();
+    const dialog = page.getByRole('dialog', { name: 'Link in sequence' });
+    await expect(dialog).toContainText(
+      'These 3 activities are already linked in this order. Nothing to add.',
+    );
+    const create = dialog.getByRole('button', { name: /^create 0 links$/i });
+    await expect(create).toHaveAttribute('aria-disabled', 'true');
+    // `force`: Playwright treats aria-disabled as not enabled and would wait for it; the press is the point.
+    await create.click({ force: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).not.toContainText(/couldn’t|already exists|conflict/i);
+    expect(await storedCount()).toBe(2);
+    await dialog.getByRole('button', { name: /^cancel$/i }).click();
+    await expect(dialog).toBeHidden();
   });
 });

@@ -7,6 +7,7 @@ import { pluralMoveHint } from '../model/reposition-announcement';
 
 import { TsldPanel, type TsldBulkOperations } from './TsldPanel';
 
+import { TOOLTIP_OPEN_DELAY_MS } from '@/components/ui/tooltip';
 import { anActivity } from '@/test/activity-fixture';
 
 /**
@@ -103,9 +104,12 @@ describe('the panel drives the bulk bar', () => {
 
     fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
     const bar = screen.getByTestId('bulk-selection-bar');
-    expect(bar).toHaveTextContent(/2 activities selected/);
-    // The primary is the most recently added survivor — the row Shift+↓ just reached.
-    expect(bar).toHaveTextContent(/“Pour” is the subject of single-activity actions/);
+    expect(bar).toHaveTextContent(/^2 selected/);
+    // The primary is the most recently added survivor — the row Shift+↓ just reached. It is named
+    // in the bar's accessible description rather than on screen (M7).
+    expect(screen.getByRole('group', { name: 'Selected activities' })).toHaveAccessibleDescription(
+      /“Pour” is the subject of single-activity actions/,
+    );
   });
 
   it('states the reason both actions are shut rather than hiding them', () => {
@@ -189,6 +193,72 @@ describe('the panel drives the bulk bar', () => {
       ]);
     });
     expect(announceSpy).toHaveBeenCalledWith('2 links created in sequence.');
+  });
+
+  describe('Link in sequence over activities that are already linked (M7)', () => {
+    const NAME: Record<string, string> = { a: 'Excavate', b: 'Pour', c: 'Cure' };
+    const fs = (id: string, from: string, to: string): DependencySummary => ({
+      id,
+      planId: 'p1',
+      predecessor: { id: from, name: NAME[from] ?? from, code: null },
+      successor: { id: to, name: NAME[to] ?? to, code: null },
+      type: 'FS',
+      lagDays: 0,
+      lagMinutes: 0,
+      lagCalendar: 'PROJECT_DEFAULT',
+      isDriving: true,
+      version: 1,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    });
+    const mountWith = (dependencies: DependencySummary[]) => {
+      const linkChain = vi.fn(() => Promise.resolve());
+      render(
+        <TsldPanel
+          activities={ACTIVITIES}
+          dependencies={dependencies}
+          dataDate="2026-01-01"
+          canEdit
+          bulk={{
+            gate: { writable: true, reason: null },
+            deleteMany: vi.fn(() => Promise.resolve()),
+            linkChain,
+            moveMany: vi.fn(() => Promise.resolve({ applied: true, conflict: null })),
+          }}
+          fill
+        />,
+      );
+      const list = screen.getByRole('listbox', { name: /activities in the diagram/i });
+      act(() => list.focus());
+      fireEvent.keyDown(list, { key: 'a', ctrlKey: true });
+      return { linkChain };
+    };
+
+    it('keeps the button lit, says nothing can be added, and writes nothing', () => {
+      const { linkChain } = mountWith([fs('d1', 'a', 'b'), fs('d2', 'b', 'c')]);
+      const trigger = screen.getByRole('button', { name: /link in sequence/i });
+      expect(trigger).toHaveAttribute('aria-disabled', 'false');
+      fireEvent.click(trigger);
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'These 3 activities are already linked in this order. Nothing to add.',
+      );
+      const create = screen.getByRole('button', { name: /create 0 links/i });
+      expect(create).toHaveAttribute('aria-disabled', 'true');
+      fireEvent.click(create);
+      expect(linkChain).not.toHaveBeenCalled();
+    });
+
+    it('writes only the missing link of a half-made chain, with no failure', async () => {
+      const { linkChain } = mountWith([fs('d1', 'a', 'b')]);
+      fireEvent.click(screen.getByRole('button', { name: /link in sequence/i }));
+      expect(screen.getByRole('dialog')).toHaveTextContent(/1 pair is already linked/);
+      fireEvent.click(screen.getByRole('button', { name: /create 1 link/i }));
+      await waitFor(() => {
+        expect(linkChain).toHaveBeenCalledWith([{ predecessorId: 'b', successorId: 'c' }]);
+      });
+      expect(announceSpy).toHaveBeenCalledWith('1 link created in sequence.');
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
   });
 
   it('Reverse applies to THIS preview only — reopening starts earliest-first again', () => {
@@ -685,10 +755,18 @@ describe('the move hint is spoken once, on entering plural, and only to a writer
     expect(announceSpy).not.toHaveBeenCalledWith(expect.stringContaining('Alt'));
   });
 
-  it('shows the same sentence on the bar for a writer', () => {
-    const { list } = renderPanel({}, true);
-    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
-    expect(screen.getByTestId('bulk-selection-bar')).toHaveTextContent(pluralMoveHint(2));
+  it('offers the same sentence as a tooltip on the bar’s caption for a writer', () => {
+    vi.useFakeTimers();
+    try {
+      const { list } = renderPanel({}, true);
+      fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+      fireEvent.pointerEnter(screen.getByText('2 selected'), { pointerType: 'mouse' });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(document.querySelector('[data-tooltip]')).toHaveTextContent(pluralMoveHint(2));
+    } finally {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    }
   });
 
   it('says nothing about moving when the keymap would not honour it (no reposition handler)', () => {

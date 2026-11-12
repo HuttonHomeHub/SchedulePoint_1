@@ -1,0 +1,351 @@
+{
+  "measuredAt": "2026-11-12T20:56:21.718Z",
+  "readings": {
+    "1024x600 idle": {
+      "kind": "none",
+      "foot": 51,
+      "diagram": 362,
+      "stripHeight": null,
+      "stripWidth": null,
+      "controls": [],
+      "widths": [],
+      "lines": 0,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1024x600 one": {
+      "kind": "single",
+      "foot": 207,
+      "diagram": 206,
+      "stripHeight": 196,
+      "stripWidth": 347.2,
+      "controls": [
+        "Logic",
+        "NotesAdd or read notes on this",
+        "ProgressReport progress on thi",
+        "Resources",
+        "Edit",
+        "Duplicate",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Zoom to selection",
+        "Isolate",
+        "",
+        ""
+      ],
+      "widths": [],
+      "lines": 5,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1024x600 three, pen": {
+      "kind": "plural",
+      "foot": 137,
+      "diagram": 276,
+      "stripHeight": 86,
+      "stripWidth": 731,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:126.8",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1024x600 three, pen, 200% text": {
+      "kind": "plural",
+      "foot": 413,
+      "diagram": 200,
+      "stripHeight": 250,
+      "stripWidth": 715,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:316",
+        "Link in sequen:333",
+        "Move to swimla:349.3",
+        "Set code…:230.2",
+        "Delete:179.8",
+        "Clear selectio:238.8"
+      ],
+      "lines": 3,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1024x600 three, no pen (refusal)": {
+      "kind": "plural",
+      "foot": 137,
+      "diagram": 276,
+      "stripHeight": 86,
+      "stripWidth": 731,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:104.1",
+        "Take the edit :235.8",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": "Take the edit lock to change this plan."
+    },
+    "1024x600 three, no pen (refusal), 200% text": {
+      "kind": "plural",
+      "foot": 469,
+      "diagram": 200,
+      "stripHeight": 306,
+      "stripWidth": 715,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:177.5",
+        "Take the edit :471.5",
+        "Link in sequen:333",
+        "Move to swimla:349.3",
+        "Set code…:230.2",
+        "Delete:179.8",
+        "Clear selectio:238.8"
+      ],
+      "lines": 3,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": "Take the edit lock to change this plan."
+    },
+    "1280x720 idle": {
+      "kind": "none",
+      "foot": 51,
+      "diagram": 482,
+      "stripHeight": null,
+      "stripWidth": null,
+      "controls": [],
+      "widths": [],
+      "lines": 0,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1280x720 one": {
+      "kind": "single",
+      "foot": 127,
+      "diagram": 406,
+      "stripHeight": 116,
+      "stripWidth": 603.2,
+      "controls": [
+        "Logic",
+        "NotesAdd or read notes on this",
+        "ProgressReport progress on thi",
+        "Resources",
+        "Edit",
+        "Duplicate",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Zoom to selection",
+        "Isolate",
+        "",
+        ""
+      ],
+      "widths": [],
+      "lines": 3,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1280x720 three, pen": {
+      "kind": "plural",
+      "foot": 97,
+      "diagram": 436,
+      "stripHeight": 86,
+      "stripWidth": 603.2,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:96.9",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1280x720 three, no pen (refusal)": {
+      "kind": "plural",
+      "foot": 97,
+      "diagram": 436,
+      "stripHeight": 86,
+      "stripWidth": 590.8,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:146.5",
+        "Take the edit :235.8",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": "Take the edit lock to change this plan."
+    },
+    "1440x900 idle": {
+      "kind": "none",
+      "foot": 51,
+      "diagram": 662,
+      "stripHeight": null,
+      "stripWidth": null,
+      "controls": [],
+      "widths": [],
+      "lines": 0,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1440x900 one": {
+      "kind": "single",
+      "foot": 127,
+      "diagram": 586,
+      "stripHeight": 116,
+      "stripWidth": 763.2,
+      "controls": [
+        "Logic",
+        "NotesAdd or read notes on this",
+        "ProgressReport progress on thi",
+        "Resources",
+        "Edit",
+        "Duplicate",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Zoom to selection",
+        "Isolate",
+        "",
+        ""
+      ],
+      "widths": [],
+      "lines": 3,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1440x900 three, pen": {
+      "kind": "plural",
+      "foot": 97,
+      "diagram": 616,
+      "stripHeight": 86,
+      "stripWidth": 763.2,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:159",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": null
+    },
+    "1440x900 three, no pen (refusal)": {
+      "kind": "plural",
+      "foot": 97,
+      "diagram": 616,
+      "stripHeight": 86,
+      "stripWidth": 750.8,
+      "controls": [
+        "Link in sequence…",
+        "Move to swimlane…",
+        "Set code…",
+        "Delete",
+        "Clear selection"
+      ],
+      "widths": [
+        "3 selected:123.9",
+        "Take the edit :235.8",
+        "Link in sequen:166.5",
+        "Move to swimla:174.7",
+        "Set code…:115.1",
+        "Delete:89.9",
+        "Clear selectio:119.4"
+      ],
+      "lines": 2,
+      "outsideFoot": 0,
+      "pageX": 0,
+      "footX": 0,
+      "status": "Take the edit lock to change this plan."
+    }
+  }
+}

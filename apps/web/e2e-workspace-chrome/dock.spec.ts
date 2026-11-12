@@ -899,12 +899,14 @@ for (const { pointer, touch } of [
         .click();
       await expect(page.getByTestId('canvas-history-result')).toHaveCount(0);
 
-      // The multi-select bar: two selected, the subject's long name in the sentence.
+      // The multi-select bar: two selected. Its subject sentence is the bar's accessible description
+      // now (diagram-keys M7), so what is read whole on screen is the caption and the actions.
       await diagramList(page).focus();
       await page.keyboard.press('Home');
       await page.keyboard.press('Shift+ArrowDown');
       const bulk = page.getByTestId('bulk-selection-bar');
-      await expect(bulk).toContainText(/activities selected — “.{40,}” is the subject/);
+      await expect(bulk).toContainText(/^2 selected/);
+      await expect(bulk).toHaveAccessibleDescription(/“.{40,}” is the subject of single-activity/);
       await expectStripAtAllWidths(page, 'bulk-selection-bar', `${pointer} multi-select bar`);
       await diagramList(page).focus();
       await page.keyboard.press('Escape');

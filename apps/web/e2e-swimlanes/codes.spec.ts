@@ -813,7 +813,7 @@ test.describe('Setting codes from the diagram', () => {
       await list.press('Shift+ArrowDown');
       await list.press('Shift+ArrowDown');
       const bar = page.getByTestId('bulk-selection-bar');
-      await expect(bar).toContainText(/3 activities selected/);
+      await expect(bar).toContainText(/^3 selected/);
       await bar.getByRole('button', { name: 'Set code…' }).click();
       const panel = page.getByRole('dialog', { name: 'Set code…' });
       await panel.getByLabel('Code type', { exact: true }).selectOption({ label: 'Trade' });

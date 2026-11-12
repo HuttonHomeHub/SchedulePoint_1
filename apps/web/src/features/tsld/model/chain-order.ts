@@ -26,10 +26,17 @@ export interface ChainEdge {
   readonly successorId: string;
 }
 
-/** An existing dependency, as the plan already holds it. */
+/**
+ * An existing dependency, as the plan already holds it.
+ *
+ * `type` is optional because the cycle check does not care (a loop is a loop whatever the type);
+ * only the "already linked" test does, and it counts an edge with no type as finish-to-start, the
+ * only type a chain writes.
+ */
 export interface ExistingEdge {
   readonly predecessorId: string;
   readonly successorId: string;
+  readonly type?: string;
 }
 
 /**
@@ -131,10 +138,20 @@ export function chainWouldCycle(
 
 /** Why a chain cannot be created, or null when it can. */
 export type ChainRefusal =
-  { kind: 'tooFew' } | { kind: 'tooMany'; limit: number; requested: number } | { kind: 'cycle' };
+  | { kind: 'tooFew' }
+  | { kind: 'tooMany'; limit: number; requested: number }
+  | { kind: 'cycle' }
+  // Every consecutive pair is already a finish-to-start link, so there is nothing to write. A plain
+  // refusal rather than a no-op success: the preview says so before the planner presses Create.
+  | { kind: 'alreadyLinked' };
 
 /**
  * The whole pre-check, in one call: order, build the edges, and say whether the gesture is legal.
+ *
+ * `edges` is **only what is missing**: a pair the plan already links finish-to-start is dropped and
+ * counted in `existingCount`. The server refuses a second (predecessor, successor, type) link with a
+ * 409 (`dependencies.service.ts`, the unique-violation mapping), so sending it would fail a chain
+ * whose only fault was being half-made already, and roll back the links that were new.
  *
  * Returns the ordered candidates and edges **even when refused**, so the preview can still show a
  * planner what was going to happen — a refusal that hides its own subject leaves them guessing at
@@ -144,18 +161,32 @@ export function planChain(params: {
   candidates: readonly ChainCandidate[];
   existing: readonly ExistingEdge[];
   reversed?: boolean;
-}): { ordered: ChainCandidate[]; edges: ChainEdge[]; refusal: ChainRefusal | null } {
+}): {
+  ordered: ChainCandidate[];
+  edges: ChainEdge[];
+  existingCount: number;
+  refusal: ChainRefusal | null;
+} {
   const ordered = params.reversed
     ? orderChain(params.candidates).reverse()
     : orderChain(params.candidates);
-  const edges = chainEdges(ordered);
+  const linked = new Set(
+    params.existing
+      .filter((e) => e.type === undefined || e.type === 'FS')
+      .map((e) => `${e.predecessorId}>${e.successorId}`),
+  );
+  const wanted = chainEdges(ordered);
+  const edges = wanted.filter((e) => !linked.has(`${e.predecessorId}>${e.successorId}`));
+  const existingCount = wanted.length - edges.length;
   const refusal: ChainRefusal | null =
     ordered.length < 2
       ? { kind: 'tooFew' }
       : edges.length > MAX_CHAIN_LINKS
         ? { kind: 'tooMany', limit: MAX_CHAIN_LINKS, requested: edges.length }
-        : chainWouldCycle(edges, params.existing)
-          ? { kind: 'cycle' }
-          : null;
-  return { ordered, edges, refusal };
+        : edges.length === 0
+          ? { kind: 'alreadyLinked' }
+          : chainWouldCycle(edges, params.existing)
+            ? { kind: 'cycle' }
+            : null;
+  return { ordered, edges, existingCount, refusal };
 }
