@@ -2455,11 +2455,19 @@ export function TsldPanel({
       !event.altKey &&
       !event.shiftKey
     ) {
+      // Nothing wired to answer it (a host without the object actions, or two selected with no bulk
+      // operations): there is no button to mirror and no sentence the product has for it, so the key
+      // is left unclaimed rather than swallowed to no effect.
+      const count = selection.ids.length;
+      const answerable = count === 0 || (count === 1 ? selectionCtx !== null : bulk !== undefined);
+      if (!answerable) return;
       event.preventDefault();
-      if (selection.ids.length === 0) {
+      // A held key repeats: the first press opened the modal or said the refusal, and a repeat must
+      // not re-announce it on every tick (the modal takes the repeats once open).
+      if (event.repeat) return;
+      if (count === 0) {
         announce('Nothing is selected to delete.');
-      } else if (selection.ids.length === 1) {
-        if (selectionCtx === null) return;
+      } else if (selectionCtx !== null && count === 1) {
         const refusal = deleteRefusal(selectionCtx);
         if (refusal !== null) announce(refusal);
         else selectionCtx.onDelete();

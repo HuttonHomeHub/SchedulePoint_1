@@ -44,7 +44,7 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
     action: 'Move every selected activity by the same step',
   },
   {
-    keys: 'Delete / Backspace',
+    keys: 'Delete / Backspace (in the diagram)',
     action: 'Delete the selected activity or activities (asks first; Undo restores them)',
   },
   {

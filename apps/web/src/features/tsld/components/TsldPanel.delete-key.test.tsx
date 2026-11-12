@@ -137,6 +137,28 @@ describe('TsldPanel — the Delete key', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  it('acts once for a held key: a repeat neither re-announces a refusal nor re-opens anything', () => {
+    const refused = mount({ canEdit: false });
+    fireEvent.keyDown(refused.list, { key: 'Delete' });
+    fireEvent.keyDown(refused.list, { key: 'Delete', repeat: true });
+    fireEvent.keyDown(refused.list, { key: 'Delete', repeat: true });
+    expect(
+      announce.mock.calls.filter(([text]) => /change this activity/.test(String(text))),
+    ).toHaveLength(1);
+  });
+
+  it('still claims a repeat, so Backspace held never navigates back', () => {
+    const { list, onDeleteActivity } = mount();
+    expect(fireEvent.keyDown(list, { key: 'Backspace', repeat: true })).toBe(false);
+    expect(onDeleteActivity).not.toHaveBeenCalled();
+  });
+
+  it('leaves the key unclaimed when nothing is wired to answer it', () => {
+    const { list } = mount({ bulk: null });
+    fireEvent.keyDown(list, { key: 'ArrowDown', shiftKey: true });
+    expect(fireEvent.keyDown(list, { key: 'Backspace' })).toBe(true);
+  });
+
   it('leaves a modified press alone', () => {
     const { list, onDeleteActivity } = mount();
     fireEvent.keyDown(list, { key: 'Backspace', ctrlKey: true });
