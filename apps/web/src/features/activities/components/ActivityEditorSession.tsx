@@ -8,6 +8,7 @@ import { useActivitySteps } from '../api/use-activity-steps';
 import { activityContextFacts } from '../lib/activity-editor-context';
 import type { ActivityEditorTab } from '../lib/activity-editor-intent';
 import { DURATION_NEEDS_WHOLE_DAYS, durationWriteFields } from '../model/duration-field';
+import { progressRefusal, type ProgressRefusal } from '../model/progress-refusal';
 import { seedRemainingText } from '../model/remaining-field';
 import { useDurationSeed, useLateSeed } from '../model/use-duration-seed';
 import {
@@ -86,6 +87,26 @@ const ANOTHER_SAVE_FINISHING = 'Another save is finishing.';
 
 /** The Progress tab's three panels, each of which saves and fails on its own. */
 type PanelSlot = 'progress' | 'measure' | 'steps';
+
+/**
+ * A Progress-tab panel's held failure. `refusal` is the progress panel's decoded refusal, derived
+ * once when the save settled; `placed` is whether its first named field could carry the sentence.
+ */
+interface PanelFailure {
+  error: Error;
+  refusal: ProgressRefusal | null;
+  placed: boolean;
+}
+
+/**
+ * The panel's top alert: the sentence when the refusal names no field, or names one the form could
+ * not show — and nothing when the field carries it, so the sentence is never on screen twice.
+ */
+function progressAlert(failure: PanelFailure | undefined): string | null {
+  if (!failure) return null;
+  if (failure.refusal === null) return failure.error.message;
+  return failure.refusal.fields.length === 0 || !failure.placed ? failure.refusal.sentence : null;
+}
 
 /** Every scope that can say "Saved.": the tabs' definition scopes and the Progress tab's panels. */
 type SaveSlot = TabKey | PanelSlot | 'codes';
@@ -172,10 +193,10 @@ export function ActivityEditorSession({
    * message and nothing else — held here, not in the mutation, because the mutation outlives the
    * session (ADR-0169 D-10) and its error would greet the next opening.
    */
-  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelSlot, string>>>({});
-  const setPanelError = (slot: PanelSlot, message: string | null): void =>
+  const [panelErrors, setPanelErrors] = useState<Partial<Record<PanelSlot, PanelFailure>>>({});
+  const setPanelError = (slot: PanelSlot, failure: PanelFailure | null): void =>
     setPanelErrors((held) => {
-      if (message !== null) return { ...held, [slot]: message };
+      if (failure !== null) return { ...held, [slot]: failure };
       const { [slot]: _cleared, ...rest } = held;
       return rest;
     });
@@ -571,14 +592,75 @@ export function ActivityEditorSession({
   };
 
   /**
+   * Whether the reader may move the plan's dates, which decides whether a refused progress save tells
+   * them to do it or to ask a planner. The definition gate is denied by role exactly when the reader
+   * lacks `activity:update`, the role set that holds `plan:update` (pinned in `org-permissions.spec.ts`).
+   * That is the **role** only: Edit plan details is not pen-gated (`derivePlanGating`'s `canWrite`
+   * feeds `editPlan` directly), so a Planner without the pen is not told to press Start editing.
+   */
+  const canMovePlanDates = gating.general.roleDenied !== true;
+
+  /**
+   * Whether this session is still mounted. The save outlives it (ADR-0169 D-10), so a settle callback
+   * must not touch the form or the cursor of an editor that has gone.
+   */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /** The Reported progress `<form>`, mounted only while that tab shows — read to place a refusal. */
+  const progressFormRef = useRef<HTMLFormElement | null>(null);
+
+  /**
    * A panel's failure is shown inside the panel, which is only on screen while Progress is — so with
    * the reader on another tab it would be invisible and the live region is the one signal left. The
    * frame announces the same sentence when the whole session is gone.
    */
   const panelFailed = (slot: PanelSlot, label: string, error: Error): void => {
     if (slot === 'measure') markSaving(slot, false);
-    setPanelError(slot, error.message);
-    if (activeRef.current !== 'progress') announce(`${label} not saved: ${error.message}`);
+    if (slot !== 'progress' || !mountedRef.current) {
+      setPanelError(slot, { error, refusal: null, placed: true });
+      if (activeRef.current !== 'progress') announce(`${label} not saved: ${error.message}`);
+      return;
+    }
+    // A refusal about a field goes on that field (ADR-0217 D1): set on the session-held form, so it
+    // is there when the reader comes back from another tab too. Derived once, here, and held.
+    const refusal = progressRefusal(error, { canMovePlanDates });
+    refusal.fields.forEach((field) =>
+      progress.form.setError(field, {
+        type: 'server',
+        message: refusal.fieldMessages[field] ?? refusal.sentence,
+      }),
+    );
+    const [first] = refusal.fields;
+    const formEl = progressFormRef.current;
+    // Off the Progress tab the form element is gone but the form is not: the error is on the field
+    // for the reader's return. On the tab, a named field the form does not render has nowhere to
+    // show it, so the panel alert carries the sentence instead of nothing.
+    const placed =
+      first === undefined || formEl === null || formEl.elements.namedItem(first) !== null;
+    setPanelError(slot, { error, refusal, placed });
+
+    let moved = false;
+    if (first !== undefined && placed && formEl !== null && activeRef.current === 'progress') {
+      // The cursor goes to the field only from where the reader pressed Save (or from nowhere): a
+      // reader who has since moved to another field, a menu or a dialog keeps their place and is
+      // told by the live region instead — a focus change they did not ask for is SC 3.2.2's reverse.
+      const at = document.activeElement;
+      const pressedSave =
+        at instanceof HTMLButtonElement && at.type === 'submit' && formEl.contains(at);
+      if (at === null || at === document.body || pressedSave) {
+        progress.form.setFocus(first);
+        moved = true;
+      }
+    }
+    if (!moved && (activeRef.current !== 'progress' || (first !== undefined && placed))) {
+      announce(`${label} not saved: ${refusal.sentence}`);
+    }
   };
 
   const saveMeasure = (values: ActivityMeasureValues): void =>
@@ -1017,7 +1099,9 @@ export function ActivityEditorSession({
                     onSave={saveProgress}
                     pending={saves.progressPending}
                     saved={savedSlots.progress === true}
-                    error={panelErrors.progress ?? null}
+                    error={progressAlert(panelErrors.progress)}
+                    refusal={panelErrors.progress?.refusal ?? null}
+                    formRef={progressFormRef}
                   />
                   <ValueMeasurePanel
                     form={measure.form}
@@ -1027,7 +1111,7 @@ export function ActivityEditorSession({
                     onSave={saveMeasure}
                     pending={saves.fieldsPending || codesSaving}
                     saved={savedSlots.measure === true}
-                    error={panelErrors.measure ?? null}
+                    error={panelErrors.measure?.error.message ?? null}
                     {...othersSaving('measure')}
                   />
                   <WeightedStepsPanel
@@ -1040,7 +1124,7 @@ export function ActivityEditorSession({
                     onSave={saveSteps}
                     pending={saves.stepsPending}
                     saved={savedSlots.steps === true}
-                    error={panelErrors.steps ?? null}
+                    error={panelErrors.steps?.error.message ?? null}
                     announce={announce}
                     // Only the **Steps** entry point asks for this. Landing at the top of a
                     // three-panel tab would make that action feel like it opened the wrong thing.

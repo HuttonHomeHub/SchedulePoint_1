@@ -367,3 +367,23 @@ describe('permissionsForRole — cost:read is coupled to activity:update (#62)',
     }
   });
 });
+
+/**
+ * The web tells a refused progress save's reader whether they may move the plan's data date from
+ * the activity editor's definition gate, which is `activity:update`. The data date is edited under
+ * `plan:update`, so the sentence is only true while the two are held by the same roles
+ * (`docs/specs/progress-before-data-date/`, M2; ADR-0217).
+ */
+describe('permissionsForRole — activity:update is coupled to plan:update', () => {
+  it('grants both to the same roles, or neither', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      const perms = permissionsForRole(role);
+      expect(
+        perms.includes('activity:update'),
+        `${role}: activity:update=${perms.includes('activity:update')}, plan:update=${perms.includes('plan:update')}. ` +
+          `A refused progress save tells a role with activity:update it may move the data date ` +
+          `(progress-refusal.ts); splitting these makes that sentence false. See docs/specs/progress-before-data-date.`,
+      ).toBe(perms.includes('plan:update'));
+    }
+  });
+});

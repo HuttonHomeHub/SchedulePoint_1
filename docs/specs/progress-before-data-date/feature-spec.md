@@ -1,6 +1,6 @@
 # Feature Spec: Reporting progress past the data date, and a refusal you can see
 
-- **Status:** Approved by the product owner, 2026-11-12, with all three defaults (Q1 keep the rule, Q2 reword journey 2, Q3 separate dates not now). M1 in progress.
+- **Status:** Approved by the product owner, 2026-11-12, with all three defaults (Q1 keep the rule, Q2 reword journey 2, Q3 separate dates not now). M1 built, M2 in progress.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, the two open first-severity problems on the ranked list
@@ -171,8 +171,8 @@ No save in the activity editor can fail silently at 1024 × 600, and the data da
 
 > **US-2** — As a **Planner**, I want the same refusal to tell me where to move the data date.
 >
-> - **Given** I can edit the plan **then** the sentence's second half reads "Move the data date to 14 Nov 2026 or
->   later in Edit plan details, then save again."
+> - **Given** I can edit the plan **then** the sentence's second half reads "Move the data date (the Planned start box in
+>   Edit plan details) to 14 Nov 2026 or later, then save again." (until M4 renames the box; the parenthetical then goes)
 
 > **US-3** — As **anyone saving in the activity editor**, I want any refusal I cannot pin to a field to appear by
 > the Save I pressed.
