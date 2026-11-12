@@ -1,7 +1,8 @@
 # Amendment 2: what M0b's fired stop rules mean, and option A′
 
 - **Status:** Approved — by the product owner, 2026-11-11, with all defaults (Q1 the revised design and the M0c
-  pass, Q2 fix the existing cut-off buttons first, Q3 judge 200 % text by reachability).
+  pass, Q2 fix the existing cut-off buttons first, Q3 judge 200 % text by reachability). **M0d passed 2026-11-11; folded**
+  (with amendments 1 and 3, by [`amendment-3-after-m0c.md`](./amendment-3-after-m0c.md) §9: A′ plus the foot row's one trailing group, A″).
 - **Amends:** [`amendment-1-offer-at-1024.md`](./amendment-1-offer-at-1024.md) §2 option A's mechanism, §3 "What changes in
   the spec" (§4.6 bullets), §4 (M0b's stop rules, replaced for M0c). Through it: [`feature-spec.md`](./feature-spec.md)
   §4.6, §4.7, SC-6; [`implementation-plan.md`](./implementation-plan.md) M0 (a third pass) and M2.
