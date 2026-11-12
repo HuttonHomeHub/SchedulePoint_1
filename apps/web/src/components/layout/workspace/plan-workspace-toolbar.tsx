@@ -128,6 +128,7 @@ import {
 import {
   HistoryResultStrip,
   LayoutResolvedStrip,
+  FollowLogicStrip,
   TsldPanel,
   barDateSourceFor,
 } from '@/features/tsld';
@@ -1203,6 +1204,34 @@ export function ToolbarPlanWorkspace({
       />
     );
   /**
+   * **The edit offer** (placed-bar-follows-link M2, ADR-0216): an edit just left a placed bar
+   * before its logic. Built here for the same reason as the notice above — it renders in BOTH views'
+   * docks — and as a function because the Diagram hands it the Link tool's confirmation to carry.
+   * Follow logic is shaded with the shared gate's reason while the Late-start overlay is on (the
+   * read-only picture); without the pen the model raises no offer at all.
+   */
+  const followEdit = model.followEdit;
+  const followEditShut = clearVisualPlacementGate({
+    canEditSchedule: model.canEditSchedule,
+    lateOverlayActive,
+    hasSelection: true,
+    scheduleRefusal: model.scheduleRefusal,
+  });
+  const followEditNotice =
+    followEdit === null
+      ? null
+      : (link?: { lead: string; onUndo?: (() => void) | undefined }): React.ReactNode => (
+          <FollowLogicStrip
+            message={followEdit.message}
+            lead={link?.lead}
+            onUndo={link?.onUndo}
+            onFollow={() => void model.acceptFollowEdit()}
+            onKeep={model.dismissFollowEdit}
+            followReason={followEditShut.enabled ? null : followEditShut.reason}
+            restoreTarget={planSurfaceTarget}
+          />
+        );
+  /**
    * **Undo and redo are live only when the planner can author right now** — pen
    * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the
    * strip's follow-up button and the refusal below, so they cannot disagree about it.
@@ -1508,6 +1537,7 @@ export function ToolbarPlanWorkspace({
       hasRevisionPair={hasRevisionPair}
       touchGestureHint={touchGestureHint}
       layoutResolvedNotice={layoutResolvedNotice}
+      followEditNotice={followEditNotice}
       historyResultNotice={historyResultNotice}
       dataDate={plan.plannedStart}
       swimlanes={swimlaneScene.input}
@@ -1974,7 +2004,10 @@ export function ToolbarPlanWorkspace({
               undo/redo result is the newest of the candidates — it describes the step just
               taken, and replaces the overlap notice it would otherwise contradict. The touch tip
               is last of all: it teaches a gesture and describes nothing about the plan. */}
-          {historyResultNotice?.node ?? layoutResolvedNotice ?? touchGestureHint}
+          {historyResultNotice?.node ??
+            followEditNotice?.() ??
+            layoutResolvedNotice ??
+            touchGestureHint}
         </CanvasDock>
       </>
     ) : (

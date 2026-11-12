@@ -159,6 +159,14 @@ export function useAutoResolveOverlaps(params: {
   history: PlanEditHistory;
   announce: (message: string) => void;
   onWriteRejected: (err: unknown) => void;
+  /**
+   * Called when a settle has been dealt with here, after any lane step is recorded. The follow-logic
+   * offer binds to the undo step on top, which is this hook's step when it moved a bar, so it must
+   * look after this has run and not beside it (placed-bar-follows-link T2.1). Not called on the
+   * paths that leave the snapshot for a later settle, and the caller re-checks that the plan is
+   * quiet, because a new edit can arrive while a lane write is in flight.
+   */
+  afterResolve?: () => void;
 }): AutoResolveOverlaps {
   const pendingRef = useRef<Pending | null>(null);
   const paramsRef = useRef(params);
@@ -191,7 +199,7 @@ export function useAutoResolveOverlaps(params: {
     pendingRef.current = null;
   }, []);
 
-  const resolve = useCallback(async (): Promise<void> => {
+  const resolveSettled = useCallback(async (): Promise<void> => {
     const pending = pendingRef.current;
     if (pending === null) return;
     const { enabled, pendingEdits, batchPositions, history, announce, onWriteRejected } =
@@ -329,6 +337,12 @@ export function useAutoResolveOverlaps(params: {
     announce(message);
     setNotice({ message, command });
   }, []);
+
+  const resolve = useCallback(async (): Promise<void> => {
+    const pending = pendingRef.current;
+    await resolveSettled();
+    if (pending !== null && pendingRef.current !== pending) paramsRef.current.afterResolve?.();
+  }, [resolveSettled]);
 
   const lastSettled = useRef(params.settled);
   useEffect(() => {

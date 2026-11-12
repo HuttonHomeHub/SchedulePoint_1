@@ -360,6 +360,17 @@ export interface TsldPanelProps {
    */
   layoutResolvedNotice?: React.ReactNode | null | undefined;
   /**
+   * The edit offer (placed-bar-follows-link M2, ADR-0216), or `null` when there is none: an edit
+   * left a placed bar before its logic and the offer to let it follow is still bound to the top
+   * undo step. A function rather than a node because the panel owns what the Link tool's
+   * confirmation says: when that confirmation is showing, the offer carries it (`link`), so one strip
+   * holds both and the armed tool's band never hides the offer.
+   */
+  followEditNotice?:
+    | ((link?: { lead: string; onUndo?: (() => void) | undefined }) => React.ReactNode)
+    | null
+    | undefined;
+  /**
    * What the last undo/redo press left behind (undo-redo M1), built by the host for the reason
    * `layoutResolvedNotice` is: the step and its lifetime belong to the workspace model, and the Gantt
    * dock renders the same strip. `kind` is what the panel needs for precedence — a failure outranks
@@ -670,6 +681,7 @@ export function TsldPanel({
   onUndoLastEdit,
   touchGestureHint,
   layoutResolvedNotice,
+  followEditNotice,
   historyResultNotice,
   recalcHold,
   dropLinkPickSignal = 0,
@@ -1861,6 +1873,7 @@ export function TsldPanel({
     hasTouchGestureHint: touchGestureHint != null,
     hasArrangeOffer: arrangeOfferAvailable,
     hasLayoutResolvedNotice: layoutResolvedNotice != null,
+    hasFollowEdit: followEditNotice != null,
     historyResult: historyResultNotice?.kind ?? null,
   });
 
@@ -3328,6 +3341,13 @@ export function TsldPanel({
           <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
         ) : null}
 
+        {/* The link confirmation carrying the edit offer (ADR-0216 D5): the mode band's own place,
+            before the object bar, which is where the confirmation always sat. Every other face of
+            the offer follows the bar, below. */}
+        {dockStrip === 'follow-edit' && modeStatement?.kind === 'linked'
+          ? followEditNotice?.({ lead: modeStatementText(modeStatement), onUndo: onUndoLastEdit })
+          : null}
+
         {/*
           The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
           reserved chrome as the plural bar below it, never floating over the scene. It floated until
@@ -3492,6 +3512,10 @@ export function TsldPanel({
 
           Omitted rather than shaded without the pen — see `arrangeOfferAvailable`.
         */}
+        {dockStrip === 'follow-edit' && modeStatement?.kind !== 'linked'
+          ? followEditNotice?.()
+          : null}
+
         {dockStrip === 'layout-resolved' ? layoutResolvedNotice : null}
 
         {dockStrip === 'arrange-offer' ? (

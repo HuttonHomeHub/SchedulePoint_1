@@ -190,6 +190,61 @@ describe.skipIf(!hasDatabase)('Activity batch operations (e2e)', () => {
       expect(res.body.data[0]).toMatchObject({ constraintType: null, constraintDate: null });
     });
 
+    it('lets a placed, constrained bar follow its logic: visualStart cleared, the constraint kept, the lane and the neighbours untouched', async () => {
+      // The web's **Follow logic** (placed-bar-follows-link, ADR-0216 D3) is exactly this row: it clears
+      // the placement and sends the constraint back AS STORED, with `laneIndex: null`. No other case here
+      // has a row that is both placed and constrained, so nothing proved the clear leaves the
+      // commitment alone: a client that sent the constraint as null would delete it, and it would be
+      // indistinguishable from "clears a constraint when both fields are null" above.
+      const { actor, planId } = await setup();
+      const a = await task(actor, planId, 'A', { laneIndex: 3 });
+      const b = await task(actor, planId, 'B');
+      const placed = await actor.agent
+        .patch(placementsUrl(planId))
+        .send({
+          placements: [
+            place(a, {
+              constraintType: 'SNET',
+              constraintDate: '2026-02-02',
+              visualStart: '2026-01-05',
+            }),
+          ],
+        })
+        .expect(200);
+      expect(placed.body.data[0]).toMatchObject({
+        constraintType: 'SNET',
+        constraintDate: '2026-02-02',
+        visualStart: '2026-01-05',
+        laneIndex: 3,
+      });
+      const afterPlace = { id: a.id, version: placed.body.data[0].version as number };
+
+      const res = await actor.agent
+        .patch(placementsUrl(planId))
+        .send({
+          placements: [place(afterPlace, { constraintType: 'SNET', constraintDate: '2026-02-02' })],
+        })
+        .expect(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0]).toMatchObject({
+        id: a.id,
+        visualStart: null,
+        constraintType: 'SNET',
+        constraintDate: '2026-02-02',
+        laneIndex: 3, // null laneIndex left it alone
+        version: afterPlace.version + 1,
+      });
+
+      // The row the batch did not name is exactly as it was.
+      const rows = await actor.agent
+        .get(`/api/v1/organizations/acme/plans/${planId}/activities`)
+        .expect(200);
+      const untouched = (rows.body.data as Array<{ id: string; version: number }>).find(
+        (row) => row.id === b.id,
+      );
+      expect(untouched?.version).toBe(b.version);
+    });
+
     it('rejects an omitted field rather than treating it as a clear (the complete-row rule)', async () => {
       const { actor, planId } = await setup();
       const a = await task(actor, planId, 'A');

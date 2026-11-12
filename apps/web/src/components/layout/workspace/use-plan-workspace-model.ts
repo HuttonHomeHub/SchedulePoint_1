@@ -10,7 +10,14 @@ import type {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  FOLLOW_LOGIC_CONFLICT,
+  followLogicDoneSentence,
+  followLogicLabel,
+  followLogicRows,
+} from './follow-logic-offer';
 import { useAutoResolveOverlaps } from './use-auto-resolve-overlaps';
+import { useFollowLogicOffer } from './use-follow-logic-offer';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import {
@@ -656,13 +663,28 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * reacts to is the moment the recalculation's refetch has landed IN THE CACHE, and a render that
    * has not caught up yet would hand it the dates the recalculation replaced.
    */
+  const readCachedActivities = (): readonly ActivitySummary[] | undefined =>
+    queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
+    activities.data;
+  /**
+   * **A bar you placed stays put, and an edit that leaves it behind offers to let it follow**
+   * (ADR-0216). It rides on the same snapshot lifecycle as the overlap resolution: `beginLayoutEdit`
+   * takes both, a replay drops both, and the offer is decided once the resolution has recorded its
+   * own step, so it binds to the step actually on top.
+   */
+  const followOffer = useFollowLogicOffer({
+    enabled: canEditSchedule,
+    pendingEdits: autoRecalc.pendingEdits,
+    isWriting: () => queryClient.isMutating() > 0,
+    readActivities: readCachedActivities,
+    history: editHistory,
+    announce,
+  });
   const autoResolve = useAutoResolveOverlaps({
     enabled: canEditSchedule,
     settled: autoRecalc.settled,
     pendingEdits: autoRecalc.pendingEdits,
-    readActivities: () =>
-      queryClient.getQueryData<ActivitySummary[]>(activityKeys.listByPlan(orgSlug, planId)) ??
-      activities.data,
+    readActivities: readCachedActivities,
     isWriting: () => queryClient.isMutating() > 0,
     batchPositions: batchPositions.mutateAsync,
     readSwimlaneInput,
@@ -670,8 +692,17 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     history: editHistory,
     announce,
     onWriteRejected: pen.onWriteRejected,
+    afterResolve: followOffer.evaluate,
   });
-  const beginLayoutEdit = autoResolve.begin;
+  const beginAutoResolve = autoResolve.begin;
+  const beginFollowOffer = followOffer.begin;
+  const beginLayoutEdit = useCallback(
+    (subjects: Iterable<string>): void => {
+      beginAutoResolve(subjects);
+      beginFollowOffer();
+    },
+    [beginAutoResolve, beginFollowOffer],
+  );
   const resolveLayoutNow = autoResolve.resolveNow;
   /**
    * The undo/redo every surface calls, with the replay noted first. A replay restores a recorded
@@ -680,7 +711,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * keybindings and the dock notices all reach undo through `model.undoRedo` — a guard inside one
    * of them is how the others come to resolve against a replay.
    */
-  const noteReplay = autoResolve.noteReplay;
+  const noteResolveReplay = autoResolve.noteReplay;
+  const noteFollowReplay = followOffer.noteReplay;
+  const noteReplay = useCallback((): void => {
+    noteResolveReplay();
+    noteFollowReplay();
+  }, [noteResolveReplay, noteFollowReplay]);
   const undoRedo = useMemo(
     () => ({
       ...plainUndoRedo,
@@ -2238,29 +2274,81 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   useEffect(() => {
     activitiesRef.current = activities.data;
   });
-  // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
-  // — the **Follow logic** command. A faithful subset of the reposition VISUAL branch above:
-  // the minimal `visualStart: null` PATCH → (flag-guarded) the `visualStartCommand` inverse restoring the
-  // prior placement → announce + `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at
-  // its computed date. A stale-version 409 surfaces the (announced) conflict non-destructively, and a
-  // pen-loss 423 defers to the shared pen banner: either way nothing applied, nothing recorded, never
-  // re-sent — exactly like a reposition. It touches only the existing PATCH hook + auto-recalc, so the
-  // CPM engine and its recalc parity gate are untouched. Stable identity (the toolbar context memo
-  // depends on it): the member handles below are hoisted into stable locals and the pre-clear row is
-  // read through `activitiesRef` at call time, so the deps array is all-stable (no eslint-disable).
   const notifyRecalc = autoRecalc.notify;
   const onPenWriteRejected = pen.onWriteRejected;
+  /**
+   * **Follow logic, for a set of bars** (ADR-0216 D3): `visualStart := null`, the constraint sent
+   * back as stored, the lane left alone, through the existing batch placement route — one
+   * all-or-nothing write, recorded as ONE undo step with `bulkPlacementCommand`, the shape apply
+   * levelling uses. A stale version on any row refuses the whole batch (409, announced); a lost pen
+   * (423) defers to the shared pen banner. Either way nothing applied, nothing recorded, never re-sent.
+   *
+   * `beginLayoutEdit(ids)` first, so a bar that now overlaps another is moved clear on the settle
+   * (ADR-0153), exactly as the single-bar clear always did. Summaries are the route's refusal
+   * (`SUMMARY_NOT_BULK_ELIGIBLE`), so they are filtered here and never reach it.
+   */
+  const followLogicRowsWrite = useCallback(
+    async (rows: readonly ActivitySummary[]): Promise<void> => {
+      const eligible = rows.filter((row) => row.type !== 'WBS_SUMMARY');
+      const [first] = eligible;
+      if (first === undefined) return;
+      const { placements, before, after } = followLogicRows(eligible);
+      beginLayoutEdit(eligible.map((row) => row.id));
+      try {
+        const saved = await batchPlacements({ placements });
+        editHistory.record(
+          bulkPlacementCommand({
+            batchPlacements,
+            before,
+            after,
+            saved,
+            label: followLogicLabel(eligible.length),
+          }),
+        );
+      } catch (err) {
+        if (onPenWriteRejected(err).kind === 'lock') return;
+        if (err instanceof ApiFetchError && err.status === 409) {
+          announce(FOLLOW_LOGIC_CONFLICT);
+          return;
+        }
+        throw err;
+      }
+      // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3).
+      announce(followLogicDoneSentence(first.name, eligible.length));
+      notifyRecalc();
+    },
+    [beginLayoutEdit, batchPlacements, editHistory, onPenWriteRejected, announce, notifyRecalc],
+  );
+  // The dock offer's **Follow logic**: take the offer (which clears it, so it cannot return when an
+  // undo puts its step back on top) and write for the bars it named, read at press time so the
+  // versions are the freshest the cache holds.
+  const takeFollowOffer = followOffer.take;
+  const acceptFollowEdit = useCallback(async (): Promise<void> => {
+    const ids = takeFollowOffer();
+    if (ids === null) return;
+    const wanted = new Set(ids);
+    await followLogicRowsWrite((activitiesRef.current ?? []).filter((a) => wanted.has(a.id)));
+  }, [takeFollowOffer, followLogicRowsWrite]);
+
+  // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
+  // — the selection bar's **Follow logic**. One write path with the dock offer's: a one-row batch
+  // (ADR-0216; its undo step is `bulkPlacementCommand`'s where it used to be `visualStartCommand`'s).
+  // **A summary keeps the single-activity PATCH**: the batch route refuses one, and a summary's
+  // per-object Follow logic still works. The row's `version` is the caller's, so a stale selection
+  // bar refuses rather than overwriting. Stable identity (the toolbar context memo depends on it):
+  // the pre-clear row is read through `activitiesRef` at call time, so the deps array is all-stable.
   const setVisualStartAsync = setVisualStart.mutateAsync;
   const clearVisualPlacement = useCallback(
     async (activityId: string, version: number): Promise<void> => {
       const activity = (activitiesRef.current ?? []).find((a) => a.id === activityId);
+      if (activity !== undefined && activity.type !== 'WBS_SUMMARY') {
+        await followLogicRowsWrite([{ ...activity, version }]);
+        return;
+      }
       const name = activity?.name ?? 'the activity';
       beginLayoutEdit([activityId]);
       try {
         const saved = await setVisualStartAsync({ activityId, visualStart: null, version });
-        // Record the clear for undo (ADR-0048) — the single user edit, NOT the follow-up recalc. The
-        // inverse restores the prior `visualStart` (lane unchanged). Like the
-        // reposition VISUAL branch.
         editHistory.record(
           visualStartCommand({
             setVisualStart: setVisualStartAsync,
@@ -2276,9 +2364,6 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         );
       } catch (err) {
         if (onPenWriteRejected(err).kind === 'lock') return;
-        // Stale version — the clear was NOT applied (nothing changed); never re-send, never record.
-        // Surface it non-destructively (announced), mirroring the reposition VISUAL branch's conflict
-        // path (which shows + announces rather than silently no-op'ing), then stop.
         if (err instanceof ApiFetchError && err.status === 409) {
           announce(
             'This plan changed since you opened it — the visual placement wasn’t cleared. Refresh to see the latest.',
@@ -2287,12 +2372,18 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }
         throw err;
       }
-      // Announce success so the (otherwise-silent) canvas re-plot is reachable to AT (WCAG 4.1.3),
-      // matching the reposition VISUAL branch's "dates will update" wording.
-      announce(`“${name}” now follows its logic; dates will update.`);
+      announce(followLogicDoneSentence(name, 1));
       notifyRecalc();
     },
-    [editHistory, setVisualStartAsync, notifyRecalc, onPenWriteRejected, announce, beginLayoutEdit],
+    [
+      followLogicRowsWrite,
+      editHistory,
+      setVisualStartAsync,
+      notifyRecalc,
+      onPenWriteRejected,
+      announce,
+      beginLayoutEdit,
+    ],
   );
 
   /**
@@ -3106,6 +3197,14 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
      */
     layoutResolved: autoResolve.notice,
     dismissLayoutResolved: autoResolve.dismissNotice,
+    /**
+     * The edit offer (ADR-0216): a placed bar an edit newly left before its logic, with **Follow
+     * logic** (`accept`, one undo step) and **Keep it here** (`dismiss`), or null. Withdrawn the
+     * moment anything else is on top of the undo stack.
+     */
+    followEdit: followOffer.offer,
+    acceptFollowEdit,
+    dismissFollowEdit: followOffer.dismiss,
     /** The canvas's plural-selection operations (`docs/specs/canvas-multi-select/` M4). */
     bulkOperations,
     applyLevelling,

@@ -4,8 +4,20 @@ import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
+  dayGap,
+  drawThreeBars,
+  flaggedNames,
+  footFigures,
+  lengthenBar,
+  linkWithTool,
+  requireRow,
+  selectInList,
+  selfHit,
+} from './follow-logic-support';
+import {
   canvas,
   createHierarchy,
+  diagramList,
   ensurePen,
   findBar,
   newPlan,
@@ -389,4 +401,290 @@ test('an expanded activities panel leaves an open dock a usable height', async (
   // The pinned positive for the trade's other half: the panel is still open and still real — the
   // floor must be paid by clamping the panel, never by collapsing it.
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
+});
+
+/**
+ * **The foot row's two new rules, read against the real DOM** (placed-bar-follows-link M2, ADR-0216
+ * D8 and D9; `docs/TECH_DEBT.md` #581).
+ *
+ * M0d measured an INJECTED copy of the offer (a clone of the real `NoticeStrip` with the draft copy
+ * put in, and the foot row's group built in the page) at 1,354 readings. This is the same plan, the
+ * same viewport and the same selection, with the real component, so a figure that moves is the
+ * injection and the product disagreeing, and is reported as such rather than adjusted.
+ *
+ * **The figures** are `follow-logic-m0d-offer-row.{fine,coarse}.json`, mode `A-double-prime`,
+ * variant `edit-one`, view `diagram`: a mouse at 1250 × 800 with the flagged bar selected reads foot
+ * 205, strip 50, stage 448, outlet 957; at 1024 × 600 nothing selected 101 / 50 / 352 / 731 and the
+ * flagged bar selected 205 / 50 / 248; a finger at 1250 × 800 flagged 229 / 62 / 404 and at 1024 × 600
+ * flagged 277 / 62 / 52 (the waived floor, D8), nothing selected 113 / 62 / 216.
+ */
+
+/** Whether the foot row's toggle is on the same line as the plan facts (centres within half a line). */
+async function toggleOnFactsLine(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const group = document.querySelector<HTMLElement>('[data-activities-bar] > [data-foot-trail]');
+    const facts = group?.firstElementChild as HTMLElement | null;
+    const toggle = group?.querySelector<HTMLElement>('[data-activities-toggle]');
+    if (!group || !facts || !toggle) throw new Error('the foot row has no facts-and-toggle group');
+    const f = facts.getBoundingClientRect();
+    const t = toggle.getBoundingClientRect();
+    return (
+      Math.abs(f.top + f.height / 2 - (t.top + t.height / 2)) <= Math.max(f.height, t.height) / 2
+    );
+  });
+}
+
+/** Raise the offer for `Pour slab` alone (the owner's runbook, B stranded and C left alone). */
+async function raiseOfferForPourSlab(page: Page, orgSlug: string): Promise<void> {
+  const bars = await drawThreeBars(page, orgSlug, [220, 440, 660]);
+  await linkWithTool(page, bars.A, bars.B);
+  await expect(page.getByTestId('canvas-mode-band')).toContainText('Linked', { timeout: 10_000 });
+  await linkWithTool(page, bars.B, bars.C, false);
+  await expect
+    .poll(async () => (await flaggedNames(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(0);
+  await canvas(page).press('Escape');
+  const a = requireRow(bars.rows, 'Excavate');
+  const b = requireRow(bars.rows, 'Pour slab');
+  const gap = dayGap(a.visualEffectiveStart ?? '', b.visualEffectiveStart ?? '');
+  const pxPerDay = (bars.B.r[0] - bars.A.r[0]) / Math.max(1, gap);
+  await lengthenBar(page, { y: bars.A.y, r: bars.A.r }, Math.round(pxPerDay * (gap + 1.5)));
+  await expect
+    .poll(async () => (await flaggedNames(page, orgSlug)).join(','), { timeout: 30_000 })
+    .toBe('Pour slab');
+  await expect(page.getByTestId('canvas-follow-logic-offer')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('canvas-follow-logic-offer')).toContainText(
+    '“Pour slab” stays where you placed it, before its logic allows.',
+  );
+}
+
+/** Every button of the strip is pressable where it is, and the foot row does not scroll sideways. */
+async function expectOfferPressable(page: Page, label: string): Promise<void> {
+  const strip = page.getByTestId('canvas-follow-logic-offer');
+  const buttons = strip.getByRole('button');
+  expect(await buttons.count(), `${label}: the strip’s two buttons`).toBe(2);
+  for (const button of await buttons.all()) {
+    expect(
+      await selfHit(button),
+      `${label}: a pointer at the centre of “${await button.textContent()}”`,
+    ).toBe(true);
+  }
+  const figures = await footFigures(page);
+  expect(figures.sideways, `${label}: the foot row must not scroll sideways`).toBe(false);
+  expect(await toggleOnFactsLine(page), `${label}: the toggle sits on the facts’ line`).toBe(true);
+}
+
+const MOUSE_AND_FINGER = [
+  {
+    pointer: 'mouse',
+    touch: false,
+    cells: {
+      wide: { foot: 205, strip: 50, stage: 448, outlet: 957 },
+      floorNone: { foot: 101, strip: 50, stage: 352, outlet: 731 },
+      floorFlagged: { foot: 205, strip: 50, stage: 248, outlet: 731 },
+      kept: { foot: 187, stage: 266 },
+    },
+  },
+  {
+    pointer: 'finger',
+    touch: true,
+    cells: {
+      wide: { foot: 229, strip: 62, stage: 404, outlet: 957 },
+      floorNone: { foot: 113, strip: 62, stage: 216, outlet: 731 },
+      floorFlagged: { foot: 277, strip: 62, stage: 52, outlet: 731 },
+      kept: { foot: 207, stage: 122 },
+    },
+  },
+] as const;
+
+for (const { pointer, touch, cells } of MOUSE_AND_FINGER) {
+  test.describe(`the follow-logic offer in the foot row, ${pointer}`, () => {
+    test.use({ hasTouch: touch });
+
+    test(`1250 and 1024 wide: every button pressable, no sideways scroll, the toggle on the facts’ line (${pointer})`, async ({
+      page,
+    }) => {
+      test.setTimeout(420_000);
+      const orgSlug = await onboard(page, STAMP + (touch ? 41 : 40));
+      await createHierarchy(page);
+      await newPlan(page, 'Offer row');
+      await ensurePen(page);
+      await raiseOfferForPourSlab(page, orgSlug);
+      expect(
+        await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
+        'the pointer this describe says it is',
+      ).toBe(touch);
+
+      // ── 1250 × 800, the flagged bar selected: the cell M0c fired on (+40 px, the toggle stranded) ──
+      await page.setViewportSize({ width: 1250, height: 800 });
+      await selectInList(page, orgSlug, 'Pour slab');
+      await expectOfferPressable(page, `${pointer} 1250 × 800, flagged bar selected`);
+      const wide = await footFigures(page);
+      expect(
+        wide,
+        `${pointer} 1250 × 800 against M0d’s A-double-prime reading (M0c read foot 253)`,
+      ).toEqual({
+        ...cells.wide,
+        sideways: false,
+      });
+
+      // ── 1024 × 600, nothing selected, then the flagged bar selected ────────────────────────────
+      await page.setViewportSize({ width: 1024, height: 600 });
+      await canvas(page).press('Escape');
+      await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
+      await expectOfferPressable(page, `${pointer} 1024 × 600, nothing selected`);
+      const none = await footFigures(page);
+      expect(none, `${pointer} 1024 × 600, nothing selected, against M0d`).toEqual({
+        ...cells.floorNone,
+        sideways: false,
+      });
+      expect(
+        none.stage,
+        'with nothing selected the stage keeps its 120 px floor (D8: never waived)',
+      ).toBeGreaterThanOrEqual(120);
+
+      await selectInList(page, orgSlug, 'Pour slab');
+      await expectOfferPressable(page, `${pointer} 1024 × 600, flagged bar selected`);
+      const flagged = await footFigures(page);
+      expect(flagged, `${pointer} 1024 × 600, flagged bar selected, against M0d`).toEqual({
+        ...cells.floorFlagged,
+        sideways: false,
+      });
+
+      // ── The floor comes back with the strip: Keep it here, and the stage is whole again ───────────
+      await page
+        .getByTestId('canvas-follow-logic-offer')
+        .getByRole('button', { name: 'Keep it here' })
+        .click();
+      await expect(page.getByTestId('canvas-follow-logic-offer')).toHaveCount(0);
+      const kept = await footFigures(page);
+      expect(kept.strip).toBe(0);
+      // The dock as it shipped, with the same selection: M0d's `base` reading for this cell.
+      expect(
+        { foot: kept.foot, stage: kept.stage },
+        `${pointer} 1024 × 600, flagged bar selected, strip gone, against M0d's base`,
+      ).toEqual(cells.kept);
+      expect(
+        kept.stage,
+        'the 120 px floor holds again once nothing awaits an answer',
+      ).toBeGreaterThanOrEqual(120);
+    });
+  });
+}
+
+test.describe('the facts and the toggle are one item (docs/TECH_DEBT.md #581)', () => {
+  /**
+   * The shipped dock stranded the panel toggle on a line of its own, with a bar selected, in three
+   * states (M0d): the real stale sentence on a mouse at about 1220 to 1260, and the ordinary current
+   * facts on a FINGER at about 1210 to 1250. Both are driven here, with no offer at all, because the
+   * defect was never the offer's: it was the foot row's three-item line test, and the group removes it.
+   * **Verified red** by taking the group out of `PlanActivitiesFootRow`: the toggle reads on its own
+   * line (a foot row 80 px taller at 1240 on a mouse, 48 px at 1230 on a finger).
+   */
+  test('a real stale sentence beside a selection bar, on a mouse at 1240 × 800', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1240, height: 800 });
+    const orgSlug = await onboard(page, STAMP + 50);
+    await createHierarchy(page);
+    await newPlan(page, 'Stale facts');
+    await ensurePen(page);
+    const [dig] = await seedActivities(page, orgSlug, [
+      { name: 'Dig footings', laneIndex: 0 },
+      { name: 'Steel frame', laneIndex: 1 },
+    ]);
+    if (!dig) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    // An activity created AFTER the last calculation, then a reload: the plan reads "Edited since it
+    // was last calculated" with its Recalculate button, which is the wide state.
+    await seedActivities(page, orgSlug, [{ name: 'Late addition', laneIndex: 2 }]);
+    await page.reload();
+    await ensurePen(page);
+    await expect(page.locator('[data-schedule-state="stale"]')).toBeVisible({ timeout: 20_000 });
+    await findBar(page, dig.id);
+    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+    expect(await toggleOnFactsLine(page), 'the toggle shares the stale facts’ line').toBe(true);
+    expect((await footFigures(page)).sideways).toBe(false);
+  });
+
+  test.describe('on a finger', () => {
+    test.use({ hasTouch: true });
+
+    test('current facts beside a selection bar at 1230 × 800', async ({ page }) => {
+      test.setTimeout(240_000);
+      await page.setViewportSize({ width: 1230, height: 800 });
+      const orgSlug = await onboard(page, STAMP + 51);
+      await createHierarchy(page);
+      await newPlan(page, 'Finger facts');
+      await ensurePen(page);
+      const [dig] = await seedActivities(page, orgSlug, [
+        { name: 'Dig footings', laneIndex: 0 },
+        { name: 'Steel frame', laneIndex: 1 },
+      ]);
+      if (!dig) throw new Error('seeding returned no activity');
+      await recalculate(page, orgSlug);
+      await ensurePen(page);
+      expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
+      await findBar(page, dig.id);
+      await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+      await expect(page.locator('[data-schedule-state="current"]')).toBeVisible();
+      expect(await toggleOnFactsLine(page), 'the toggle shares the current facts’ line').toBe(true);
+      expect((await footFigures(page)).sideways).toBe(false);
+    });
+  });
+});
+
+test.describe('the follow-logic offer at 200 % text', () => {
+  test('every button can be reached by scrolling, and nothing scrolls sideways', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const orgSlug = await onboard(page, STAMP + 60);
+    await createHierarchy(page);
+    await newPlan(page, 'Offer 200');
+    await ensurePen(page);
+    await raiseOfferForPourSlab(page, orgSlug);
+
+    // Root font size, one of the two routes M0d read: the root font moves every rem floor, which is
+    // what the `min(<rem>, 100%)` caps exist for (selection-bar-fit M1). The bar is selected BEFORE
+    // the text grows, because at 200 % the stage is too short to walk a list in.
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await selectInList(page, orgSlug, 'Pour slab');
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '32px';
+    });
+    for (const selection of ['the flagged bar', 'nothing'] as const) {
+      if (selection === 'nothing') {
+        // Back to 100 % to clear the selection (the stage is too short to focus at 200 %), then up again.
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '';
+        });
+        await diagramList(page).focus();
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
+        await page.evaluate(() => {
+          document.documentElement.style.fontSize = '32px';
+        });
+      }
+      const strip = page.getByTestId('canvas-follow-logic-offer');
+      await expect(strip).toBeVisible();
+      for (const button of await strip.getByRole('button').all()) {
+        expect(
+          await selfHit(button),
+          `200 %, ${selection}: “${await button.textContent()}” is reachable after scrolling it into view`,
+        ).toBe(true);
+      }
+      const figures = await footFigures(page);
+      expect(figures.sideways, `200 %, ${selection}: no sideways scroll`).toBe(false);
+      if (selection === 'nothing') {
+        expect(
+          figures.stage,
+          'with nothing selected the diagram keeps at least the 219 px M0d read',
+        ).toBeGreaterThanOrEqual(219);
+      }
+    }
+  });
 });

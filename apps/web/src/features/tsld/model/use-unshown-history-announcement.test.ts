@@ -13,6 +13,7 @@ const base: DockStripInput = {
   hasTouchGestureHint: false,
   hasArrangeOffer: false,
   hasLayoutResolvedNotice: false,
+  hasFollowEdit: false,
   historyResult: 'failure',
 };
 const failure = { id: 1, kind: 'failure' as const, message: 'Couldn’t undo just now.' };

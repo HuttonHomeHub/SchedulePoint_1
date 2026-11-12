@@ -17,6 +17,7 @@ import { anActivity } from '@/test/activity-fixture';
 const h = vi.hoisted(() => ({
   record: vi.fn(),
   setVisualMutateAsync: vi.fn(),
+  batchMutateAsync: vi.fn(),
   notify: vi.fn(),
   announce: vi.fn(),
   onWriteRejected: vi.fn((): { kind: 'none' | 'lock' } => ({ kind: 'none' })),
@@ -31,6 +32,9 @@ vi.mock('@/features/undo-redo', async (importOriginal) => ({
     clear: vi.fn(),
     canUndo: false,
     canRedo: false,
+    // The follow-logic offer reads the step on top when a settle is decided; nothing is on this stack.
+    peekUndo: () => undefined,
+    isTop: () => false,
   }),
 }));
 
@@ -82,6 +86,10 @@ const ACTIVITY: ActivitySummary = anActivity({
   visualStart: '2026-02-01',
   accrualType: 'UNIFORM',
   version: 7,
+  // A commitment the clear must NOT touch: the batch route needs it sent back, and nulling it
+  // would silently delete it (ADR-0148's context defect; spec §2, "Validation rules").
+  constraintType: 'SNET',
+  constraintDate: '2026-01-20',
 });
 
 // A second, present activity so the delete-reconcile case can be simulated by swapping the query data.
@@ -102,7 +110,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   useRepositionLane: () => ({ mutateAsync: vi.fn() }),
   useSetActivityVisualStart: () => ({ mutateAsync: h.setVisualMutateAsync }),
   useBatchPositions: () => ({ mutateAsync: vi.fn() }),
-  useBatchPlacements: () => ({ mutateAsync: vi.fn(() => Promise.resolve([])) }),
+  useBatchPlacements: () => ({ mutateAsync: h.batchMutateAsync }),
   useDeleteActivity: () => ({ mutateAsync: vi.fn() }),
   useBulkDeleteActivities: () => ({ mutateAsync: vi.fn() }),
   useRestoreDeleteBatch: () => ({ mutateAsync: vi.fn() }),
@@ -122,6 +130,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.onWriteRejected.mockReturnValue({ kind: 'none' });
   h.setVisualMutateAsync.mockResolvedValue({ ...ACTIVITY, visualStart: null, version: 8 });
+  h.batchMutateAsync.mockResolvedValue([{ ...ACTIVITY, visualStart: null, version: 8 }]);
   h2.activities = [ACTIVITY, OTHER];
 });
 
@@ -163,31 +172,64 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     expect(result.current.editorIntent).toMatchObject({ activityId: 'a1', tab: 'progress' });
   });
 
-  it('F5: clearVisualPlacement sends exactly { activityId, visualStart: null, version } and notifies recalc', async () => {
+  it('F5: clearVisualPlacement is a one-row batch: visualStart cleared, the constraint sent back as stored, the lane left alone', async () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await act(async () => {
       await result.current.clearVisualPlacement('a1', 7);
     });
-    expect(h.setVisualMutateAsync).toHaveBeenCalledTimes(1);
+    // **Verified red** by building the row with `constraintType: null`: the constraint is then
+    // deleted by a request the planner meant as "follow the logic" (spec §2).
+    expect(h.batchMutateAsync).toHaveBeenCalledTimes(1);
+    expect(h.batchMutateAsync).toHaveBeenCalledWith({
+      placements: [
+        {
+          id: 'a1',
+          version: 7,
+          constraintType: 'SNET',
+          constraintDate: '2026-01-20',
+          visualStart: null,
+          laneIndex: null,
+        },
+      ],
+    });
+    expect(h.setVisualMutateAsync).not.toHaveBeenCalled();
+    expect(h.notify).toHaveBeenCalledTimes(1);
+  });
+
+  it('F5: the clear is the CALLER’s version, so a stale selection bar refuses rather than overwrites', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 6);
+    });
+    expect(h.batchMutateAsync.mock.calls[0]?.[0].placements[0].version).toBe(6);
+  });
+
+  it('F5: records ONE undo step, never the recalc', async () => {
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 7);
+    });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.record.mock.calls[0]?.[0]).toMatchObject({ label: 'Follow logic', subjects: ['a1'] });
+  });
+
+  it('F5: a summary keeps the single-activity PATCH, because the batch route refuses one', async () => {
+    h2.activities = [{ ...ACTIVITY, type: 'WBS_SUMMARY' }, OTHER];
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    await act(async () => {
+      await result.current.clearVisualPlacement('a1', 7);
+    });
+    expect(h.batchMutateAsync).not.toHaveBeenCalled();
     expect(h.setVisualMutateAsync).toHaveBeenCalledWith({
       activityId: 'a1',
       visualStart: null,
       version: 7,
     });
-    expect(h.notify).toHaveBeenCalledTimes(1);
-  });
-
-  it('F5: records the undo inverse — one command, never the recalc', async () => {
-    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    await act(async () => {
-      await result.current.clearVisualPlacement('a1', 7);
-    });
-    expect(h.setVisualMutateAsync).toHaveBeenCalled();
     expect(h.record).toHaveBeenCalledTimes(1);
   });
 
   it('F5: a stale-version 409 is non-destructive — nothing applied, nothing recorded, no recalc', async () => {
-    h.setVisualMutateAsync.mockRejectedValueOnce(
+    h.batchMutateAsync.mockRejectedValueOnce(
       new ApiFetchError(409, { message: 'stale', code: 'CONFLICT' }),
     );
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
@@ -207,7 +249,7 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
   });
 
   it('A2: a 409 announces the conflict non-destructively (never silent), no success announce', async () => {
-    h.setVisualMutateAsync.mockRejectedValueOnce(
+    h.batchMutateAsync.mockRejectedValueOnce(
       new ApiFetchError(409, { message: 'stale', code: 'CONFLICT' }),
     );
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
@@ -216,13 +258,13 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
     });
     expect(h.announce).toHaveBeenCalledTimes(1);
     expect(h.announce).toHaveBeenCalledWith(
-      'This plan changed since you opened it — the visual placement wasn’t cleared. Refresh to see the latest.',
+      'This plan changed since you opened it — nothing was moved. Refresh to see the latest.',
     );
   });
 
   it('T4: a 423 pen-loss is non-destructive — nothing recorded, no recalc, no announce contradiction', async () => {
     h.onWriteRejected.mockReturnValueOnce({ kind: 'lock' as const });
-    h.setVisualMutateAsync.mockRejectedValueOnce(
+    h.batchMutateAsync.mockRejectedValueOnce(
       new ApiFetchError(423, { message: 'locked', code: 'LOCKED' }),
     );
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
@@ -237,7 +279,7 @@ describe('usePlanWorkspaceModel — toolbar quick-wins seams', () => {
 
   it('T5: a non-409/non-lock error rethrows (never silently swallowed)', async () => {
     h.onWriteRejected.mockReturnValueOnce({ kind: 'none' as const });
-    h.setVisualMutateAsync.mockRejectedValueOnce(new Error('network down'));
+    h.batchMutateAsync.mockRejectedValueOnce(new Error('network down'));
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
     await expect(
       act(async () => {
