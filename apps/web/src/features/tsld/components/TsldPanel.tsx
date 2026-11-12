@@ -933,27 +933,28 @@ export function TsldPanel({
    * this must never take from. Not when the list already has it, so the second call (the `click`
    * after the release) costs nothing.
    */
-  const focusListFromPointer = useCallback(() => {
+  const listMayTakeFocusFromPointer = useCallback((): boolean => {
     const list = listboxRef.current;
-    if (list === null) return;
+    if (list === null) return false;
     const active = document.activeElement;
-    if (active === list) return;
-    if (
+    if (active === list) return false;
+    return !(
       active !== null &&
       active !== document.body &&
       (isTextEntryTarget(active) ||
         active.closest('dialog, [role="dialog"], [role="alertdialog"], [role="menu"], form') !==
           null)
-    ) {
-      return;
-    }
+    );
+  }, []);
+  const focusListFromPointer = useCallback(() => {
+    if (!listMayTakeFocusFromPointer()) return;
     pointerFocusRef.current = true;
     try {
-      list.focus({ preventScroll: true });
+      listboxRef.current?.focus({ preventScroll: true });
     } finally {
       pointerFocusRef.current = false;
     }
-  }, []);
+  }, [listMayTakeFocusFromPointer]);
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -2059,7 +2060,7 @@ export function TsldPanel({
   const activeId: string | null =
     activeIdRaw && activities.some((a) => a.id === activeIdRaw) ? activeIdRaw : selectedId;
 
-  const select = (id: string | null, modifier?: SelectModifier): void => {
+  const select = (id: string | null, modifier?: SelectModifier, quiet = false): void => {
     // Pointing at a row — by click or by arrow — moves the cursor there. Only Space, Ctrl/Cmd+A and
     // the marquee change the selection without moving it, which is exactly the distinction the
     // separate cursor exists to hold.
@@ -2085,8 +2086,21 @@ export function TsldPanel({
       // The row's OWN text, not a rebuild of part of it — so what is spoken and what is on screen
       // are the same string by construction, including the lens marks (WCAG 1.4.1 / 4.1.3).
       const rowText = rowTextById.get(id);
-      if (rowText) announce(rowText);
+      if (rowText && !quiet) announce(rowText);
     }
+  };
+
+  /**
+   * A selection made by a press on the canvas. When the press is about to hand the keyboard to the
+   * list (ADR-0218 D1), the list's own focus announcement speaks the active option and its
+   * description, so the polite row text would be a second telling of the same row (the accessibility
+   * review of D1). Where no focus move follows — the Add tool, an open create popover, focus held by
+   * a field or a dialog, the list already focused — nothing else speaks, so the announcement stays.
+   */
+  const selectFromPointer = (id: string | null, modifier?: SelectModifier): void => {
+    const focusWillSpeak =
+      mode !== 'add-activity' && pendingCreate === null && listMayTakeFocusFromPointer();
+    select(id, modifier, focusWillSpeak);
   };
 
   /**
@@ -3661,7 +3675,7 @@ export function TsldPanel({
               edges={renderEdges}
               dataDate={dataDate}
               selectedId={selectedId}
-              onSelect={select}
+              onSelect={selectFromPointer}
               onSelectRegion={selectRegion}
               onPressComplete={focusListFromPointer}
               // The plural set only when it IS plural: at one selected the canvas

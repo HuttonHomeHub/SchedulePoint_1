@@ -32,7 +32,7 @@ import { useUndoRedoKeybindings } from '@/features/undo-redo';
  * focusable, and is excluded anyway). Focus on a control in the portalled chrome band is in the
  * React tree but not an ancestor, so the React handler has it and the fallback stands down. The
  * fallback runs the SAME composed handler, so the guards (`modalOpen`, text-entry targets, the pen)
- * are the same in both places, and it additionally stands down while any `<dialog>` is open.
+ * are the same in both places, and it additionally stands down while any dialog, menu or the create popover is open.
  */
 export function usePlanWorkspaceKeyScope(params: {
   /** The workspace root the handler is bound to; the fallback asks whether focus is above it. */
@@ -112,9 +112,11 @@ export function usePlanWorkspaceKeyScope(params: {
     const onDocumentKeyDown = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return;
       if (!focusIsAboveWorkspace(rootRef.current)) return;
-      // A modal `<dialog>` owns the keyboard, and a flag the host forgot to fold into `modalOpen`
-      // must still not let a key mutate the plan from beneath it.
-      if (document.querySelector('dialog[open]') !== null) return;
+      // An open dialog, menu or popover owns the keyboard, and a flag the host forgot to fold into
+      // `modalOpen` must still not let a key mutate the plan from beneath it. A press on a
+      // non-focusable part of one (a label, padding) leaves focus on `<main>`, which is exactly where
+      // this fallback listens. The create popover is a plain `<form>`, so it carries the marker.
+      if (document.querySelector(OPEN_OVERLAY_SELECTOR) !== null) return;
       handleRef.current(event);
     };
     document.addEventListener('keydown', onDocumentKeyDown);
@@ -123,6 +125,14 @@ export function usePlanWorkspaceKeyScope(params: {
 
   return handle;
 }
+
+/**
+ * Anything that, while open, means a key is not for the plan beneath it. A `<dialog>` element counts
+ * only when `[open]`: the workspace keeps its closed confirmations in the document with a dialog role,
+ * so a bare `[role="alertdialog"]` would match them all, always, and silence the fallback for good.
+ */
+const OPEN_OVERLAY_SELECTOR =
+  'dialog[open], [role="dialog"]:not(dialog), [role="alertdialog"]:not(dialog), [role="menu"], [data-key-scope-block]';
 
 /**
  * True when no element holds focus, `<body>` does, or the focused element contains the workspace root

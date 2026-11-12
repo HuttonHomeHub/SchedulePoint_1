@@ -156,6 +156,23 @@ test.describe('the canvas says what it is doing', () => {
     await expect(form).toBeHidden();
   });
 
+  test("a press on the open create popover's padding does not hand the plan its keys", async () => {
+    await newPlan(page, 'Popover keys');
+    await ensurePen(page);
+    await armAdd(page, 'Task');
+    await canvas(page).click({ position: { x: 240, y: 120 } });
+    const form = page.getByRole('form', { name: 'Name the new activity' });
+    await expect(form).toBeVisible();
+    // The form's padding is not focusable, so the press leaves focus on <main>, where the workspace's
+    // document fallback listens (ADR-0218 D2). The popover is not a <dialog>, so it must stand the
+    // fallback down itself: `?` would open the shortcuts sheet and Ctrl+Z would undo beneath it.
+    await form.click({ position: { x: 2, y: 2 } });
+    await page.keyboard.press('Control+z');
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: /shortcuts/i })).toHaveCount(0);
+    await expect(form).toBeVisible();
+  });
+
   test('a click in the Link tool gives the diagram the keyboard, and Escape drops the pick', async () => {
     await newPlan(page, 'Link keys');
     await ensurePen(page);

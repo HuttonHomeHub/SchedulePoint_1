@@ -84,10 +84,23 @@ foot row, the Gantt, where a bar press does not move focus at all) that D1 does 
 ## Consequences
 
 - **Escape clears a selection after a click**, as the ADR-0064 ladder always said it should. The owner is told (spec Q1).
-- **A screen reader hears the list and the clicked activity on a mouse press.** ADR-0026 §7 makes the list the canvas's
-  account of itself and says keyboard and visual focus never diverge, so announcing what was clicked is the right
-  behaviour; a sighted mouse user sees nothing, because the list is `sr-only`. A screen-reader user who clicks gets the
-  keys without hunting for the list. Reviewed under ADR-0111 before release.
+- **A screen reader hears the list and the clicked activity on a mouse press, once.** ADR-0026 §7 makes the list the
+  canvas's account of itself and says keyboard and visual focus never diverge, so the list's own focus announcement
+  (the active option and its description) is the account of a click. The panel therefore does **not** also push the
+  row's text through the polite live region for a press that is about to move focus; it keeps that announcement where
+  no focus move follows (the Add tool, an open create popover, focus held by a field or a dialog, the list already
+  focused), and the selection **count** for a Ctrl/Shift-click is still announced, because the focus announcement does
+  not carry it. A sighted mouse user sees nothing, because the list is `sr-only`. **Not verified with a real screen
+  reader**: the one-telling claim rests on the unit test (one announcement path per press) and the accessibility
+  review's reading of the list's markup, not on NVDA, JAWS or VoiceOver.
+- **After a click on empty ground the focus rests on the clipped list with nothing selected, so no focus indicator is
+  drawn until the next key (accepted).** The accessibility review (S2) recorded it and asked
+  for no cue: the next arrow key selects a row and draws the ring on the bar, and Tab from the list lands on a visible
+  control, so the state ends at the reader's next keystroke.
+- **A create popover, a menu or any dialog stands the fallback down.** The popover is a plain `<form>`, not a
+  `<dialog>`, so a press on its padding left focus on `<main>` and made Ctrl+Z, Ctrl+V and `?` act beneath it; the
+  document fallback now also stands down while `[role=dialog]`, `[role=alertdialog]`, `[role=menu]` or an element
+  marked `data-key-scope-block` (the popover) is in the document (accessibility review S3).
 - Copy/paste and `?` now work from `<body>` and `<main>`, which they never did.
 - The shortcuts sheet gains no row: the keys are not new.
 - The Gantt gets only D2: its bar press does not move focus, so the keys work there while focus is on the toolbar and, with

@@ -271,6 +271,44 @@ describe('usePlanWorkspaceKeyScope — the document fallback', () => {
     expect(onCopy).not.toHaveBeenCalled();
   });
 
+  it('is inert while the create popover is open, though it is a plain form', () => {
+    render(<Shell />);
+    const form = document.createElement('form');
+    form.setAttribute('data-key-scope-block', '');
+    document.body.appendChild(form);
+    screen.getByTestId('main').focus();
+    expect(pressWhereFocused({ key: 'z', ctrlKey: true })).toBe(false);
+    expect(pressWhereFocused({ key: 'v', ctrlKey: true })).toBe(false);
+    expect(pressWhereFocused({ key: '?' })).toBe(false);
+    form.remove();
+    expect(undo).not.toHaveBeenCalled();
+    expect(onPaste).not.toHaveBeenCalled();
+    expect(onShowShortcuts).not.toHaveBeenCalled();
+  });
+
+  it('is not silenced by a closed <dialog> that carries a dialog role', () => {
+    render(<Shell />);
+    const closed = document.createElement('dialog');
+    closed.setAttribute('role', 'alertdialog');
+    document.body.appendChild(closed);
+    expect(pressWhereFocused({ key: 'z', ctrlKey: true })).toBe(true);
+    closed.remove();
+    expect(undo).toHaveBeenCalledTimes(1);
+  });
+
+  it('is inert while a role=menu is open', () => {
+    render(<Shell />);
+    const menu = document.createElement('div');
+    menu.setAttribute('role', 'menu');
+    document.body.appendChild(menu);
+    screen.getByTestId('main').focus();
+    expect(pressWhereFocused({ key: 'z', ctrlKey: true })).toBe(false);
+    expect(pressWhereFocused({ key: 'c', ctrlKey: true })).toBe(false);
+    menu.remove();
+    expect(undo).not.toHaveBeenCalled();
+    expect(onCopy).not.toHaveBeenCalled();
+  });
+
   it('leaves a bare key and an already-handled key alone', () => {
     render(<Shell />);
     expect(pressWhereFocused({ key: 'z' })).toBe(false);
