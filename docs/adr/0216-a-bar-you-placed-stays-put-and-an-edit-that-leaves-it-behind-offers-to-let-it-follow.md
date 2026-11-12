@@ -147,6 +147,9 @@ specified as the fallback and **not built**: M0d passed.
 - A planner who drags a bar early on purpose sees the whole-plan offer for it at once: it describes the plan, not their last act, so
   it does not know the early start was meant. **Dismiss** is the answer and it is per bar, so that bar is not asked about again this
   session; after a reload it asks again.
+- Where a bar both overlaps its predecessor and sits before its logic, the whole-plan offer outranks the Arrange offer, so the planner
+  answers it first (Follow logic usually removes the overlap too; Dismiss brings the Arrange offer up). On a short window the
+  whole-plan offer is omitted, so the Arrange offer shows directly and the per-bar Follow logic is the only route to this action.
 - A cross-plan successor is not offered in the plan that drew the link; its own plan's whole-plan offer shows it when opened.
 - A strip that marks itself `data-dock-row` costs a line of the diagram at narrow widths while it waits (about 50–60 px at 1024
   on a mouse); the facts sit at the trailing edge of a line the outlet has taken for itself.
