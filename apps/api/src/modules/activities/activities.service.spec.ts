@@ -1677,6 +1677,45 @@ describe('ActivitiesService', () => {
       });
     });
 
+    it('names a stored value the request did not send, and only the offenders', async () => {
+      // The data date moved back after these actuals were stored: the request sends neither.
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({
+          actualStart: new Date('2026-05-01T00:00:00.000Z'),
+          actualFinish: new Date('2027-02-01T00:00:00.000Z'),
+        }),
+      );
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          percentComplete: 50,
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: {
+          reason: 'ACTUAL_AFTER_DATA_DATE',
+          fields: ['actualFinish'],
+          latestActual: '2027-02-01',
+        },
+      });
+
+      // Clearing the start leaves the stored finish orphaned: the field at fault is the finish.
+      activities.findActiveByIdInOrg.mockResolvedValue(
+        activity({
+          actualStart: new Date('2026-05-01T00:00:00.000Z'),
+          actualFinish: new Date('2026-06-01T00:00:00.000Z'),
+        }),
+      );
+      await expect(
+        service.updateProgress(principalWith(PROGRESS), 'acme', ACTIVITY_ID, {
+          actualStart: null,
+          version: 1,
+        }),
+      ).rejects.toMatchObject({
+        details: { reason: 'FINISH_WITHOUT_START', fields: ['actualFinish'] },
+      });
+      expect(activities.updateIfVersionMatches).not.toHaveBeenCalled();
+    });
+
     it('accepts an actual dated exactly on the data date', async () => {
       activities.updateIfVersionMatches.mockResolvedValue({});
       activities.findActiveByIdInOrg.mockResolvedValue(activity());
