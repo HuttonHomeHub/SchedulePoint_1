@@ -1,4 +1,5 @@
 import { expect, test } from '../e2e-support/test';
+import { findBar } from '../e2e-workspace-chrome/support';
 
 import {
   announced,
@@ -306,4 +307,29 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
     await announced(page, /select an activity to copy/i);
     expect((await announcer(page).textContent())?.trim()).not.toBe('');
   });
+});
+
+/**
+ * **Ctrl+C and Ctrl+V work straight after a mouse click on a bar** (`docs/specs/diagram-keys-and-selection/`
+ * M1, ADR-0218). The journey above selects through the list, which is a keyboard path; a click left
+ * focus on `<main>` and neither key reached the workspace, and copy/paste had no document fallback at all.
+ */
+test('click a bar with the mouse, then Ctrl+C and Ctrl+V duplicate it', async ({ page }) => {
+  test.setTimeout(120_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, 'Mouse then keys');
+  await ensurePen(page);
+  const seeded = await seedActivities(page, orgSlug, [{ name: 'Excavate', durationDays: 4 }]);
+  const excavate = seeded.find((a) => a.name === 'Excavate');
+  if (!excavate) throw new Error('seeding produced no Excavate');
+
+  await findBar(page, excavate.id);
+  await expect(diagramList(page)).toBeFocused();
+  await page.keyboard.press('Control+c');
+  await announced(page, /1 activity copied/i);
+  await page.keyboard.press('Control+v');
+  await announced(page, /1 activity duplicated/i);
+  await expect.poll(async () => (await apiActivities(page, orgSlug)).length).toBe(2);
 });

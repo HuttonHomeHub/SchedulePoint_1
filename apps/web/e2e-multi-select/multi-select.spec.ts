@@ -1,6 +1,7 @@
 import type { Request } from '@playwright/test';
 
 import { expect, test } from '../e2e-support/test';
+import { findBar } from '../e2e-workspace-chrome/support';
 
 import {
   announced,
@@ -527,4 +528,67 @@ test('focus on a selection-bar command survives a context rebuild and then the b
   await refetch();
   await expect(bar).toHaveCount(0, { timeout: 15_000 });
   await expect(list).toBeFocused();
+});
+
+/**
+ * **A click gives the diagram the keyboard: Escape clears a selection made with the mouse, and an
+ * empty-ground click selects nothing** (`docs/specs/diagram-keys-and-selection/` M1, ADR-0218).
+ *
+ * `docs/HANDOFF.md` once recorded "Esc never clears a selection, by design"; it was never a design.
+ * Escape is the diagram list's key, and a mouse press left focus on `<main>`, so it never arrived.
+ * The second half guards what moving focus must NOT do: the list's own `onFocus` selects its first
+ * row when nothing is selected, so a focus move after an empty-ground press would invent a selection.
+ */
+test('Escape clears a selection made with the mouse, and empty ground selects nothing', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createHierarchy(page);
+  await newPlan(page, `Mouse keys ${stamp}`);
+  await ensurePen(page);
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Excavate', durationDays: 3 },
+    { name: 'Pour slab', durationDays: 3 },
+  ]);
+  const first = seeded[0];
+  if (!first) throw new Error('seeding returned no activity');
+  await ensurePen(page);
+
+  const selectedCount = async (): Promise<number> =>
+    page.locator('[role="option"][aria-selected="true"]').count();
+  const emptyGround = async (): Promise<{ x: number; y: number }> => {
+    const box = await canvas(page).boundingBox();
+    if (!box) throw new Error('the canvas has no bounding box');
+    return { x: Math.round(box.width * 0.45), y: Math.round(box.height - 30) };
+  };
+
+  await test.step('a mouse click selects, and the diagram holds the keyboard', async () => {
+    await findBar(page, first.id);
+    await expect(diagramList(page)).toBeFocused();
+    expect(await selectedCount()).toBe(1);
+  });
+
+  await test.step('Escape clears it and says so', async () => {
+    await page.keyboard.press('Escape');
+    await announced(page, /Selection cleared/);
+    expect(await selectedCount()).toBe(0);
+  });
+
+  await test.step('an empty-ground click with nothing selected invents no selection', async () => {
+    await canvas(page).click({ position: await emptyGround() });
+    await expect(diagramList(page)).toBeFocused();
+    // Polled for a beat: the invented selection, when there was one, landed a frame after the click.
+    await page.waitForTimeout(500);
+    expect(await selectedCount()).toBe(0);
+  });
+
+  await test.step('arrows move the cursor after a click on empty ground', async () => {
+    const before = await diagramList(page).getAttribute('aria-activedescendant');
+    await page.keyboard.press('ArrowDown');
+    await expect
+      .poll(() => diagramList(page).getAttribute('aria-activedescendant'))
+      .not.toBe(before);
+  });
 });

@@ -13,6 +13,7 @@ import {
 } from '../e2e-copy-paste/support';
 import { ganttGrid, ganttRow, showGantt } from '../e2e-gantt/support';
 import { expect, test } from '../e2e-support/test';
+import { dragBarBy, findBar, placements, requirePlacement } from '../e2e-workspace-chrome/support';
 
 import {
   addLink,
@@ -998,6 +999,69 @@ test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan
     await expect
       .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
       .toBe(2);
+  });
+});
+
+/**
+ * **The diagram answers Ctrl+Z straight after a mouse press** (`docs/specs/diagram-keys-and-selection/`
+ * M1, ADR-0218).
+ *
+ * Every other journey here reaches the keys by focusing a control or the list first, which is why they
+ * were green while a planner who dragged a bar and pressed Ctrl+Z got nothing: a press on the canvas
+ * left focus on the shell's `<main>`, an ancestor of the handler's root. Driven with the mouse only,
+ * and read from the API, because "the bar went back" is a statement about stored data.
+ */
+test('Ctrl+Z undoes a bar dragged with the mouse, from the diagram or from empty chrome', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+  // Three bars, not one: a lone bar fits the view at about a screen per day, so a drag would be
+  // less than a day and write nothing.
+  const [excavate] = await seedActivities(page, orgSlug, [
+    { name: 'Excavate', durationDays: 4 },
+    { name: 'Backfill', durationDays: 4 },
+    { name: 'Compact', durationDays: 4 },
+  ]);
+  if (!excavate) throw new Error('seeding returned no activity');
+
+  const start = async (): Promise<string | null> =>
+    requirePlacement(await placements(page, orgSlug), 'Excavate').visualStart;
+  const original = await start();
+
+  const at = await findBar(page, excavate.id);
+  await dragBarBy(page, at, 200);
+  await expect.poll(start, { timeout: 20_000 }).not.toBe(original);
+  const moved = await start();
+
+  await test.step('the release gave the diagram the keyboard, and Ctrl+Z undoes the drag', async () => {
+    await expect(diagramList(page)).toBeFocused();
+    await page.keyboard.press('Control+z');
+    await expect.poll(start, { timeout: 20_000 }).toBe(original);
+    await expect(page.getByTestId('announcer')).toContainText(/Undid/i);
+  });
+
+  await test.step('a press on empty chrome that holds no focus still lets Ctrl+Shift+Z redo', async () => {
+    const foot = await page.locator('[data-activities-bar]').first().boundingBox();
+    if (!foot) throw new Error('the foot row has no bounding box');
+    await page.mouse.click(foot.x + foot.width - 8, foot.y + foot.height / 2);
+    await page.keyboard.press('Control+Shift+z');
+    await expect.poll(start, { timeout: 20_000 }).toBe(moved);
+  });
+
+  await test.step('typing in the search box keeps its own undo, and the plan is not touched', async () => {
+    await findBar(page, excavate.id);
+    const search = page.getByRole('searchbox', { name: 'Search or filter activities' });
+    await search.click();
+    await page.keyboard.type('Exc');
+    await page.keyboard.press('Control+z');
+    // Settled by the announcer reading the redo, not an undo: nothing else would say "Undid".
+    await page.waitForTimeout(800);
+    await expect(page.getByTestId('announcer')).not.toContainText(/Undid/i);
+    expect(await start()).toBe(moved);
   });
 });
 

@@ -136,6 +136,7 @@ import {
   type SelectionBarContext,
   type SelectionCanvasContext,
 } from '@/features/plan-actions/selection-actions';
+import { isTextEntryTarget } from '@/features/undo-redo';
 import { wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor } from '@/lib/bar-dates';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -916,6 +917,43 @@ export function TsldPanel({
   // `onFocus` default-select (pick the first row when nothing is selected) doesn't clobber the conflict
   // selection we set in the same tick (the closure's `selectedId` is still stale then). Consumed once.
   const conflictFocusPendingRef = useRef(false);
+  // The same one-shot idea for a press on the canvas (ADR-0218 D1): set only for the duration of the
+  // synchronous `focus()` call in `focusListFromPointer`, so the default row-0 select cannot turn an
+  // empty-ground click that just CLEARED the selection into a selection of the first row. It is never
+  // left set — `focus()` fires `onFocus` before it returns, and a no-op focus fires nothing.
+  const pointerFocusRef = useRef(false);
+  /**
+   * A press on the canvas has finished: give the diagram's list the keyboard, so Ctrl+Z, Ctrl+C/V,
+   * Escape and the arrows act on what was just clicked (ADR-0218 D1). Without it the browser leaves
+   * focus on the shell's `<main>`, an ancestor of the key scope, and every one of those keys is dead.
+   *
+   * Not scrolled (`preventScroll`): the list is `sr-only`, and the page must not jump to it. Not when
+   * something that owns the keyboard holds focus — a dialog, a menu, a form (the create popover) or a
+   * text field — which a canvas press cannot normally leave focused (a mousedown blurs it), but which
+   * this must never take from. Not when the list already has it, so the second call (the `click`
+   * after the release) costs nothing.
+   */
+  const focusListFromPointer = useCallback(() => {
+    const list = listboxRef.current;
+    if (list === null) return;
+    const active = document.activeElement;
+    if (active === list) return;
+    if (
+      active !== null &&
+      active !== document.body &&
+      (isTextEntryTarget(active) ||
+        active.closest('dialog, [role="dialog"], [role="alertdialog"], [role="menu"], form') !==
+          null)
+    ) {
+      return;
+    }
+    pointerFocusRef.current = true;
+    try {
+      list.focus({ preventScroll: true });
+    } finally {
+      pointerFocusRef.current = false;
+    }
+  }, []);
   // Where focus returns when the create popover closes: the listbox when opened via `n`, else the
   // Add-activity tool (drag/toolbar). Reset after each close.
   const createReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -3625,6 +3663,7 @@ export function TsldPanel({
               selectedId={selectedId}
               onSelect={select}
               onSelectRegion={selectRegion}
+              onPressComplete={focusListFromPointer}
               // The plural set only when it IS plural: at one selected the canvas
               // receives `undefined` and builds the scene it always built.
               selectedIds={selection.ids.length > 1 ? selection.ids : undefined}
@@ -3881,6 +3920,9 @@ export function TsldPanel({
               aria-activedescendant={activeId ? optionId(activeId) : undefined}
               onKeyDown={onListKeyDown}
               onFocus={() => {
+                // A press on the canvas focused us (ADR-0218 D1): the click already decided the
+                // selection, including "none" — do not pick row 0 over an empty-ground clear.
+                if (pointerFocusRef.current) return;
                 // A Next-conflict cycle focused us programmatically and already set the selection — skip
                 // the default row-0 select so it isn't clobbered (a11y-rec-1). Consume the one-shot flag.
                 if (conflictFocusPendingRef.current) {

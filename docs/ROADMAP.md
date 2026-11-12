@@ -450,6 +450,13 @@ keep `main` releasable.
   describes Save to a screen reader and never takes focus, so it is on screen at 1024 × 600. M4 renames the box and
   refreshes the footer.
 
+- **A click on the diagram gives it the keyboard** (decided and Accepted 2026-11-12 in
+  [ADR-0218](adr/0218-a-click-on-the-diagram-gives-it-the-keyboard.md); spec and plan at
+  [`docs/specs/diagram-keys-and-selection/`](specs/diagram-keys-and-selection/feature-spec.md)). **M1 ships the keys:** after a
+  click or a drag on the diagram, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+C, Ctrl+V, Escape and the arrow keys act on the
+  diagram, and undo, redo, copy and paste also work from the page body or the shell, in the Gantt as well. Escape now
+  clears a selection after a click. Delete, double-click and Ctrl-click, and the short-window selection bars, follow in M2 to M7.
+
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at
   [`docs/specs/baseline-float-frame/`](specs/baseline-float-frame/); closed `docs/TECH_DEBT.md` #318).

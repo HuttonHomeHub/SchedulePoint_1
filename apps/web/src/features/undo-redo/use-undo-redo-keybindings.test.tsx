@@ -274,89 +274,19 @@ describe('useUndoRedoKeybindings — text-entry narrowing (M5)', () => {
   });
 });
 
-/** Undo-redo M5, spec F-4 — the accelerators work with focus on `<body>`. */
-describe('useUndoRedoKeybindings — body fallback (M5)', () => {
-  /** A keydown aimed at the page itself — what the browser sends when nothing has focus. */
-  function pressOnBody(init: KeyboardEventInit): boolean {
-    return !fireEvent.keyDown(document.body, { bubbles: true, cancelable: true, ...init });
-  }
-
-  it('undoes and redoes with focus on <body>', () => {
-    mount();
-    expect(document.activeElement).toBe(document.body);
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
-    expect(pressOnBody({ key: 'z', metaKey: true, shiftKey: true })).toBe(true);
-    expect(pressOnBody({ key: 'y', ctrlKey: true })).toBe(true);
-    expect(undo).toHaveBeenCalledTimes(1);
-    expect(redo).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not double-fire when focus is inside the workspace (the React handler owns it)', () => {
-    mount();
-    const button = screen.getByRole('button', { name: 'in-tree' });
-    button.focus();
-    expect(document.activeElement).toBe(button);
-    press({ key: 'z', ctrlKey: true }, button);
-    expect(undo).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not act when focus is in a text field outside the workspace', () => {
-    mount();
-    const stray = document.createElement('input');
-    document.body.appendChild(stray);
-    stray.focus();
-    expect(press({ key: 'z', ctrlKey: true }, stray)).toBe(false);
-    expect(undo).not.toHaveBeenCalled();
-    stray.remove();
-  });
-
-  it('is inert under a modal, and resumes when it closes', () => {
-    const view = render(<Host modalOpen container={portalHost} />);
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
-    view.rerender(<Host container={portalHost} />);
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
-    expect(undo).toHaveBeenCalledTimes(1);
-  });
-
-  it('is inert while any open <dialog> exists, even if the host did not report a modal', () => {
-    mount();
-    const dialog = document.createElement('dialog');
-    dialog.setAttribute('open', '');
-    document.body.appendChild(dialog);
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
-    dialog.remove();
-    expect(undo).not.toHaveBeenCalled();
-  });
-
-  it('leaves a bare Z and an already-handled key alone', () => {
-    mount();
-    expect(pressOnBody({ key: 'z' })).toBe(false);
-    const handled = (event: KeyboardEvent): void => event.preventDefault();
-    document.addEventListener('keydown', handled, { capture: true, once: true });
-    pressOnBody({ key: 'z', ctrlKey: true });
-    expect(undo).not.toHaveBeenCalled();
-  });
-
-  it('removes the listener on unmount (leaving the plan)', () => {
-    const view = render(<Host container={portalHost} />);
-    view.unmount();
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(false);
-    expect(undo).not.toHaveBeenCalled();
-  });
-
-  it('installs one listener however many times the host re-renders', () => {
+/**
+ * The document fallback these accelerators once carried (undo-redo M5, body focus only) moved to the
+ * workspace key scope, which owns ONE fallback for undo, copy/paste and `?` (ADR-0218 D2). Its tests
+ * are in `components/layout/workspace/use-plan-workspace-key-scope.test.tsx`; this hook is only the
+ * handler, so a keydown on the body reaches nothing here.
+ */
+describe('useUndoRedoKeybindings — no document listener of its own', () => {
+  it('installs none, so a keydown on the body reaches nothing', () => {
     const add = vi.spyOn(document, 'addEventListener');
-    const view = render(<Host container={portalHost} />);
-    view.rerender(<Host container={portalHost} />);
-    view.rerender(<Host modalOpen container={portalHost} />);
-    expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+    mount();
+    expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(0);
     add.mockRestore();
-  });
-
-  it('tells the host why when the pen is not held, from the body too', () => {
-    const onBlocked = vi.fn().mockReturnValue(true);
-    render(<Host enabled={false} onBlocked={onBlocked} container={portalHost} />);
-    expect(pressOnBody({ key: 'z', ctrlKey: true })).toBe(true);
-    expect(onBlocked).toHaveBeenCalledWith('undo');
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+    expect(undo).not.toHaveBeenCalled();
   });
 });
