@@ -170,6 +170,60 @@ already speaks it when the selection turns plural, and moves to a tooltip on the
 only in the worst case (a refusal sentence beside all five). The button must stay lit (`TsldPanel.tsx:3386-3394`). Cost
 estimate: **+0 px** for one line against +122 now; not built, and the five-control worst case is not measured.
 
+## M7 as built: the plural bar with five controls and a refusal sentence
+
+- **Date:** 2026-11-12, the `keys-work` branch with M7's bar built. **Harness:** a throwaway Playwright spec on the existing
+  measure config (deleted after the run; nothing under `apps/web/src` was changed for it). **Raw readings:**
+  [`readings/diagram-keys-m7.json`](./readings/diagram-keys-m7.json). Real sign-up, real API, real Chromium, fine pointer,
+  the browser's default text size except the two 200 % rows.
+- **The plan.** The seeded "three types, eight activities" codes plan, calculated, with its swimlane source switched to the
+  Area code type, so the plural bar carries **all five controls**: Link in sequence…, Move to swimlane…, Set code…, Delete and
+  Clear selection. Three bars selected with the keyboard. "No pen" is the pen released with the selection kept: both Link and
+  Delete are shaded and the one visible sentence is "Take the edit lock to change this plan." (235.8 px wide).
+- **What it does NOT cover.** Chromium only, one plan, the five-control worst case only. No coarse-pointer or 320 px reading.
+  The plain-plan bar (Link, Delete, Clear) is not in this file: its widths below are read off the same buttons, and the
+  journey asserts it sits on one row at 1024 × 600 and 1440 × 900.
+
+| Size                   | State                   | Foot idle → selected | Diagram idle → selected | Lines | Strip (h × w) | Single-activity bar on this plan (foot, diagram) |
+| ---------------------- | ----------------------- | -------------------- | ----------------------- | ----- | ------------- | ------------------------------------------------ |
+| 1024 × 600             | three, pen              | 51 → 137             | 362 → 276               | 2     | 86 × 731      | 207, 206 (5 lines, 13 controls)                  |
+| 1024 × 600             | three, no pen (refusal) | 51 → 137             | 362 → 276               | 2     | 86 × 731      | 207, 206                                         |
+| 1024 × 600, 200 % text | three, pen              | not read → 413       | 200                     | 3     | 250 × 715     | not read                                         |
+| 1024 × 600, 200 % text | three, no pen (refusal) | not read → 469       | 200                     | 3     | 306 × 715     | not read                                         |
+| 1280 × 720             | three, pen              | 51 → 97              | 482 → 436               | 2     | 86 × 603      | 127, 406 (3 lines, 13 controls)                  |
+| 1280 × 720             | three, no pen (refusal) | 51 → 97              | 482 → 436               | 2     | 86 × 591      | 127, 406                                         |
+| 1440 × 900             | three, pen              | 51 → 97              | 662 → 616               | 2     | 86 × 763      | 127, 586 (3 lines, 13 controls)                  |
+| 1440 × 900             | three, no pen (refusal) | 51 → 97              | 662 → 616               | 2     | 86 × 751      | 127, 586                                         |
+
+Nothing was clipped (no control outside the foot row or the window) and nothing scrolled sideways, page or foot row, in any
+row, 200 % text included.
+
+- **It does not fit as designed in the five-control case, and the reason is a number.** The proposal estimated "five controls
+  and a caption are about 650 px". Measured: the five buttons are 166.5 + 174.7 + 115.1 + 89.9 + 119.4 = **665.6 px**, plus
+  four 8 px gaps = **697.6 px**, and the caption ("3 selected") needs about 75-85 px and a gap on top, so about **780 px** against the
+  **705 px** of inner width the strip has at 1024 × 600 (731 px wide, less padding and border). That is 70-80 px too wide, so the
+  five-control bar takes **two lines at every size read, with or without the refusal sentence**, where the proposal expected one
+  line and two only with the sentence beside all five. The refusal sentence adds nothing to the line count here because it
+  fills the line the wrap had already opened.
+- **It still costs less than the single-activity bar everywhere it was read**, which is the claim the journey holds: at
+  1024 × 600 the foot is 137 against 207 (the diagram is 276 against 206, 70 px more), at 1280 × 720 and 1440 × 900 it is
+  97 against 127 (30 px more). The single-activity bar here is the 13-control kind (Move to swimlane… and Set code… are on it
+  too), so its figures are larger than M5's 11-control plain plan (167 at 1024 × 600, 127 at 1280 × 720).
+- **Against what the plural bar cost before:** M5 read 173 at 1024 × 600 and 133 at 1366 × 768 and 1440 × 900 for the old bar
+  with three controls. The five-control bar now reads 137 and 97 at the same sizes, so it is cheaper than the old bar with
+  _fewer_ controls. The old bar was not re-read on this plan, so that comparison is across two plans and is not exact.
+- **The plain plan (three controls) fits one line**, by the widths above: Link in sequence… 166.5, Delete 89.9, Clear selection
+  119.4, two gaps and the caption come to about 485 px against 705. The journey asserts the three share one row.
+- **Choice made on the readings.** The first build left the actions in one group beside the caption, so a wrapped bar put the
+  caption alone on a line above them (strip 78 px at 1024 × 600, foot 129, and 169 with the refusal sentence). The
+  built bar makes the actions the strip's own flex items (`display: contents`) with an 8 px gap, so the caption and the actions
+  wrap as one run: 86 px and foot 137 without the sentence, **and still 137 with it**. It trades 8 px in the case without a
+  sentence for 32 px in the case with one; the plain plan is one line either way.
+- **If the owner wants five controls on one line at 1024 × 600**, the figures say what it takes: about 80 px. The only
+  candidate that gets there without an overflow is Clear selection as an icon (its name and tooltip kept, as the single bar's
+  Clear already is on a finger), which frees about 80 px and is borderline. It was **not** built: the brief keeps the visible
+  label, and it is a decision for the owner, not for a builder.
+
 ## What was not done
 
 - No candidate was built in the probe; the S-A, S-B, S-C and plural-bar figures are inferences from the line-cost reading

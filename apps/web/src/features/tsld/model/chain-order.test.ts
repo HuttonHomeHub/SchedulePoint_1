@@ -137,4 +137,70 @@ describe('planChain', () => {
     });
     expect(refusal).toEqual({ kind: 'cycle' });
   });
+
+  const three = [at('a', '2026-01-01'), at('b', '2026-02-01'), at('c', '2026-03-01')];
+
+  it('refuses a chain whose every pair is already a finish-to-start link, and writes nothing', () => {
+    const plan = planChain({
+      candidates: three,
+      existing: [
+        { predecessorId: 'a', successorId: 'b', type: 'FS' },
+        { predecessorId: 'b', successorId: 'c', type: 'FS' },
+      ],
+    });
+    expect(plan.refusal).toEqual({ kind: 'alreadyLinked' });
+    expect(plan.edges).toEqual([]);
+    expect(plan.existingCount).toBe(2);
+    // The order is still returned, so the preview can show what was already there.
+    expect(plan.ordered.map((o) => o.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('writes only the missing pairs of a half-made chain, and says how many existed', () => {
+    const plan = planChain({
+      candidates: three,
+      existing: [{ predecessorId: 'a', successorId: 'b', type: 'FS' }],
+    });
+    expect(plan.refusal).toBeNull();
+    expect(plan.edges).toEqual([{ predecessorId: 'b', successorId: 'c' }]);
+    expect(plan.existingCount).toBe(1);
+  });
+
+  it('does not count a link of another type, or the opposite way round, as already there', () => {
+    const plan = planChain({
+      candidates: [at('a', '2026-01-01'), at('b', '2026-02-01')],
+      existing: [{ predecessorId: 'a', successorId: 'b', type: 'SS' }],
+    });
+    expect(plan.refusal).toBeNull();
+    expect(plan.edges).toHaveLength(1);
+    expect(plan.existingCount).toBe(0);
+
+    const opposite = planChain({
+      candidates: [at('a', '2026-01-01'), at('b', '2026-02-01')],
+      existing: [{ predecessorId: 'b', successorId: 'a', type: 'FS' }],
+    });
+    expect(opposite.refusal).toEqual({ kind: 'cycle' });
+  });
+
+  it('counts the cap against what would be written, not against what already exists', () => {
+    const many = Array.from({ length: MAX_CHAIN_LINKS + 2 }, (_, i) =>
+      at(`a${String(i).padStart(3, '0')}`, `2026-01-01`, `n${String(i).padStart(3, '0')}`),
+    );
+    const existing = many
+      .slice(0, 5)
+      .map((c, i) => ({ predecessorId: c.id, successorId: many[i + 1]?.id ?? '', type: 'FS' }));
+    const plan = planChain({ candidates: many, existing });
+    expect(plan.refusal).toBeNull();
+    expect(plan.edges).toHaveLength(many.length - 1 - 5);
+  });
+
+  it('still catches a cycle that closes through links the chain would have skipped', () => {
+    const { refusal } = planChain({
+      candidates: three,
+      existing: [
+        { predecessorId: 'a', successorId: 'b', type: 'FS' },
+        { predecessorId: 'c', successorId: 'a', type: 'FS' },
+      ],
+    });
+    expect(refusal).toEqual({ kind: 'cycle' });
+  });
 });

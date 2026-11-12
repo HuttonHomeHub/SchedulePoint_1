@@ -128,3 +128,31 @@ describe('TsldPanel — double-click a bar', () => {
     expect(announce).not.toHaveBeenCalledWith('Take the pen to change this activity.');
   });
 });
+
+describe('TsldPanel — pressing a bar that is already the whole selection', () => {
+  const spokenRows = (): unknown[][] =>
+    announce.mock.calls.filter(([text]) => typeof text === 'string' && text.includes('Excavate'));
+
+  it('does not speak the row again on the second press of a double-click', () => {
+    const { canvas } = mount({ canEdit: true, canReportProgress: true });
+    doubleClick(canvas);
+    // The first press hands focus to the list, whose own announcement speaks the row (so the
+    // polite region stays quiet); the second press changes nothing and must not tell it either.
+    expect(spokenRows()).toHaveLength(0);
+  });
+
+  it('still says a different bar when the press changes the selection', () => {
+    const { canvas } = mount({ canEdit: true, canReportProgress: true });
+    const onSecond = { ...ON_BAR, clientY: laneMid(1) };
+    fireEvent.pointerDown(canvas, ON_BAR);
+    fireEvent.pointerUp(canvas, ON_BAR);
+    fireEvent.click(canvas);
+    announce.mockClear();
+    fireEvent.pointerDown(canvas, onSecond);
+    fireEvent.pointerUp(canvas, onSecond);
+    fireEvent.click(canvas);
+    expect(
+      announce.mock.calls.some(([text]) => typeof text === 'string' && text.includes('Pour')),
+    ).toBe(true);
+  });
+});

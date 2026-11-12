@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { pluralMoveHint } from '../model/reposition-announcement';
 
 import { BulkSelectionBar, type BulkActionGate } from './BulkSelectionBar';
 
-import { expectDockRow } from '@/test/dock-row';
+import { TOOLTIP_OPEN_DELAY_MS } from '@/components/ui/tooltip';
 
 /**
  * The bulk selection bar's four gate states (`docs/specs/canvas-multi-select/` M4-T7).
@@ -50,11 +50,81 @@ describe('when to render at all', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('names the count and the primary, so which bar Edit still acts on is not a guess', () => {
+  it('reads as a short caption, and keeps the subject sentence off the screen', () => {
     renderBar({ count: 12, primaryName: 'Pour slab' });
-    expect(screen.getByTestId('bulk-selection-bar')).toHaveTextContent(
-      /12 activities selected — “Pour slab” is the subject of single-activity actions/,
+    const bar = screen.getByTestId('bulk-selection-bar');
+    expect(bar).toHaveTextContent(/^12 selected/);
+    // Visible text is the caption and the actions: the long sentence is not on screen.
+    expect(bar).not.toHaveTextContent(/subject of single-activity/);
+    expect(screen.getByText('12 selected')).toBeVisible();
+  });
+
+  it('names the count and the primary as its accessible description, so which bar Edit acts on is not a guess', () => {
+    renderBar({ count: 12, primaryName: 'Pour slab' });
+    const bar = screen.getByRole('group', { name: 'Selected activities' });
+    expect(bar).toHaveAccessibleDescription(
+      '12 activities selected — “Pour slab” is the subject of single-activity actions.',
     );
+  });
+
+  it('describes the count alone when no primary is known', () => {
+    renderBar({ count: 3, primaryName: null });
+    expect(screen.getByRole('group', { name: 'Selected activities' })).toHaveAccessibleDescription(
+      '3 activities selected.',
+    );
+  });
+});
+
+describe('one line, no overflow', () => {
+  it('shows every action at once, with no More menu or menu button', () => {
+    renderBar({
+      moveToSwimlane: {
+        assignment: { source: 'MANUAL' } as never,
+        ids: ['a', 'b'],
+        names: ['A', 'B'],
+        gate: { writable: true, reason: null },
+      },
+      codeAction: <button type="button">Set code…</button>,
+    });
+    const names = screen.getAllByRole('button').map((b) => b.textContent?.trim());
+    expect(names).toEqual([
+      'Link in sequence…',
+      'Move to swimlane…',
+      'Set code…',
+      'Delete',
+      'Clear selection',
+    ]);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: /more/i })).toBeNull();
+  });
+
+  it('wraps rather than clips, asks the dock for its own line, and never ellipsises the caption', () => {
+    renderBar({ primaryName: 'Fabricate and erect precast stair cores, blk B' });
+    const bar = screen.getByTestId('bulk-selection-bar');
+    expect(bar).toHaveAttribute('data-dock-row');
+    expect(bar).toHaveClass('flex-wrap', 'min-w-0');
+    expect(bar).not.toHaveAttribute('title');
+    expect(screen.getByText('5 selected').closest('p')).not.toHaveClass('truncate');
+  });
+
+  it('has no visible sentence at all while nothing is refused', () => {
+    renderBar({ canMove: true });
+    expect(screen.queryByRole('status')).toBeNull();
+    const bar = screen.getByTestId('bulk-selection-bar');
+    // The caption's paragraph is the only one, and the move hint is not in the document yet.
+    expect(bar.querySelectorAll('p')).toHaveLength(1);
+    expect(bar).not.toHaveTextContent(/moves all/i);
+  });
+
+  it('shows exactly one sentence, the refusal, when something is refused', () => {
+    renderBar({
+      canMove: true,
+      link: shut('Take the edit lock to change this plan.'),
+      remove: shut('Take the edit lock to change this plan.'),
+    });
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Take the edit lock to change this plan.');
+    expect(screen.getByTestId('bulk-selection-bar').querySelectorAll('p')).toHaveLength(2);
   });
 });
 
@@ -157,36 +227,50 @@ describe('the status line', () => {
 
   /**
    * The bar used to carry a third sentence here — "moving these will pin a start-no-earlier-than
-   * date on all N" — for a plural drag that was never wired. Its model, its undo command and its
-   * endpoint all landed; the gesture did not, so the sentence described something a planner could
-   * not do, and it was removed rather than left (`docs/TECH_DEBT.md` #108).
-   *
-   * **The gesture is wired now, so the bar speaks again — and the assertion below is kept, not
-   * relaxed.** The original wording is still forbidden, because it was only ever true in EARLY
-   * mode: a plural move pins an SNET there and writes `visualStart` in VISUAL (ADR-0033), so
-   * restoring it verbatim would re-introduce a false statement for half the plans in the product.
-   * What is asserted present is a sentence true in both modes.
+   * date on all N" — for a plural drag that was never wired, and it was removed rather than left
+   * (`docs/TECH_DEBT.md` #108). The gesture is wired now and the hint says so, true in both modes
+   * (ADR-0033); since M7 it is the caption's tooltip rather than a line of the bar, and the
+   * mode-specific wording stays forbidden.
    */
-  it('tells a planner the move is plural, without claiming a mode-specific consequence', () => {
-    renderBar({ canMove: true });
-    const bar = screen.getByTestId('bulk-selection-bar');
-    expect(bar).toHaveTextContent(pluralMoveHint(5));
-    expect(bar).toHaveTextContent(/pressing alt with an arrow key/i);
-    // Still absent, and deliberately: true in EARLY, false in VISUAL.
-    expect(bar).not.toHaveTextContent(/start-no-earlier-than/i);
-  });
+  describe('the move hint is a tooltip on the caption', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    });
+    const tip = (): HTMLElement | null => document.querySelector('[data-tooltip]');
 
-  // The hint is a claim about what the keys do, so a viewer — or a planner without the pen — is
-  // not told it works. `canMove` defaults to false for exactly that reason.
-  it('says nothing about moving unless the caller can move', () => {
-    renderBar({});
-    expect(screen.getByTestId('bulk-selection-bar')).not.toHaveTextContent(/moves all/i);
-  });
+    it('opens on hover with the same sentence the panel speaks, without claiming a mode', () => {
+      renderBar({ canMove: true });
+      fireEvent.pointerEnter(screen.getByText('5 selected'), { pointerType: 'mouse' });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(tip()).toHaveTextContent(pluralMoveHint(5));
+      expect(tip()).toHaveTextContent(/pressing alt with an arrow key/i);
+      expect(tip()).not.toHaveTextContent(/start-no-earlier-than/i);
+    });
 
-  it('keeps the hint out of every control’s description', () => {
-    renderBar({ canMove: true, link: shut('No pen.') });
-    const id = linkButton().getAttribute('aria-describedby');
-    expect(document.getElementById(id!)).not.toHaveTextContent(/moves all/i);
+    it('is a visual echo only: the tip is hidden from assistive technology, so it is never heard twice', () => {
+      renderBar({ canMove: true });
+      fireEvent.pointerEnter(screen.getByText('5 selected'), { pointerType: 'mouse' });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(tip()).toHaveAttribute('aria-hidden', 'true');
+      expect(screen.getByText('5 selected')).not.toHaveAttribute('aria-describedby');
+    });
+
+    // The hint is a claim about what the keys do, so a viewer — or a planner without the pen — is
+    // not told it works. `canMove` defaults to false for exactly that reason.
+    it('says nothing about moving unless the caller can move', () => {
+      renderBar({});
+      fireEvent.pointerEnter(screen.getByText('5 selected'), { pointerType: 'mouse' });
+      act(() => void vi.advanceTimersByTime(TOOLTIP_OPEN_DELAY_MS));
+      expect(tip()).toBeNull();
+    });
+
+    it('keeps the hint out of every control’s description', () => {
+      renderBar({ canMove: true, link: shut('No pen.') });
+      const id = linkButton().getAttribute('aria-describedby');
+      expect(document.getElementById(id!)).not.toHaveTextContent(/moves all/i);
+    });
   });
 });
 
@@ -208,13 +292,5 @@ describe('Set code… (the host-supplied codeAction slot)', () => {
     const at = names.indexOf('Set code…');
     expect(at).toBeGreaterThan(names.indexOf('Link in sequence…'));
     expect(at).toBeLessThan(names.indexOf('Delete'));
-  });
-});
-
-describe('the sentence is never cut (docs/TECH_DEBT.md #580)', () => {
-  it('takes a dock row that wraps, so a long subject name is read whole', () => {
-    const name = 'Fabricate and erect precast stair cores, blk B';
-    renderBar({ primaryName: name });
-    expectDockRow(screen.getByTestId('bulk-selection-bar'), screen.getByText(new RegExp(name)));
   });
 });

@@ -23,7 +23,7 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
  * A refusal keeps the preview rather than replacing it: "this would create a loop" with the chain
  * hidden leaves them guessing at which two activities closed it.
  */
-function refusalMessage(refusal: ChainRefusal): string {
+function refusalMessage(refusal: ChainRefusal, activityCount: number): string {
   switch (refusal.kind) {
     case 'tooFew':
       return 'Select at least two activities to link them in sequence.';
@@ -32,6 +32,9 @@ function refusalMessage(refusal: ChainRefusal): string {
       return `That would create ${refusal.requested} links; the most one action can create is ${refusal.limit}. Select fewer activities.`;
     case 'cycle':
       return 'That sequence would create a circular dependency. Reverse it, or leave out the activity that already comes later.';
+    case 'alreadyLinked':
+      // A statement of fact, not a failure: nothing is wrong, nothing is left to do.
+      return `These ${activityCount} activities are already linked in this order. Nothing to add.`;
   }
 }
 
@@ -39,6 +42,7 @@ export function LinkChainDialog({
   open,
   onClose,
   ordered,
+  existingCount,
   refusal,
   reversed,
   onToggleReverse,
@@ -50,6 +54,8 @@ export function LinkChainDialog({
   onClose: () => void;
   /** The sequence as it would be written, already ordered (and reversed if asked). */
   ordered: readonly ChainCandidate[];
+  /** How many of the pairs in that order are already linked finish-to-start, and so are not written. */
+  existingCount: number;
   refusal: ChainRefusal | null;
   reversed: boolean;
   onToggleReverse: () => void;
@@ -58,7 +64,8 @@ export function LinkChainDialog({
   /** A failure from the write loop. The chain is rolled back, so this reports rather than warns. */
   error: string | null;
 }): React.ReactElement {
-  const linkCount = Math.max(0, ordered.length - 1);
+  // What would be WRITTEN: the pairs in the order, less the ones the plan already links.
+  const linkCount = Math.max(0, ordered.length - 1 - existingCount);
   const blocked = refusal !== null || pending;
   // The Confirm button is shaded whenever a refusal or an error is on screen, so it points at
   // whichever one is rendered — adjacency is association for a sighted reader and nothing at all
@@ -74,7 +81,11 @@ export function LinkChainDialog({
       description={
         refusal
           ? 'Review the order below.'
-          : `This will create ${linkCount} finish-to-start ${linkCount === 1 ? 'link' : 'links'}, in the order shown.`
+          : `This will create ${linkCount} finish-to-start ${linkCount === 1 ? 'link' : 'links'}, in the order shown.${
+              existingCount > 0
+                ? ` ${existingCount} ${existingCount === 1 ? 'pair is' : 'pairs are'} already linked and will be left as ${existingCount === 1 ? 'it is' : 'they are'}.`
+                : ''
+            }`
       }
     >
       <div className="flex flex-col gap-4">
@@ -89,8 +100,12 @@ export function LinkChainDialog({
           <NoticeStrip
             id={noticeId}
             role="alert"
-            tone="warning"
-            message={refusalMessage(refusal)}
+            tone={refusal.kind === 'alreadyLinked' ? 'info' : 'warning'}
+            // Wraps: the default truncates, and these sentences are the whole point of the strip — the
+            // already-linked one was cut to "Nothing…" in a 1024 px dialog, and the cycle one is longer.
+            messageFit="wrap"
+            density="comfortable"
+            message={refusalMessage(refusal, ordered.length)}
           />
         ) : null}
         {error ? <NoticeStrip id={noticeId} role="alert" tone="warning" message={error} /> : null}

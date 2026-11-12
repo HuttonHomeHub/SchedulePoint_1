@@ -8,6 +8,7 @@ import { MoveToSwimlaneButton } from './MoveToSwimlaneButton';
 
 import { Button } from '@/components/ui/button';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { useTooltip } from '@/components/ui/tooltip';
 
 /**
  * What a plural selection can do, and why it cannot (`docs/specs/canvas-multi-select/` M4-T7).
@@ -35,6 +36,15 @@ import { NoticeStrip } from '@/components/ui/notice-strip';
  * **One status line, `aria-describedby`-linked** to whichever action it explains — not merely
  * adjacent to it. Proximity is association for a sighted reader and nothing at all in the
  * accessibility tree; the ADR-0073 C2.5 review caught exactly this, in a fix written for it.
+ *
+ * **One short line** (diagram-keys-and-selection M7, `docs/specs/diagram-keys-and-selection/m5-measurement.md`
+ * "The plural bar"). It used to be a sentence, a drag hint and the actions, 122 px at 1024 × 600 —
+ * dearer than the single-activity bar it replaces. Now a caption ("3 selected"), the actions and
+ * Clear selection; the one visible sentence is a refusal, when there is one. What was dropped from
+ * the screen was not dropped from the reader: the subject sentence is the bar's accessible
+ * description, and the move hint is spoken by the panel when the selection turns plural and echoed
+ * as a tooltip on the caption. **No overflow menu at any size** — the strip wraps rather than clips,
+ * which is the whole reason there is room to leave every action in view.
  */
 
 /** May an action be used, and — when not — why, in words a planner can act on. */
@@ -134,6 +144,27 @@ function BulkAction({
   );
 }
 
+/**
+ * The caption, and the move hint it carries as a tooltip. A component of its own because
+ * `useTooltip` is a hook and the bar returns early below two.
+ *
+ * `'name-echo'`: the panel already speaks the hint when the selection turns plural (and when the pen
+ * arrives, TECH_DEBT #529), from the same `pluralMoveHint`, so a tooltip a screen reader also read
+ * would say it a second time. The caption is not focusable, so this is a hover and long-press
+ * affordance for a sighted reader; the keyboard reader has the spoken one and the shortcuts sheet.
+ */
+function Caption({ count, hint }: { count: number; hint: string | null }): React.ReactElement {
+  const tip = useTooltip({ content: hint ?? undefined, purpose: 'name-echo' });
+  return (
+    <>
+      <span {...tip.triggerProps} className="font-medium whitespace-nowrap">
+        {`${String(count)} selected`}
+      </span>
+      {tip.tooltip}
+    </>
+  );
+}
+
 export function BulkSelectionBar({
   count,
   primaryName,
@@ -148,96 +179,103 @@ export function BulkSelectionBar({
   codeAction = null,
 }: BulkSelectionBarProps): React.ReactElement | null {
   const statusId = useId();
+  const subjectId = useId();
   // Below two this is not a plural selection and the floating per-object bar is the right surface.
   // Rendering nothing (rather than an empty strip) is what keeps the flag-off parity claim simple:
   // at one selected, the canvas is exactly what it was.
   if (count < 2) return null;
 
-  // ONE line, and it prefers the sentence that stops an action over the one that merely warns.
+  // ONE line, and it prefers the sentence that stops an action over the one that merely warns. It is
+  // the only sentence on screen, and only while something is refused: it is also what `aria-describedby`
+  // points the shut buttons at, so it cannot be dropped to save room.
   //
-  // It used to fall through to a third sentence — "moving these will pin a start-no-earlier-than
-  // date on all N" — which was **removed rather than kept**: the plural drag that would pin them
-  // was never wired (its model, its command and its endpoint all landed; the gesture did not), so
-  // the bar was telling a planner what a gesture they cannot perform would do. That is worse than
-  // the "lit but inert" class this repo keeps finding — an inert control does nothing, a false
-  // sentence asserts something.
+  // The drag hint is not here. It was folded into this strip as a second visible line until M7 and
+  // is now the caption's tooltip, spoken by the panel from the same function when the selection turns
+  // plural, so the two cannot drift. It was never part of `status`: folding a fact about the
+  // selection into the reason a control is shut made every action's description read "Dragging any
+  // of these moves all 3" (the 101-tests lesson), and that separation is kept.
   //
-  // **The gesture is now wired (`docs/TECH_DEBT.md` #108), so a sentence comes back — but not that
-  // sentence.** The original was only true in EARLY mode: a plural move pins an SNET there and
-  // writes `visualStart` in VISUAL (ADR-0033), so restoring it verbatim would re-introduce a false
-  // statement for half the plans in the product, which is the defect it was removed for wearing a
-  // different hat. What replaces it is true in both modes and is the fact a planner actually needs
-  // before they drag — that the gesture is plural at all.
+  // (The strip once carried a "moving these will pin a start-no-earlier-than date" sentence for a
+  // plural drag that was not yet wired, removed as false, and a replacement true in both modes was
+  // the hint. Neither belongs on the line.)
   const status = !remove.enabled ? remove.reason : !link.enabled ? link.reason : null;
-  // A **separate** line from `status`, and deliberately so. `status` is the reason a control is
-  // SHUT, and it is what `aria-describedby` points the shut buttons at; folding the drag caveat
-  // into it made every action's description read "Dragging any of these moves all 3", which is
-  // unrelated to why the button is off. 101 unit tests said so immediately. The caveat is a fact
-  // about the selection, not about a control, so it gets its own element and no describedby.
-  // The panel speaks the same string from the same function when the selection becomes plural (a
-  // second live region here would say it again on every pen poll), so the two cannot drift.
-  const moveHint = pluralMoveHint(count);
+  const moveHint = canMove ? pluralMoveHint(count) : null;
   // One id, shared by whichever controls are shut — see `BulkAction`'s `reasonId` docblock.
   const describedBy = status === null ? undefined : statusId;
 
   return (
-    <NoticeStrip
-      data-testid="bulk-selection-bar"
-      tone="accent"
-      // Wraps on an own row (`docs/TECH_DEBT.md` #580): the subject's name is what this sentence is
-      // for, and `grow` made a 14-line column of it (`m0-measurement.md`, M0d, "Row 580").
-      data-dock-row=""
-      messageFit="wrap"
-      density="comfortable"
-      message={
-        primaryName
-          ? `${count} activities selected — “${primaryName}” is the subject of single-activity actions.`
-          : `${count} activities selected.`
-      }
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        {status ? (
-          <p
-            id={statusId}
-            className="text-muted-foreground text-sm"
-            // Announced as it changes: the gates move with the pen, and a planner who has just lost
-            // the lock is told once, here, rather than discovering it by pressing a shaded button.
-            role="status"
-          >
-            {status}
-          </p>
-        ) : null}
-        {canMove ? <p className="text-muted-foreground text-sm">{moveHint}</p> : null}
-        <BulkAction
-          gate={link}
-          busy={busy}
-          onActivate={onLink}
-          reasonId={describedBy}
-          icon={<Link2 aria-hidden="true" className="size-4" />}
-          label="Link in sequence…"
-        />
-        {moveToSwimlane ? (
-          <MoveToSwimlaneButton
-            assignment={moveToSwimlane.assignment}
-            ids={moveToSwimlane.ids}
-            names={moveToSwimlane.names}
-            gate={moveToSwimlane.gate}
+    <>
+      <NoticeStrip
+        data-testid="bulk-selection-bar"
+        tone="accent"
+        // A group, so the sentence that used to be on screen has something to describe: a bare div
+        // with `aria-describedby` exposes no description to anything.
+        role="group"
+        aria-label="Selected activities"
+        aria-describedby={subjectId}
+        // Asks the dock for a line of its own where it does not fit beside the plan facts (the
+        // outlet's `data-dock-row` floor): the caption and five actions are about 650 px, against the
+        // 350 px the facts leave at 1024. It wraps rather than clips (`flex-wrap`), so a refusal beside
+        // all five costs one more line and never a lost control.
+        data-dock-row=""
+        // `grow`, not the default `truncate`: the caption is two words and must never take an ellipsis.
+        messageFit="grow"
+        className="flex-wrap gap-2"
+        message={<Caption count={count} hint={moveHint} />}
+      >
+        {/* `contents`: the actions are the strip's own flex items, so the caption and the actions wrap
+          as one run instead of the caption being left alone on a line above a group. */}
+        <div className="contents">
+          {status ? (
+            <p
+              id={statusId}
+              className="text-muted-foreground text-sm"
+              // Announced as it changes: the gates move with the pen, and a planner who has just lost
+              // the lock is told once, here, rather than discovering it by pressing a shaded button.
+              role="status"
+            >
+              {status}
+            </p>
+          ) : null}
+          <BulkAction
+            gate={link}
+            busy={busy}
+            onActivate={onLink}
+            reasonId={describedBy}
+            icon={<Link2 aria-hidden="true" className="size-4" />}
+            label="Link in sequence…"
           />
-        ) : null}
-        {codeAction}
-        <BulkAction
-          gate={remove}
-          busy={busy}
-          onActivate={onDelete}
-          reasonId={describedBy}
-          tone="destructive"
-          icon={<Trash2 aria-hidden="true" className="size-4" />}
-          label="Delete"
-        />
-        <Button type="button" size="sm" variant="ghost" onClick={onClear}>
-          Clear selection
-        </Button>
-      </div>
-    </NoticeStrip>
+          {moveToSwimlane ? (
+            <MoveToSwimlaneButton
+              assignment={moveToSwimlane.assignment}
+              ids={moveToSwimlane.ids}
+              names={moveToSwimlane.names}
+              gate={moveToSwimlane.gate}
+            />
+          ) : null}
+          {codeAction}
+          <BulkAction
+            gate={remove}
+            busy={busy}
+            onActivate={onDelete}
+            reasonId={describedBy}
+            tone="destructive"
+            icon={<Trash2 aria-hidden="true" className="size-4" />}
+            label="Delete"
+          />
+          <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+            Clear selection
+          </Button>
+        </div>
+      </NoticeStrip>
+      {/* A sibling, not a child: the strip's own text is what a reader and a test see as "the bar", and
+        the sentence must be in the accessibility tree without being in it (the `TsldMinimap`
+        `sr-only` + `aria-describedby` pattern). */}
+      <span id={subjectId} className="sr-only">
+        {primaryName
+          ? `${String(count)} activities selected — “${primaryName}” is the subject of single-activity actions.`
+          : `${String(count)} activities selected.`}
+      </span>
+    </>
   );
 }

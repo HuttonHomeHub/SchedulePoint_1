@@ -2,7 +2,7 @@
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only; Firefox and
-  WebKit are not installed here and remain unverified, see `m0-verification.md`). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 (`m5-measurement.md`); M6 and M7 wait for the owner's look at its pictures.
+  WebKit are not installed here and remain unverified, see `m0-verification.md`). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 (`m5-measurement.md`); M7 built 2026-11-12 (the plural bar and Link in sequence over linked activities; as-built readings in `m5-measurement.md`); M6 waits for the owner's look at M5's pictures.
 - **Owner:** product owner; built by `builder` agents, one milestone per pull request.
 
 ## Breakdown

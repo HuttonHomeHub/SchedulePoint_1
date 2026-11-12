@@ -414,7 +414,7 @@ export async function selectPair(page: Page, first: string, second: string): Pro
   await list.press('Escape');
   await cursorTo(page, first);
   await list.press('Shift+ArrowDown');
-  await expect(page.getByTestId('bulk-selection-bar')).toContainText(/2 activities selected/);
+  await expect(page.getByTestId('bulk-selection-bar')).toContainText(/^2 selected/);
   await expect(list.getByRole('option', { selected: true })).toHaveCount(2);
   for (const name of [first, second]) {
     await expect(option(page, name)).toHaveAttribute('aria-selected', 'true');

@@ -1003,7 +1003,10 @@ marker). `CanvasDockOutlet` reads it: an outlet holding a marked strip asks for 
 plan facts gives the strip a line of its own. It is a **floor, never a content basis**: the outlet
 stays `basis 0`, the alternative ADR-0187 rejected. Five strips set it: `FollowLogicStrip` and, since
 `docs/TECH_DEBT.md` #580 closed, `CanvasModeBand`, `HistoryResultStrip`, `LayoutResolvedStrip` and
-`BulkSelectionBar`, all with `messageFit="wrap"` and `density="comfortable"` (`CanvasModeBand` only for
+`BulkSelectionBar`, all with `messageFit="wrap"` and `density="comfortable"` except the last: since
+diagram-keys M7 the plural bar's message is a two-word caption ("3 selected"), so it keeps the marker but
+sets `messageFit="grow"`, `flex-wrap gap-2` and the compact density, and its subject sentence is the
+group's accessible description rather than visible text (`CanvasModeBand` only for
 the two statements that name activities; its armed-tool hint (Select; Add and Link state their mode on the toolbar button) wraps with no marker and keep the compact
 density, so they cost the diagram no line, ADR-0092). None carries a hover-only `title` stop-gap any more,
 because none can cut its sentence.

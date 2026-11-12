@@ -1197,6 +1197,7 @@ export function TsldPanel({
         existing: dependencies.map((d) => ({
           predecessorId: d.predecessor.id,
           successorId: d.successor.id,
+          type: d.type,
         })),
         reversed: chainReversed,
       }),
@@ -2098,11 +2099,17 @@ export function TsldPanel({
    * description, so the polite row text would be a second telling of the same row (the accessibility
    * review of D1). Where no focus move follows — the Add tool, an open create popover, focus held by
    * a field or a dialog, the list already focused — nothing else speaks, so the announcement stays.
+   *
+   * **A press on the bar that is already the whole selection says nothing.** The list holds focus by
+   * then, so the rule above would speak the row again — which is exactly what the second click of a
+   * double-click did, ahead of the editor it opens (the M3 review). Nothing changed, so nothing is said.
    */
   const selectFromPointer = (id: string | null, modifier?: SelectModifier): void => {
     const focusWillSpeak =
       mode !== 'add-activity' && pendingCreate === null && listMayTakeFocusFromPointer();
-    select(id, modifier, focusWillSpeak);
+    const unchanged =
+      !modifier && id !== null && selection.ids.length === 1 && selection.ids[0] === id;
+    select(id, modifier, focusWillSpeak || unchanged);
   };
 
   /**
@@ -4063,6 +4070,7 @@ export function TsldPanel({
           setBulkError(null);
         }}
         ordered={chain.ordered}
+        existingCount={chain.existingCount}
         refusal={chain.refusal}
         reversed={chainReversed}
         onToggleReverse={() => setChainReversed((r) => !r)}
