@@ -1,7 +1,7 @@
 # ADR-0218: A click on the diagram gives it the keyboard
 
 - **Status:** Accepted — 2026-11-12. The product owner approved the spec and the plan on 2026-11-12 with all four
-  defaults. D1 and D2 ship with M1; D3 to D5 are added by M2 to M4 as dated amendments to this file.
+  defaults. D1 and D2 ship with M1; D3 (M2) and D5 (M4) are added as dated amendments (D4, the double-click, follows with M3) to this file.
 - **Date:** 2026-11-12
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:** [ADR-0048](0048-undo-redo-command-stack.md) M5 (the undo accelerators' body-only document fallback is
@@ -90,6 +90,21 @@ Each goes through the button's own path, so the dialog, the focus return and the
   button's absence does.
 - **No `aria-keyshortcuts` on the buttons.** The key acts only with the list focused; advertising it on a button a reader
   is standing on would promise a press that does nothing there. The shortcuts sheet lists it ("Delete / Backspace").
+
+### D5 — A press on a bar carries its select modifier (added 2026-11-12, M4)
+
+A press on a bar runs the gesture machine whenever the pen is held, and whenever Ctrl or Cmd is held (the marquee chord
+arms it for every reader, and a reposition handler is always wired), so the bar becomes `repositioning`, or `resizing` on
+an edge. Its unmoved release returned `select` and nothing else, and the canvas called `onSelect(id)`, a **replace**. The
+plain click path, which has the modifier, never ran. Measured in Chromium (M0): Ctrl-click replaced with the pen **and
+without it**; Shift-click was lost only with the pen.
+
+- The machine's `Modifiers` gain `shift`; `repositioning` and `resizing` capture `selectModifier` (`toggle` for Ctrl/Cmd,
+  `span` for Shift, Ctrl winning) **at press**, never at release, as `marqueeing` captures `additive`; the unmoved
+  release returns it beside `select`, and the canvas calls `onSelect(id, modifier)`.
+- A plain press adds no key, so a plain click stays the one-argument call it was. Shift still never arms the marquee, and a
+  press that becomes a move selects nothing, as before. The Link and Add tools, the marquee and touch run no new path.
+- Corrects the spec's P4 and `docs/HANDOFF.md`'s "worked at 8.4": the fault is wider than "with the pen".
 
 ## Alternatives considered
 

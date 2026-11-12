@@ -2571,6 +2571,7 @@ export function TsldCanvas({
   // platforms, and a downstream consumer that had to check both would eventually check one.
   const modifiersOf = (e: React.PointerEvent): Modifiers => ({
     ctrl: e.ctrlKey || e.metaKey,
+    shift: e.shiftKey,
   });
   /**
    * The selection modifier a click carries, or `undefined` for a plain replace.
@@ -2622,7 +2623,7 @@ export function TsldCanvas({
       // check until the surface has a real measured size (avoids a degenerate 1×1).
       const measured = width > 1 && height > 1;
       const outOfBounds = measured && (p.x < 0 || p.y < 0 || p.x > width || p.y > height);
-      const { state, intent, select } = reduce(
+      const { state, intent, select, selectModifier } = reduce(
         gestureRef.current,
         outOfBounds ? { type: 'escape' } : { type: 'pointerUp' },
         machineCtx(),
@@ -2644,7 +2645,13 @@ export function TsldCanvas({
         return;
       }
       if (intent) onIntent?.(intent, clampAnchor(p, sizeRef.current));
-      else if (select) onSelect(select);
+      else if (select) {
+        // The modifier the press CARRIED, captured by the machine at press (ADR-0218 D5): an unmoved
+        // Ctrl- or Shift-click on a bar toggles or extends, not replaces. Absent for a plain click, so
+        // that call stays the one-argument call it has always been.
+        if (selectModifier) onSelect(select, selectModifier);
+        else onSelect(select);
+      }
       return;
     }
     const wasDrag = drag.current?.moved ?? false;

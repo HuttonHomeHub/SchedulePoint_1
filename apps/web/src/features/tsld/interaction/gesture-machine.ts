@@ -86,6 +86,28 @@ export interface Modifiers {
    * M2-T1). The shell sets it from `e.ctrlKey || e.metaKey`; nothing downstream can tell which.
    */
   ctrl?: boolean;
+  /**
+   * Shift. Read only to decide what an UNMOVED press selects: Shift-click extends the run. Ctrl
+   * still arms the marquee; Shift never does (ADR-0218 D5).
+   */
+  shift?: boolean;
+}
+
+/**
+ * How an unmoved press on a bar changes the selection: `toggle` for Ctrl/Cmd, `span` for Shift,
+ * absent for a plain replace. Ctrl wins when both are held (toggle is the reversible one). The same
+ * two words the canvas's `SelectModifier` uses; declared here so the pure machine imports nothing
+ * from a component.
+ */
+export type PressSelectModifier = 'toggle' | 'span';
+
+/** The select modifier a press carries, decided once at press (ADR-0218 D5); spread, so a plain press adds no key. */
+function selectModifierField(
+  modifiers: Modifiers | undefined,
+): { selectModifier: PressSelectModifier } | Record<string, never> {
+  if (modifiers?.ctrl === true) return { selectModifier: 'toggle' };
+  if (modifiers?.shift === true) return { selectModifier: 'span' };
+  return {};
 }
 
 /** The grabbed activity's current geometry, supplied by the shell on a body pointer-down. */
@@ -256,6 +278,11 @@ export type GestureState =
       spanDays: number;
       /** The lane grabbed at pointer-down (the vertical origin). */
       laneIndex: number;
+      /**
+       * What the press selects if it ends unmoved. Captured at PRESS like `marqueeing`'s `additive`,
+       * never re-read at release: lifting the key before the button must not turn a toggle into a replace.
+       */
+      selectModifier?: PressSelectModifier;
       currentStartDay: number;
       /** The lane under the pointer now — `round(dy / LANE_HEIGHT)` from the grab, clamped ≥ 0. */
       currentLaneIndex: number;
@@ -289,6 +316,8 @@ export type GestureState =
       originDurationDays: number;
       /** The bar's lane, for the ghost geometry (a resize never changes the lane). */
       laneIndex: number;
+      /** What the press selects if it ends unmoved; captured at press (see `repositioning`). */
+      selectModifier?: PressSelectModifier;
       /** The live tentative start day — fixed at {@link originStartDay} for a finish drag. */
       currentStartDay: number;
       /** The live tentative duration (whole days, clamped ≥ 1) under the pointer. */
@@ -370,6 +399,8 @@ export interface Reduction {
   intent?: EditIntent;
   /** Set when a body press ended without moving — the shell should select this activity. */
   select?: string;
+  /** With {@link select}: the modifier the press carried, so a Ctrl/Shift-click is not a plain replace. */
+  selectModifier?: PressSelectModifier;
   /** LOE endpoint-pick feedback (Stage D) — see {@link LoeSpanStep}. */
   loe?: LoeSpanStep;
 }
@@ -426,6 +457,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             laneIndex: event.body.laneIndex,
             currentStartDay: startDay,
             currentDurationDays: durationDays,
+            ...selectModifierField(event.modifiers),
           },
         };
       }
@@ -474,6 +506,7 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             dayLocked: startFrozen === true,
             sidewaysBlocked: false,
             laneClamped: false,
+            ...selectModifierField(event.modifiers),
           },
         };
       }
@@ -652,7 +685,11 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
           };
         }
         if (!state.movedPastThreshold || (!dayChanged && !laneChanged)) {
-          return { state: IDLE, select: state.activityId };
+          return {
+            state: IDLE,
+            select: state.activityId,
+            ...(state.selectModifier ? { selectModifier: state.selectModifier } : {}),
+          };
         }
         // Free-2D: emit ONE reposition carrying only the axes that changed — so the route can
         // pick the minimal write (lane-only skips recalc; time needs it) — §3/§4.
@@ -677,7 +714,11 @@ export function reduce(state: GestureState, event: GestureEvent, ctx: GestureCtx
             ? state.currentStartDay === state.originStartDay
             : state.currentDurationDays === state.originDurationDays;
         if (!state.movedPastThreshold || unchanged) {
-          return { state: IDLE, select: state.activityId };
+          return {
+            state: IDLE,
+            select: state.activityId,
+            ...(state.selectModifier ? { selectModifier: state.selectModifier } : {}),
+          };
         }
         return {
           state: IDLE,
