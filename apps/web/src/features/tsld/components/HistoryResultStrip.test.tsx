@@ -191,11 +191,17 @@ describe('HistoryResultStrip', () => {
     expect(screen.queryByRole('button', { name: 'Redo' })).toBeNull();
   });
 
-  it('shows the full sentence as a tooltip for a success, whose message truncates', () => {
-    renderStrip();
-    expect(screen.getByTestId('canvas-history-result')).toHaveAttribute(
-      'title',
-      'Undid add “Foundations”.',
-    );
-  });
+  // #580: the sentence names the step, so it wraps on its own row instead of being cut, and the
+  // hover-only `title` stop-gap is gone because nothing is left to reveal.
+  it.each(['success', 'failure'] as const)(
+    'a %s takes a dock row that wraps, with no title stop-gap',
+    (kind) => {
+      renderStrip({ kind });
+      const strip = screen.getByTestId('canvas-history-result');
+      expect(strip).toHaveAttribute('data-dock-row');
+      expect(strip).toHaveClass('flex-wrap', 'min-w-0');
+      expect(strip).not.toHaveAttribute('title');
+      expect(screen.getByText('Undid add “Foundations”.')).not.toHaveClass('truncate');
+    },
+  );
 });

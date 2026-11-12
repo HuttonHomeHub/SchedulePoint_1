@@ -110,9 +110,13 @@ export function CanvasModeBand({
     // same sentence twice, which is the double-speak the plan named as this task's risk.
     <NoticeStrip
       data-testid="canvas-mode-band"
+      // Own row, never cut (`docs/TECH_DEBT.md` #580, ADR-0216): a name-bearing sentence (the Linked
+      // confirmation, the link pick) is the one thing a planner reads here, and a `title` on a
+      // truncated line is reachable only by a mouse. `data-dock-row` is the outlet's 36 rem floor.
+      data-dock-row=""
       message={text}
-      // The sentence truncates in a narrow dock; the full text is a hover convenience only.
-      title={text}
+      messageFit="wrap"
+      density="comfortable"
       tone={confirmation ? 'muted' : 'accent'}
     >
       {confirmation && onUndo ? (

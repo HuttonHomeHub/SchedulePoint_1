@@ -184,6 +184,11 @@ export function BulkSelectionBar({
     <NoticeStrip
       data-testid="bulk-selection-bar"
       tone="accent"
+      // Wraps on an own row (`docs/TECH_DEBT.md` #580): the subject's name is what this sentence is
+      // for, and `grow` made a 14-line column of it (`m0-measurement.md`, M0d, "Row 580").
+      data-dock-row=""
+      messageFit="wrap"
+      density="comfortable"
       message={
         primaryName
           ? `${count} activities selected — “${primaryName}” is the subject of single-activity actions.`

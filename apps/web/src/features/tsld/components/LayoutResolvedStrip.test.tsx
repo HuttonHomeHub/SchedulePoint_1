@@ -45,4 +45,14 @@ describe('LayoutResolvedStrip', () => {
     expect(onDismiss).toHaveBeenCalledOnce();
     expect(calls).toEqual(['focus', 'dismiss']);
   });
+
+  // #580: the sentence names the bar that moved; it wraps on its own row and needs no hover title.
+  it('takes a dock row that wraps, and carries no title stop-gap', () => {
+    renderStrip();
+    const strip = screen.getByTestId('canvas-layout-resolved');
+    expect(strip).toHaveAttribute('data-dock-row');
+    expect(strip).toHaveClass('flex-wrap', 'min-w-0');
+    expect(strip).not.toHaveAttribute('title');
+    expect(screen.getByText(MESSAGE)).not.toHaveClass('truncate');
+  });
 });

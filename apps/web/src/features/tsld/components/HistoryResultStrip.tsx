@@ -89,11 +89,13 @@ export function HistoryResultStrip({
       <NoticeStrip
         data-testid="canvas-history-result"
         {...(failure ? { role: 'alert' as const } : {})}
+        // Success and failure alike take an own row and wrap (`docs/TECH_DEBT.md` #580): both sentences
+        // name the step, so neither is cut and neither depends on a hover-only `title`.
+        data-dock-row=""
         tone={failure ? 'warning' : 'muted'}
-        density={failure ? 'comfortable' : 'compact'}
-        messageFit={failure ? 'grow' : 'truncate'}
+        density="comfortable"
+        messageFit="wrap"
         message={message}
-        title={failure ? undefined : message}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
         onFocus={() => setFocused(true)}

@@ -118,3 +118,6 @@ specified as the fallback and **not built**: M0d passed.
 - The selection bar's single-bar Follow logic records `bulkPlacementCommand`'s step where it recorded `visualStartCommand`'s.
 - `NoticeStrip`'s public surface gains one value, and four existing strips may adopt it (`docs/TECH_DEBT.md` #580, its own
   change straight after M2).
+  **Taken up (2026-11-12):** `CanvasModeBand`, `HistoryResultStrip`, `LayoutResolvedStrip` and `BulkSelectionBar` now use
+  `messageFit="wrap"`, `density="comfortable"` and `data-dock-row`, so no dock sentence is cut. The decision is
+  unchanged; it was extended to four more strips, and the `title` stop-gaps on three of them were removed.

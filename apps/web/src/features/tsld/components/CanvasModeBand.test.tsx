@@ -109,4 +109,18 @@ describe('CanvasModeBand', () => {
       'Marquee select · drag to select, Ctrl to add · Esc to stop',
     );
   });
+
+  // #580: a statement that names activities is shown whole, so the band wraps on its own row and
+  // carries no hover-only title.
+  it.each([
+    { kind: 'linkPicking', linkType: 'FS', predecessorName: 'Set out' },
+    { kind: 'linked', predecessorName: 'Set out', successorName: 'Reinforce', linkType: 'FS' },
+  ] as const)('a $kind statement takes a dock row that wraps', (statement) => {
+    render(<CanvasModeBand statement={statement} />);
+    const band = screen.getByTestId('canvas-mode-band');
+    expect(band).toHaveAttribute('data-dock-row');
+    expect(band).toHaveClass('flex-wrap', 'min-w-0');
+    expect(band).not.toHaveAttribute('title');
+    expect(screen.getByText(modeStatementText(statement))).not.toHaveClass('truncate');
+  });
 });
