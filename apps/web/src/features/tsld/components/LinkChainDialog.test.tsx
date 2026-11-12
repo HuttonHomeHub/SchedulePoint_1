@@ -64,7 +64,10 @@ describe('a half-made chain', () => {
 describe('a chain that is already linked', () => {
   it('says so plainly, and shades Create with that reason', () => {
     renderDialog({ existingCount: 2, refusal: { kind: 'alreadyLinked' } });
-    const alert = screen.getByRole('alert');
+    // A standing fact, not a failure (ADR-0132): the polite region, never an alert.
+    expect(screen.queryByRole('alert')).toBeNull();
+    const alert = screen.getByRole('status');
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription('There is nothing to create.');
     expect(alert).toHaveTextContent(
       'These 3 activities are already linked in this order. Nothing to add.',
     );
@@ -75,6 +78,12 @@ describe('a chain that is already linked', () => {
     expect(create).toHaveAttribute('aria-describedby', alert.id);
     fireEvent.click(create);
     expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('keeps a real refusal an alert, with the review-the-order description', () => {
+    renderDialog({ existingCount: 0, refusal: { kind: 'cycle' } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/circular dependency/);
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription('Review the order below.');
   });
 
   it('keeps the order on screen, and Reverse and Cancel live', () => {
