@@ -783,6 +783,44 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
       .expect(422);
   });
 
+  it('names the field and both dates when a Contributor reports past the data date', async () => {
+    const { orgId, actor, planId } = await setup(); // plan data date is 2026-01-01
+    const created = await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Slab', durationDays: 5 })
+      .expect(201);
+    const item = `/api/v1/organizations/acme/activities/${created.body.data.id as string}`;
+    const contributor = await signUp('contributor@example.com');
+    await prisma.orgMember.create({
+      data: { organizationId: orgId, userId: contributor.userId, role: 'CONTRIBUTOR' },
+    });
+
+    const refused = await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ actualStart: '2025-12-01', actualFinish: '2026-01-05', version: 1 })
+      .expect(422);
+    expect(refused.body.error).toMatchObject({
+      code: 'VALIDATION_FAILED',
+      message: 'An actual date cannot be after the plan’s data date.',
+      details: {
+        reason: 'ACTUAL_AFTER_DATA_DATE',
+        fields: ['actualFinish'],
+        dataDate: '2026-01-01',
+        latestActual: '2026-01-05',
+      },
+    });
+
+    // A finish before its start names its field too.
+    const backwards = await contributor.agent
+      .patch(`${item}/progress`)
+      .send({ actualStart: '2025-12-20', actualFinish: '2025-12-10', version: 1 })
+      .expect(422);
+    expect(backwards.body.error.details).toMatchObject({
+      reason: 'FINISH_BEFORE_START',
+      fields: ['actualFinish'],
+    });
+  });
+
   it('surfaces a repair as meta.warnings, and omits meta on an ordinary report (M2, ADR-0035 §6)', async () => {
     const { planId, actor } = await setup(); // plan data date is 2026-01-01
     const created = await actor.agent

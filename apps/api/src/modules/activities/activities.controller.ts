@@ -127,7 +127,9 @@ export class ActivitiesController {
       'Contributor has but a Viewer does not. Status is derived from the numbers. Accepts ' +
       'percent complete, actual start/finish, an explicit remaining duration, and suspend/resume ' +
       'dates (M2, ADR-0035). Actuals are validated against the plan data date (N07) and ' +
-      'inconsistent completeness is repaired (N08/N18).',
+      'inconsistent completeness is repaired (N08/N18). A refusal (422) names the request ' +
+      'field(s) in `details.fields`; an actual after the data date also carries `details.dataDate` ' +
+      'and `details.latestActual` as ISO calendar days. Details are additive: do not parse `message`.',
   })
   @ApiOkResponse({ type: ActivityResponseDto })
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })

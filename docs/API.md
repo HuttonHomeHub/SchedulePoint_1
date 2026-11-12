@@ -88,6 +88,14 @@ complete activity — `COMPLETE_WITHOUT_FINISH` (finish set to the data date) or
 `REMAINING_ON_COMPLETE` (remaining forced to zero) — per ADR-0035 §6. An
 ordinary write omits `meta` entirely.
 
+A refused progress save (`PATCH …/activities/:id/progress`, 422 `VALIDATION_FAILED`) names what it
+refused in `error.details`, additively: `reason` as always, plus `fields` (the request fields at
+fault: `actualStart` and/or `actualFinish` for `ACTUAL_AFTER_DATA_DATE`, `actualFinish` for
+`FINISH_WITHOUT_START` and `FINISH_BEFORE_START`, `resumeDate` for `RESUME_BEFORE_SUSPEND`).
+`ACTUAL_AFTER_DATA_DATE` also carries `dataDate` and `latestActual`, both ISO calendar days
+(`YYYY-MM-DD`; the server reads the data date at refusal time, so it is current even if the client's
+copy is stale). Read these keys, do not parse `message`: its wording is not a contract.
+
 ### Cross-resource recompute (a write that mutates a sibling)
 
 A few writes deterministically mutate a **second** resource in the same
