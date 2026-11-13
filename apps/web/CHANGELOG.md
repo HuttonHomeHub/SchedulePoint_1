@@ -1,5 +1,17 @@
 # @repo/web
 
+## 1.8.0
+
+### Minor Changes
+
+- [#1347](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1347) [`c6862f5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c6862f5ae58c584bf064903a0a94a3cdc41a7470) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Opening a plan that nobody else is editing now starts editing straight away, so you no longer press Start editing first. If someone else is already editing, you see who it is and can ask for control. Pressing Stop editing is respected until you open the plan again. Because opening a plan now takes it, press Stop editing when you only want to look. A plan open in a second tab no longer reports that someone took over when you close the other tab. Viewers and Contributors are unaffected.
+
+### Patch Changes
+
+- [#1349](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1349) [`9955225`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9955225aedcaaf8380e37cb98aeab20953cab1ee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan left open in a background tab for 15 minutes stops holding other people out: within about two more minutes a colleague can take it over. Coming back to the tab, you carry on editing if nobody else started, and are told if someone did. Your undo history is kept, and any step that can no longer be applied is set aside with an explanation. A tab you leave in front, unattended, still holds the plan until you press Stop editing.
+
+- [#1349](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1349) [`9955225`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9955225aedcaaf8380e37cb98aeab20953cab1ee) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - If you ask for control of a plan and the person editing hands it over or leaves, you start editing as soon as you are looking at the page. If someone else gets there first, nothing changes and you can ask again.
+
 ## 1.7.0
 
 ### Minor Changes
