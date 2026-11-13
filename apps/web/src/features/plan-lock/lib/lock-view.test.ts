@@ -119,11 +119,94 @@ describe('resolveLockView', () => {
       ME,
       null,
     );
-    expect(view?.actions).toEqual(['waiting']);
+    expect(view?.actions).toEqual(['waiting', 'cancel']);
     expect(view?.message).toBe(
       'Requested — you will start editing when Jane hands over or leaves.',
     );
   });
+
+  it('HELD_BY_OTHER + canTakeOver + my request → Take over now beside Cancel request (#588)', () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        canTakeOver: true,
+        requestedBy: { id: ME, name: 'Me', email: 'me@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['takeover', 'cancel']);
+    expect(view?.message).toBe(
+      'You can take over from Jane now, or start editing when they hand over or leave.',
+    );
+  });
+
+  it('takeover offered because the holder is inactive, with no request of mine → no Cancel (#588)', () => {
+    const view = resolveLockView(
+      status({ state: 'HELD_BY_OTHER', holder: JANE, canTakeOver: true }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['takeover']);
+  });
+
+  it('an admin override never offers Cancel, even with a request of theirs on record (#588)', () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canOverride: true,
+        canRequest: true,
+        requestedBy: { id: ME, name: 'Me', email: 'me@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['override']);
+  });
+
+  it("someone else's request on record → Request control, no Cancel (#588)", () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        requestedBy: { id: 'carol', name: 'Carol', email: 'c@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['request']);
+  });
+
+  it.each([
+    ['waiting', { canTakeOver: false }],
+    ['take-over', { canTakeOver: true }],
+  ])(
+    'a failed cancel replaces the sentence with its own and shows it, in the %s state',
+    (_n, flags) => {
+      const asked = status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        requestedBy: { id: ME, name: 'Me', email: 'me@x.com' },
+        ...flags,
+      });
+      const plain = resolveLockView(asked, null, ME, null);
+      const failed = resolveLockView(asked, null, ME, null, { cancelFailed: true });
+      expect(failed?.message).toBe('Couldn’t cancel your request. Try again.');
+      expect(plain?.message).not.toBe(failed?.message);
+      expect(failed?.messageVisible).toBe(true);
+      expect(plain?.messageVisible).toBeUndefined();
+      expect(failed?.actions).toContain('cancel');
+    },
+  );
 
   it('HELD_BY_OTHER + canTakeOver → Take over now (row 7)', () => {
     const view = resolveLockView(
@@ -275,13 +358,12 @@ describe('LockView is a discriminated union, not a flat bag', () => {
     expect([editing.tone, lost.tone]).toEqual(['editing', 'lost']);
   });
 
-  it('rejects a painted message on the two tones the badge already covers', () => {
+  it('rejects a painted message on the tone the badge already covers', () => {
     const base = { badge: 'Locked', message: 'x', actions: [] } as const;
-    // @ts-expect-error `neutral` is a steady state; the badge carries it.
+    // @ts-expect-error `neutral` is a steady state; the badge carries it. (`locked` paints its
+    // sentence only when a cancel failed, #588, which the resolver sets and no caller writes.)
     const neutral: LockView = { ...base, tone: 'neutral', messageVisible: true };
-    // @ts-expect-error `locked` puts the holder's name on the badge instead (D4).
-    const locked: LockView = { ...base, tone: 'locked', messageVisible: true };
-    expect([neutral.tone, locked.tone]).toEqual(['neutral', 'locked']);
+    expect(neutral.tone).toBe('neutral');
   });
 
   it('requires the painted message on `lost`, where nothing else can carry it', () => {
@@ -301,15 +383,14 @@ describe('lockViewKey', () => {
   // A full `locked` view (the tone carrying the most optional fields). `messageVisible` is
   // exercised below via a cast, the same way this file's own discriminated-union tests do —
   // `lockViewKey` reads every field generically and does not care which tone "really" produces it.
-  const base: LockView = {
-    tone: 'locked',
+  const base = {
+    tone: 'locked' as const,
     badge: 'Locked',
     message: 'Alexandra is editing this plan.',
     aside: 'active 2 min ago',
-    actions: ['request'],
+    actions: ['request' as const],
     badgeName: 'Alexandra',
-    messageVisible: undefined,
-  };
+  } satisfies LockView;
 
   it('keys `null` differently from any real view', () => {
     expect(lockViewKey(null)).not.toBe(lockViewKey(base));
@@ -330,10 +411,7 @@ describe('lockViewKey', () => {
     ['aside present vs. absent', { ...base, aside: undefined } as unknown as LockView],
     ['actions', { ...base, actions: ['override'] }],
     ['badgeName', { ...base, badgeName: 'Sam' }],
-    // Not a real `locked` shape (`messageVisible` is `locked ? undefined`), and deliberately so —
-    // this asserts the KEY FUNCTION distinguishes the field, independent of which tone the type
-    // would actually let it appear on.
-    ['messageVisible', { ...base, messageVisible: true } as unknown as LockView],
+    ['messageVisible', { ...base, messageVisible: true }],
   ])('differs from the base view when only %s changes', (_field, variant) => {
     expect(lockViewKey(variant)).not.toBe(lockViewKey(base));
   });

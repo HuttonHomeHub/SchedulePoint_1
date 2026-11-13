@@ -32,6 +32,8 @@ const CALLBACKS = {
   startEditing: vi.fn(),
   stopEditing: vi.fn(),
   requestControl: vi.fn(),
+  cancelRequest: vi.fn(),
+  cancelFailed: false,
   handoff: vi.fn(),
   takeOver: vi.fn(),
   onWriteRejected: vi.fn(),

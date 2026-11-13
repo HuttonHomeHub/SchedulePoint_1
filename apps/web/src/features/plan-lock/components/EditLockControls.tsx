@@ -12,7 +12,7 @@ export interface EditLockControlsProps {
   /**
    * Render only these actions, dropping the rest (console epic M5-T1). The pen's `start`/`stop`
    * moved to the command deck — it is the control that unlocks the eleven commands beside it — while
-   * the badge, the live-region sentence and the seven hand-off actions stay in the plan's foot row.
+   * the badge, the live-region sentence and the eight hand-off actions stay in the plan's foot row.
    * Two surfaces, ONE `usePenLockView` call: the hook holds real local state (`dismissedRequestId`,
    * a countdown tick, a just-acted ref), so a second call would let the two halves disagree about
    * the same lock — the ADR-0062 drift, invisible because each looks right alone.
@@ -28,6 +28,7 @@ export interface EditLockControlsProps {
   onStop: () => void;
   onRequest: () => void;
   onTakeOver: () => void;
+  onCancel: () => void;
   onOverride: () => void;
   onHandover: () => void;
   onKeep: () => void;
@@ -50,6 +51,7 @@ export function EditLockControls({
   onStop,
   onRequest,
   onTakeOver,
+  onCancel,
   onOverride,
   onHandover,
   onKeep,
@@ -96,6 +98,22 @@ export function EditLockControls({
       {actions.includes('takeover') ? (
         <Button size="sm" onClick={onTakeOver} disabled={isPending} aria-busy={isPending}>
           {lockCopy.takeOverNow}
+        </Button>
+      ) : null}
+      {actions.includes('cancel') ? (
+        // `aria-disabled`, not the native attribute, and only on this button: Chromium blurs a button
+        // the moment it is natively disabled, and this one STAYS when a cancel fails, so focus would
+        // be left on `<body>` (WCAG 2.4.3). The press is swallowed while pending instead.
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            if (!isPending) onCancel();
+          }}
+          aria-disabled={isPending}
+          aria-busy={isPending}
+        >
+          {lockCopy.cancelRequest}
         </Button>
       ) : null}
       {actions.includes('override') ? (

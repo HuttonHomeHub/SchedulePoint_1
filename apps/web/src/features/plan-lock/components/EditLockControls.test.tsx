@@ -14,6 +14,7 @@ function handlers() {
     onStop: vi.fn(),
     onRequest: vi.fn(),
     onTakeOver: vi.fn(),
+    onCancel: vi.fn(),
     onOverride: vi.fn(),
     onHandover: vi.fn(),
     onKeep: vi.fn(),
@@ -43,6 +44,7 @@ describe('EditLockControls', () => {
     ['stop', 'Stop editing', 'onStop'],
     ['request', 'Request control', 'onRequest'],
     ['takeover', 'Take over now', 'onTakeOver'],
+    ['cancel', 'Cancel request', 'onCancel'],
     ['handover', 'Hand over', 'onHandover'],
     ['keep', 'Keep editing', 'onKeep'],
     ['dismiss', 'Dismiss', 'onDismiss'],
@@ -55,6 +57,17 @@ describe('EditLockControls', () => {
   it('renders the "waiting" action as a disabled Take over now (no handler)', () => {
     renderControls(['waiting']);
     expect(screen.getByRole('button', { name: 'Take over now' })).toBeDisabled();
+  });
+
+  it('shades Cancel request while a mutation is pending without disabling it natively, and swallows a press', () => {
+    const h = renderControls(['waiting', 'cancel'], { isPending: true });
+    const cancel = screen.getByRole('button', { name: 'Cancel request' });
+    // Native `disabled` would blur it in Chromium and leave focus on <body> if the cancel fails.
+    expect(cancel).not.toBeDisabled();
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+    expect(cancel).toHaveAttribute('aria-busy', 'true');
+    fireEvent.click(cancel);
+    expect(h.onCancel).not.toHaveBeenCalled();
   });
 
   it('confirms the admin override through a dialog before calling onOverride', () => {

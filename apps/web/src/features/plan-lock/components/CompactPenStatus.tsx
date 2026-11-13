@@ -28,6 +28,7 @@ export const HANDOFF_ACTIONS = [
   'request',
   'waiting',
   'takeover',
+  'cancel',
   'override',
   'handover',
   'keep',
@@ -125,7 +126,7 @@ export function CompactPenStatus({
 
 /**
  * The pen's **facts and hand-off**, rendered from a view somebody else resolved: the badge, the
- * `role="status"` sentence and — since M5 — the seven actions that are not `start`/`stop`, which
+ * `role="status"` sentence and — since M5 — the eight actions that are not `start`/`stop`, which
  * moved to the command deck as the control that unlocks the row beside it.
  */
 export function PenStatusCluster({

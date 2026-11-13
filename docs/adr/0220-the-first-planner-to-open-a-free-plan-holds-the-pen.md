@@ -6,7 +6,8 @@
 - **Date:** 2026-11-12
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:** [ADR-0028](0028-plan-edit-lock.md) (the acquire model: an explicit Start editing was a default nobody
-  was asked about, `docs/features/plan-edit-lock/feature-spec.md:149-150`).
+  was asked about, `docs/features/plan-edit-lock/feature-spec.md:149-150`). **D7 added 2026-11-13 for `docs/TECH_DEBT.md`
+  #588**: a request can be withdrawn, and the tab's memory of one follows the server.
 - **Spec:** [`docs/specs/first-planner-gets-the-pen/`](../specs/first-planner-gets-the-pen/feature-spec.md) §4.7 ·
   **Plan:** [`implementation-plan.md`](../specs/first-planner-gets-the-pen/implementation-plan.md) (M1 builds D1–D3
   and D6, M2 D4, M3 D5)
@@ -64,11 +65,11 @@ different holder is seen, because the request was to that person and not to whoe
 own record of the request with the lease row on release, so only the client can remember it. A colleague who wins the
 race is silent, as in D1. Unlike D1 it may act on a poll, because the person asked for exactly this.
 
-The cost, plainly: a requester cannot yet withdraw a request, so someone who asked and then wandered off starts
-editing when they next look at the tab. The waiting sentence says so ("Requested — you will start editing when
+The cost, plainly: a requester could not withdraw a request, so someone who asked and then wandered off started
+editing when they next looked at the tab. The waiting sentence says so ("Requested — you will start editing when
 {Name} hands over or leaves.") and the live region goes straight from it to "You’re editing this plan." without a
-"Checking…" between. A "Cancel request" control needs a server-side withdrawal and its own spec
-(`docs/TECH_DEBT.md` #588).
+"Checking…" between. **D7 pays this cost** (Cancel request, `docs/TECH_DEBT.md` #588), and also replaces the
+memory rule above: the tab no longer remembers only its own press.
 
 **D5 — A tab hidden for 15 minutes stops heartbeating.** While this tab holds the pen and has been hidden for 15
 continuous minutes (`HIDDEN_LET_GO_MS`), its heartbeat interval skips its beat. It never sends a release: the lock is
@@ -80,6 +81,42 @@ existing beat when the tab is shown again resumes the lease if nobody has taken 
 through D3: a silent retake when the plan is free, the "taken over" notice when someone else holds it. The undo history
 is not cleared by that return (ADR-0176 D4), though a step the server can no longer apply is set aside as ADR-0176
 describes.
+
+**D7 — A request can be withdrawn, and the tab's memory follows the server's record (#588).** Approved 2026-11-13
+with Q1 answered yes. Spec: [`docs/specs/cancel-request-control/`](../specs/cancel-request-control/feature-spec.md).
+
+- **The route.** `DELETE …/plans/:planId/edit-lock/request` clears the caller's own request and returns the status
+  with 200, never 204: the answer may be "you now hold the pen" (a Hand over arrived first) or "someone else's request
+  stands", and the tab must not guess. It is idempotent, needs `plan:request_control`, and the write is conditional on
+  the caller's id under the same advisory lock as `request` and `handoff`, so it can never clear another person's request.
+- **The button.** **Cancel request** (ghost) sits beside the disabled **Take over now** while waiting, and beside the
+  live **Take over now** after the countdown, and only when the server says the pending request is the reader's own.
+  An Org Admin is offered Take over, never Request control, so never Cancel. The sentence after the countdown reads
+  "You can take over from {Name} now, or start editing when they hand over or leave."
+- **The memory rule replaces D4's.** While another person holds the pen, a status read naming this user as the
+  requester **adopts** the request (so a reload no longer leaves the sentence untrue), and a read naming nobody or someone
+  else **drops** it (so a withdrawal in another tab, or a request replaced by a colleague's, is no longer acted on).
+  It is still dropped when this tab holds the pen or sees a different holder, and still held through the moment of
+  release, which only the tab can remember. Pressing Cancel forgets it at once and adoption is suspended while the
+  DELETE is in flight, so a read that left before it cannot re-arm it.
+- **If a Hand over beats the cancel**, the person keeps the pen and sees "You’re editing this plan." with Stop editing.
+  Nothing hands it back: undoing a colleague's deliberate act without anyone pressing anything is worse than one press.
+- **The holder is not told** the request was withdrawn. Their prompt goes on their next status read (up to 15 s), and a
+  Hand over pressed late gets a 409 and a refetch. Their "Keep editing" dismissal resets once the status carries no request,
+  so a fresh ask after a cancel is shown.
+- **Focus.** When a colleague's act removes the Cancel request button while focus is on it, focus goes to the pen
+  cluster's container, detected by containment as ADR-0135 D2/D3 do for the toolbars, in addition to the existing return
+  after the person's own press.
+- **A failed cancel says so** (_changed in review, 2026-11-13_; the first draft showed nothing, as Request control and
+  Hand over do). The server still holds the request, so the tab re-adopts it and keeps the button, and the pen status
+  replaces its sentence with one visible, announced sentence, "Couldn’t cancel your request. Try again.", until the next successful action
+  (ADR-0217); it replaces rather than follows the waiting sentence because both together wrapped the foot row at
+  1024 × 600 and pushed the buttons off screen. The cancel also cancels any status read already in flight, so a read that left before the DELETE cannot
+  put the request back in the cache.
+- **Residual, accepted.** A second tab of the same person left in the background does not learn of a cancel made in the
+  first until it reads again. If the holder leaves and that tab is brought forward before it reads, it can take the
+  pen. Closing it needs cross-tab messaging, which is not worth building until someone reports it.
+- **Versions.** api minor (an additive route), web minor. No flag (D6 stands), no schema change.
 
 ## Alternatives considered
 
@@ -116,3 +153,6 @@ describes.
 - The browser journeys press Start editing far less. A journey that means "nobody holds it" must say so with
   `expectPenFree`, and reaching that state by a reload now needs a Stop first (`apps/web/e2e-support/pen.ts`).
 - ADR-0028's header gains "amended by ADR-0220", and CLAUDE.md §16 gains one line.
+- D7: the foot row's pen cluster gains a button in its two tightest states, so those states are held to the 1024 × 600
+  floor by a journey (`e2e-edit/pen-handoff.spec.ts`). A reloaded requester takes the pen when the holder leaves, which
+  is what the waiting sentence always promised.

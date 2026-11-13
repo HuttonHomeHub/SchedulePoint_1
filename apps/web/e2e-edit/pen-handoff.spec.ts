@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
@@ -305,7 +307,10 @@ test('a requester takes the pen once grace elapses, and the silent holder is tol
   await refetchLock(b);
   await expect(takeOverNow).toBeEnabled(CROSS_ACTOR);
   await expect(
-    b.getByRole('status').filter({ hasText: /You can take over editing from Holder\./ }),
+    // B asked, so the sentence says both ways in (#588): the take-over and the pen coming to them.
+    b.getByRole('status').filter({
+      hasText: /You can take over from Holder now, or start editing when they hand over or leave\./,
+    }),
   ).toBeVisible(CROSS_ACTOR);
   // "Holder", not "Holder A" — `firstName` again, the same rule the hand-off test pins. Asserted
   // here too because this sentence is produced by a different branch of `lock-view.ts`, and one
@@ -333,6 +338,337 @@ test('a requester takes the pen once grace elapses, and the silent holder is tol
     }),
   ).toBeVisible(CROSS_ACTOR);
   await expect(a.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * What the server says about the plan's pen, from the reader's own session. The journeys below use it
+ * to say "the plan is free" as a fact about the server rather than as the absence of a button.
+ */
+async function penStateOf(page: Page, planUrl: string): Promise<string> {
+  const match = /\/orgs\/([^/]+)\/.*plans\/([^/?#]+)/.exec(planUrl);
+  if (!match) throw new Error(`no org or plan in ${planUrl}`);
+  const [, slug, planId] = match;
+  return page.evaluate(
+    async ({ slug: s, id }: { slug: string; id: string }) => {
+      const res = await fetch(`/api/v1/organizations/${s}/plans/${id}/edit-lock`, {
+        credentials: 'include',
+      });
+      const body = (await res.json()) as { data: { state: string } };
+      return body.data.state;
+    },
+    { slug: slug ?? '', id: planId ?? '' },
+  );
+}
+
+/**
+ * **Cancel request (#588, ADR-0220 D7).** B asks for the pen and changes their mind. What matters is
+ * not the button but what follows it: the holder's prompt goes, and when the holder later leaves the
+ * plan is FREE, not B's. Before this change B's tab would have taken it.
+ */
+test('a requester cancels, the holder is no longer asked, and leaving does not hand B the pen', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await holdThePen(a);
+
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeVisible();
+  await expect(b.getByRole('button', { name: 'Take over now' })).toBeDisabled();
+
+  await refetchLock(a);
+  await expect(
+    a.getByRole('status').filter({ hasText: 'is asking to edit this plan.' }),
+  ).toBeVisible(CROSS_ACTOR);
+
+  // --- B takes the request back --------------------------------------------------------------
+  await b.bringToFront();
+  await b.getByRole('button', { name: 'Cancel request' }).click();
+  await expect(b.getByRole('button', { name: 'Request control' })).toBeVisible();
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toHaveCount(0);
+  await expect(
+    b.getByRole('status').filter({ hasText: 'Holder is editing this plan.' }),
+  ).toBeVisible();
+  // Focus is on the pen cluster, not dropped to <body> by the button going away.
+  await expectFocusInPen(b);
+
+  // --- A's prompt clears on their next read, and they are still editing ----------------------
+  await refetchLock(a);
+  await expect(a.getByRole('button', { name: 'Hand over' })).toHaveCount(0, CROSS_ACTOR);
+  await expect(a.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+
+  // --- A leaves: the plan is free, and B did not take it -------------------------------------
+  await a.getByRole('button', { name: 'Stop editing' }).click();
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Start editing' })).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
+  expect(await penStateOf(b, planUrl)).toBe('FREE');
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * **The reload case (Q1).** B asks, reloads, and the screen still says "you will start editing when
+ * Holder hands over or leaves". That is true only if the tab re-learns the request from the server.
+ */
+test('a requester who reloads still gets the pen when the holder leaves', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await holdThePen(a);
+
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeVisible();
+
+  await b.reload();
+  await expect(
+    b.getByRole('status').filter({ hasText: /Requested — you will start editing when/i }),
+  ).toBeVisible();
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeVisible();
+
+  await a.bringToFront();
+  await a.getByRole('button', { name: 'Stop editing' }).click();
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * **The foot row at the design floor (ADR-0179, ADR-0219).** The waiting state is the tightest the pen
+ * cluster gets: the `Locked · Holder` badge stays painted even when a selection bar is docked, beside
+ * a shaded Take over now and the new Cancel request. Each must be wholly on screen, pressable, and the
+ * page must not scroll sideways. Asserted as properties that hold on any machine, never as sizes.
+ */
+test('at 1024 x 600 every pen control is on screen and pressable, with and without a docked selection bar', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await holdThePen(a);
+  await addActivity(a, 'Excavate');
+
+  await b.setViewportSize({ width: 1024, height: 600 });
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeVisible();
+
+  const badge = b.locator('[data-plan-pen]').getByText(/^Locked · Holder/);
+  const reachable = async (names: readonly string[]): Promise<void> => {
+    for (const name of names) {
+      const control = b.getByRole('button', { name });
+      await expect(control).toBeInViewport({ ratio: 1 });
+      await control.click({ trial: true });
+    }
+    await expect(badge).toBeInViewport({ ratio: 1 });
+    const sideways = await b.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(sideways, 'the page scrolls sideways').toBe(false);
+  };
+
+  // A selected activity docks the selection bar into the foot row (ADR-0219). The diagram's list is
+  // the keyboard route to it, and Escape is the way back.
+  const selectionBar = b.getByRole('toolbar', { name: 'Actions for Excavate' });
+  const select = async (): Promise<void> => {
+    const list = b.getByRole('listbox', { name: 'Activities in the diagram' });
+    // Home moves the list's cursor to the first row and selects it, whatever the cursor was on.
+    await list.focus();
+    await list.press('Home');
+    await expect(selectionBar).toBeVisible();
+  };
+  const clear = async (): Promise<void> => {
+    await b.getByRole('listbox', { name: 'Activities in the diagram' }).press('Escape');
+    await expect(selectionBar).toHaveCount(0);
+  };
+
+  // --- waiting: Take over now (shaded) and Cancel request ------------------------------------
+  await expect(b.getByRole('button', { name: 'Take over now' })).toBeDisabled();
+  await reachable(['Take over now', 'Cancel request']);
+  await select();
+  await reachable(['Take over now', 'Cancel request']);
+  await clear();
+
+  // --- take-over: wait out the real grace window with the holder demonstrably alive ----------
+  for (let tick = 0; tick < 6; tick += 1) {
+    await refetchLock(a);
+    await a.waitForTimeout(9_000);
+  }
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Take over now' })).toBeEnabled(CROSS_ACTOR);
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeVisible();
+  await reachable(['Take over now', 'Cancel request']);
+  await select();
+  await reachable(['Take over now', 'Cancel request']);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/** Where focus is, as a fact about the document: inside the pen cluster, not dropped to <body>. */
+async function expectFocusInPen(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document.activeElement?.closest('[data-plan-pen]') !== null &&
+            document.activeElement !== null,
+        ),
+      {
+        message: 'focus is not inside the pen cluster',
+      },
+    )
+    .toBe(true);
+}
+
+/**
+ * **Focus survives somebody else's act (WCAG 2.4.3, ADR-0135).** The control a person is standing on
+ * is removed by a colleague, not by them: B on Cancel request when the holder hands over or stops, the
+ * holder on Hand over or Keep editing when B cancels. Chromium fires `focusout` with a null
+ * `relatedTarget` on the element being removed while it is still connected, which jsdom never does, so
+ * only a browser can say the focus went to the pen cluster rather than `<body>`.
+ */
+test('focus stays in the pen cluster when a colleague removes the control you are on', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await holdThePen(a);
+  await b.goto(planUrl);
+
+  // (b) The holder stops editing while B stands on Cancel request: B's request is honoured.
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await b.getByRole('button', { name: 'Cancel request' }).focus();
+  await a.bringToFront();
+  await a.getByRole('button', { name: 'Stop editing' }).click();
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toHaveCount(0);
+  await expectFocusInPen(b);
+
+  // (a) The holder hands over while B stands on Cancel request. A (an Org Admin) takes the pen back
+  // first, since B holds it now.
+  await b.getByRole('button', { name: 'Stop editing' }).click();
+  await refetchLock(a);
+  await holdThePen(a);
+  await refetchLock(b);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await b.getByRole('button', { name: 'Cancel request' }).focus();
+  await refetchLock(a);
+  await a.getByRole('button', { name: 'Hand over' }).click();
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toHaveCount(0);
+  await expectFocusInPen(b);
+
+  // B lets go and A takes the pen again, so A is the holder for the cases below.
+  await b.getByRole('button', { name: 'Stop editing' }).click();
+  await refetchLock(a);
+  await holdThePen(a);
+  await refetchLock(b);
+
+  // (c) The holder (A) stands on Hand over, then on Keep editing, while B withdraws.
+  await refetchLock(b);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await refetchLock(a);
+  await a.getByRole('button', { name: 'Hand over' }).focus();
+  await b.bringToFront();
+  await b.getByRole('button', { name: 'Cancel request' }).click();
+  await refetchLock(a);
+  await expect(a.getByRole('button', { name: 'Hand over' })).toHaveCount(0, CROSS_ACTOR);
+  await expectFocusInPen(a);
+
+  await b.bringToFront();
+  await b.getByRole('button', { name: 'Request control' }).click();
+  await refetchLock(a);
+  await a.getByRole('button', { name: 'Keep editing' }).focus();
+  await b.bringToFront();
+  await b.getByRole('button', { name: 'Cancel request' }).click();
+  await refetchLock(a);
+  await expect(a.getByRole('button', { name: 'Keep editing' })).toHaveCount(0, CROSS_ACTOR);
+  await expectFocusInPen(a);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/**
+ * **A cancel that cannot be sent says so (ADR-0217).** The DELETE is refused at the network, so the
+ * request still stands: the sentence is visible and whole at the design floor beside both buttons, and
+ * Cancel request stays pressable.
+ */
+test('a failed cancel shows its sentence, keeps the request, and fits at 1024 x 600', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { ctxA, a, ctxB, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.bringToFront();
+  await a.goto(planUrl);
+  await holdThePen(a);
+
+  await b.setViewportSize({ width: 1024, height: 600 });
+  let refuseCancel = true;
+  await b.route(
+    (url) => url.pathname.endsWith('/edit-lock/request'),
+    (route) =>
+      route.request().method() === 'DELETE' && refuseCancel ? route.abort() : route.continue(),
+  );
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  // By keyboard, so the question is where focus is once the refusal lands (WCAG 2.4.3): a button that
+  // is natively disabled while the request is in the air is blurred by the browser, and stays blurred.
+  const cancel = b.getByRole('button', { name: 'Cancel request' });
+  await cancel.focus();
+  await b.keyboard.press('Enter');
+
+  const failure = b
+    .getByRole('status')
+    .filter({ hasText: 'Couldn’t cancel your request. Try again.' });
+  await expect(failure).toBeVisible();
+  await expect(cancel).toBeFocused();
+  await expect(failure).toBeInViewport({ ratio: 1 });
+  await expect(b.getByRole('button', { name: 'Cancel request' })).toBeEnabled();
+  for (const name of ['Take over now', 'Cancel request']) {
+    await expect(b.getByRole('button', { name })).toBeInViewport({ ratio: 1 });
+  }
+  expect(
+    await b.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    ),
+    'the page scrolls sideways',
+  ).toBe(false);
+
+  // The request still stands on the server: the holder is still being asked.
+  await refetchLock(a);
+  await expect(a.getByRole('button', { name: 'Hand over' })).toBeVisible(CROSS_ACTOR);
+
+  // The retry goes through, and focus is still somewhere real: the button went away with the request.
+  refuseCancel = false;
+  await b.bringToFront();
+  await cancel.focus();
+  await b.keyboard.press('Enter');
+  await expect(b.getByRole('button', { name: 'Request control' })).toBeVisible();
+  await expectFocusInPen(b);
 
   await ctxA.close();
   await ctxB.close();
