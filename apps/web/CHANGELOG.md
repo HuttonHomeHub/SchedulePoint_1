@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.7.0
+
+### Minor Changes
+
+- [#1344](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1344) [`47f3eae`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/47f3eaef2c36246f3ff45af7a1db50828c03bdf1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a short window (about 700 pixels high or less at normal text size), selecting one activity or several now gives the action buttons the whole bottom row. The plan's dates and counts and the "Editing" label step aside, so the buttons wrap onto fewer lines, and they come back when you clear the selection. A "Locked" warning stays on screen, and a screen reader still reads the hidden facts. Clicking a bar on the diagram no longer slides it when it is still fully in view.
+
 ## 1.6.0
 
 ### Minor Changes
