@@ -3259,7 +3259,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       row: 'strip' as const,
       order: 2,
       label: 'Select',
-      description: 'Marquee-select activities on the canvas',
+      description:
+        'Drag a box across bars to select them. Hold Ctrl (Cmd on a Mac) to add to the selection.',
       icon: <SquareDashedMousePointer className="size-4" />,
       isActive: (ctx: TsldToolbarContext) => ctx.isMarqueeSelecting,
       activeKind: 'armed' as const,

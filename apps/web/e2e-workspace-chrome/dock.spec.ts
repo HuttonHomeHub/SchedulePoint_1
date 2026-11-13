@@ -106,12 +106,12 @@ test.describe('The canvas dock', () => {
       .getByRole('button', { name: 'Select', exact: true })
       .click();
 
-    const statement = page.getByText(/^Marquee select/).first();
+    const statement = page.getByText(/^Select · drag across bars/).first();
     await expect(statement, 'the armed tool should say what the next click does').toBeVisible();
     await expect(
       activitiesRow(page),
       'the statement belongs in the row the workspace already pays for',
-    ).toContainText(/Marquee select/);
+    ).toContainText(/Select · drag across bars/);
     expect(await canvasHeight(page), 'arming a tool must not shorten the canvas').toBe(idle);
 
     // **And the withdrawn half, pinned in the same breath.** Arming Link must now state nothing in
@@ -177,6 +177,56 @@ test.describe('The canvas dock', () => {
     // milestone. Asserted as containment in the row, not as "not over the canvas": a bar can sit
     // outside the canvas box and still be an overlay, and only its host says where it belongs.
     await expect(activitiesRow(page).getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+  });
+
+  /**
+   * **The armed Select tool's sentence is one line at the 1024 px floor** (follow-logic follow-ups
+   * M2, `docs/specs/follow-logic-follow-ups/`). The premise — that the old 58-character sentence
+   * wraps beside the plan facts — was unmeasured when the spec was written (ADR-0113), so this case
+   * is written first and recorded failing on that sentence before the copy changes.
+   *
+   * The state is fixed because the facts' width varies with it (ADR-0216 D6): a computed plan,
+   * nothing selected, facts current. The sentence is found by its tail, not its head, so the same
+   * case measures the old copy and the new. It counts line boxes of the sentence's own text node —
+   * a `Range` over it — and states no pixel figure.
+   */
+  test('the armed Select sentence is one line box at 1024 wide, and costs the diagram no height', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const orgSlug = await onboard(page, STAMP + 11);
+    await createHierarchy(page);
+    await newPlan(page, 'Select hint');
+    await holdThePen(page);
+
+    await seedActivities(page, orgSlug, [
+      { name: 'Dig footings', laneIndex: 0 },
+      { name: 'Steel frame', laneIndex: 1 },
+    ]);
+    await recalculate(page, orgSlug);
+    await holdThePen(page);
+    await expect(canvas(page)).toBeVisible();
+
+    const idle = await canvasHeight(page);
+    await page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Select', exact: true })
+      .click();
+    const band = page.getByTestId('canvas-mode-band');
+    await expect(band).toBeVisible();
+
+    const lineBoxes = await band.evaluate((el) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.includes('Esc to stop')) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top))).size;
+      }
+      throw new Error('the armed Select band has no sentence ending "Esc to stop"');
+    });
+    expect(lineBoxes, 'the armed Select sentence should occupy one line box').toBe(1);
+    expect(await canvasHeight(page), 'arming Select must not shorten the diagram').toBe(idle);
   });
 });
 
@@ -874,7 +924,7 @@ for (const { pointer, touch } of [
       const idleFoot = (await footFigures(page)).foot;
       const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
       await toolbar.getByRole('button', { name: 'Select', exact: true }).click();
-      await expect(page.getByTestId('canvas-mode-band')).toContainText('Marquee select');
+      await expect(page.getByTestId('canvas-mode-band')).toContainText('Select · drag across bars');
       await expectArmedHintCostsNothing(page, idleFoot, `${pointer} Select tool armed`);
       await canvas(page).press('Escape');
       await expect(page.getByTestId('canvas-mode-band')).toHaveCount(0);

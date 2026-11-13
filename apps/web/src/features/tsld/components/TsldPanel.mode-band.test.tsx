@@ -134,7 +134,7 @@ describe('TsldPanel — mode statement band (flag on)', () => {
    */
   it('keeps the band for the marquee tool, whose trigger does not restate it', () => {
     render(<Harness arm="marquee" />);
-    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/^Marquee select/);
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/^Select · drag across bars/);
   });
 
   it('disappears again when the tool disarms', () => {
@@ -558,6 +558,6 @@ describe('TsldPanel — the dock shows at most one transient strip', () => {
     // that stays in a file after the derivation moves.
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/Marquee select/);
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/Select · drag across bars/);
   });
 });

@@ -59,6 +59,11 @@ export type CanvasModeStatement =
  * re-hide a capability rather than trim a sentence, so they are compressed instead: the drag
  * statement is 66 characters against 88, the marquee 58 against 99. Going shorter is a one-line
  * edit if the product owner would rather have the brevity than the discovery.
+ *
+ * **2026-11-13: the marquee took that edit.** It reads `Select · drag across bars · Esc to stop`
+ * (39 characters against 58) so it fits one line at 1024 wide (`docs/specs/follow-logic-follow-ups/`
+ * M2). `Ctrl to add` is not hidden again: it moved to the shortcuts sheet (`PlanShortcutsHelp`) and
+ * the Select button's tooltip.
  */
 export function modeStatementText(statement: CanvasModeStatement): string {
   switch (statement.kind) {
@@ -69,9 +74,9 @@ export function modeStatementText(statement: CanvasModeStatement): string {
     case 'linking':
       return `Linking ${statement.linkType} · click the predecessor · Esc to stop`;
     case 'marquee':
-      // Names the modifier as well as the tool: holding Ctrl/Cmd sweeps without arming anything, and
-      // a planner who never finds that is left toggling a tool for every rectangle they draw.
-      return 'Marquee select · drag to select, Ctrl to add · Esc to stop';
+      // The Ctrl/Cmd-drag shortcut lives in the shortcuts sheet and the Select button's tooltip, not
+      // here: the longer sentence wrapped beside the plan facts at 1024 wide.
+      return 'Select · drag across bars · Esc to stop';
     case 'linkPicking':
       return `Linking ${statement.linkType} from “${statement.predecessorName}” · click the successor · Esc to drop the pick`;
     case 'linked':
