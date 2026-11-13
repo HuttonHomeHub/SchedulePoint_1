@@ -85,10 +85,13 @@ export function usePenLockView(
   const [tick, setTick] = useState(() => now ?? Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
   const justActedRef = useRef(false);
-  // Whether focus was last inside the container, so a control removed by SOMEONE ELSE's act (the
+  // Whether focus last LANDED inside the container, so a control removed by SOMEONE ELSE's act (the
   // holder hands over while the requester's focus is on Cancel request) is told apart from focus that
-  // was never here. A focusout that leaves a still-connected element is a deliberate move away; one
-  // from a node that has gone is the removal itself (ADR-0135 D2/D3, by containment).
+  // was never here (ADR-0135 D2/D3, by containment). Only `focusin` writes it, never `focusout`:
+  // Chromium fires a `focusout` with a null `relatedTarget` on the very element being removed while it
+  // is still connected, so reading that as "moved away" switched the restore off in exactly the case
+  // it exists for, and a window blur fires the same event. The restore still acts only when focus has
+  // fallen to `<body>`, so a stale `true` after a click on empty ground moves focus nowhere it was.
   const focusInsideRef = useRef(false);
 
   // **Paused while the tab is hidden**, which `render/use-now.ts` has done since ADR-0056 and this
@@ -132,6 +135,7 @@ export function usePenLockView(
   const view = resolveLockView(pen.status, pen.lostControl, currentUserId, dismissedRequestId, {
     now: effectiveNow,
     autoAcquiring: pen.autoAcquiring,
+    cancelFailed: pen.cancelFailed,
   });
   const signature = view ? `${view.tone}:${view.actions.join('|')}` : 'none';
 
@@ -160,17 +164,8 @@ export function usePenLockView(
       focusInsideRef.current =
         e.target instanceof Node && Boolean(containerRef.current?.contains(e.target));
     };
-    const onFocusOut = (e: FocusEvent): void => {
-      if (e.target instanceof Node && e.target.isConnected && e.relatedTarget === null) {
-        focusInsideRef.current = false;
-      }
-    };
     document.addEventListener('focusin', onFocusIn);
-    document.addEventListener('focusout', onFocusOut);
-    return () => {
-      document.removeEventListener('focusin', onFocusIn);
-      document.removeEventListener('focusout', onFocusOut);
-    };
+    return () => document.removeEventListener('focusin', onFocusIn);
   }, []);
 
   useEffect(() => {

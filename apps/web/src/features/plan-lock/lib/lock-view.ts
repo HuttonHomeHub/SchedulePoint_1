@@ -84,7 +84,12 @@ export type LockView =
        * Optional on this tone, not required: the defensive no-holder branch has no name to give.
        */
       badgeName?: string;
-      messageVisible?: undefined;
+      /**
+       * `true` only on the two states where a withdrawal was refused (`cancelFailed`): the request
+       * still stands, and a sentence that only a screen reader could read would leave a sighted
+       * planner pressing a button that appears to do nothing (ADR-0217).
+       */
+      messageVisible?: true;
     })
   | (LockViewCommon & {
       tone: 'lost';
@@ -146,6 +151,12 @@ export function lockViewKey(view: LockView | null): string {
   }).join('\u0001');
 }
 
+// The refusal REPLACES the waiting sentence rather than following it: painted, the two together wrapped
+// the foot row at the design floor and pushed the buttons out of view, and the waiting sentence is
+// still true and is read again the moment the next action clears the refusal.
+const withCancelFailure = (message: string, failed: boolean): string =>
+  failed ? lockCopy.cancelFailed : message;
+
 /**
  * Resolve the banner view from the lock status and the two local flags. Pure and
  * exhaustively unit-testable — every control's presence is keyed on a **server**
@@ -161,13 +172,19 @@ export function lockViewKey(view: LockView | null): string {
  *   plan then reads as still loading, so one sentence is announced per opening rather than "No one is
  *   editing this plan." followed a moment later by "You're editing this plan." A silent retake is
  *   deliberately not this: the caller keeps passing the last held status instead.
+ * @param options.cancelFailed the last Cancel request did not reach the server (#588): the sentence is
+ *   replaces the sentence of the waiting and take-over views, and is shown, because the request still stands.
  */
 export function resolveLockView(
   status: PlanEditLockStatus | undefined,
   lostControl: PlanEditLockReason | null,
   currentUserId: string | undefined,
   dismissedRequestId: string | null,
-  { now, autoAcquiring = false }: { now?: number; autoAcquiring?: boolean } = {},
+  {
+    now,
+    autoAcquiring = false,
+    cancelFailed = false,
+  }: { now?: number; autoAcquiring?: boolean; cancelFailed?: boolean } = {},
 ): LockView | null {
   if (lostControl) {
     return {
@@ -245,7 +262,8 @@ export function resolveLockView(
             tone: 'locked',
             badge: lockCopy.badgeLocked,
             badgeName: firstName(holder),
-            message: lockCopy.canTakeOverRequested(holder),
+            message: withCancelFailure(lockCopy.canTakeOverRequested(holder), cancelFailed),
+            ...(cancelFailed ? { messageVisible: true as const } : {}),
             actions: ['takeover', 'cancel'],
           };
         }
@@ -264,7 +282,8 @@ export function resolveLockView(
             tone: 'locked',
             badge: lockCopy.badgeLocked,
             badgeName: firstName(holder),
-            message: lockCopy.waitingForHandover(holder),
+            message: withCancelFailure(lockCopy.waitingForHandover(holder), cancelFailed),
+            ...(cancelFailed ? { messageVisible: true as const } : {}),
             ...(countdown ? { aside: countdown } : {}),
             actions: ['waiting', 'cancel'],
           };

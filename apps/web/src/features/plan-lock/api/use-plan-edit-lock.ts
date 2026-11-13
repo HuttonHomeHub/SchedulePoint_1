@@ -102,6 +102,8 @@ export function useCancelRequest(orgSlug: string, planId: string) {
   return useMutation({
     mutationFn: () =>
       apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/request`, { method: 'DELETE' }),
+    // A read that left before the DELETE could land after it and put the request back in the cache.
+    onMutate: () => queryClient.cancelQueries({ queryKey: key }),
     onSuccess: (data) => queryClient.setQueryData(key, data),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
@@ -269,6 +271,8 @@ export interface PlanPen {
   requestControl: () => void;
   /** Withdraw this person's own pending request (#588). */
   cancelRequest: () => void;
+  /** The last Cancel request failed, so the request still stands; cleared by the next successful action. */
+  cancelFailed: boolean;
   handoff: () => void;
   /** Take over a live lock (peer post-grace, or admin immediate — server decides). */
   takeOver: () => void;
@@ -364,6 +368,7 @@ export function usePlanPen(
   // whoever comes next).
   const [requestedOf, setRequestedOf] = useState<string | null>(null);
   const cancel = useCancelRequest(orgSlug, planId);
+  const [cancelFailed, setCancelFailed] = useState(false);
   const seenOther = status?.state === 'HELD_BY_OTHER' ? (status.holder?.id ?? null) : null;
   if (requestedOf !== null && (holdsPen || (seenOther !== null && seenOther !== requestedOf))) {
     setRequestedOf(null);
@@ -379,6 +384,14 @@ export function usePlanPen(
     const isMine = status.requestedBy?.id === currentUserId;
     if (isMine && holderId !== null && requestedOf !== holderId) setRequestedOf(holderId);
     else if (!isMine && requestedOf !== null) setRequestedOf(null);
+  }
+  // The refusal is about a request that stands: once the status shows no request of mine (cancelled
+  // elsewhere, handed over, freed), there is nothing left for it to describe.
+  if (
+    cancelFailed &&
+    !(status?.state === 'HELD_BY_OTHER' && status.requestedBy?.id === currentUserId)
+  ) {
+    setCancelFailed(false);
   }
   // The freed-pen acquire is in flight. Its own mutation, so it never shares an observer with the
   // opening acquire or the silent retake.
@@ -523,12 +536,18 @@ export function usePlanPen(
     });
   }, [request]);
 
+  const { mutate: mutateCancel } = cancel;
   const cancelRequest = useCallback(() => {
     // Forget first: a free read that lands while the DELETE is in the air must not hand over a pen
     // the person has just said they no longer want.
     setRequestedOf(null);
-    cancel.mutate();
-  }, [cancel]);
+    setCancelFailed(false);
+    mutateCancel(undefined, {
+      // The request still stands on the server, and the memory follows it back (the adopt rule runs
+      // as soon as the cancel is no longer pending), so the screen only has to say so (ADR-0217).
+      onError: () => setCancelFailed(true),
+    });
+  }, [mutateCancel]);
 
   const handoff = useCallback(() => {
     handoffMutation.mutate(undefined, { onSuccess: decline });
@@ -575,6 +594,7 @@ export function usePlanPen(
     stopEditing,
     requestControl,
     cancelRequest,
+    cancelFailed,
     handoff,
     takeOver,
     onWriteRejected,

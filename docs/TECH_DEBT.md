@@ -9369,3 +9369,11 @@ A progress save is refused when an actual is after the data date (ADR-0035 §6, 
 Since ADR-0220 D3 a refused heartbeat that finds the plan free is retaken silently, once, because the common cause is the person's own other tab or a reload. A force-release leaves the plan free in the same way, and nothing the client can read tells the two apart, so the editor an admin released would take the plan straight back and the admin's act would be undone without anyone seeing it. It cannot happen from the product's screens today, only from a direct call to the endpoint.
 
 **Next:** have the API say why a lease ended (a reason on the heartbeat's 423 or on the status), so the web declines the retake and shows the lost-control banner. That is an API change and needs a spec (ADR-0105). **Trigger:** force-release gaining a screen, or its use on the owner's host.
+
+### 589. A shaded Take over now says nothing about why it is shaded
+
+**Status:** open · **Verified:** 2026-11-13, by reading `apps/web/src/features/plan-lock/components/EditLockControls.tsx` (the `waiting` action renders a `disabled` `Button` with no description, where ADR-0204 says a shaded control states its reason to every input) and by running the waiting state in Chromium, where a screen reader and a keyboard reader meet a dead button with no stated cause (the countdown is `aria-hidden`) · **Raised:** 2026-11-13 (found by the accessibility and ux reviews of the Cancel request change; pre-existing, not introduced by it) · **Size:** S · **Owner:** web
+
+While a request waits out the grace window the foot row shows **Take over now** shaded with the native `disabled` attribute. That takes it out of the Tab order and gives it no reason, so a person who cannot see the countdown has a control that does nothing and does not say when it will.
+
+**Next:** make it `aria-disabled` with a reason echoed beside it (the countdown, in words), as ADR-0082 and ADR-0204 do for the other shaded controls. **Trigger:** the next change to `EditLockControls`.

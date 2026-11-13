@@ -925,4 +925,89 @@ describe('usePlanPen — a requester takes the freed pen', () => {
     act(() => result.current.cancelRequest());
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
   });
+
+  it('a failed cancel re-adopts the request, says so, and a later FREE still sends exactly one acquire', async () => {
+    serve([ASKED, ASKED, FREE, HELD_BY_ME], (path) => {
+      const isDelete = vi.mocked(apiFetch).mock.calls.some(([, i]) => i?.method === 'DELETE');
+      if (isDelete && path.endsWith('/request')) return new Error('network down');
+      return HELD_BY_ME;
+    });
+    const { result, qc } = (() => {
+      const q = client();
+      const Wrapper = ({ children }: { children: ReactNode }) =>
+        createElement(QueryClientProvider, { client: q }, children);
+      return {
+        result: renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper }).result,
+        qc: q,
+      };
+    })();
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    expect(result.current.cancelFailed).toBe(false);
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(result.current.cancelFailed).toBe(true));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    // The request is still on record, so the tab asked for it again: the free read takes the pen once.
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(result.current.cancelFailed).toBe(false);
+  });
+
+  it('a status read that left before the cancel cannot put the request back', async () => {
+    const CANCELLED = { ...HELD_BY_OTHER, requestedBy: null };
+    let staleRead: (v: PlanEditLockStatus) => void = () => {};
+    let n = 0;
+    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') return Promise.resolve(CANCELLED);
+      if (init?.method === 'POST') return Promise.resolve(HELD_BY_ME);
+      n += 1;
+      if (n === 1) return Promise.resolve(ASKED);
+      if (n === 2) return new Promise<PlanEditLockStatus>((r) => (staleRead = r));
+      return Promise.resolve(CANCELLED);
+    });
+    const q = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: q }, children);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    act(() => {
+      void q.refetchQueries(); // the read that leaves before the cancel
+    });
+    await waitFor(() => expect(n).toBe(2));
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(result.current.status?.requestedBy).toBeNull());
+    act(() => staleRead(ASKED));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(result.current.status?.requestedBy).toBeNull();
+  });
+
+  it('adopts a reloaded request under StrictMode: FREE sends exactly one acquire', async () => {
+    serve([ASKED, FREE, HELD_BY_ME]);
+    const q = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(StrictMode, null, createElement(QueryClientProvider, { client: q }, children));
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    await act(async () => {
+      await q.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('the freed-pen acquire already sent, then Cancel runs: the tab keeps the one pen it took', async () => {
+    serve([ASKED, FREE, HELD_BY_ME], () => HELD_BY_ME);
+    const { result, qc } = mount([ASKED, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(result.current.cancelFailed).toBe(false);
+  });
 });

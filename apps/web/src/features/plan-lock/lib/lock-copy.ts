@@ -72,7 +72,9 @@ export const lockCopy = {
     `You can take over editing from ${firstName(holder)}.`,
   // The post-grace state of a request that is still standing: both ways in are true at once.
   canTakeOverRequested: (holder: PlanEditLockActor): string =>
-    `You can take over editing from ${firstName(holder)} now, or you will start editing when they hand over or leave.`,
+    `You can take over from ${firstName(holder)} now, or start editing when they hand over or leave.`,
+  /** A withdrawal that did not reach the server: the request still stands, so say so (ADR-0217). */
+  cancelFailed: 'Couldn’t cancel your request. Try again.',
   adminNote: 'As an admin, you can take over editing.',
   /** Shown at the Activities / Logic-diagram sections when the pen is held elsewhere. */
   scheduleReadOnlyHint: 'Read-only — you are not editing this plan.',

@@ -29,7 +29,7 @@ describe('the cancel-request copy', () => {
     const holder = { id: 'a', name: 'Alexandra Smith', email: 'a@x.com' };
     expect(lockCopy.cancelRequest).toBe('Cancel request');
     expect(lockCopy.canTakeOverRequested(holder)).toBe(
-      'You can take over editing from Alexandra now, or you will start editing when they hand over or leave.',
+      'You can take over from Alexandra now, or start editing when they hand over or leave.',
     );
   });
 });

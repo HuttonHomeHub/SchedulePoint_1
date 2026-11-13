@@ -138,9 +138,11 @@ Defaults I am proceeding on (overrule any of them if you disagree):
   worse than one press.
 - **D-c.** The holder is not told the request was withdrawn. Their prompt simply disappears, which is the same
   thing that happens today when a request lapses with a release.
-- **D-d.** No new error message. If a cancel fails (network), the screen stays as it was, with Cancel request still
-  offered, so the person can press it again. This matches Request control and Hand over today, neither of which
-  shows an error (`use-plan-edit-lock.ts:83-104`).
+- **D-d.** _Changed in review, 2026-11-13._ A failed cancel says so. The request memory is restored (the tab re-adopts the
+  server's record), Cancel request stays pressable, and one sentence, "Couldn’t cancel your request. Try again.", is
+  shown and announced through the pen status region until the next successful action (ADR-0217: a refusal is shown where
+  it was asked for). This replaces the first default, "no new error message", which matched Request control and Hand
+  over, neither of which says when it fails, and left a person pressing a button that appeared to do nothing.
 - **D-e.** No `VITE_` flag (ADR-0088 D1). Rollback is the commit boundary.
 
 ## 2. Functional requirements
@@ -199,7 +201,7 @@ view re-renders from it.
 | E7  | Cancel pressed twice, or from two tabs                                                | Idempotent: the second finds nothing and returns 200 with the status.                                                                                                                                                                                                                                                               |
 | E8  | Ben cancels in tab 1 while tab 2 of the same plan is open                             | Tab 2 forgets on its next `HELD_BY_OTHER` read (≤ 15 s while visible). **Residual:** if tab 2 is in the background, the holder leaves, and Ben then brings tab 2 forward, tab 2 can take the pen before it ever reads the cancellation. Accepted and recorded in ADR-0220 D7; fixing it needs cross-tab messaging.                  |
 | E9  | Ben cancels, the holder had pressed **Keep editing** on Ben's request, Ben asks again | Today the holder's "Keep editing" hides that person's requests for the rest of the opening (`use-pen-lock-view.ts:84, 229-231`). Default: clear that dismissal when the holder's status shows no request, so a fresh ask after a cancel is seen. If both happen inside one 15 s poll, the holder may not see it; stated, not fixed. |
-| E10 | Network failure                                                                       | D-d. The server still holds the request; the tab re-learns it on the next read (§4.2), so the screen tells the truth.                                                                                                                                                                                                               |
+| E10 | Network failure                                                                       | D-d (changed in review). The server still holds the request; the tab re-learns it on the next read (§4.2) and the pen status says the cancel failed.                                                                                                                                                                                |
 | E11 | Plan soft-deleted, or not in the caller's organisation                                | 404, as for `request()` (`plan-lock.service.ts:305-316`).                                                                                                                                                                                                                                                                           |
 
 ### Permissions
@@ -215,13 +217,13 @@ No body, no query. `planId` is `ParseUUIDPipe` as on every sibling route.
 
 ### Error scenarios
 
-| Scenario                  | Detection                 | User-facing result                       | Status |
-| ------------------------- | ------------------------- | ---------------------------------------- | ------ |
-| No session                | auth guard                | sign-in                                  | 401    |
-| Contributor / Viewer      | `assertCan`               | not reachable from the UI                | 403    |
-| Plan not in org / deleted | `resolvePlanOrg`          | not reachable from the UI                | 404    |
-| Nothing of mine to cancel | conditional write count 0 | status returned; view follows it         | 200    |
-| Network / 5xx             | mutation error            | screen unchanged, button pressable (D-d) | n/a    |
+| Scenario                  | Detection                 | User-facing result                     | Status |
+| ------------------------- | ------------------------- | -------------------------------------- | ------ |
+| No session                | auth guard                | sign-in                                | 401    |
+| Contributor / Viewer      | `assertCan`               | not reachable from the UI              | 403    |
+| Plan not in org / deleted | `resolvePlanOrg`          | not reachable from the UI              | 404    |
+| Nothing of mine to cancel | conditional write count 0 | status returned; view follows it       | 200    |
+| Network / 5xx             | mutation error            | sentence shown, button pressable (D-d) | n/a    |
 
 ## 3. Technical analysis
 
@@ -350,8 +352,8 @@ flowchart TD
 - `lib/lock-view.ts`: new `LockAction` `'cancel'`. The `mine` branch (`:249-259`) becomes `['waiting', 'cancel']`.
   The `canTakeOver` branch (`:239-247`) gains a `mine` test: when `requestedBy.id` is the reader, actions
   `['takeover', 'cancel']` and the message `lockCopy.canTakeOverRequested(holder)`.
-- `lib/lock-copy.ts`: `cancelRequest: 'Cancel request'`; `canTakeOverRequested`: "You can take over editing from
-  {Name} now, or you will start editing when they hand over or leave." The existing waiting sentence is unchanged.
+- `lib/lock-copy.ts`: `cancelRequest: 'Cancel request'`; `canTakeOverRequested`: "You can take over from
+  {Name} now, or start editing when they hand over or leave." The existing waiting sentence is unchanged.
 - `components/EditLockControls.tsx`: one `Button size="sm" variant="ghost"` after Take over now, disabled while
   pending, like its neighbours. No new styling.
 - `components/CompactPenStatus.tsx`: `'cancel'` added to `HANDOFF_ACTIONS`.

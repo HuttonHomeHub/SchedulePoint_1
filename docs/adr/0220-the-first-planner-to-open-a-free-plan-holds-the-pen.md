@@ -92,7 +92,7 @@ with Q1 answered yes. Spec: [`docs/specs/cancel-request-control/`](../specs/canc
 - **The button.** **Cancel request** (ghost) sits beside the disabled **Take over now** while waiting, and beside the
   live **Take over now** after the countdown, and only when the server says the pending request is the reader's own.
   An Org Admin is offered Take over, never Request control, so never Cancel. The sentence after the countdown reads
-  "You can take over editing from {Name} now, or you will start editing when they hand over or leave."
+  "You can take over from {Name} now, or start editing when they hand over or leave."
 - **The memory rule replaces D4's.** While another person holds the pen, a status read naming this user as the
   requester **adopts** the request (so a reload no longer leaves the sentence untrue), and a read naming nobody or someone
   else **drops** it (so a withdrawal in another tab, or a request replaced by a colleague's, is no longer acted on).
@@ -107,8 +107,12 @@ with Q1 answered yes. Spec: [`docs/specs/cancel-request-control/`](../specs/canc
 - **Focus.** When a colleague's act removes the Cancel request button while focus is on it, focus goes to the pen
   cluster's container, detected by containment as ADR-0135 D2/D3 do for the toolbars, in addition to the existing return
   after the person's own press.
-- **A failed cancel shows nothing**, as Request control and Hand over do not: the server still holds the request, the tab
-  re-adopts it on the next read, and the button stays pressable.
+- **A failed cancel says so** (_changed in review, 2026-11-13_; the first draft showed nothing, as Request control and
+  Hand over do). The server still holds the request, so the tab re-adopts it and keeps the button, and the pen status
+  replaces its sentence with one visible, announced sentence, "Couldn’t cancel your request. Try again.", until the next successful action
+  (ADR-0217); it replaces rather than follows the waiting sentence because both together wrapped the foot row at
+  1024 × 600 and pushed the buttons off screen. The cancel also cancels any status read already in flight, so a read that left before the DELETE cannot
+  put the request back in the cache.
 - **Residual, accepted.** A second tab of the same person left in the background does not learn of a cancel made in the
   first until it reads again. If the holder leaves and that tab is brought forward before it reads, it can take the
   pen. Closing it needs cross-tab messaging, which is not worth building until someone reports it.
