@@ -82,6 +82,69 @@ describe('/reset-password search params', () => {
   });
 });
 
+describe('/sign-up and /verify-email carry the same same-origin `?redirect=`', () => {
+  /**
+   * An invitee who creates an account used to lose the invitation: Sign in carried the destination
+   * and Create an account did not. The destination now rides through sign-up (and onto the waiting
+   * screen's own Sign in), under the one rule `/sign-in` already applies.
+   */
+  it('keeps an invitation path on both routes', () => {
+    const redirect = '/accept-invite?token=abc_DEF-123';
+    const search = `?redirect=${encodeURIComponent(redirect)}`;
+    expect(validate('/sign-up', search)).toEqual({ redirect });
+    expect(validate('/verify-email', `${search}&email=ada%40example.com`)).toEqual({
+      email: 'ada@example.com',
+      redirect,
+    });
+  });
+
+  it.each(['//evil.test/phish', '/%5Cevil.test', 'https://evil.test', 'orgs/acme'])(
+    'drops %s',
+    (value) => {
+      expect(validate('/sign-up', `?redirect=${value}`)).toEqual({});
+      expect(validate('/verify-email', `?redirect=${value}`)).toEqual({});
+    },
+  );
+
+  it('yields nothing when there is no redirect', () => {
+    expect(validate('/sign-up', '')).toEqual({});
+  });
+});
+
+describe('the one `?redirect=` rule, applied to every route that carries it', () => {
+  /**
+   * `/sign-in`, `/sign-up` and `/verify-email` share `sameOriginRedirect`, so a hostile value is
+   * asserted against all three: the rule drifting on one is exactly the failure a shared helper is
+   * there to prevent. The values are written as the URL carries them and read through the real
+   * parser.
+   */
+  const HOSTILE: Array<[string, string]> = [
+    ['a tab, which URL parsing strips so `/\t/evil` becomes `//evil`', '?redirect=/%09/evil.test'],
+    ['a newline, stripped the same way', '?redirect=/%0A/evil.test'],
+    ['a literal backslash', '?redirect=/%5Cevil'],
+    ['a javascript: URL', '?redirect=javascript:alert(1)'],
+    [
+      'an encoded double slash, which the parser decodes to `///evil` BEFORE the rule sees it',
+      '?redirect=/%2f%2fevil',
+    ],
+    ['a space', '?redirect=/orgs/a%20b'],
+    ['a repeated param whose first value is not a path', '?redirect=a&redirect=b'],
+    ['an empty value', '?redirect='],
+  ];
+
+  it.each(HOSTILE)('drops %s, on all three routes', (_why, search) => {
+    for (const path of ['/sign-in', '/sign-up', '/verify-email']) {
+      expect(validate(path, search), path).toEqual({});
+    }
+  });
+
+  it('keeps the first value of a repeated param when it is a path, as every other param does', () => {
+    expect(validate('/sign-up', '?redirect=/orgs/acme&redirect=//evil.test')).toEqual({
+      redirect: '/orgs/acme',
+    });
+  });
+});
+
 describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
   /**
    * `/sign-in` is where **every** unauthenticated arrival lands (`router.tsx:128` composes the

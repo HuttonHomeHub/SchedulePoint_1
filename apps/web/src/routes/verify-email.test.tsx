@@ -18,8 +18,18 @@ const navigate = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => search.current,
   useNavigate: () => navigate,
-  Link: ({ children, ...rest }: { children: React.ReactNode; to?: string }) => (
-    <a href={typeof rest.to === 'string' ? rest.to : '/'}>{children}</a>
+  Link: ({
+    children,
+    to,
+    search: linkSearch,
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    search?: { redirect?: string };
+  }) => (
+    <a href={`${to ?? '/'}${linkSearch?.redirect ? `?redirect=${linkSearch.redirect}` : ''}`}>
+      {children}
+    </a>
   ),
 }));
 
@@ -54,6 +64,14 @@ describe('VerifyEmailScreen', () => {
     expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     // Nothing to resend — offering it here would invite a second, pointless email.
     expect(screen.queryByRole('button', { name: /send another/i })).not.toBeInTheDocument();
+  });
+
+  it("sends the waiting screen's Sign in on to the invitation sign-up came from", () => {
+    renderAt({ email: 'ada@example.com', redirect: '/accept-invite?token=tok' });
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/sign-in?redirect=/accept-invite?token=tok',
+    );
   });
 
   it('offers the sign-in way out beside the resend in the waiting state', () => {

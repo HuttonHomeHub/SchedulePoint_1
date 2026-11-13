@@ -1,15 +1,33 @@
 import type { OrgMemberSummary } from '@repo/types';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useChangeMemberRole, useMembers, useRemoveMember } from '../api/use-members';
 import { ROLE_LABELS, ROLE_OPTIONS } from '../schemas/invite-schemas';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { SectionCard } from '@/components/ui/page';
 import { Select } from '@/components/ui/select';
+import { useSession } from '@/features/auth';
 import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
+
+/** How long the visible confirmation stays before it clears itself. */
+const NOTICE_MS = 8000;
+
+/**
+ * "Val is now a Planner. They may need to reload the page to see the change." — or, when the person
+ * whose role changed is the one signed in, "You are now a Planner. Reload the page to see what
+ * changed." The article follows the label's first letter.
+ */
+function roleChangedMessage(name: string, role: OrgMemberSummary['role'], isSelf: boolean): string {
+  const label = ROLE_LABELS[role];
+  const article = /^[AEIOU]/.test(label) ? 'an' : 'a';
+  return isSelf
+    ? `You are now ${article} ${label}. Reload the page to see what changed.`
+    : `${name} is now ${article} ${label}. They may need to reload the page to see the change.`;
+}
 
 /**
  * Roster with inline role changes and remove-with-confirm.
@@ -28,12 +46,33 @@ import { formatTimestamp, SAMPLE_INSTANT } from '@/lib/format-date';
  * second thing while still reading as the first. Here that assumption sits beside the call it
  * depends on.
  */
-export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactElement {
+export function MembersTable({
+  orgSlug,
+  canAdminister,
+}: {
+  orgSlug: string;
+  /** Org Admin: may change roles and remove members. Everyone else reads the roster. */
+  canAdminister: boolean;
+}): React.ReactElement {
   const members = useMembers(orgSlug);
   const changeRole = useChangeMemberRole(orgSlug);
   const removeMember = useRemoveMember(orgSlug);
   const [removing, setRemoving] = useState<OrgMemberSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The sentence a role change earned, kept on screen as well as announced: the select already
+  // shows the new role, but nothing said the save had gone through or that the colleague's own
+  // session does not follow it until it next refreshes.
+  const [notice, setNotice] = useState<string | null>(null);
+  const announce = useAnnounce();
+  const signedInUserId = useSession().data?.user.id;
+
+  // The line is a status, not a record: it clears itself so a stale "now a Planner" is not still
+  // there when somebody comes back to the page. Clearing announces nothing.
+  useEffect(() => {
+    if (notice === null) return;
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const columns: Column<OrgMemberSummary>[] = [
     { header: 'Name', cell: (member) => member.user.name },
@@ -61,8 +100,11 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
     },
     {
       header: 'Role',
-      cell: (member) => (
-        /* **`aria-disabled` + `aria-busy` + a guard, not the native attribute** — the answer to
+      cell: (member) =>
+        !canAdminister ? (
+          ROLE_LABELS[member.role]
+        ) : (
+          /* **`aria-disabled` + `aria-busy` + a guard, not the native attribute** — the answer to
            page-consistency CQ-3, given by **accessibility-reviewer** at the M8 gate (CLAUDE.md
            §19.13: a shared control's keyboard model is reviewed before release, not after).
 
@@ -82,35 +124,51 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
 
            **The guard needs no manual revert** because the select is **controlled**: ignoring the
            change re-renders it at `member.role`, which is the stored value. */
-        <Select
-          aria-label={`Role for ${member.user.name}`}
-          value={member.role}
-          aria-disabled={changeRole.isPending}
-          aria-busy={changeRole.isPending}
-          onChange={(event) => {
-            if (changeRole.isPending) return;
-            setError(null);
-            changeRole.mutate(
-              {
-                memberId: member.id,
-                role: event.target.value as OrgMemberSummary['role'],
-                version: member.version,
-              },
-              { onError: (err) => setError(err.message) },
-            );
-          }}
-        >
-          {ROLE_OPTIONS.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
-            </option>
-          ))}
-        </Select>
-      ),
+          <Select
+            aria-label={`Role for ${member.user.name}`}
+            value={member.role}
+            aria-disabled={changeRole.isPending}
+            aria-busy={changeRole.isPending}
+            onChange={(event) => {
+              if (changeRole.isPending) return;
+              setError(null);
+              setNotice(null);
+              const role = event.target.value as OrgMemberSummary['role'];
+              changeRole.mutate(
+                { memberId: member.id, role, version: member.version },
+                {
+                  onSuccess: () => {
+                    const message = roleChangedMessage(
+                      member.user.name,
+                      role,
+                      member.user.id === signedInUserId,
+                    );
+                    setNotice(message);
+                    announce(message);
+                  },
+                  onError: (err) => setError(err.message),
+                },
+              );
+            }}
+          >
+            {ROLE_OPTIONS.map((role) => (
+              <option key={role} value={role}>
+                {ROLE_LABELS[role]}
+              </option>
+            ))}
+          </Select>
+        ),
     },
-    {
+  ];
+  if (canAdminister) {
+    columns.push({
       header: 'Actions',
       srHeader: true,
+      /* `fit`, because the button's label is bounded and must never be the thing that gives way:
+         without a declared width the column was shrunk by its neighbours and "Remove" was clipped
+         to "Rem" at 1024 px. */
+      width: 'fit',
+      sample: 'Remove',
       headClassName: 'pr-0',
       cellClassName: 'pr-0 text-right',
       cell: (member) => (
@@ -123,8 +181,8 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
           Remove
         </Button>
       ),
-    },
-  ];
+    });
+  }
 
   const confirmRemove = (): void => {
     if (!removing) return;
@@ -132,8 +190,12 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
       onSuccess: () => {
         setRemoving(null);
         setError(null);
+        setNotice(null);
       },
-      onError: (err) => setError(err.message),
+      onError: (err) => {
+        setNotice(null);
+        setError(err.message);
+      },
     });
   };
 
@@ -150,6 +212,7 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
             {error}
           </p>
         ) : null}
+        {notice ? <p className="text-muted-foreground text-sm">{notice}</p> : null}
 
         <DataTable
           caption="Organisation members"

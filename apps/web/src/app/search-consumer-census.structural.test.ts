@@ -77,9 +77,11 @@ const CLASSIFIED: Record<string, string> = {
     'real parser.',
 
   // Route validators — Gate A refuses any of these without a case in `router-search.test.ts`.
-  'app/router.tsx': 'All eight validators; covered by Gate A + `router-search.test.ts`.',
+  'app/router.tsx': 'All nine validators; covered by Gate A + `router-search.test.ts`.',
   'routes/sign-in.tsx': 'Reads `redirect`/`signedOut`, validated at the route (Gate A).',
-  'routes/verify-email.tsx': 'Reads `email`/`verified`/`error`, validated at the route (Gate A).',
+  'routes/sign-up.tsx': 'Reads `redirect`, validated at the route (Gate A).',
+  'routes/verify-email.tsx':
+    'Reads `email`/`verified`/`error`/`redirect`, validated at the route (Gate A).',
   'routes/accept-invite.tsx': 'Reads `token`, validated at the route (Gate A).',
 
   // The shared readers, and the screens that use them.

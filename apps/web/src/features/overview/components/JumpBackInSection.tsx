@@ -3,7 +3,13 @@ import { Link } from '@tanstack/react-router';
 
 import { SectionCount } from './SectionCount';
 
-import { ListRow, RowSubject, SectionCard, rowLinkClass } from '@/components/ui/page';
+import {
+  ListRow,
+  ListRowSkeleton,
+  RowSubject,
+  SectionCard,
+  rowLinkClass,
+} from '@/components/ui/page';
 
 /**
  * "Jump back in" — the plans this reader was recently working in.
@@ -27,12 +33,26 @@ export function JumpBackInSection({
   plans,
   orgSlug,
   fill,
+  pending = false,
 }: {
   plans: RecentPlan[];
   orgSlug: string;
+  /**
+   * The overview is still loading AND this browser remembers plans, so the section is going to be
+   * here: it holds its place in the settled shape rather than appearing and shifting the grid
+   * (ADR-0202). Names come from the server, so there are none to show yet.
+   */
+  pending?: boolean;
   /** Fill the height the grid gives and scroll the body — see `SectionCard`. */
   fill?: boolean;
 }): React.ReactElement | null {
+  if (pending) {
+    return (
+      <SectionCard title="Jump back in" fill={fill}>
+        <ListRowSkeleton rows={2} label="Loading your recent plans…" />
+      </SectionCard>
+    );
+  }
   if (plans.length === 0) return null;
 
   return (

@@ -20,7 +20,7 @@ import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { reportCrash, setCrashReportSessionProbe } from '@/lib/crash-report';
 import { createQueryClient } from '@/lib/query/query-client';
 import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
-import { searchString } from '@/lib/router/search-string';
+import { sameOriginRedirect, searchString } from '@/lib/router/search-string';
 import { SignInScreen } from '@/routes/sign-in';
 
 /**
@@ -126,21 +126,8 @@ const signInRoute = createRoute({
   // public routes was drift, not a decision.
   beforeLoad: warmOnboardingScreen,
   validateSearch: (search: Record<string, unknown>): { redirect?: string; signedOut?: string } => {
-    // **Same-origin by shape** (`docs/TECH_DEBT.md` #102(1)). The value is spent at
-    // `routes/sign-in.tsx:28` as `router.history.push(search.redirect ?? '/')`, and until this check
-    // it was whatever the URL said. It has never been exploitable, but only because `pushState`
-    // throws on a cross-origin URL — a property of the History API, not of this code, and one that
-    // stops protecting us the moment a `window.location` assignment replaces the push. That is one
-    // ordinary refactor away, on the screen every unauthenticated arrival lands on.
-    //
-    // The rule is one leading slash and not two: `/plans/1` is ours, `//evil.test` is a
-    // protocol-relative URL the browser resolves to another origin (as is `/\evil.test`, which
-    // browsers normalise to `//evil.test` — hence the backslash is refused in second place too), and `https://evil.test` is not
-    // a path at all. A malformed value is DROPPED rather than repaired — the fallback is `/`, which
-    // is exactly where a reader with no destination should land.
-    const requested = searchString(search.redirect);
-    const redirect =
-      requested !== undefined && /^\/(?![/\\])/.test(requested) ? requested : undefined;
+    // Same-origin by shape; the rule and its reasoning live on `sameOriginRedirect`.
+    const redirect = sameOriginRedirect(search.redirect);
     // `?signedOut` is how a completed sign-out reaches its confirmation, since the action and the
     // message it earns happen on two different screens (ADR-0077 §9).
     //
@@ -163,6 +150,12 @@ const signUpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-up',
   beforeLoad: warmOnboardingScreen,
+  // An invitee who creates an account must come back to the invitation, so the destination rides
+  // through sign-up exactly as it rides through sign-in.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const redirect = sameOriginRedirect(search.redirect);
+    return redirect ? { redirect } : {};
+  },
   component: SignUpScreen,
 });
 
@@ -609,12 +602,17 @@ const verifyEmailRoute = createRoute({
   path: '/verify-email',
   validateSearch: (
     search: Record<string, unknown>,
-  ): { email?: string; verified?: string; error?: string } => {
+  ): { email?: string; verified?: string; error?: string; redirect?: string } => {
     const email = searchString(search.email);
     const verified = searchString(search.verified);
     const error = searchString(search.error);
+    // Only sign-up writes this, so the waiting screen's own "Sign in" can go on to the invitation.
+    // The emailed link is composed by the server and carries none, which is why it is never read
+    // from the confirmed-by-token arrival.
+    const redirect = sameOriginRedirect(search.redirect);
     return {
       ...(email ? { email } : {}),
+      ...(redirect ? { redirect } : {}),
       ...(verified ? { verified } : {}),
       ...(error ? { error } : {}),
     };

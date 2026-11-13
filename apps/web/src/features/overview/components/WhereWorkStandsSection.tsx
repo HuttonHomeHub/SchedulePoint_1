@@ -3,7 +3,7 @@ import type { PlanStanding } from '@repo/types';
 import { PlanStandingRow } from './PlanStandingRow';
 import { SectionCount } from './SectionCount';
 
-import { EmptyState, SectionCard } from '@/components/ui/page';
+import { EmptyState, ListRowSkeleton, SectionCard } from '@/components/ui/page';
 
 /**
  * "Where the work stands" — the programme view the landing never had.
@@ -14,10 +14,12 @@ import { EmptyState, SectionCard } from '@/components/ui/page';
  * organisation — gated on a measurement, and withdrawable; if it is withdrawn, this caption is
  * already the truth rather than something that needs walking back.)
  *
- * **No pending or error branch, and no live-region announcement — all three would be dead code.**
- * This section renders only once `planStanding` is present in the payload, which means the one query
- * has already succeeded; a skeleton would additionally have to be drawn before we know whether this
- * reader is entitled to the answer, flashing a frame at a Viewer who never gets one.
+ * **A pending state holds the cell, and there is still no error branch or announcement.** Every
+ * mintable role holds `schedule:read`, so while the one query is loading this section is going to
+ * be here for every real reader, and drawing its frame in the settled position keeps the grid from
+ * shifting when the data arrives (ADR-0202). If the server ever omits `planStanding` the frame is
+ * removed on settle, which is the omit clause below. There is no error branch because a failed
+ * query is reported once, by "Recently changed".
  *
  * The announcement is the interesting one. The first version called
  * `useSettledCountAnnouncement({ pending: false, … })` and **could never have fired**: that hook
@@ -38,9 +40,12 @@ export function WhereWorkStandsSection({
   standing,
   orgSlug,
   fill,
+  pending = false,
 }: {
   standing: PlanStanding[];
   orgSlug: string;
+  /** The overview is still loading: draw the settled frame over a skeleton. */
+  pending?: boolean;
   /** Fill the height the grid gives and scroll the body — see `SectionCard`. */
   fill?: boolean;
 }): React.ReactElement {
@@ -50,10 +55,14 @@ export function WhereWorkStandsSection({
       description="How each recently-changed programme is tracking against its baseline."
       fill={fill}
       action={
-        standing.length === 0 ? null : <SectionCount count={standing.length} noun="programme" />
+        pending || standing.length === 0 ? null : (
+          <SectionCount count={standing.length} noun="programme" />
+        )
       }
     >
-      {standing.length === 0 ? (
+      {pending ? (
+        <ListRowSkeleton rows={3} label="Loading where the work stands…" />
+      ) : standing.length === 0 ? (
         <EmptyState
           size="section"
           title="No programmes to report on yet."

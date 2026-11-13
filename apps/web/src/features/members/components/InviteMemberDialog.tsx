@@ -1,20 +1,28 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useId, useRef, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateInvitation } from '../api/use-invitations';
 import {
   ROLE_LABELS,
   ROLE_OPTIONS,
+  ROLE_SUMMARIES,
   inviteMemberSchema,
   type InviteMemberValues,
 } from '../schemas/invite-schemas';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useClipboardCopy } from '@/hooks/use-clipboard-copy';
+
+// "Sent" is true in both senses: the invitation is emailed to the address (published after commit
+// by `InvitationsService.create` through the mail port) AND the link is returned once for the
+// inviter to copy. Delivery is best-effort (ADR-0075), which is why the sentence goes on to tell
+// the inviter to copy the link now rather than relying on the email arriving.
+const INVITATION_SENT = 'Invitation sent. Copy the link now: it is shown only once.';
 
 /** Dialog to invite a member by email + role. Shows the accept link on success. */
 export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.ReactElement {
@@ -26,15 +34,23 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
     revertAfterMs: 2000,
   });
   const create = useCreateInvitation(orgSlug);
+  const announce = useAnnounce();
+  const linkRef = useRef<HTMLInputElement>(null);
+  const onceId = useId();
+  const roleHintId = useId();
   const {
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors },
   } = useForm<InviteMemberValues>({
     resolver: zodResolver(inviteMemberSchema),
     defaultValues: { role: 'VIEWER' },
   });
+
+  // `useWatch`, not `watch()`: the memoization-safe read (see `CalendarFormDialog`).
+  const chosenRole = useWatch({ control, name: 'role' });
 
   const close = (): void => {
     setOpen(false);
@@ -48,8 +64,21 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
     clipboard.reset();
   };
 
+  // **Focus follows the swap.** Sending the form unmounts the control that held focus and mounts the
+  // link block in its place, so a keyboard user was left on nothing and a screen-reader user heard
+  // nothing. The link field is where the dialog now wants them: it is the one thing on the screen
+  // that cannot be recovered later.
+  useEffect(() => {
+    if (acceptUrl) linkRef.current?.focus();
+  }, [acceptUrl]);
+
   const onSubmit = handleSubmit((values) => {
-    create.mutate(values, { onSuccess: (invitation) => setAcceptUrl(invitation.acceptUrl) });
+    create.mutate(values, {
+      onSuccess: (invitation) => {
+        setAcceptUrl(invitation.acceptUrl);
+        announce(INVITATION_SENT);
+      },
+    });
   });
 
   return (
@@ -63,11 +92,19 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
       >
         {acceptUrl ? (
           <div className="flex flex-col gap-3">
-            <p className="text-muted-foreground text-sm">
-              Invitation created. Share this link so they can join:
+            <p id={onceId} className="text-muted-foreground text-sm">
+              {INVITATION_SENT} Share it so they can join.
             </p>
             <div className="flex items-center gap-2">
-              <Input readOnly aria-label="Invitation link" value={acceptUrl} className="bg-muted" />
+              <Input
+                ref={linkRef}
+                readOnly
+                aria-label="Invitation link"
+                aria-describedby={onceId}
+                value={acceptUrl}
+                onFocus={(event) => event.currentTarget.select()}
+                className="bg-muted"
+              />
               {/* **The fifth clipboard site, and the one the plan's count of four missed.** It
                   announced nothing in either direction and showed nothing either, so a reader had
                   no way to tell a successful copy from a refused one — on the link that is the
@@ -104,13 +141,28 @@ export function InviteMemberDialog({ orgSlug }: { orgSlug: string }): React.Reac
               error={errors.email?.message}
               {...register('email')}
             />
-            <SelectField label="Role" id="invite-role" {...register('role')}>
-              {ROLE_OPTIONS.map((role) => (
-                <option key={role} value={role}>
-                  {ROLE_LABELS[role]}
-                </option>
-              ))}
-            </SelectField>
+            {/* The sentence for the role currently chosen, so the choice is explained where it is
+                made (the roles panel behind the dialog is not reachable from here). It is a
+                paragraph of our own rather than the field's `hint`, to reserve two lines: the four
+                sentences wrap to one or two, and a hint that changed height would move the Send
+                button under the pointer each time the role changed. */}
+            <div className="flex flex-col gap-1.5">
+              <SelectField
+                label="Role"
+                id="invite-role"
+                aria-describedby={roleHintId}
+                {...register('role')}
+              >
+                {ROLE_OPTIONS.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </SelectField>
+              <p id={roleHintId} className="text-muted-foreground min-h-10 text-sm">
+                {ROLE_SUMMARIES[chosenRole]}
+              </p>
+            </div>
             <Button
               type="submit"
               className="aria-disabled:pointer-events-none"

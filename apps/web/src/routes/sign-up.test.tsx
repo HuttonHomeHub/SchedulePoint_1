@@ -15,6 +15,7 @@ import { authClient } from '@/lib/auth-client';
  * `/sign-in` with nothing said about why.
  */
 const pushed = vi.hoisted(() => ({ calls: [] as string[] }));
+const search = vi.hoisted((): { current: Record<string, unknown> } => ({ current: {} }));
 
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({
@@ -24,8 +25,20 @@ vi.mock('@tanstack/react-router', () => ({
       },
     },
   }),
-  Link: ({ children, ...rest }: { children: React.ReactNode; to?: string }) => (
-    <a href={typeof rest.to === 'string' ? rest.to : '/'}>{children}</a>
+  useSearch: () => search.current,
+  useNavigate: () => vi.fn(),
+  Link: ({
+    children,
+    to,
+    search: linkSearch,
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    search?: { redirect?: string };
+  }) => (
+    <a href={`${to ?? '/'}${linkSearch?.redirect ? `?redirect=${linkSearch.redirect}` : ''}`}>
+      {children}
+    </a>
   ),
 }));
 
@@ -60,6 +73,7 @@ function fillAndSubmit() {
 
 afterEach(() => {
   pushed.calls = [];
+  search.current = {};
   vi.clearAllMocks();
 });
 
@@ -86,5 +100,46 @@ describe('SignUpScreen', () => {
     // The address rides along so the landing screen can offer the resend without asking for it
     // again — the difference between a dead end and an instruction.
     await waitFor(() => expect(pushed.calls).toEqual(['/verify-email?email=ada%40example.com']));
+  });
+
+  describe('when an invitation sent them here', () => {
+    const redirect = '/accept-invite?token=tok';
+
+    it('goes back to the invitation after sign-up, not to onboarding', async () => {
+      search.current = { redirect };
+      vi.mocked(authClient.signUp.email).mockResolvedValue({
+        data: { token: 'session-token' },
+        error: null,
+      });
+      renderScreen();
+      fillAndSubmit();
+
+      await waitFor(() => expect(pushed.calls).toEqual([redirect]));
+    });
+
+    it('carries the destination to the waiting screen when verification is required', async () => {
+      search.current = { redirect };
+      vi.mocked(authClient.signUp.email).mockResolvedValue({
+        data: { token: null, user: { id: 'u1' } },
+        error: null,
+      });
+      renderScreen();
+      fillAndSubmit();
+
+      await waitFor(() =>
+        expect(pushed.calls).toEqual([
+          `/verify-email?email=ada%40example.com&redirect=${encodeURIComponent(redirect)}`,
+        ]),
+      );
+    });
+
+    it('keeps the destination on the link back to sign-in', () => {
+      search.current = { redirect };
+      renderScreen();
+      expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+        'href',
+        `/sign-in?redirect=${redirect}`,
+      );
+    });
   });
 });
