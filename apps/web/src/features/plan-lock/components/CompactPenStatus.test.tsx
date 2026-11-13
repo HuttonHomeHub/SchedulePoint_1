@@ -39,6 +39,7 @@ function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
     startEditing: vi.fn(),
     stopEditing: vi.fn(),
     requestControl: vi.fn(),
+    cancelRequest: vi.fn(),
     handoff: vi.fn(),
     takeOver: vi.fn(),
     onWriteRejected: vi.fn(() => ({ kind: 'passthrough' as const })),
@@ -96,6 +97,22 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
     render(<CompactPenStatus pen={pen} />);
     fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
     expect(pen.requestControl).toHaveBeenCalledOnce();
+  });
+
+  it('offers Cancel request beside the disabled Take over now once my request is pending (#588)', async () => {
+    const pen = makePen({
+      status: status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        requestedBy: { id: 'me', name: 'Me', email: 'me@x.com' },
+      }),
+    });
+    const { container } = render(<CompactPenStatus pen={pen} currentUserId="me" />);
+    expect(screen.getByRole('button', { name: 'Take over now' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(pen.cancelRequest).toHaveBeenCalledOnce();
+    expect((await axe(container)).violations).toEqual([]);
   });
 
   it('shows a terse loading chip while status resolves', () => {

@@ -16,7 +16,7 @@ import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
  *
  * ## What stays behind, and why that is not a compromise
  *
- * Only the **verb** moves. The badge, the `role="status"` sentence and the seven hand-off actions
+ * Only the **verb** moves. The badge, the `role="status"` sentence and the eight hand-off actions
  * (request, waiting, take over, override, hand over, keep, dismiss) remain in the plan's foot row —
  * ADR-0112 D1 put the sentence there and this keeps its neighbours with it, which is the product
  * owner's answer to CQ-4. The split is ADR-0093's discriminator applied to a model rather than a

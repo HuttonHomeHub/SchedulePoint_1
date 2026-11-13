@@ -9,6 +9,7 @@ export type LockAction =
   | 'request' // Request control (peer)
   | 'waiting' // "Take over now" shown disabled while my request waits out grace
   | 'takeover' // Take over now (peer, post-grace / holder inactive)
+  | 'cancel' // Cancel request (withdraw my own pending request, #588)
   | 'override' // Take over (admin, immediate — via confirm)
   | 'handover' // Hand the pen to the pending requester
   | 'keep' // Keep editing (locally dismiss the incoming-request prompt)
@@ -236,7 +237,18 @@ export function resolveLockView(
           actions: ['override'],
         };
       }
+      // "My pending request" is the server's record of who asked, never the tab's memory (#588).
+      const mine = status.requestedBy?.id === currentUserId && currentUserId !== undefined;
       if (status.canTakeOver) {
+        if (mine) {
+          return {
+            tone: 'locked',
+            badge: lockCopy.badgeLocked,
+            badgeName: firstName(holder),
+            message: lockCopy.canTakeOverRequested(holder),
+            actions: ['takeover', 'cancel'],
+          };
+        }
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
@@ -246,7 +258,6 @@ export function resolveLockView(
         };
       }
       if (status.canRequest) {
-        const mine = status.requestedBy?.id === currentUserId && currentUserId !== undefined;
         if (mine) {
           const countdown = lockCopy.graceCountdown(status.graceEndsAt, now) ?? undefined;
           return {
@@ -255,7 +266,7 @@ export function resolveLockView(
             badgeName: firstName(holder),
             message: lockCopy.waitingForHandover(holder),
             ...(countdown ? { aside: countdown } : {}),
-            actions: ['waiting'],
+            actions: ['waiting', 'cancel'],
           };
         }
         return {

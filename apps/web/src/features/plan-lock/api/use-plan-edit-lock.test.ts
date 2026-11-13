@@ -285,13 +285,13 @@ describe('usePlanPen', () => {
 
   it('derives holdsPen from a HELD_BY_ME status', async () => {
     vi.mocked(apiFetch).mockResolvedValue(HELD_BY_ME);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
   });
 
   it('onWriteRejected classifies a 423 as a lock event and raises lostControl', async () => {
     vi.mocked(apiFetch).mockResolvedValue(FREE);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status).toBeDefined());
     let outcome: { kind: string } | undefined;
     act(() => {
@@ -309,7 +309,7 @@ describe('usePlanPen', () => {
 
   it('onWriteRejected passes a 409 through (the conflict-banner path)', async () => {
     vi.mocked(apiFetch).mockResolvedValue(FREE);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status).toBeDefined());
     const outcome = result.current.onWriteRejected(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'stale' }),
@@ -320,6 +320,8 @@ describe('usePlanPen', () => {
 });
 
 // --- the pen on opening (ADR-0220) -------------------------------------------
+
+const ME = { id: 'u1', name: 'Me', email: 'me@x.com' };
 
 const HELD_BY_OTHER: PlanEditLockStatus = {
   ...FREE,
@@ -378,7 +380,7 @@ describe('usePlanPen — the pen on opening', () => {
 
   it('opens FREE → one acquire, and never a take-over', async () => {
     serve([FREE, HELD_BY_ME], () => HELD_BY_ME);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     expect(posts()).toHaveLength(1);
     expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
@@ -386,7 +388,7 @@ describe('usePlanPen — the pen on opening', () => {
 
   it('opens EXPIRED → one acquire', async () => {
     serve([{ ...FREE, state: 'EXPIRED', holder: HELD_BY_OTHER.holder }, HELD_BY_ME]);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     expect(posts()).toHaveLength(1);
   });
@@ -396,7 +398,7 @@ describe('usePlanPen — the pen on opening', () => {
     const Plain = wrapper();
     const Strict = ({ children }: { children: ReactNode }) =>
       createElement(StrictMode, null, createElement(Plain, null, children));
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Strict });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Strict });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     await new Promise((r) => setTimeout(r, 50));
     expect(posts()).toHaveLength(1);
@@ -413,7 +415,7 @@ describe('usePlanPen — the pen on opening', () => {
           })
         : Promise.resolve(FREE),
     );
-    const { result, unmount } = renderHook(() => usePlanPen('acme', 'p1'), {
+    const { result, unmount } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(posts()).toHaveLength(1));
@@ -437,7 +439,7 @@ describe('usePlanPen — the pen on opening', () => {
           })
         : Promise.resolve(posted ? HELD_BY_ME : FREE),
     );
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.autoAcquiring).toBe(true));
     expect(result.current.isPending).toBe(true);
     act(() => resolvePost(HELD_BY_ME));
@@ -447,14 +449,14 @@ describe('usePlanPen — the pen on opening', () => {
 
   it('opens HELD_BY_ME → zero acquires', async () => {
     serve([HELD_BY_ME]);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     expect(posts()).toHaveLength(0);
   });
 
   it('opens HELD_BY_OTHER → zero acquires, even when the server offers an override', async () => {
     serve([{ ...HELD_BY_OTHER, canOverride: true }]);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     expect(posts()).toHaveLength(0);
     expect(result.current.autoAcquiring).toBe(false);
@@ -462,7 +464,7 @@ describe('usePlanPen — the pen on opening', () => {
 
   it('opens with canAcquire false (Viewer, Contributor) → zero acquires', async () => {
     serve([{ ...FREE, canAcquire: false }]);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
     expect(posts()).toHaveLength(0);
     expect(result.current.autoAcquiring).toBe(false);
@@ -471,7 +473,7 @@ describe('usePlanPen — the pen on opening', () => {
   it('opens in a hidden tab → waits; one acquire when first shown', async () => {
     setVisibility('hidden');
     serve([FREE, HELD_BY_ME]);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
     expect(posts()).toHaveLength(0);
     act(() => setVisibility('visible'));
@@ -488,7 +490,7 @@ describe('usePlanPen — the pen on opening', () => {
       }
       return Promise.resolve(held ? HELD_BY_OTHER : FREE);
     });
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     await waitFor(() => expect(result.current.autoAcquiring).toBe(false));
     expect(result.current.lostControl).toBeNull();
@@ -499,7 +501,7 @@ describe('usePlanPen — the pen on opening', () => {
     serve([FREE, HELD_BY_ME, FREE, FREE], (path) =>
       path.endsWith('/edit-lock') ? HELD_BY_ME : undefined,
     );
-    const { result, rerender } = renderHook(() => usePlanPen('acme', 'p1'), {
+    const { result, rerender } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
@@ -518,7 +520,7 @@ describe('usePlanPen — the pen on opening', () => {
     });
     const Wrapper = ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client }, children);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Wrapper });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     await act(async () => {
       await client.invalidateQueries();
@@ -557,7 +559,7 @@ describe('usePlanPen — a loss nobody caused', () => {
 
   it('heartbeat 423 then FREE → one silent acquire, no banner', async () => {
     lose(FREE);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
     act(() => setVisibility('visible'));
@@ -569,7 +571,7 @@ describe('usePlanPen — a loss nobody caused', () => {
 
   it('heartbeat 423 then HELD_BY_OTHER → today’s lostControl, and no acquire', async () => {
     lose(HELD_BY_OTHER);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
     act(() => setVisibility('visible'));
@@ -579,7 +581,7 @@ describe('usePlanPen — a loss nobody caused', () => {
 
   it('a retake that is itself refused shows the banner rather than looping', async () => {
     lose(FREE, () => LOCKED_HELD);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
     act(() => setVisibility('visible'));
@@ -622,7 +624,7 @@ describe('usePlanPen — a loss nobody caused', () => {
         }),
       ],
     );
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     act(() => setVisibility('visible'));
     await waitFor(() => expect(posts()).toHaveLength(1));
@@ -649,7 +651,7 @@ describe('usePlanPen — a loss nobody caused', () => {
         }),
       ],
     );
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     act(() => {
       setVisibility('visible');
@@ -672,7 +674,7 @@ describe('usePlanPen — a loss nobody caused', () => {
 
   it('a second loss with no accepted beat between shows the banner', async () => {
     scripted(['lost']);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     act(() => setVisibility('visible'));
     await waitFor(() => expect(posts()).toHaveLength(1));
@@ -684,7 +686,7 @@ describe('usePlanPen — a loss nobody caused', () => {
 
   it('an accepted beat resets the cap, so a later loss is retaken again', async () => {
     scripted(['lost', 'ok', 'lost']);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     act(() => setVisibility('visible'));
     await waitFor(() => expect(posts()).toHaveLength(1));
@@ -704,6 +706,8 @@ describe('usePlanPen — a requester takes the freed pen', () => {
     ...HELD_BY_OTHER,
     holder: { id: 'u3', name: 'Holder B', email: 'b@x.com' },
   };
+  // What the server reads once this person (u1) has asked: the memory follows that record (D7).
+  const ASKED: PlanEditLockStatus = { ...HELD_BY_OTHER, requestedBy: ME };
   const client = () =>
     new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 
@@ -716,16 +720,16 @@ describe('usePlanPen — a requester takes the freed pen', () => {
 
   function mount(reads: PlanEditLockStatus[]) {
     // The request answers with the held status; the acquire answers with the pen.
-    serve(reads, (path) => (path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME));
+    serve(reads, (path) => (path.endsWith('/request') ? ASKED : HELD_BY_ME));
     const qc = client();
     const Wrapper = ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client: qc }, children);
-    const hook = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Wrapper });
+    const hook = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
     return { ...hook, qc };
   }
 
   it('request, then the holder leaves → exactly one acquire, never a take-over', async () => {
-    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    const { result, qc } = mount([HELD_BY_OTHER, ASKED, FREE, HELD_BY_ME]);
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     act(() => result.current.requestControl());
     await waitFor(() => expect(posts('/request')).toHaveLength(1));
@@ -739,15 +743,15 @@ describe('usePlanPen — a requester takes the freed pen', () => {
 
   it('keeps showing the holder while the freed pen is taken, never a free or loading status', async () => {
     const seen: string[] = [];
-    serve([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME], (path) =>
-      path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME,
+    serve([HELD_BY_OTHER, ASKED, FREE, HELD_BY_ME], (path) =>
+      path.endsWith('/request') ? ASKED : HELD_BY_ME,
     );
     const qc = client();
     const Wrapper = ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client: qc }, children);
     const { result } = renderHook(
       () => {
-        const pen = usePlanPen('acme', 'p1');
+        const pen = usePlanPen('acme', 'p1', 'u1');
         seen.push(`${pen.status?.state ?? 'none'}${pen.autoAcquiring ? '+auto' : ''}`);
         return pen;
       },
@@ -776,7 +780,7 @@ describe('usePlanPen — a requester takes the freed pen', () => {
   });
 
   it('request, then a different holder, then free → zero acquires', async () => {
-    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, HELD_BY_OTHER_2, FREE]);
+    const { result, qc } = mount([HELD_BY_OTHER, ASKED, HELD_BY_OTHER_2, FREE]);
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     act(() => result.current.requestControl());
     await waitFor(() => expect(posts('/request')).toHaveLength(1));
@@ -793,7 +797,7 @@ describe('usePlanPen — a requester takes the freed pen', () => {
   });
 
   it('request in a hidden tab → waits until shown, then one acquire', async () => {
-    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    const { result, qc } = mount([HELD_BY_OTHER, ASKED, FREE, HELD_BY_ME]);
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
     act(() => result.current.requestControl());
     await waitFor(() => expect(posts('/request')).toHaveLength(1));
@@ -806,5 +810,119 @@ describe('usePlanPen — a requester takes the freed pen', () => {
     act(() => setVisibility('visible'));
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     expect(posts()).toHaveLength(1);
+  });
+
+  const del = (): unknown[][] =>
+    vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'DELETE');
+
+  it('Cancel request sends DELETE …/request and the memory is gone: a later FREE sends no acquire', async () => {
+    const CANCELLED = { ...HELD_BY_OTHER, requestedBy: null };
+    serve([HELD_BY_OTHER, ASKED, CANCELLED, FREE], (path) =>
+      path.endsWith('/request') &&
+      vi.mocked(apiFetch).mock.calls.some(([, i]) => i?.method === 'DELETE')
+        ? CANCELLED
+        : path.endsWith('/request')
+          ? ASKED
+          : HELD_BY_ME,
+    );
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(del()).toHaveLength(1));
+    expect(del()[0]![0]).toBe('/organizations/acme/plans/p1/edit-lock/request');
+    await waitFor(() => expect(result.current.status?.requestedBy).toBeNull());
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('a read that left before the cancel cannot re-arm the memory while it is in flight', async () => {
+    const CANCELLED = { ...HELD_BY_OTHER, requestedBy: null };
+    let release: (v: PlanEditLockStatus) => void = () => {};
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') return new Promise((r) => (release = r));
+      if (init?.method === 'POST') return Promise.resolve(HELD_BY_ME);
+      return Promise.resolve(path ? (reads.shift() ?? ASKED) : ASKED);
+    });
+    const reads: PlanEditLockStatus[] = [ASKED, ASKED, FREE];
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(del()).toHaveLength(1));
+    // A stale read still naming me lands while the DELETE is pending, then the pen frees.
+    await act(async () => {
+      await qc.refetchQueries();
+    });
+    await act(async () => {
+      await qc.refetchQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+    act(() => release(CANCELLED));
+  });
+
+  it('reload: a fresh mount that reads my own request adopts it, and FREE then sends exactly one acquire (Q1)', async () => {
+    const { result, qc } = mount([ASKED, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
+  });
+
+  it('another requester replaces mine → FREE then sends nothing', async () => {
+    const CAROL = { ...HELD_BY_OTHER, requestedBy: { id: 'u9', name: 'Carol', email: 'c@x.com' } };
+    const { result, qc } = mount([ASKED, CAROL, FREE]);
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u9'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('a request withdrawn in a sibling tab (a read with no requester) drops the memory', async () => {
+    const { result, qc } = mount([ASKED, HELD_BY_OTHER, FREE]);
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.requestedBy).toBeNull());
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('a cancel answered HELD_BY_ME leaves the tab holding', async () => {
+    serve([ASKED, HELD_BY_ME], () => HELD_BY_ME);
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1', 'u1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.requestedBy?.id).toBe('u1'));
+    act(() => result.current.cancelRequest());
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
   });
 });

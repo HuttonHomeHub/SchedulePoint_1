@@ -260,7 +260,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const session = useSession();
   const currentUserId = session.data?.user.id;
   // The edit-lock "pen" (ADR-0028): schedule editing needs the role AND holding the pen.
-  const pen = usePlanPen(orgSlug, planId);
+  const pen = usePlanPen(orgSlug, planId, currentUserId);
   const canWrite = canManageHierarchy(role); // role only — plan metadata + baselines
   // Notes (ADR-0046) are collaborative annotations: Contributor upward may write, and unlike schedule
   // editing they are NOT pen-gated (the progress precedent). Role-only, like `canWrite`.

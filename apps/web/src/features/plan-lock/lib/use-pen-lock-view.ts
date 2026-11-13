@@ -85,6 +85,11 @@ export function usePenLockView(
   const [tick, setTick] = useState(() => now ?? Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
   const justActedRef = useRef(false);
+  // Whether focus was last inside the container, so a control removed by SOMEONE ELSE's act (the
+  // holder hands over while the requester's focus is on Cancel request) is told apart from focus that
+  // was never here. A focusout that leaves a still-connected element is a deliberate move away; one
+  // from a node that has gone is the removal itself (ADR-0135 D2/D3, by containment).
+  const focusInsideRef = useRef(false);
 
   // **Paused while the tab is hidden**, which `render/use-now.ts` has done since ADR-0056 and this
   // timer did not: a backgrounded plan re-rendered the workspace 3,600 times an hour to advance a
@@ -116,6 +121,13 @@ export function usePenLockView(
     };
   }, [now]);
 
+  // The holder's "Keep editing" hides that person's requests for the rest of the opening. Once the
+  // status carries no request (withdrawn, or handed over), the dismissal has done its job, so a fresh
+  // ask from the same person is shown rather than swallowed (#588 E9).
+  if (dismissedRequestId !== null && pen.status && !pen.status.requestedBy) {
+    setDismissedRequestId(null);
+  }
+
   const effectiveNow = now ?? tick;
   const view = resolveLockView(pen.status, pen.lostControl, currentUserId, dismissedRequestId, {
     now: effectiveNow,
@@ -144,8 +156,27 @@ export function usePenLockView(
   // would need the two to be told apart, and the hook deliberately does not know how many
   // surfaces read it.
   useEffect(() => {
-    if (!justActedRef.current) return;
+    const onFocusIn = (e: FocusEvent): void => {
+      focusInsideRef.current =
+        e.target instanceof Node && Boolean(containerRef.current?.contains(e.target));
+    };
+    const onFocusOut = (e: FocusEvent): void => {
+      if (e.target instanceof Node && e.target.isConnected && e.relatedTarget === null) {
+        focusInsideRef.current = false;
+      }
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
+  useEffect(() => {
+    const own = justActedRef.current;
     justActedRef.current = false;
+    if (!own && !focusInsideRef.current) return;
     const active = typeof document === 'undefined' ? null : document.activeElement;
     const lost = active === null || active === document.body || !active.isConnected;
     if (lost) containerRef.current?.focus();
@@ -204,7 +235,15 @@ export function usePenLockView(
   // The pieces below ARE stable: every callback is a `useCallback` on that hook, and `holder` comes
   // from the query cache. `stableView` covers everything the two surfaces render, so a change a
   // reader can see always produces a new object and a tick that moves nothing does not.
-  const { startEditing, stopEditing, requestControl, takeOver, handoff, dismissLost } = pen;
+  const {
+    startEditing,
+    stopEditing,
+    requestControl,
+    cancelRequest,
+    takeOver,
+    handoff,
+    dismissLost,
+  } = pen;
   const holder = pen.status?.holder ?? null;
   const requestedById = pen.status?.requestedBy?.id ?? null;
   const { isPending } = pen;
@@ -224,6 +263,7 @@ export function usePenLockView(
         // the server decides immediate (override) vs post-grace (peer). They differ only in
         // affordance.
         onTakeOver: act(takeOver),
+        onCancel: act(cancelRequest),
         onOverride: act(takeOver),
         onHandover: act(handoff),
         onKeep: act(() => {
@@ -244,6 +284,7 @@ export function usePenLockView(
       startEditing,
       stopEditing,
       requestControl,
+      cancelRequest,
       takeOver,
       handoff,
       dismissLost,

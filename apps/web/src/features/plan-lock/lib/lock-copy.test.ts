@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { relativeTime } from './lock-copy';
+import { lockCopy, relativeTime } from './lock-copy';
 
 const NOW = new Date('2026-07-11T12:00:00.000Z').getTime();
 const ago = (ms: number): string => new Date(NOW - ms).toISOString();
@@ -21,5 +21,15 @@ describe('relativeTime', () => {
 
   it('clamps a future instant to "just now" (never negative)', () => {
     expect(relativeTime(ago(-5_000), NOW)).toBe('just now');
+  });
+});
+
+describe('the cancel-request copy', () => {
+  it('labels the control and states both ways in once the countdown has run out', () => {
+    const holder = { id: 'a', name: 'Alexandra Smith', email: 'a@x.com' };
+    expect(lockCopy.cancelRequest).toBe('Cancel request');
+    expect(lockCopy.canTakeOverRequested(holder)).toBe(
+      'You can take over editing from Alexandra now, or you will start editing when they hand over or leave.',
+    );
   });
 });

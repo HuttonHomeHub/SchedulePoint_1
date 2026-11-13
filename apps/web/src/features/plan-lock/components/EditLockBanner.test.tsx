@@ -37,6 +37,7 @@ function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
     startEditing: vi.fn(),
     stopEditing: vi.fn(),
     requestControl: vi.fn(),
+    cancelRequest: vi.fn(),
     handoff: vi.fn(),
     takeOver: vi.fn(),
     onWriteRejected: vi.fn(() => ({ kind: 'passthrough' as const })),

@@ -91,6 +91,22 @@ export function useRequestControl(orgSlug: string, planId: string) {
   });
 }
 
+/**
+ * Withdraw this person's own pending request (#588). 200 with the status, idempotent: the answer may
+ * be "you now hold the pen" (a hand-over got there first) or "someone else's request stands", so the
+ * tab takes the status rather than guessing.
+ */
+export function useCancelRequest(orgSlug: string, planId: string) {
+  const queryClient = useQueryClient();
+  const key = planLockKeys.status(orgSlug, planId);
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/request`, { method: 'DELETE' }),
+    onSuccess: (data) => queryClient.setQueryData(key, data),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+}
+
 /** Hand the pen directly to the pending requester (holder-initiated). */
 export function useHandoff(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
@@ -234,7 +250,7 @@ export interface PlanPen {
   /** The caller currently holds the pen. */
   holdsPen: boolean;
   /**
-   * Any acquire/release/request/handoff is in flight, or the app is taking the pen itself (the
+   * Any acquire/release/request/cancel/handoff is in flight, or the app is taking the pen itself (the
    * opening acquire or a silent retake).
    */
   isPending: boolean;
@@ -251,6 +267,8 @@ export interface PlanPen {
   startEditing: () => void;
   stopEditing: () => void;
   requestControl: () => void;
+  /** Withdraw this person's own pending request (#588). */
+  cancelRequest: () => void;
   handoff: () => void;
   /** Take over a live lock (peer post-grace, or admin immediate — server decides). */
   takeOver: () => void;
@@ -270,7 +288,11 @@ export interface PlanPen {
  * `routes/plan-detail.tsx` does (`${orgSlug}/${planId}`). Without one, a plan switch would carry
  * the previous plan's "the person pressed Stop" into the next opening.
  */
-export function usePlanPen(orgSlug: string, planId: string): PlanPen {
+export function usePlanPen(
+  orgSlug: string,
+  planId: string,
+  currentUserId: string | undefined,
+): PlanPen {
   const queryClient = useQueryClient();
 
   const lockQuery = usePlanEditLock(orgSlug, planId);
@@ -341,9 +363,22 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   // holds it, or a different holder shows up (ADR-0220 D4: the request was to that person, not to
   // whoever comes next).
   const [requestedOf, setRequestedOf] = useState<string | null>(null);
+  const cancel = useCancelRequest(orgSlug, planId);
   const seenOther = status?.state === 'HELD_BY_OTHER' ? (status.holder?.id ?? null) : null;
   if (requestedOf !== null && (holdsPen || (seenOther !== null && seenOther !== requestedOf))) {
     setRequestedOf(null);
+  }
+  // The tab's memory follows the server's record while somebody else holds the pen (ADR-0220 D7): a
+  // read that names this person as the requester is the request, whether or not this tab pressed the
+  // button (a reload), and a read that names nobody or someone else is a request that is gone
+  // (withdrawn here or in another tab, or replaced). Only the moment of release stays the tab's own
+  // to remember, because that deletes the row and its request with it. Suspended while a cancel is
+  // in flight so a read that left the server before it cannot re-arm what the press just forgot.
+  if (currentUserId !== undefined && status?.state === 'HELD_BY_OTHER' && !cancel.isPending) {
+    const holderId = status.holder?.id ?? null;
+    const isMine = status.requestedBy?.id === currentUserId;
+    if (isMine && holderId !== null && requestedOf !== holderId) setRequestedOf(holderId);
+    else if (!isMine && requestedOf !== null) setRequestedOf(null);
   }
   // The freed-pen acquire is in flight. Its own mutation, so it never shares an observer with the
   // opening acquire or the silent retake.
@@ -380,6 +415,12 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   const takingFreedPen = wantsFreed || takingFreed;
 
   const { mutate: mutateFreed } = freedAcquire;
+  // Re-arm the once-only guard whenever the memory is empty, so a request adopted from the server
+  // after a cancel, a replacement or a reload can send its own acquire. Not in the effect below: a
+  // strict-mode replay of that effect runs while the memory is still set, and must find it spent.
+  useEffect(() => {
+    if (requestedOf === null) freedFiredRef.current = false;
+  }, [requestedOf]);
   useEffect(() => {
     if (!wantsFreed || freedFiredRef.current) return;
     freedFiredRef.current = true;
@@ -477,11 +518,17 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
       onSuccess: (data) => {
         const holderId = data.holder?.id ?? null;
         if (data.state !== 'HELD_BY_OTHER' || holderId === null) return;
-        freedFiredRef.current = false;
         setRequestedOf(holderId);
       },
     });
   }, [request]);
+
+  const cancelRequest = useCallback(() => {
+    // Forget first: a free read that lands while the DELETE is in the air must not hand over a pen
+    // the person has just said they no longer want.
+    setRequestedOf(null);
+    cancel.mutate();
+  }, [cancel]);
 
   const handoff = useCallback(() => {
     handoffMutation.mutate(undefined, { onSuccess: decline });
@@ -516,6 +563,7 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
       acquire.isPending ||
       release.isPending ||
       request.isPending ||
+      cancel.isPending ||
       handoffMutation.isPending ||
       autoAcquiring ||
       takingFreedPen ||
@@ -526,6 +574,7 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
     startEditing,
     stopEditing,
     requestControl,
+    cancelRequest,
     handoff,
     takeOver,
     onWriteRejected,

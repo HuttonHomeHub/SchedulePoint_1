@@ -46,6 +46,7 @@ const EVERY_ACTION = [
   'request',
   'waiting',
   'takeover',
+  'cancel',
   'override',
   'handover',
   'keep',

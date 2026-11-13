@@ -14,6 +14,7 @@ function handlers() {
     onStop: vi.fn(),
     onRequest: vi.fn(),
     onTakeOver: vi.fn(),
+    onCancel: vi.fn(),
     onOverride: vi.fn(),
     onHandover: vi.fn(),
     onKeep: vi.fn(),
@@ -43,6 +44,7 @@ describe('EditLockControls', () => {
     ['stop', 'Stop editing', 'onStop'],
     ['request', 'Request control', 'onRequest'],
     ['takeover', 'Take over now', 'onTakeOver'],
+    ['cancel', 'Cancel request', 'onCancel'],
     ['handover', 'Hand over', 'onHandover'],
     ['keep', 'Keep editing', 'onKeep'],
     ['dismiss', 'Dismiss', 'onDismiss'],
@@ -55,6 +57,11 @@ describe('EditLockControls', () => {
   it('renders the "waiting" action as a disabled Take over now (no handler)', () => {
     renderControls(['waiting']);
     expect(screen.getByRole('button', { name: 'Take over now' })).toBeDisabled();
+  });
+
+  it('disables Cancel request while a mutation is pending', () => {
+    renderControls(['waiting', 'cancel'], { isPending: true });
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeDisabled();
   });
 
   it('confirms the admin override through a dialog before calling onOverride', () => {

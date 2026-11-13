@@ -119,10 +119,70 @@ describe('resolveLockView', () => {
       ME,
       null,
     );
-    expect(view?.actions).toEqual(['waiting']);
+    expect(view?.actions).toEqual(['waiting', 'cancel']);
     expect(view?.message).toBe(
       'Requested — you will start editing when Jane hands over or leaves.',
     );
+  });
+
+  it('HELD_BY_OTHER + canTakeOver + my request → Take over now beside Cancel request (#588)', () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        canTakeOver: true,
+        requestedBy: { id: ME, name: 'Me', email: 'me@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['takeover', 'cancel']);
+    expect(view?.message).toBe(
+      'You can take over editing from Jane now, or you will start editing when they hand over or leave.',
+    );
+  });
+
+  it('takeover offered because the holder is inactive, with no request of mine → no Cancel (#588)', () => {
+    const view = resolveLockView(
+      status({ state: 'HELD_BY_OTHER', holder: JANE, canTakeOver: true }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['takeover']);
+  });
+
+  it('an admin override never offers Cancel, even with a request of theirs on record (#588)', () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canOverride: true,
+        canRequest: true,
+        requestedBy: { id: ME, name: 'Me', email: 'me@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['override']);
+  });
+
+  it("someone else's request on record → Request control, no Cancel (#588)", () => {
+    const view = resolveLockView(
+      status({
+        state: 'HELD_BY_OTHER',
+        holder: JANE,
+        canRequest: true,
+        requestedBy: { id: 'carol', name: 'Carol', email: 'c@x.com' },
+      }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.actions).toEqual(['request']);
   });
 
   it('HELD_BY_OTHER + canTakeOver → Take over now (row 7)', () => {
