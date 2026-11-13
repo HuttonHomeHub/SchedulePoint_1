@@ -183,9 +183,11 @@ export function ProgrammeScheduleSection({
         >
           <p className="font-medium">Some plans are being edited</p>
           <p>
-            Nothing was recalculated. Someone else is editing{' '}
-            {locked.blockedPlanIds.length === 1 ? 'a plan' : 'these plans'} in this programme. Ask
-            whoever is editing to hand over, or ask an Org Admin to take over, then try again.
+            Nothing was recalculated.{' '}
+            {locked.blockedPlanIds.length === 1
+              ? 'A plan in this programme is being edited by someone else.'
+              : 'Some plans in this programme are being edited by someone else.'}{' '}
+            Ask whoever is editing to hand over, or ask an Org Admin to take over, then try again.
           </p>
           <ul className="flex flex-col gap-1">
             {locked.blockedPlanIds.map((blockedId) => (

@@ -143,7 +143,7 @@ describe('ProgrammeScheduleSection', () => {
     expect(await screen.findByText('Some plans are being edited')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Nothing was recalculated\. Someone else is editing these plans in this programme\. Ask whoever is editing to hand over, or ask an Org Admin to take over, then try again\./,
+        /Nothing was recalculated\. Some plans in this programme are being edited by someone else\. Ask whoever is editing to hand over, or ask an Org Admin to take over, then try again\./,
       ),
     ).toBeInTheDocument();
     // Each link carries a distinguishing accessible name (WCAG 2.4.4) so AT can tell them apart.
@@ -153,6 +153,25 @@ describe('ProgrammeScheduleSection', () => {
       'href',
       '/orgs/acme/plans/pl2',
     );
+  });
+
+  it('says "A plan" when exactly one plan is blocked', async () => {
+    mockApi(summary({ scheduleStale: true, staleUpstreamPlanIds: ['pl2'] }), () =>
+      Promise.reject(
+        new ApiFetchError(423, {
+          code: 'PLAN_EDIT_LOCK_REQUIRED',
+          message: 'blocked',
+          details: { reason: 'PROGRAMME_PLANS_LOCKED', blockedPlanIds: ['pl2'] },
+        }),
+      ),
+    );
+    renderSection();
+    fireEvent.click(await screen.findByRole('button', { name: 'Recalculate programme' }));
+    expect(
+      await screen.findByText(
+        /Nothing was recalculated\. A plan in this programme is being edited by someone else\. Ask whoever is editing to hand over, or ask an Org Admin to take over, then try again\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('shows the 422 too-large path with the actionable message', async () => {
