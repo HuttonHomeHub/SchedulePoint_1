@@ -531,11 +531,25 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
   test('where even that leaves no room the cluster is withdrawn from the Tab order, focus on it moves to View, and View ▾ still fits the plan', async () => {
     // Standing on Zoom in when the stage shrinks: the column is hidden under the reader's focus.
     await clusterOf(page).getByRole('button', { name: 'Zoom in' }).focus();
-    await page.setViewportSize({ width: 1024, height: 500 });
-    await page.waitForTimeout(600);
-    // The stage is a sliver and `inert` here (TECH_DEBT #480), so the diagram's list cannot take
-    // focus: it goes to View, the route the sentence names.
-    await expect(page.locator('[data-toolbar-item="view"]')).toBeFocused();
+    // Shorten the window a step at a time until the column is withdrawn, rather than naming one
+    // height: on a short window the selection bar now takes the whole foot row (ADR-0219), so the
+    // stage keeps room for the column further down than it used to, and how far depends on how the
+    // bar wraps. What is asserted is what happens when the room runs out, wherever that is.
+    let withdrawn = false;
+    for (let height = 500; height >= 360 && !withdrawn; height -= 20) {
+      await page.setViewportSize({ width: 1024, height });
+      await page.waitForTimeout(600);
+      withdrawn = await clusterOf(page).isHidden();
+    }
+    expect(withdrawn, 'the column is withdrawn before the window reaches 360 px').toBe(true);
+    // Focus goes to the diagram's list when it can take it. Where the stage has become a sliver
+    // and `inert` (TECH_DEBT #480) the list cannot, and focus goes to View, the route the sentence
+    // names. Which of the two applies depends on how much the selection bar left; both are the rule.
+    const stageInert =
+      (await stageOf(page).locator('xpath=ancestor-or-self::*[@inert]').count()) > 0;
+    await expect(
+      stageInert ? page.locator('[data-toolbar-item="view"]') : diagramList(page),
+    ).toBeFocused();
     await expect(page.getByTestId('announcer')).toHaveText(
       'Diagram viewport controls hidden: not enough room. Use View, Zoom.',
     );
