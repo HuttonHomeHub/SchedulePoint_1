@@ -638,6 +638,9 @@ test('a failed cancel shows its sentence, keeps the request, and fits at 1024 x 
   // By keyboard, so the question is where focus is once the refusal lands (WCAG 2.4.3): a button that
   // is natively disabled while the request is in the air is blurred by the browser, and stays blurred.
   const cancel = b.getByRole('button', { name: 'Cancel request' });
+  // The button is shaded (aria-disabled) and ignores a press until the request's own status re-read
+  // has settled. A press in that moment does nothing, so this waits for it, as a person would.
+  await expect(cancel).toBeEnabled();
   await cancel.focus();
   await b.keyboard.press('Enter');
 
