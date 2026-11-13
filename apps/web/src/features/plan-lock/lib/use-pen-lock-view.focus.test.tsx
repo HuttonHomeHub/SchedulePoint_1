@@ -1,5 +1,5 @@
 import type { PlanEditLockStatus } from '@repo/types';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PlanPen } from '../api/use-plan-edit-lock';
@@ -92,6 +92,15 @@ describe('usePenLockView focus and dismissal (#588)', () => {
     act(() => screen.getByRole('button', { name: 'elsewhere' }).focus());
     rerender(<Harness p={pen(holding)} />);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'elsewhere' }));
+  });
+
+  it('a press on empty ground, then a colleague removing the control: focus is not pulled into the cluster', () => {
+    const { rerender } = render(<Harness p={pen(waiting)} />);
+    act(() => screen.getByRole('button', { name: 'Cancel request' }).focus());
+    fireEvent.pointerDown(document.body);
+    act(() => (document.activeElement as HTMLElement).blur());
+    rerender(<Harness p={pen(holding)} />);
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('the holder who kept editing past Ben sees Ben ask again after the request was withdrawn', () => {

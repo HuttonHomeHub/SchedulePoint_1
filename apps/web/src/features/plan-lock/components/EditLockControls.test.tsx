@@ -59,9 +59,15 @@ describe('EditLockControls', () => {
     expect(screen.getByRole('button', { name: 'Take over now' })).toBeDisabled();
   });
 
-  it('disables Cancel request while a mutation is pending', () => {
-    renderControls(['waiting', 'cancel'], { isPending: true });
-    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeDisabled();
+  it('shades Cancel request while a mutation is pending without disabling it natively, and swallows a press', () => {
+    const h = renderControls(['waiting', 'cancel'], { isPending: true });
+    const cancel = screen.getByRole('button', { name: 'Cancel request' });
+    // Native `disabled` would blur it in Chromium and leave focus on <body> if the cancel fails.
+    expect(cancel).not.toBeDisabled();
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+    expect(cancel).toHaveAttribute('aria-busy', 'true');
+    fireEvent.click(cancel);
+    expect(h.onCancel).not.toHaveBeenCalled();
   });
 
   it('confirms the admin override through a dialog before calling onOverride', () => {

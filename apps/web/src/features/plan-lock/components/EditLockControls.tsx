@@ -101,11 +101,16 @@ export function EditLockControls({
         </Button>
       ) : null}
       {actions.includes('cancel') ? (
+        // `aria-disabled`, not the native attribute, and only on this button: Chromium blurs a button
+        // the moment it is natively disabled, and this one STAYS when a cancel fails, so focus would
+        // be left on `<body>` (WCAG 2.4.3). The press is swallowed while pending instead.
         <Button
           size="sm"
           variant="ghost"
-          onClick={onCancel}
-          disabled={isPending}
+          onClick={() => {
+            if (!isPending) onCancel();
+          }}
+          aria-disabled={isPending}
           aria-busy={isPending}
         >
           {lockCopy.cancelRequest}

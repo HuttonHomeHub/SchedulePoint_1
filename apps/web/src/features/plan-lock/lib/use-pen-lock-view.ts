@@ -91,7 +91,7 @@ export function usePenLockView(
   // Chromium fires a `focusout` with a null `relatedTarget` on the very element being removed while it
   // is still connected, so reading that as "moved away" switched the restore off in exactly the case
   // it exists for, and a window blur fires the same event. The restore still acts only when focus has
-  // fallen to `<body>`, so a stale `true` after a click on empty ground moves focus nowhere it was.
+  // fallen to `<body>`, and a press outside the container clears it, so a click on empty ground followed by a colleague's act moves nothing.
   const focusInsideRef = useRef(false);
 
   // **Paused while the tab is hidden**, which `render/use-now.ts` has done since ADR-0056 and this
@@ -164,8 +164,19 @@ export function usePenLockView(
       focusInsideRef.current =
         e.target instanceof Node && Boolean(containerRef.current?.contains(e.target));
     };
+    // A press on empty ground sends focus to <body> without a `focusin`, so it is the pointer that
+    // says the person has left the cluster.
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!(e.target instanceof Node && containerRef.current?.contains(e.target))) {
+        focusInsideRef.current = false;
+      }
+    };
     document.addEventListener('focusin', onFocusIn);
-    return () => document.removeEventListener('focusin', onFocusIn);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
   }, []);
 
   useEffect(() => {

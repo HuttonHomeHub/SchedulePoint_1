@@ -627,18 +627,25 @@ test('a failed cancel shows its sentence, keeps the request, and fits at 1024 x 
   await holdThePen(a);
 
   await b.setViewportSize({ width: 1024, height: 600 });
+  let refuseCancel = true;
   await b.route(
     (url) => url.pathname.endsWith('/edit-lock/request'),
-    (route) => (route.request().method() === 'DELETE' ? route.abort() : route.continue()),
+    (route) =>
+      route.request().method() === 'DELETE' && refuseCancel ? route.abort() : route.continue(),
   );
   await b.goto(planUrl);
   await b.getByRole('button', { name: 'Request control' }).click();
-  await b.getByRole('button', { name: 'Cancel request' }).click();
+  // By keyboard, so the question is where focus is once the refusal lands (WCAG 2.4.3): a button that
+  // is natively disabled while the request is in the air is blurred by the browser, and stays blurred.
+  const cancel = b.getByRole('button', { name: 'Cancel request' });
+  await cancel.focus();
+  await b.keyboard.press('Enter');
 
   const failure = b
     .getByRole('status')
     .filter({ hasText: 'Couldn’t cancel your request. Try again.' });
   await expect(failure).toBeVisible();
+  await expect(cancel).toBeFocused();
   await expect(failure).toBeInViewport({ ratio: 1 });
   await expect(b.getByRole('button', { name: 'Cancel request' })).toBeEnabled();
   for (const name of ['Take over now', 'Cancel request']) {
@@ -654,6 +661,14 @@ test('a failed cancel shows its sentence, keeps the request, and fits at 1024 x 
   // The request still stands on the server: the holder is still being asked.
   await refetchLock(a);
   await expect(a.getByRole('button', { name: 'Hand over' })).toBeVisible(CROSS_ACTOR);
+
+  // The retry goes through, and focus is still somewhere real: the button went away with the request.
+  refuseCancel = false;
+  await b.bringToFront();
+  await cancel.focus();
+  await b.keyboard.press('Enter');
+  await expect(b.getByRole('button', { name: 'Request control' })).toBeVisible();
+  await expectFocusInPen(b);
 
   await ctxA.close();
   await ctxB.close();
