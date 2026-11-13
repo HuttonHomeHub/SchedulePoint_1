@@ -366,6 +366,7 @@ test.describe('The whole-plan offer', () => {
     const excavate = requireRow(await activityRows(page, orgSlug), 'Excavate');
     await linkActivities(page, orgSlug, excavate.id, fitOut.id);
     await recalculate(page, orgSlug);
+    await holdThePen(page);
     await placeViaApi(page, orgSlug, 'Fit out', DATA_DATE);
     await recalculate(page, orgSlug);
     await page.reload();
