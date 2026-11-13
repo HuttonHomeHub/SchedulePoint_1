@@ -251,11 +251,11 @@ export class PlanEditLockService {
         organizationId,
         requesterId: principal.userId,
       });
-      if (cleared === 0) {
+      if (cleared === 0 || !row) {
         return this.buildStatus(planId, organizationId, row, now, principal, tx);
       }
       this.audit('request_cancelled', principal, organizationId, planId, {
-        holder: (row as NonNullable<typeof row>).holderUserId,
+        holder: row.holderUserId,
       });
       const refreshed = await this.repository.find(planId, organizationId, tx);
       return this.buildStatus(planId, organizationId, refreshed, now, principal, tx);

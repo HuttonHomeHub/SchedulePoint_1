@@ -112,7 +112,8 @@ export class PlanLockController {
   @ApiOperation({ summary: 'Withdraw your own pending request-control (Planner or Org Admin).' })
   @ApiOkResponse({
     type: PlanEditLockStatusDto,
-    description: "Idempotent; clears only the caller's own request.",
+    description:
+      "Idempotent; clears only the caller's own request. A 200 carries the current status, which is unchanged when the caller had no request (another user's pending request still stands).",
   })
   async cancelRequest(
     @CurrentUser() principal: Principal,
