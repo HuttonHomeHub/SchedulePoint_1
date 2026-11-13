@@ -22,6 +22,12 @@ export { planLockKeys };
 const POLL_MS = 15_000;
 /** Holder heartbeat cadence (ADR-0028 config; the server enforces the 120 s TTL). */
 const HEARTBEAT_MS = 30_000;
+/**
+ * A tab hidden this long stops beating (ADR-0220 D5), so a plan left in the background does not keep
+ * colleagues out for ever. 15 minutes by the product owner's answer; the server then calls the
+ * holder inactive after 90 s without a beat and expires the lease at 120 s.
+ */
+const HIDDEN_LET_GO_MS = 15 * 60_000;
 
 const lockPath = (orgSlug: string, planId: string): string =>
   `/organizations/${orgSlug}/plans/${planId}/edit-lock`;
@@ -116,6 +122,11 @@ export function useHandoff(orgSlug: string, planId: string) {
  *   what proves a retaken lease is live.
  * - On `visibilitychange → visible`, fire an immediate heartbeat to recover from
  *   background-tab interval throttling (a beat can slip toward 60 s, still < TTL).
+ * - A tab hidden for {@link HIDDEN_LET_GO_MS} skips its beats (D5) but never releases: a visible
+ *   sibling tab of the same person shares the lease and keeps it alive with its own beats. The
+ *   hidden time is measured from the `visibilitychange` that hid the tab, not by counting ticks,
+ *   because a hidden tab's timers are throttled. The visible-again beat resumes the lease, or meets
+ *   the 423 the caller's `onLost` already handles.
  */
 export function useLockHeartbeat(
   orgSlug: string,
@@ -159,21 +170,34 @@ export function useLockHeartbeat(
     holdingRef.current = holding;
   });
 
+  // When this tab was hidden, or null while it is visible.
+  const hiddenSinceRef = useRef<number | null>(null);
+
   // The heartbeat interval — only while holding.
   useEffect(() => {
     if (!holding) return;
-    const id = setInterval(() => beatRef.current(), HEARTBEAT_MS);
+    const id = setInterval(() => {
+      const hiddenSince = hiddenSinceRef.current;
+      if (hiddenSince !== null && Date.now() - hiddenSince >= HIDDEN_LET_GO_MS) return;
+      beatRef.current();
+    }, HEARTBEAT_MS);
     return () => clearInterval(id);
   }, [holding]);
 
   // Immediate recovery beat when a backgrounded tab returns to the foreground.
   useEffect(() => {
     if (!holding) return;
-    const onVisible = (): void => {
+    hiddenSinceRef.current = document.visibilityState === 'hidden' ? Date.now() : null;
+    const onChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current ??= Date.now();
+        return;
+      }
+      hiddenSinceRef.current = null;
       if (document.visibilityState === 'visible') beatRef.current();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
   }, [holding]);
 
   // Release on nav-away (unmount) and tab close — keepalive DELETE, only while holding.

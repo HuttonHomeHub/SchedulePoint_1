@@ -160,6 +160,79 @@ describe('useLockHeartbeat', () => {
     expect(onLost).toHaveBeenCalledWith('PLAN_EDIT_LOCK_LOST');
   });
 
+  describe('a hidden tab lets go (ADR-0220 D5)', () => {
+    const beats = (): number =>
+      vi.mocked(apiFetch).mock.calls.filter(([path]) => path.endsWith('/heartbeat')).length;
+    const MINUTE = 60_000;
+
+    beforeEach(() => setVisibility('visible'));
+    afterEach(() => setVisibility('visible'));
+
+    it('keeps beating for a tab hidden less than 15 minutes', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(14 * MINUTE);
+      expect(beats()).toBeGreaterThan(20);
+    });
+
+    it('stops beating once hidden for 15 minutes, and never releases', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(15 * MINUTE);
+      const atThreshold = beats();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(beats()).toBe(atThreshold);
+      expect(vi.mocked(fetch)).not.toHaveBeenCalled(); // the keepalive DELETE is the release
+      expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(
+        false,
+      );
+    });
+
+    it('measures from when it was hidden, not from the ticks it managed to fire', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      // A throttled timer fires once, late: one tick after 16 minutes is already past the threshold.
+      vi.setSystemTime(Date.now() + 16 * MINUTE);
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(beats()).toBe(before);
+    });
+
+    it('beats at once when the tab is shown again, and keeps beating', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(20 * MINUTE);
+      const paused = beats();
+      act(() => setVisibility('visible'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(beats()).toBe(paused + 1);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(beats()).toBe(paused + 2);
+    });
+
+    it('a short hide resets: hidden 10 minutes, shown, hidden again, still beats at minute 20', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      act(() => setVisibility('visible'));
+      await vi.advanceTimersByTimeAsync(0);
+      act(() => setVisibility('hidden'));
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(beats()).toBeGreaterThan(before + 15);
+    });
+  });
+
   it('releases via a keepalive DELETE on pagehide (while holding)', () => {
     renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
       wrapper: wrapper(),

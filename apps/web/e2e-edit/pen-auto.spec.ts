@@ -259,6 +259,62 @@ test('a planner who asked for control gets the pen when the holder leaves, press
   await ctxB.close();
 });
 
+/** A pause on the test's own clock: `page.waitForTimeout` follows the page's, which is faked here. */
+const realPause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Make the page report itself hidden (or shown again), the way a background tab does. */
+async function setTabVisibility(page: Page, state: 'hidden' | 'visible'): Promise<void> {
+  await page.evaluate((value) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+}
+
+test('a tab hidden for fifteen minutes stops heartbeating, and carries on when shown again', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const { ctxA, ctxB, a, planUrl } = await setUpTwoActors(browser);
+  const MINUTE = 60_000;
+
+  // The clock is installed before the page loads so the heartbeat interval is made on it; no
+  // fifteen-minute wait happens. The invariant asserted is a network one: how many heartbeats left.
+  await a.clock.install();
+  let beats = 0;
+  a.on('request', (req) => {
+    if (req.method() === 'POST' && /\/edit-lock\/heartbeat$/.test(new URL(req.url()).pathname)) {
+      beats += 1;
+    }
+  });
+  await a.goto(planUrl);
+  await expectHeldWithoutPressing(a);
+
+  // Positive control: a hidden tab still beats before the threshold, so the later silence is the
+  // threshold and not a clock that never ran.
+  await setTabVisibility(a, 'hidden');
+  await a.clock.runFor(2 * MINUTE);
+  await expect.poll(() => beats, CROSS_ACTOR).toBeGreaterThan(0);
+
+  // Jump past the threshold in one step (a hidden tab's timers are throttled to about this anyway,
+  // which is why the threshold is measured from when the tab was hidden and not from ticks), then
+  // let a few more beats fall due. None may leave.
+  const beforeJump = beats;
+  await a.clock.fastForward(16 * MINUTE);
+  await a.clock.runFor(2 * MINUTE);
+  await realPause(500); // let a request that was due leave the page
+  expect(beats).toBe(beforeJump);
+  const atThreshold = beats;
+
+  // Shown again: it beats at once, still holds, and says nothing. The lease was never really idle
+  // (only the page's clock moved), so this proves the resume path, not the server's expiry.
+  await setTabVisibility(a, 'visible');
+  await expect.poll(() => beats, CROSS_ACTOR).toBe(atThreshold + 1);
+  await expectHeldWithoutPressing(a);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
 test('a Viewer who opens a free plan does not take the pen', async ({ browser }) => {
   test.setTimeout(150_000);
   const { ctxA, ctxB, a, extras, planUrl } = await setUpTwoActors(browser, ['VIEWER']);

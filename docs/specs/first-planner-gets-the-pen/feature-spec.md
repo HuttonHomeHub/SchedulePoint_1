@@ -220,7 +220,7 @@ See the user flow in §4.3.
 >   `EXPIRED` and `canAcquire`, **then** the client re-acquires silently (no banner) — at most once per loss.
 > - **When** the refetched status is `HELD_BY_OTHER`, **then** today's lost banner shows (the sentence is now
 >   true).
-> - The undo history is cleared on a lost pen exactly as today (ADR-0048, `docs/adr/0048-undo-redo-command-stack.md:48-50`);
+> - The undo history survives a lost pen exactly as today (ADR-0176 D4 amended ADR-0048's "a 423 clears the stack");
 >   this story does not change undo.
 
 > **US-5 — The requester gets it when it is let go.** As a second Planner who pressed **Request control**, I
