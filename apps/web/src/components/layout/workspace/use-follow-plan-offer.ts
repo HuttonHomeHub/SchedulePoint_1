@@ -1,6 +1,7 @@
 import type { ActivitySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { pruneDismissed, readDismissed, rememberDismissed } from './follow-plan-dismissals';
 import {
   FOLLOW_PLAN_LIMIT,
   MOVING_CEILING_MS,
@@ -50,8 +51,9 @@ export interface FollowPlanOfferState {
    */
   restore: () => void;
   /**
-   * Dismiss: every bar counted now stops being offered, for this plan this session. Works in any
-   * phase but a press in flight, so a failed offer can be put away. Nothing is written.
+   * Dismiss: every bar counted now stops being offered, in this plan, and the answer is kept on this
+   * browser for the signed-in person. Works in any phase but a press in flight, so a failed offer can
+   * be put away.
    */
   dismiss: () => void;
   /** "Keep it here" on the edit offer: only the bars that offer was about stop being offered. */
@@ -78,17 +80,32 @@ interface Held {
 type Dismissed = ReadonlyMap<string, ReadonlySet<string>>;
 const NONE: ReadonlySet<string> = new Set();
 
+/** `window.localStorage` throws on access when storage is blocked, so even reaching it is guarded. */
+function storageFor(injected: Storage | undefined): Storage | null {
+  if (injected !== undefined) return injected;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * **A plan with early-placed bars offers to let all of them follow** (placed-bar-follows-link M3,
  * ADR-0216 D6): a standing condition read from the activities, not an event, so unlike
  * `useFollowLogicOffer` it has no snapshot, no undo-step binding while it asks and no announcement
  * (ADR-0132: it reads the same to somebody arriving five minutes later).
  *
- * **Dismissal is per bar, per session, in memory.** Dismiss puts every bar counted into a set kept
- * under the plan's id, so switching plans and back does not ask again; Keep it here on an edit offer
- * adds only the bars that offer named; undoing this offer's own step adds the bars it moved. The offer
- * therefore returns only when a bar nobody has put away becomes eligible. It is not persisted, so a
- * reload asks again (ADR-0216, a known trade-off: a per-device memory is the owner's call).
+ * **Dismissal is per bar and per plan, and it is remembered on this browser for the signed-in person**
+ * (`follow-plan-dismissals.ts`; ADR-0216 D6, "Remembered"). Dismiss puts every bar counted into a set
+ * kept under the plan's id, so switching plans and back does not ask again; Keep it here on an edit
+ * offer adds only the bars that offer named; undoing this offer's own step adds the bars it moved. The
+ * offer therefore returns only when a bar nobody has put away becomes eligible. Each answer is also
+ * written to the device store; **the store is read once per plan opening**, after the first activities
+ * list and with no edit pending, intersected with the bars that are early now and merged into what the
+ * planner has already answered in this opening (never replacing it). That same read prunes the store.
+ * Never pruned mid-session: a recalculation in flight can briefly change the flags. Without a signed-in
+ * person, or with storage blocked, it is today's session-only memory.
  *
  * The write is the workspace's one Follow logic write (`followLogicRowsWrite`), so this holds only
  * what the dock shows: the count, and the press's phases, which are the edit offer's. **The press is
@@ -107,8 +124,12 @@ export function useFollowPlanOffer(params: {
   pendingEdits: number;
   history: PlanEditHistory;
   announce: (message: string) => void;
+  /** The signed-in person's id; the dismissals are kept per person, so nothing is read or written without it. */
+  userId?: string | undefined;
+  /** Injectable for tests; defaults to `window.localStorage` where the browser allows it. */
+  storage?: Storage | undefined;
 }): FollowPlanOfferState {
-  const { enabled, planId, activities, settled, pendingEdits, history } = params;
+  const { enabled, planId, activities, settled, pendingEdits, history, userId } = params;
   const paramsRef = useRef(params);
   useEffect(() => {
     paramsRef.current = params;
@@ -142,12 +163,37 @@ export function useFollowPlanOffer(params: {
 
   const addDismissed = useCallback((ids: readonly string[]): void => {
     if (ids.length === 0) return;
-    const plan = paramsRef.current.planId;
+    const { planId: plan, userId: person } = paramsRef.current;
     const next = new Map(dismissedRef.current);
     next.set(plan, new Set([...(next.get(plan) ?? NONE), ...ids]));
     dismissedRef.current = next;
     setDismissedByPlan(next);
+    const storage = storageFor(paramsRef.current.storage);
+    if (storage !== null && person !== undefined) {
+      rememberDismissed(storage, { userId: person, planId: plan, ids, at: Date.now() });
+    }
   }, []);
+
+  // Seed once per plan opening, from the first settled list: stored answers that still apply.
+  const seededRef = useRef<string | null>(null);
+  const settledList = activities !== undefined && pendingEdits === 0;
+  useEffect(() => {
+    if (userId === undefined || !settledList) return;
+    const opening = `${userId}:${planId}`;
+    if (seededRef.current === opening) return;
+    seededRef.current = opening;
+    const storage = storageFor(paramsRef.current.storage);
+    if (storage === null) return;
+    const eligible = new Set(placedBeforeLogicIn(activities).map((row) => row.id));
+    const stored = readDismissed(storage, { userId, planId });
+    const applying = stored.filter((id) => eligible.has(id));
+    pruneDismissed(storage, { userId, planId, keep: new Set(applying) });
+    if (applying.length === 0) return;
+    const next = new Map(dismissedRef.current);
+    next.set(planId, new Set([...(next.get(planId) ?? NONE), ...applying]));
+    dismissedRef.current = next;
+    setDismissedByPlan(next);
+  }, [userId, planId, settledList, activities]);
 
   const targets = useMemo(
     () => placedBeforeLogicIn(activities ?? []).filter((row) => !dismissedHere.has(row.id)),

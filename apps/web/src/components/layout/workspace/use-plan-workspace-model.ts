@@ -700,6 +700,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     pendingEdits: autoRecalc.pendingEdits,
     history: editHistory,
     announce,
+    userId: currentUserId,
   });
   const autoResolve = useAutoResolveOverlaps({
     enabled: canEditSchedule,

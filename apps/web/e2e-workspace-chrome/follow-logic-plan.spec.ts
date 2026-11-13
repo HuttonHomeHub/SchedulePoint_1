@@ -308,7 +308,7 @@ test.describe('The whole-plan offer', () => {
     await expect(planOffer(page), 'and the offer does not ask again').toHaveCount(0);
   });
 
-  test('Dismiss puts a failed offer away; a reload asks again', async ({ page }) => {
+  test('Dismiss puts a failed offer away, and a reload does not ask again', async ({ page }) => {
     test.setTimeout(300_000);
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
@@ -349,11 +349,31 @@ test.describe('The whole-plan offer', () => {
       (await activityRows(page, orgSlug)).map((r) => [r.name, r.version, r.visualStart]),
     ).toEqual(before.map((r) => [r.name, r.version, r.visualStart]));
 
-    // Not remembered across a reload: a known trade-off, recorded in ADR-0216.
+    // Remembered across a reload (ADR-0216 D6): kept on this browser for this person, per plan.
     await page.unroute('**/activities/placements');
     await page.reload();
     await holdThePen(page);
+    await expect(
+      page.getByTestId('canvas-follow-logic-plan-offer'),
+      'the strip is not asked again after a reload',
+    ).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    await expect(planOffer(page), 'and it stays away once the plan has settled').toHaveCount(0);
+
+    // A bar nobody has put away that becomes early brings the offer back, counting only it.
+    const [fitOut] = await seedActivities(page, orgSlug, [{ name: 'Fit out', laneIndex: 3 }]);
+    if (!fitOut) throw new Error('seeding returned no activity');
+    const excavate = requireRow(await activityRows(page, orgSlug), 'Excavate');
+    await linkActivities(page, orgSlug, excavate.id, fitOut.id);
+    await recalculate(page, orgSlug);
+    await placeViaApi(page, orgSlug, 'Fit out', DATA_DATE);
+    await recalculate(page, orgSlug);
+    await page.reload();
+    await holdThePen(page);
     await expect(planOffer(page)).toBeVisible({ timeout: 20_000 });
+    await expect(planOffer(page)).toContainText(
+      '1 bar stays where it was placed, before its logic allows.',
+    );
   });
 
   test('under the Late-start overlay Follow logic is shaded with its reason, and Enter writes nothing', async ({

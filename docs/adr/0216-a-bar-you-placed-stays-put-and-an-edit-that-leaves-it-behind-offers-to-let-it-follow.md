@@ -71,9 +71,12 @@ teaches it.
    the plan's id so switching plans and back does not ask again; **Keep it here** on an edit offer puts away only the bars that
    offer named, so other flagged bars keep their offer; and **undoing the offer's own step** puts away the bars it moved, so it
    does not ask again the question the planner has just taken back. The offer returns only when a bar nobody has put away
-   becomes eligible, and Follow logic acts on the bars counted, not the dismissed ones. **A known trade-off:** the dismissal is
-   not remembered across a reload (a persisted per-device dismissal was suggested in review and is left for the owner to
-   decide). **On a short window (at most 44 rem high, the stylesheet's `short` variant, `SHORT_QUERY`) the standing offer is not shown**, and the
+   becomes eligible, and Follow logic acts on the bars counted, not the dismissed ones. **Remembered (2026-11-13):** the dismissal is kept on
+   this browser for the signed-in person, per plan, across a reload (`follow-plan-dismissals.ts`, ids only, at most 20 plans and
+   1,000 bars each); Dismiss, Keep it here and undoing the offer's own step are all kept. It is read once when a plan opens,
+   against the bars that are early then, so a bar that has stopped being early is forgotten and asked about afresh if it
+   becomes early again. Another device, browser or person is asked; clearing site data forgets it; with storage blocked it is
+   the session-only memory it was. This replaces the earlier "a known trade-off: not remembered across a reload". **On a short window (at most 44 rem high, the stylesheet's `short` variant, `SHORT_QUERY`) the standing offer is not shown**, and the
    planner reaches the same action per bar, through the conflict chip and the selection bar's Follow logic, as before M3. Measured
    first (ADR-0142), in the 1024 wide, one-conflict plan of `floor-states.spec.ts` with the strip's own row and nothing selected:
    the diagram is **312 px at 600 high against the 350 px it is owed** (ADR-0092), a mouse; **304 px** when the strip is compact and
@@ -146,7 +149,7 @@ specified as the fallback and **not built**: M0d passed.
 - Two new dock rungs (one in M2, one in M3, both built); the remedy's label changed in every journey that names it (M1).
 - A planner who drags a bar early on purpose sees the whole-plan offer for it at once: it describes the plan, not their last act, so
   it does not know the early start was meant. **Dismiss** is the answer and it is per bar, so that bar is not asked about again this
-  session; after a reload it asks again.
+  session and, since 2026-11-13, not after a reload either (it is kept on this browser for the signed-in person).
 - Where a bar both overlaps its predecessor and sits before its logic, the whole-plan offer outranks the Arrange offer, so the planner
   answers it first (Follow logic usually removes the overlap too; Dismiss brings the Arrange offer up). On a short window the
   whole-plan offer is omitted, so the Arrange offer shows directly and the per-bar Follow logic is the only route to this action.
