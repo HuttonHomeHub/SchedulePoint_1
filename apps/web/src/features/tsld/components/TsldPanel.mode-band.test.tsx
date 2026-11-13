@@ -43,6 +43,7 @@ function Harness({
   arm,
   activities = [A, B],
   canEdit = true,
+  scheduleRefusal,
   onLink,
   onOpenLogic,
   onUndoLastEdit,
@@ -51,6 +52,7 @@ function Harness({
   arm: 'select' | 'add-activity' | 'link' | 'loe' | 'marquee';
   activities?: ActivitySummary[];
   canEdit?: boolean;
+  scheduleRefusal?: (action: string) => string | null;
   onLink?: React.ComponentProps<typeof TsldPanel>['onLink'];
   onOpenLogic?: (activity: ActivitySummary) => void;
   onUndoLastEdit?: () => void;
@@ -79,6 +81,7 @@ function Harness({
         dependencies={NO_DEPS}
         dataDate="2026-01-01"
         canEdit={canEdit}
+        {...(scheduleRefusal ? { scheduleRefusal } : {})}
         canvasUi={canvasUi}
         onCreate={() => Promise.resolve({ recalcConflict: null })}
         {...(onLink ? { onLink } : {})}
@@ -211,11 +214,26 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     // Hidden, a Viewer cannot tell "the plan is empty" from "I am not allowed" (ADR-0062 M6).
     expect(draw).toHaveAttribute('aria-disabled', 'true');
     const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
-    expect(reason).toHaveTextContent('Start editing this plan to draw activities.');
+    expect(reason).toHaveTextContent('Start editing to draw activities.');
     // Visible to a sighted pointer user too (#462): not hidden from sight, and not inside anything that is.
     expect(reason?.closest('.sr-only')).toBeNull();
     fireEvent.click(draw);
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+  });
+
+  it('gives the host’s reason, not a fixed sentence, so a colleague’s edit or a role is named truthfully', () => {
+    render(
+      <Harness
+        arm="select"
+        activities={[]}
+        canEdit={false}
+        scheduleRefusal={(action) => `Your role cannot ${action}.`}
+      />,
+    );
+    const draw = screen.getByRole('button', { name: 'Draw the first activity' });
+    const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
+    expect(reason).toHaveTextContent('Your role cannot draw activities.');
+    expect(screen.getByTestId('canvas-empty-state')).not.toHaveTextContent('Start editing');
   });
 
   it('says nothing once the plan has any activity at all', () => {

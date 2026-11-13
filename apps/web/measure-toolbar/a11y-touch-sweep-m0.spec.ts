@@ -9,6 +9,7 @@ import {
 } from '@playwright/test';
 
 import { showActivities } from '../e2e/workspace';
+import { holdThePen } from '../e2e-support/pen';
 import { onboard, openPlanId, recalculate, seedActivities } from '../e2e-workspace-chrome/support';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -82,8 +83,7 @@ async function build(browser: Browser): Promise<Fixture> {
   await page.getByRole('link', { name: LONG_PLAN, exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },

@@ -3585,9 +3585,9 @@ export function TsldPanel({
                   message: (
                     <>
                       This plan has no activities yet.{' '}
-                      <span id={emptyStateReasonId}>
-                        Start editing this plan to draw activities.
-                      </span>
+                      {/* The host's sentence, not a fixed one: this is shown mostly to people for whom
+                          "Start editing" is wrong — a colleague is editing, or the role cannot. */}
+                      <span id={emptyStateReasonId}>{scheduleRefusal('draw activities')}</span>
                     </>
                   ),
                 })}

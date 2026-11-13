@@ -1,7 +1,7 @@
 import type { PlanEditLockStatus } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createElement, type ReactNode } from 'react';
+import { createElement, StrictMode, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -311,6 +311,48 @@ describe('usePlanPen — the pen on opening', () => {
     expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
   });
 
+  it('opens EXPIRED → one acquire', async () => {
+    serve([{ ...FREE, state: 'EXPIRED', holder: HELD_BY_OTHER.holder }, HELD_BY_ME]);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('mounted under StrictMode → still exactly one acquire', async () => {
+    serve([FREE, HELD_BY_ME]);
+    const Plain = wrapper();
+    const Strict = ({ children }: { children: ReactNode }) =>
+      createElement(StrictMode, null, createElement(Plain, null, children));
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Strict });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('unmounting while the automatic acquire is in the air → no second acquire, no rejection', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    let rejectPost: (e: Error) => void = () => {};
+    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Promise<PlanEditLockStatus>((_resolve, reject) => {
+            rejectPost = reject;
+          })
+        : Promise.resolve(FREE),
+    );
+    const { result, unmount } = renderHook(() => usePlanPen('acme', 'p1'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(result.current.autoAcquiring).toBe(true);
+    unmount();
+    rejectPost(LOCKED_HELD);
+    await new Promise((r) => setTimeout(r, 50));
+    process.off('unhandledRejection', unhandled);
+    expect(posts()).toHaveLength(1);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
   it('is busy from the first render that has the free status, before the POST resolves', async () => {
     let resolvePost: (s: PlanEditLockStatus) => void = () => {};
     let posted = false;
@@ -470,5 +512,116 @@ describe('usePlanPen — a loss nobody caused', () => {
     act(() => setVisibility('visible'));
     await waitFor(() => expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST'));
     expect(posts()).toHaveLength(1);
+  });
+
+  /** HELD_BY_ME; every heartbeat is answered from `beats` in turn (the last repeats). */
+  function scripted(beats: ('lost' | 'ok')[], retakes: Promise<PlanEditLockStatus>[] = []) {
+    let lost = false;
+    let beat = 0;
+    let retake = 0;
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && path.endsWith('/heartbeat')) {
+        const outcome = beats[Math.min(beat, beats.length - 1)];
+        beat += 1;
+        if (outcome === 'ok') return Promise.resolve(HELD_BY_ME);
+        lost = true;
+        return Promise.reject(LOCKED_LOST);
+      }
+      if (init?.method === 'POST') {
+        const out = retakes[retake] ?? Promise.resolve(HELD_BY_ME);
+        retake += 1;
+        return out.then((v) => {
+          lost = false;
+          return v;
+        });
+      }
+      return Promise.resolve(lost ? FREE : HELD_BY_ME);
+    });
+  }
+
+  it('keeps showing the held lease while the silent retake is in the air', async () => {
+    let finish: (s: PlanEditLockStatus) => void = () => {};
+    scripted(
+      ['lost'],
+      [
+        new Promise<PlanEditLockStatus>((r) => {
+          finish = r;
+        }),
+      ],
+    );
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    // The refetch has said FREE; the status a view is built from has not changed, and the opening
+    // flag stays down so the view is never the loading one.
+    expect(result.current.status?.state).toBe('HELD_BY_ME');
+    expect(result.current.autoAcquiring).toBe(false);
+    expect(result.current.isPending).toBe(true);
+    expect(result.current.lostControl).toBeNull();
+    act(() => {
+      finish(HELD_BY_ME);
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.status?.state).toBe('HELD_BY_ME');
+  });
+
+  it('two refused beats close together run one retake and show no banner', async () => {
+    let finish: (s: PlanEditLockStatus) => void = () => {};
+    scripted(
+      ['lost'],
+      [
+        new Promise<PlanEditLockStatus>((r) => {
+          finish = r;
+        }),
+      ],
+    );
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    act(() => {
+      setVisibility('visible');
+      setVisibility('visible');
+    });
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    // While the retake is still in the air: the second beat must not have shown a banner (the first
+    // retake's success would clear it afterwards, which is why this is read before `finish`).
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(result.current.lostControl).toBeNull();
+    act(() => {
+      finish(HELD_BY_ME);
+    });
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(posts()).toHaveLength(1);
+    expect(result.current.lostControl).toBeNull();
+  });
+
+  it('a second loss with no accepted beat between shows the banner', async () => {
+    scripted(['lost']);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST'));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('an accepted beat resets the cap, so a later loss is retaken again', async () => {
+    scripted(['lost', 'ok', 'lost']);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(vi.mocked(apiFetch).mock.calls.length).toBeGreaterThan(4));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(posts()).toHaveLength(2));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.lostControl).toBeNull();
   });
 });

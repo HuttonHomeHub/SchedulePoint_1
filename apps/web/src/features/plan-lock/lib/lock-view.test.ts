@@ -45,13 +45,13 @@ describe('resolveLockView', () => {
     '%s while the app is taking the pen → still loading (ADR-0220: one sentence per opening)',
     (state) => {
       const free = status({ state, holder: state === 'EXPIRED' ? JANE : null, canAcquire: true });
-      expect(resolveLockView(free, null, ME, null, undefined, true)).toBeNull();
+      expect(resolveLockView(free, null, ME, null, { autoAcquiring: true })).toBeNull();
     },
   );
 
   it('autoAcquiring changes nothing for a state that is not free', () => {
     const held = status({ state: 'HELD_BY_OTHER', holder: JANE, canRequest: true });
-    expect(resolveLockView(held, null, ME, null, undefined, true)).toEqual(
+    expect(resolveLockView(held, null, ME, null, { autoAcquiring: true })).toEqual(
       resolveLockView(held, null, ME, null),
     );
   });

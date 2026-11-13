@@ -117,14 +117,10 @@ export function usePenLockView(
   }, [now]);
 
   const effectiveNow = now ?? tick;
-  const view = resolveLockView(
-    pen.status,
-    pen.lostControl,
-    currentUserId,
-    dismissedRequestId,
-    effectiveNow,
-    pen.autoAcquiring,
-  );
+  const view = resolveLockView(pen.status, pen.lostControl, currentUserId, dismissedRequestId, {
+    now: effectiveNow,
+    autoAcquiring: pen.autoAcquiring,
+  });
   const signature = view ? `${view.tone}:${view.actions.join('|')}` : 'none';
 
   // After the user's own action changes the view, pull focus back to the surface container rather

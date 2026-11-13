@@ -78,8 +78,16 @@ spec and arrive in the epic's later milestones; this ADR is amended there rather
 ## Consequences
 
 - A Planner who opens a plan only to look holds the pen while that tab stays open, so a colleague who arrives later has
-  to ask for it (Request control, then up to the 45-second grace). Today the same happens only when somebody forgets to
-  press Stop. The 15-minute hidden-tab release (D5) bounds it in a later milestone.
+  to ask for it (Request control, then up to the 45-second grace). Until the hidden-tab release (D5, M3) ships, an open
+  tab holds the pen with **no time limit**: the heartbeat every 30 seconds renews a 120-second lease whether or not
+  anyone is at the screen. M3 will not cover a **visible** idle tab either, since a tab in the foreground is not hidden.
+  For this reason M1 is not released on its own: M1, M2 and M3 ship in one release.
+- A heartbeat refused while the plan reads free is retaken silently, once, and nothing the client can read says why the
+  plan is free. An Org Admin's force-release (`force_released`, `plan-lock.service.ts` `release`) also leaves the plan
+  free, so the released editor's tab would take it back within about 30 seconds and undo that admin act. The web has no
+  screen that sends a force-release (the only `DELETE` it sends is the holder's own, from Stop editing and from leaving
+  the page), and neither the 423 body nor the status carries a cause, so telling the two apart needs an API change.
+  This is a known cost, recorded as `docs/TECH_DEBT.md` #587 with its trigger.
 - `PlanPen` gains `autoAcquiring`, and `usePlanPen` sends a `POST …/edit-lock` on its own: one extra
   `plan_edit_lock.acquired` log line per Planner opening of a free plan.
 - Viewers, Contributors and share-link guests never take it: the first two read `canAcquire: false`, and the share page

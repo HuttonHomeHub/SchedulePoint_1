@@ -22,6 +22,45 @@ const CROSS_ACTOR = { timeout: 20_000 };
 
 const HOLDING = 'You’re editing this plan.';
 
+/**
+ * Record what the pen's surfaces say from now on: every distinct text a `role="status"` region
+ * carries (a region that is busy is recorded as `busy: <text>`), and every distinct name the pen
+ * button has. A silent retake must leave both unchanged: the live region is what a screen reader
+ * announces and the button is what keyboard focus is standing on.
+ */
+async function recordPenSurface(
+  page: Page,
+): Promise<() => Promise<{ status: string[]; pen: string[] }>> {
+  await page.evaluate(() => {
+    const seen = { status: [] as string[], pen: [] as string[] };
+    const read = (): void => {
+      for (const el of document.querySelectorAll('[role="status"]')) {
+        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // Only the pen's own sentences: other regions (a saved toast, a recalculation) come and go.
+        if (!/editing this plan|Checking who|taken over|no longer editing/i.test(text)) continue;
+        const entry = el.getAttribute('aria-busy') === 'true' ? `busy: ${text}` : text;
+        if (!seen.status.includes(entry)) seen.status.push(entry);
+      }
+      for (const el of document.querySelectorAll('button')) {
+        const name = (el.getAttribute('aria-label') ?? el.textContent ?? '').trim();
+        if (/^(Start|Stop) editing$/.test(name) && !seen.pen.includes(name)) seen.pen.push(name);
+      }
+    };
+    read();
+    new MutationObserver(read).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+    (window as unknown as { __penSeen: typeof seen }).__penSeen = seen;
+  });
+  return () =>
+    page.evaluate(
+      () => (window as unknown as { __penSeen: { status: string[]; pen: string[] } }).__penSeen,
+    );
+}
+
 /** Count every acquire this page sends from now on. */
 function countAcquires(page: Page): () => number {
   let n = 0;
@@ -151,6 +190,7 @@ test('closing a second tab does not tell the first it was taken over', async ({ 
   await a.goto(planUrl);
   await holdThePen(a);
   const firstTabAcquires = countAcquires(a);
+  const penSurface = await recordPenSurface(a);
 
   // A second tab of the same person reads the lease as already theirs and sends nothing.
   const tab2 = await ctxA.newPage();
@@ -176,6 +216,14 @@ test('closing a second tab does not tell the first it was taken over', async ({ 
   await expect(a.getByRole('alert')).toHaveCount(0);
   expect(firstTabAcquires()).toBe(1);
   expect(await lockState(a, planUrl)).toBe('HELD_BY_ME');
+
+  // The retake was silent where a screen reader listens, too: the status never went busy with
+  // "Checking who’s editing…" and never said anything but what it already said, and the pen button
+  // the person may be standing on never changed its name.
+  const seen = await penSurface();
+  expect(seen.status.filter((text) => /Checking/.test(text))).toEqual([]);
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
 
   await ctxA.close();
   await ctxB.close();

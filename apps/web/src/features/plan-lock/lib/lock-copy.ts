@@ -72,12 +72,12 @@ export const lockCopy = {
     `You can take over editing from ${firstName(holder)}.`,
   adminNote: 'As an admin, you can take over editing.',
   /** Shown at the Activities / Logic-diagram sections when the pen is held elsewhere. */
-  scheduleReadOnlyHint: 'Read-only — use “Start editing” at the top of Schedule to make changes.',
+  scheduleReadOnlyHint: 'Read-only — you are not editing this plan.',
   /** Distinct from the 409 "changed elsewhere — refresh" copy (ADR-0028). */
   lost: (reason: PlanEditLockReason): string =>
     reason === 'PLAN_EDIT_LOCK_LOST'
       ? 'Editing control was taken over — you’re now read-only.'
-      : 'You’re not the current editor — take the pen to edit.',
+      : 'You’re no longer editing this plan. Press Start editing to carry on.',
   // Control labels.
   startEditing: 'Start editing',
   stopEditing: 'Stop editing',

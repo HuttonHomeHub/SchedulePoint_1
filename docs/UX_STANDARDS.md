@@ -334,6 +334,8 @@ reader acts (edits the field, retries or refreshes), and is not also announced b
     commands it is the precondition for — and sent the badge and the seven
     hand-off controls _down_ to join the sentence.
 
+    Opening a free plan takes the pen automatically (ADR-0220); Start editing is the way back in after Stop.
+
     So the arrangement this bullet described is gone: the badge is no longer on
     the identity line, and the condition and its sentence are now together rather
     than apart. What survives is the cost, in a different shape. For the lock

@@ -43,7 +43,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await expect(emptyState).not.toContainText('Start editing');
   await releaseThePen(page);
   await expect(emptyState).toContainText(
-    'This plan has no activities yet. Start editing this plan to draw activities.',
+    'This plan has no activities yet. Start editing to draw activities.',
   );
   await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeHidden();

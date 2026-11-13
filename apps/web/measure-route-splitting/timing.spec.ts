@@ -3,6 +3,8 @@ import { cpus, platform, release, totalmem } from 'node:os';
 
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 import { writeReading } from './output';
 import { MIN_RUNS, summarise, type Summary } from './stats';
 
@@ -130,8 +132,7 @@ async function seed(browser: Browser): Promise<Seeded> {
 
   // A plan with bars, so the diagram has something to paint. Needs the pen only for the UI; the
   // API accepts the request from the signed-in session as the other harnesses' seeders do.
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
   const failures = await page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
       const bad: string[] = [];

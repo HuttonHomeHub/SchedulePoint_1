@@ -1,5 +1,6 @@
 import type { PlanEditLockReason, PlanEditLockStatus } from '@repo/types';
 import {
+  isCancelledError,
   queryOptions,
   useMutation,
   useQuery,
@@ -208,11 +209,16 @@ export interface PlanPen {
   status: PlanEditLockStatus | undefined;
   /** The caller currently holds the pen. */
   holdsPen: boolean;
-  /** Any acquire/release/request/handoff is in flight, or the app is about to take the pen itself. */
+  /**
+   * Any acquire/release/request/handoff is in flight, or the app is taking the pen itself (the
+   * opening acquire or a silent retake).
+   */
   isPending: boolean;
   /**
-   * The app is taking the pen on the person's behalf — decided at render from the status, so there
-   * is no frame in which an enabled Start editing is offered first (ADR-0220 D1).
+   * The OPENING acquire: the app is taking the pen on the person's behalf, decided at render from
+   * the status so there is no frame in which an enabled Start editing is offered first (ADR-0220 D1).
+   * It is what makes the lock view read as loading. A silent retake after a lost lease is not this:
+   * it feeds `isPending` only, and `status` keeps showing the last held lease meanwhile.
    */
   autoAcquiring: boolean;
   /** A transient "you just lost the pen" reason (423), until dismissed or re-acquired. */
@@ -234,6 +240,11 @@ export interface PlanPen {
  * announcer for action results. Server state (the lease) lives entirely in TanStack
  * Query keyed by plan; the only local state is the transient `lostControl` flag
  * (ADR-0004 split).
+ *
+ * @remarks Its per-opening state (the opening decision, `declined`, the one silent retake) lives in
+ * this hook instance, so it is per **mount**: mount it under a key that changes with the plan, as
+ * `routes/plan-detail.tsx` does (`${orgSlug}/${planId}`). Without one, a plan switch would carry
+ * the previous plan's "the person pressed Stop" into the next opening.
  */
 export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   const queryClient = useQueryClient();
@@ -278,9 +289,15 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
     setDeclined(false);
     setLostControl(null);
   }, []);
-  // An automatic acquire (or the retake after a loss nobody caused) is in the air, refetch included.
-  const [autoInFlight, setAutoInFlight] = useState(false);
+  // The silent retake after a loss nobody caused is in the air, refetch included.
+  const [retaking, setRetaking] = useState(false);
+  const retakeInFlightRef = useRef(false); // two refused beats close together must run one retake
   const retakenRef = useRef(false); // one silent retake per loss, until a beat proves the lease live
+  // The last lease this person held, so the status can keep showing it while a retake is in flight:
+  // the refetch in the middle reads FREE, and a view built from that would announce "checking" and
+  // flip Stop editing to Start editing for a retake that is meant to be silent.
+  const [lastHeld, setLastHeld] = useState<PlanEditLockStatus | undefined>(undefined);
+  if (status?.state === 'HELD_BY_ME' && lastHeld !== status) setLastHeld(status);
 
   const acknowledgeLost = useCallback(
     (reason: PlanEditLockReason) => {
@@ -312,9 +329,13 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   if (opening === 'waiting' && openingStatus && visible) {
     setOpening(wantsAuto ? 'taking' : 'done');
   }
-  const autoAcquiring = wantsAuto || opening === 'taking' || autoInFlight;
+  const autoAcquiring = wantsAuto || opening === 'taking';
 
   const { mutate: mutateAuto, mutateAsync: mutateAutoAsync } = autoAcquire;
+  // This acquire and the retake in `handleLost` share ONE mutation observer (`autoAcquire`), so they
+  // must never overlap: a second `mutate` on it would orphan the first's callbacks. They cannot today
+  // because the retake only starts from a heartbeat, which needs a held lease the opening has not yet
+  // produced; keep it that way.
   useEffect(() => {
     if (opening !== 'taking' || openingFiredRef.current) return;
     openingFiredRef.current = true;
@@ -327,18 +348,33 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
     );
   }, [opening, mutateAuto]);
 
+  // Every refused beat invalidates the status query first, and a second invalidation cancels the
+  // fetch a first one started — including the one this read joined. A cancelled read says nothing
+  // about the lock, so ask again rather than fall through to a banner that may be false.
+  const readLatestStatus = useCallback(async (): Promise<PlanEditLockStatus> => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await queryClient.fetchQuery({
+          ...planEditLockQueryOptions(orgSlug, planId),
+          staleTime: 0,
+        });
+      } catch (err) {
+        if (!isCancelledError(err) || attempt >= 2) throw err;
+      }
+    }
+  }, [queryClient, orgSlug, planId]);
+
   // A heartbeat said the lease is gone. Look before announcing: a lease released by this person's own
   // other tab or by a reload leaves the plan free, and "taken over" would be false.
   const handleLost = useCallback(
     (reason: PlanEditLockReason) => {
       if (declinedRef.current) return; // a beat in flight while Stop was pressed
-      setAutoInFlight(true);
+      if (retakeInFlightRef.current) return; // the beat before this one is already being answered
+      retakeInFlightRef.current = true;
+      setRetaking(true);
       void (async () => {
         try {
-          const latest = await queryClient.fetchQuery({
-            ...planEditLockQueryOptions(orgSlug, planId),
-            staleTime: 0,
-          });
+          const latest = await readLatestStatus();
           if (declinedRef.current) return;
           if (shouldRetakeAfterLoss({ status: latest, retakenForThisLoss: retakenRef.current })) {
             retakenRef.current = true;
@@ -349,12 +385,13 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
         } catch {
           // Could not look, or the retake was refused: fall through to the honest default.
         } finally {
-          setAutoInFlight(false);
+          retakeInFlightRef.current = false;
+          setRetaking(false);
         }
         if (!declinedRef.current) acknowledgeLost(reason);
       })();
     },
-    [queryClient, orgSlug, planId, mutateAutoAsync, acknowledgeLost],
+    [readLatestStatus, mutateAutoAsync, acknowledgeLost],
   );
   const confirmLive = useCallback(() => {
     retakenRef.current = false;
@@ -402,14 +439,15 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
 
   return {
-    status,
+    status: retaking && lastHeld ? lastHeld : status,
     holdsPen: Boolean(holdsPen),
     isPending:
       acquire.isPending ||
       release.isPending ||
       request.isPending ||
       handoffMutation.isPending ||
-      autoAcquiring,
+      autoAcquiring ||
+      retaking,
     autoAcquiring,
     lostControl,
     dismissLost,

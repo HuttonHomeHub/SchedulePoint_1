@@ -1,5 +1,6 @@
 import { type BrowserContext, expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { onboard, openPlanId, recalculate, seedActivities } from '../e2e-workspace-chrome/support';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -103,8 +104,7 @@ test('#494 what the Gantt divider strip covers', async ({ browser }) => {
   await page0.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page0.getByRole('link', { name: 'Slab', exact: true }).click();
   await expect(page0).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
-  await page0.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page0.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page0);
   await seedActivities(page0, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
