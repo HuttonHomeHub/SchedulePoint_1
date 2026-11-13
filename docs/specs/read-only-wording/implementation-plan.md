@@ -1,6 +1,6 @@
 # Implementation Plan: Wording for people who cannot edit
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) (Draft, awaiting approval)
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) (Approved)
 - **Status:** Draft, awaiting approval before implementation.
 - **Owner:** product owner; built by the **builder** agent
 

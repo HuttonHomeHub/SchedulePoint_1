@@ -1,6 +1,6 @@
 # Feature Spec: Wording for people who cannot edit
 
-- **Status:** Draft, awaiting approval before implementation.
+- **Status:** Approved — by the product owner, 2026-11-13, with "Ask a Planner" (capital P, question 1's default) and the "Locked" badge left alone (question 2's default). Not yet built.
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-13
 - **Tracking issue / epic:** none yet (`docs/HANDOFF.md` "What is next", item 3, and the "edit lock" bullet)

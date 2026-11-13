@@ -1,6 +1,6 @@
 # Feature Spec: Cancel request
 
-- **Status:** Draft, awaiting the product owner's approval. One question (Q1) needs an answer; every other choice below is a stated default.
+- **Status:** Approved — by the product owner, 2026-11-13, with Q1 answered yes (the reload gap is fixed in the same change) and every other default as stated below. Not yet built.
 - **Author(s):** feature-analyst (Claude Code), for the product owner
 - **Date:** 2026-11-13
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #588 ("A planner who asked for control cannot withdraw the request"), closed by this work
