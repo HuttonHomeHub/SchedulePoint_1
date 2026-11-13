@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -90,7 +90,7 @@ test('#478 ruler day labels at 100 % and 200 % text', async ({ page }) => {
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Ruler day labels');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 30 },
     { name: 'Dig footings', laneIndex: 1, durationDays: 45 },

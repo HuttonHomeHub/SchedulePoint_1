@@ -1,10 +1,10 @@
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   canvas,
   createHierarchy,
-  ensurePen,
   findBar,
   newPlan,
   onboard,
@@ -45,7 +45,7 @@ test.describe('The activity editor chrome', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Activity editor chrome');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Dig footings', laneIndex: 0 },
@@ -54,7 +54,7 @@ test.describe('The activity editor chrome', () => {
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const explorerTree = page.getByRole('navigation', { name: 'Project Explorer' });
     await expect(explorerTree).toBeVisible();
@@ -118,7 +118,7 @@ test.describe('The activity editor chrome', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Double-click editor');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Dig footings', laneIndex: 0 },
@@ -127,7 +127,7 @@ test.describe('The activity editor chrome', () => {
     const [dig, steel] = seeded;
     if (!dig || !steel) throw new Error('seeding returned no activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── The bar's editor opens on General, for that activity. ─────────────────────────────────
     const at = await findBar(page, dig.id);
@@ -184,7 +184,7 @@ test.describe('The activity editor chrome', () => {
 
     await createHierarchy(page);
     await newPlan(page, 'Double-click contributor');
-    await ensurePen(page);
+    await holdThePen(page);
     const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');

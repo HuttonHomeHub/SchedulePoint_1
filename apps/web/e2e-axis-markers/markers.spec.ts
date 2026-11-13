@@ -1,9 +1,9 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -106,7 +106,7 @@ test.describe('The axis markers', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Axis markers journey');
-    await ensurePen(page);
+    await holdThePen(page);
 
     // Lane 0 and lane 1 both occupied: those are the rows the old pills printed over, and the
     // bar in lane 0 is the one whose NAME the register's own screenshot shows obscured.
@@ -145,7 +145,7 @@ test.describe('The axis markers', () => {
 
     // ── With the pen. Two of the three audiences never hold it and neither ever sees the cursor
     // readout, so both states are asserted rather than one standing in for the other.
-    await ensurePen(page);
+    await holdThePen(page);
     await expectNoMarkerOverTheScene(page, 'pen held');
 
     // ── A second pan position. `pan()` is unclamped, so the topmost lane is whichever the planner
@@ -174,14 +174,14 @@ test.describe('The axis markers', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Cursor readout journey');
-    await ensurePen(page);
+    await holdThePen(page);
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 30 },
       { name: 'Dig footings', laneIndex: 1, durationDays: 45 },
     ]);
     expect(seeded).toHaveLength(2);
     await recalculate(page, orgSlug);
-    await ensurePen(page); // the reload above drops the ADR-0028 lease
+    await holdThePen(page); // the reload above drops the ADR-0028 lease
 
     const canvas = page.locator('canvas.touch-none').first();
     const box = await canvas.boundingBox();
@@ -233,7 +233,7 @@ test.describe('The axis markers', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Ruler day labels journey');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 30 },
       { name: 'Dig footings', laneIndex: 1, durationDays: 45 },

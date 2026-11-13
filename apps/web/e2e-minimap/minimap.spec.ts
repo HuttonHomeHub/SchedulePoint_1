@@ -1,9 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -37,7 +37,7 @@ test.describe('The minimap', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Minimap journey');
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── Before any activity has computed dates: the toggle is SHADED with a reason, not hidden
     // (ADR-0082) — it stays focusable, it is not pressable, and the reason is reachable.
@@ -62,7 +62,7 @@ test.describe('The minimap', () => {
     ]);
     expect(seeded).toHaveLength(3);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── The entry point (the test's real subject): the cluster's Minimap toggle.
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');

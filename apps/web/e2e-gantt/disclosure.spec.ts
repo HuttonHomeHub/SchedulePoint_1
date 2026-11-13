@@ -1,5 +1,6 @@
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -11,7 +12,6 @@ import {
   ganttRow,
   onboard,
   seedNestedWbs,
-  startEditing,
 } from './support';
 
 /**
@@ -36,7 +36,7 @@ async function nestedPlan(page: Page): Promise<void> {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedNestedWbs(page, orgSlug);
   await expect(ganttGrid(page)).toBeVisible();
 }

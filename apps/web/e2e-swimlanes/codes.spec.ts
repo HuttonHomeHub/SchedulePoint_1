@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
 import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
@@ -11,7 +12,6 @@ import {
   calculateSeededPlan,
   cursorTo,
   diagramList,
-  ensurePen,
   expectFocused,
   openPlanId,
   openSeededPlan,
@@ -130,7 +130,7 @@ test.describe('Codes…', () => {
       await expectFocused(page, page.getByRole('button', { name: 'Codes…' }));
     });
 
-    await ensurePen(page);
+    await holdThePen(page);
 
     await test.step('2. add a code type and a value: focus follows, and the field is ready for the next', async () => {
       const dialog = await openCodes(page);
@@ -274,7 +274,7 @@ test.describe('Codes… at the 1024 × 600 floor', () => {
   test('both panes scroll and both Add forms stay reachable', async ({ page }) => {
     test.setTimeout(240_000);
     const orgSlug = await openSeededPlan(page, Date.now() + 1, CODES_PLAN);
-    await ensurePen(page);
+    await holdThePen(page);
     const types = await storedTypes(page, orgSlug);
     const planId = openPlanId(page);
     // Enough values to overflow the pane at 600 px, made through the API: typing them would measure
@@ -512,7 +512,7 @@ test.describe('Code columns', () => {
     });
 
     await test.step('4. at 1024 × 600 the View panel does not grow with the number of types', async () => {
-      await ensurePen(page);
+      await holdThePen(page);
       const planId = openPlanId(page);
       const addTypes = async (from: number, to: number): Promise<void> => {
         const failures = await page.evaluate(
@@ -547,7 +547,7 @@ test.describe('Code columns', () => {
       await addTypes(1, 12);
       const twelve = await panelHeight();
       // The reload above released the pen; the second batch writes too.
-      await ensurePen(page);
+      await holdThePen(page);
       await addTypes(13, 30);
       const thirty = await panelHeight();
       expect(twelve, 'the View panel has no height').toBeGreaterThan(0);
@@ -641,7 +641,7 @@ test.describe('Setting codes', () => {
     const area = types['Area']!;
     const tradeValues = await storedValues(page, orgSlug, trade);
     const areaValues = await storedValues(page, orgSlug, area);
-    await ensurePen(page);
+    await holdThePen(page);
     await showActivitiesPanel(page);
 
     await test.step('1. the editor: Trade = MEP on CD_5, saved by Save codes alone, then read in History', async () => {
@@ -754,7 +754,7 @@ test.describe('Setting codes from the diagram', () => {
     const area = types['Area']!;
     const tradeValues = await storedValues(page, orgSlug, trade);
     const areaValues = await storedValues(page, orgSlug, area);
-    await ensurePen(page);
+    await holdThePen(page);
     const list = diagramList(page);
     await list.focus();
     await list.press('Escape');

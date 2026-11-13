@@ -59,14 +59,6 @@ export async function createPlan(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('button', { name: /^(Start|Stop) editing$/ })).toBeVisible();
 }
 
-/** Hold the pen, whether or not this session already does. */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
 /** The open plan's id, read from the route rather than from a list endpoint's ordering. */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());

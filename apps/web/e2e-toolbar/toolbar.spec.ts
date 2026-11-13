@@ -1,10 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { holdRead } from '../e2e-support/hold-read';
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
-import { addActivity, onboard, openNewPlan, startEditing } from './support';
+import { addActivity, onboard, openNewPlan } from './support';
 
 /**
  * The **canvas-maximal, toolbar-hosted workspace** journey (ADR-0031 two-row amendment).
@@ -53,7 +54,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
 
   // Populate the plan so the canvas has something to plot (the plan already carries a mandatory
   // planned start from creation, so the bars plot after a recalc).
-  await startEditing(page); // take the pen — the authoring toolbar group goes live
+  await holdThePen(page); // take the pen — the authoring toolbar group goes live
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
   await recalculate(page);
@@ -173,7 +174,7 @@ test('every control in the View popover is pointer-reachable at a short viewport
   await page.setViewportSize({ width: 1280, height: 520 });
   await onboard(page, Date.now() + 7);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
   await recalculate(page);
@@ -247,7 +248,7 @@ test('icon-only deck glyphs name themselves to pointer, keyboard and touch', asy
   await acknowledgeTouchHint(page);
   await onboard(page, Date.now() + 13);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await recalculate(page);
 
@@ -312,7 +313,7 @@ test("a menu's own trigger closes it, and focus lands where Escape would put it"
   test.setTimeout(180_000);
   await onboard(page, Date.now() + 29);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await recalculate(page);
 

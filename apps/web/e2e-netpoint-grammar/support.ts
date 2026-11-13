@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 
 import { expect, type Page } from '@playwright/test';
 
-import { ensurePen, onboard, openProject, recalculate } from '../e2e-arrange/support';
+import { onboard, openProject, recalculate } from '../e2e-arrange/support';
+import { holdThePen } from '../e2e-support/pen';
 
 /**
  * Shared by the NetPoint grammar journeys (`docs/specs/netpoint-grammar/`). The reference plan is
@@ -72,7 +73,7 @@ export async function openReferencePlan(page: Page): Promise<void> {
     .first()
     .click();
   await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
-  await ensurePen(page);
+  await holdThePen(page);
   await recalculate(page, orgSlug);
   await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
 }

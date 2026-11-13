@@ -117,14 +117,6 @@ export function planIdOf(url: string): string {
   return id;
 }
 
-/** Take the pen, whether or not this session already holds it. Writes are pen-gated (ADR-0028). */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
 /**
  * Add an activity, typing its duration in the sub-day grammar. Requires the pen.
  *

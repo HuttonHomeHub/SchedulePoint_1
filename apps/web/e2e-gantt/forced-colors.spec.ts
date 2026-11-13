@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -17,14 +18,12 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   FORCED_COLOURS_PLAN as PLAN,
   ganttGrid,
   ganttRow,
   onboard,
   seedForcedColoursPlan,
   showGantt,
-  startEditing,
 } from './support';
 
 /**
@@ -195,11 +194,11 @@ test('a contrast theme keeps the Gantt readable and a shaded control shaded', as
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedForcedColoursPlan(page, orgSlug);
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
-  await ensurePen(page);
+  await holdThePen(page);
   await page.addStyleTag({ content: NO_TRANSITIONS });
 
   // The pinned positives: every mark the assertions below read exists, and is the kind of mark it

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -131,7 +131,7 @@ test('M7: does nulling every deck icon close the 3 px label spread?', async ({ p
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, PLAN_NAME);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -140,7 +140,7 @@ test('M7: does nulling every deck icon close the 3 px label spread?', async ({ p
   await recalculate(page, orgSlug);
   // `recalculate` reloads and the reload drops the pen. The deck is pen-gated, so a run with the pen
   // free measures a different set of enabled controls — `m0-repaired` records that exact mistake.
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME, penHeld: true, byViewport: {} };

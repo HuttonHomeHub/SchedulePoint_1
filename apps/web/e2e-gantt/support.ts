@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { GRID_END_GUTTER } from '../src/features/gantt/layout/pinned-geometry';
 
 /**
@@ -56,25 +57,6 @@ export async function createPlan(page: Page, name: string): Promise<void> {
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name }).click();
-}
-
-/** Take the pen so the authoring affordances go live. */
-export async function startEditing(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-}
-
-/**
- * Hold the pen, whether or not this session already does.
- *
- * Writes are pen-gated (ADR-0028) — including the API seeding below, which would 423 without it —
- * but a reload may leave the lease already held, in which case the toolbar reads "Stop editing" and
- * clicking "Start editing" would hang. Checking beats assuming either state.
- */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await startEditing(page);
 }
 
 /** The Gantt's treegrid — the surface every assertion in this journey reads. */
@@ -171,10 +153,10 @@ export async function seedActivities(
    * with the same one-line reason) and it belongs at the point of the out-of-band write rather than
    * in a helper that has no way to know one happened.
    *
-   * **`ensurePen` after it, and that is not belt-and-braces.** A reload drops this session's hold on
+   * **`holdThePen` after it, and that is not belt-and-braces.** A reload drops this session's hold on
    * the plan lock, and every caller here seeds while holding it — so without this the next write
    * gets a 423, which is exactly what the first version of this change produced (`create summary:
-   * 423`, five specs). `ensurePen` is idempotent by construction: it reads what the toolbar says
+   * 423`, five specs). `holdThePen` is idempotent by construction: it reads what the toolbar says
    * rather than assuming, which its own docblock added for this same reload case.
    */
   await syncClient(page);
@@ -366,13 +348,13 @@ export async function seedForcedColoursPlan(page: Page, orgSlug: string): Promis
  * effect nobody had written down. ADR-0109 D3 made that control conditional, and a client that
  * believes the plan is empty believes it is current.
  *
- * The reload is the established idiom (`e2e-workspace-chrome/support.ts`); the `ensurePen` after it
+ * The reload is the established idiom (`e2e-workspace-chrome/support.ts`); the `holdThePen` after it
  * is the part that is easy to miss, because a reload drops this session's hold on the plan lock and
  * the next write then 423s several specs later, a long way from the cause.
  */
 export async function syncClient(page: Page): Promise<void> {
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
 }
 
 /** Switch the workspace to the Gantt and wait for the grid. */

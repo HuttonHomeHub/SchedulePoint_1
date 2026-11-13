@@ -1,12 +1,12 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   ganttGrid,
   onboard,
   seedActivities,
@@ -64,13 +64,13 @@ test.describe('the Gantt at plan scale', () => {
     await createPlan(page, 'Programme');
 
     // Writes are pen-gated (ADR-0028), and the seed goes through the same API the UI does.
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, FIRST_FILL);
     await page.reload();
     const small = await liveRowCount(page);
 
     // Top the SAME plan up by three times.
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, TOPPED_UP - FIRST_FILL, FIRST_FILL);
     await page.reload();
     const large = await liveRowCount(page);

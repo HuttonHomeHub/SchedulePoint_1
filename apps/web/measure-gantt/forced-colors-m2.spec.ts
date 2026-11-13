@@ -13,15 +13,14 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   FORCED_COLOURS_PLAN as PLAN,
   ganttGrid,
   ganttRow,
   onboard,
   seedForcedColoursPlan,
   showGantt,
-  startEditing,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 import { clearMeasurement, writeMeasurement } from '../measure-toolbar/output';
@@ -131,11 +130,11 @@ test('M2-T1: contrast-theme readings of the Gantt, shaded controls and existing 
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedForcedColoursPlan(page, orgSlug);
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
-  await ensurePen(page);
+  await holdThePen(page);
   // Buttons carry `transition-colors`: a read right after a mode switch is a point on a transition.
   await page.addStyleTag({
     content: '*,*::before,*::after{transition:none!important;animation:none!important}',

@@ -2,7 +2,6 @@ import { type Page } from '@playwright/test';
 
 import {
   createPlan,
-  ensurePen,
   onboard,
   openPlanId,
   openProject,
@@ -11,6 +10,7 @@ import {
   seedDependency,
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -147,7 +147,7 @@ test.describe('NetPoint grammar — links', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Link gaps');
-    await ensurePen(page);
+    await holdThePen(page);
     // Piling drives Pour; Excavate finishes a week earlier, so Excavate → Pour is a NON-driving link
     // that waits. (Placing Pour late instead does not make a waiting link: the placement is not
     // logic, so Excavate → Pour stays driving and draws no gap, which is the rule, ADR-0154.)
@@ -209,7 +209,7 @@ test.describe('NetPoint grammar — links', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Attachment');
-    await ensurePen(page);
+    await holdThePen(page);
     const made = await seedActivities(page, orgSlug, [
       { name: 'Frame', laneIndex: 0, durationDays: 10 },
       { name: 'Clad', laneIndex: 2, durationDays: 4 },
@@ -229,7 +229,7 @@ test.describe('NetPoint grammar — links', () => {
     // The control: no link yet, so no mark-shade ink sits on a bar.
     expect((await countInk(page, [], mark, bars, ground)).dotsOnBars).toBe(0);
 
-    await ensurePen(page);
+    await holdThePen(page);
     await seedLink(page, orgSlug, frame.id, clad.id, 'SS', 2);
     await recalculate(page, orgSlug);
     await expect(page.locator('canvas').first()).toBeAttached();
@@ -245,7 +245,7 @@ test.describe('NetPoint grammar — links', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Node to node');
-    await ensurePen(page);
+    await holdThePen(page);
     // Lane 1 is left empty, so the only ink between the two bars is the link's vertical. One-letter
     // names keep the name row clear of the node, which the probe below looks through.
     const made = await seedActivities(page, orgSlug, [
@@ -340,7 +340,7 @@ test.describe('NetPoint grammar — links', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Round the name');
-    await ensurePen(page);
+    await holdThePen(page);
     const made = await seedActivities(page, orgSlug, [
       { name: 'A', laneIndex: 0, durationDays: 3 },
       {
@@ -519,7 +519,7 @@ test.describe('Links-and-labels — two-way tracks', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Two-way track');
-    await ensurePen(page);
+    await holdThePen(page);
     const made = await seedActivities(page, orgSlug, [
       { name: 'Task 0', laneIndex: 0, durationDays: 8 },
       { name: 'Task 1', laneIndex: 2, durationDays: 3 },

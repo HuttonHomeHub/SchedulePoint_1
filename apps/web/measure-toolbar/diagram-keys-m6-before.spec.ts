@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import {
   calculateSeededPlan,
   cursorTo,
   diagramList,
-  ensurePen,
   openPlanId,
   openSeededPlan,
 } from '../e2e-swimlanes/support';
@@ -69,7 +69,7 @@ test('M6 before: the fullest single bar, today and at the full foot width', asyn
   mkdirSync(OUT, { recursive: true });
   const stamp = Date.now();
   const orgSlug = await openSeededPlan(page, stamp);
-  await ensurePen(page);
+  await holdThePen(page);
   await calculateSeededPlan(page);
   const planId = openPlanId(page);
 
@@ -118,7 +118,7 @@ test('M6 before: the fullest single bar, today and at the full foot width', asyn
   );
   expect(setup).toBe(true);
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
 
   const out: Record<string, unknown> = {};
   for (const size of [
@@ -144,7 +144,7 @@ test('M6 before: the fullest single bar, today and at the full foot width', asyn
     await page.screenshot({ path: join(OUT, `fullwidth-${String(size.w)}x${String(size.h)}.png`) });
     out[`${String(size.w)}x${String(size.h)}`] = { idle, today, fullWidth: full };
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
   }
   const path = writeMeasurement('diagram-keys-m6-before', out);
   // eslint-disable-next-line no-console

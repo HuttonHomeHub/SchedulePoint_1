@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { placeRelativeTo } from '../e2e-arrange/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
@@ -17,7 +18,6 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   findBar,
   newPlan,
   onboard,
@@ -76,7 +76,7 @@ test.describe('The canvas dock', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Dock');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [dig] = await seedActivities(page, orgSlug, [
       { name: 'Dig footings', laneIndex: 0 },
@@ -84,7 +84,7 @@ test.describe('The canvas dock', () => {
     ]);
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(canvas(page)).toBeVisible();
 
     const idle = await canvasHeight(page);
@@ -186,7 +186,7 @@ test.describe('a dock message with long names, at the 1024 px floor', () => {
     const orgSlug = await onboard(page, STAMP + 7);
     await createHierarchy(page);
     await newPlan(page, 'Long names');
-    await ensurePen(page);
+    await holdThePen(page);
 
     // Two 46-character names: the sentence is wider than the foot row's outlet. Before the strip
     // could shrink, it kept its content width, spilled 423 px past the outlet and put Undo
@@ -197,7 +197,7 @@ test.describe('a dock message with long names, at the 1024 px floor', () => {
     ]);
     if (!first || !second) throw new Error('seeding returned fewer than two activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const firstPoint = await findBar(page, first.id);
     const secondPoint = await findBar(page, second.id);
@@ -281,11 +281,11 @@ test.describe('below the floor, after Continue anyway', () => {
     const orgSlug = await onboard(page, Date.now() + 7);
     await createHierarchy(page);
     await newPlan(page, 'Foot row');
-    await ensurePen(page);
+    await holdThePen(page);
     const [dig] = await seedActivities(page, orgSlug, [{ name: 'Dig', laneIndex: 0 }]);
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const row = activitiesRow(page);
     await expect(row).toBeVisible();
@@ -364,7 +364,7 @@ test('an expanded activities panel leaves an open dock a usable height', async (
   const orgSlug = await onboard(page, Date.now() + 11);
   await createHierarchy(page);
   await newPlan(page, 'Dock floor');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Dig', laneIndex: 0 }]);
   await recalculate(page, orgSlug);
 
@@ -494,7 +494,7 @@ for (const { pointer, touch } of [
       const orgSlug = await onboard(page, STAMP + (touch ? 41 : 40));
       await createHierarchy(page);
       await newPlan(page, 'Offer row');
-      await ensurePen(page);
+      await holdThePen(page);
       await raiseOfferForPourSlab(page, orgSlug);
       expect(
         await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches),
@@ -563,19 +563,19 @@ test.describe('the facts and the toggle are one item (docs/TECH_DEBT.md #581)', 
     const orgSlug = await onboard(page, STAMP + 50);
     await createHierarchy(page);
     await newPlan(page, 'Stale facts');
-    await ensurePen(page);
+    await holdThePen(page);
     const [dig] = await seedActivities(page, orgSlug, [
       { name: 'Dig footings', laneIndex: 0 },
       { name: 'Steel frame', laneIndex: 1 },
     ]);
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     // An activity created AFTER the last calculation, then a reload: the plan reads "Edited since it
     // was last calculated" with its Recalculate button, which is the wide state.
     await seedActivities(page, orgSlug, [{ name: 'Late addition', laneIndex: 2 }]);
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.locator('[data-schedule-state="stale"]')).toBeVisible({ timeout: 20_000 });
     await findBar(page, dig.id);
     await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
@@ -592,14 +592,14 @@ test.describe('the facts and the toggle are one item (docs/TECH_DEBT.md #581)', 
       const orgSlug = await onboard(page, STAMP + 51);
       await createHierarchy(page);
       await newPlan(page, 'Finger facts');
-      await ensurePen(page);
+      await holdThePen(page);
       const [dig] = await seedActivities(page, orgSlug, [
         { name: 'Dig footings', laneIndex: 0 },
         { name: 'Steel frame', laneIndex: 1 },
       ]);
       if (!dig) throw new Error('seeding returned no activity');
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches)).toBe(true);
       await findBar(page, dig.id);
       await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
@@ -619,7 +619,7 @@ test.describe('the follow-logic offer at 200 % text', () => {
     const orgSlug = await onboard(page, STAMP + 60);
     await createHierarchy(page);
     await newPlan(page, 'Offer 200');
-    await ensurePen(page);
+    await holdThePen(page);
     await raiseOfferForPourSlab(page, orgSlug);
 
     // Root font size, one of the two routes M0d read: the root font moves every rem floor, which is
@@ -673,7 +673,7 @@ test.describe('the follow-logic offer reflows at 320 CSS px (WCAG 1.4.10)', () =
     const orgSlug = await onboard(page, STAMP + 70);
     await createHierarchy(page);
     await newPlan(page, 'Offer reflow');
-    await ensurePen(page);
+    await holdThePen(page);
     await raiseOfferByLinking(page, orgSlug);
 
     await page.setViewportSize({ width: 320, height: 640 });
@@ -840,7 +840,7 @@ for (const { pointer, touch } of [
       const orgSlug = await onboard(page, STAMP + (touch ? 91 : 90));
       await createHierarchy(page);
       await newPlan(page, 'Row 580');
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: LONG[0], laneIndex: 0 },
         { name: LONG[1], laneIndex: 1 },
@@ -850,11 +850,11 @@ for (const { pointer, touch } of [
       const [first, second] = seeded;
       if (!first || !second) throw new Error('seeding returned too few activities');
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       // Far enough after the third that nothing overlaps until the third is lengthened.
       await placeRelativeTo(page, orgSlug, LONG[3], LONG[2], 8);
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
 
       // Found before anything resizes the window: a resize moves where the bars are drawn.
       const firstPoint = await findBar(page, first.id);

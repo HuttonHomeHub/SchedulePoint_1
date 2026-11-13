@@ -2,10 +2,10 @@ import { type CDPSession, expect, type Locator, type Page, test } from '@playwri
 
 import { ganttRow, showGantt } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   openViewMenu,
@@ -457,7 +457,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       const orgUrl = page.url();
       await createHierarchy(page);
       await newPlan(page, 'Dock M0');
-      await ensurePen(page);
+      await holdThePen(page);
 
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Excavate', laneIndex: 0 },
@@ -472,11 +472,11 @@ for (const pointer of ['fine', 'coarse'] as const) {
       };
       await linkActivities(page, orgSlug, id('Excavate'), id('Pour slab'));
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       // Placed before its logic allows, so a conflict exists and the selection bar carries a remedy.
       await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-05');
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       const planUrl = page.url();
 
       const cdp: CDPSession = await page.context().newCDPSession(page);
@@ -505,7 +505,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
           await page.goto(planUrl);
           await page.waitForTimeout(700);
           try {
-            await ensurePen(page);
+            await holdThePen(page);
             break;
           } catch (e) {
             if (attempt >= 1) throw e;
@@ -616,7 +616,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         // taken a moment early saw no shell at all, and then a shorter Explorer than every later cell.
         await page.locator('main#main').waitFor();
         await page.waitForTimeout(2500);
-        if (routeName === 'plan') await ensurePen(page);
+        if (routeName === 'plan') await holdThePen(page);
         for (const [w, h] of SWEEP_CELLS) {
           await page.setViewportSize({ width: w, height: h });
           await page.waitForTimeout(150);
@@ -702,7 +702,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
       await createHierarchy(page);
       await newPlan(page, 'Dock M1 overlays');
-      await ensurePen(page);
+      await holdThePen(page);
       await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0 }]);
       const planUrl = page.url();
 
@@ -710,7 +710,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await page.setViewportSize({ width, height: 600 });
         await page.goto(planUrl);
         await page.waitForTimeout(700);
-        await ensurePen(page);
+        await holdThePen(page);
       };
 
       // 1. The activity editor Dialog, from the Activities panel's row menu.

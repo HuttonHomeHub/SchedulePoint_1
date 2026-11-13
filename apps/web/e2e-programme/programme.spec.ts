@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { takeThePen } from '../e2e-support/pen';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -36,7 +36,7 @@ test('a planner links plans across projects and recalculates the programme', asy
 
   // Upstream plan: a long activity so its computed finish clearly gates the downstream.
   await createAndOpenPlan(page, 'Procurement');
-  await takeThePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Deliver steel', 20);
   await recalculate(page);
   await awaitComputedSchedule(page, orgSlug);
@@ -44,7 +44,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   // Downstream plan: back to the project, then a second plan with one activity.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await createAndOpenPlan(page, 'Construction');
-  await takeThePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Erect frame');
   await recalculate(page);
 
@@ -126,7 +126,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   // recalculation, and what causes one is an edit. So the journey now does what a planner would.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('link', { name: 'Procurement', exact: true }).click();
-  await takeThePen(page);
+  await holdThePen(page);
   await showActivities(page);
   await addActivity(page, 'Late delivery', 4);
   await recalculate(page);
@@ -137,7 +137,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   await expect(staleBanner).toBeVisible();
 
   // Leaving the plan released the pen, and the programme recalculate is a write.
-  await takeThePen(page);
+  await holdThePen(page);
 
   // A programme recalculate clears the staleness.
   await page

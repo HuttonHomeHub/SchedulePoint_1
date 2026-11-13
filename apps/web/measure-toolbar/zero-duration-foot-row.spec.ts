@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   openPlanId,
@@ -160,7 +160,7 @@ test('the foot row with a zero-duration task selected, per candidate label', asy
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Zero foot row ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Sign-off', laneIndex: 0, durationDays: 0 },
     { name: 'Placed sign-off', laneIndex: 1, durationDays: 0 },
@@ -170,7 +170,7 @@ test('the foot row with a zero-duration task selected, per candidate label', asy
   if (!placed) throw new Error('seed did not return the placed row');
   await place(page, orgSlug, placed.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   expect(openPlanId(page)).toBeTruthy();
 
   const readings: unknown[] = [];

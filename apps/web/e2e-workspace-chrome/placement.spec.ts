@@ -1,10 +1,10 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   canvas,
   createHierarchy,
   DATA_DATE,
-  ensurePen,
   findBar,
   isoDay,
   linkActivities,
@@ -52,12 +52,12 @@ test.describe('Visual placement rolls forward, on the server', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Placement');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [pour] = await seedActivities(page, orgSlug, [{ name: 'Pour slab', laneIndex: 0 }]);
     if (!pour) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // Unconstrained, so it starts at the data date — Monday 5 January 2026.
     const before = requirePlacement(await placements(page, orgSlug), 'Pour slab');
@@ -108,7 +108,7 @@ test.describe('Visual placement rolls forward, on the server', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Milestone');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [frame] = await seedActivities(page, orgSlug, [
       { name: 'Frame', laneIndex: 0, durationDays: 5 },
@@ -137,7 +137,7 @@ test.describe('Visual placement rolls forward, on the server', () => {
     );
     await linkActivities(page, orgSlug, frame.id, milestoneId);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const placed = requirePlacement(await placements(page, orgSlug), 'Frame complete');
     expect(isoDay(placed.visualEffectiveStart)).toBe('2026-01-09');
@@ -173,10 +173,10 @@ test.describe('Visual placement rolls forward, on the server', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Absence');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Strip out', laneIndex: 0 }]);
     await recalculate(page, orgSlug);
-    await ensurePen(page); // the helper reloads, and a reload drops the pen (ADR-0028)
+    await holdThePen(page); // the helper reloads, and a reload drops the pen (ADR-0028)
 
     // ADR-0081: a milestone that removes a capability names where it is no longer reachable. The
     // control was a Row 1 toggle gated on the mode and the pen — so this asserts its absence in the

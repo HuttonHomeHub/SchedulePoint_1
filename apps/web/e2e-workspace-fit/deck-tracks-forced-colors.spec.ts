@@ -1,7 +1,8 @@
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
-import { createHierarchy, ensurePen, newPlan, onboard } from '../e2e-workspace-chrome/support';
+import { createHierarchy, newPlan, onboard } from '../e2e-workspace-chrome/support';
 
 /**
  * **Under forced colours the chosen member of a switch is still distinguishable** (toolbar-grid M2,
@@ -40,7 +41,7 @@ async function openPlan(page: Page): Promise<void> {
   await onboard(page, Date.now() + Math.floor(Math.random() * 1000));
   await createHierarchy(page);
   await newPlan(page, 'Riverside Quarter — Tracks');
-  await ensurePen(page);
+  await holdThePen(page);
   // The Colour set is promoted from 1912 (L2).
   await page.setViewportSize({ width: 1912, height: 1080 });
   await expect(page.locator('[data-toolbar-item="colour-by-criticality"]')).toBeVisible();

@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   openPlanId,
@@ -78,9 +78,9 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Panel scale');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedSixty(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
     const region = activitiesRegion(page);
@@ -167,9 +167,9 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     const orgSlug = await onboard(page, STAMP + 4);
     await createHierarchy(page);
     await newPlan(page, 'Panel scale windowed');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedSixty(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
     const region = activitiesRegion(page);
@@ -278,9 +278,9 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
       const orgSlug = await onboard(page, STAMP + 1);
       await createHierarchy(page);
       await newPlan(page, 'Panel scale narrow');
-      await ensurePen(page);
+      await holdThePen(page);
       await seedSixty(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       // Tall on purpose: this asserts the panel's scroll ownership, not the height budget. At
       // 640 x 480 the shell's chrome leaves the workspace a ~117 px body and no row can show
       // (retire-single-pane m0-measurement.md §2, `docs/TECH_DEBT.md` #471).
@@ -319,7 +319,7 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     const orgSlug = await onboard(page, STAMP + 3);
     await createHierarchy(page);
     await newPlan(page, 'Panel scale select');
-    await ensurePen(page);
+    await holdThePen(page);
     // The selection column exists only on a plan that has a WBS summary to assign rows to
     // (`ActivitiesTable`'s `bulkAssignActive`), so seed one alongside the sixty tasks.
     const summaryStatus = await page.evaluate(
@@ -375,9 +375,9 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Panel scale axe');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedSixty(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
     const region = activitiesRegion(page);
@@ -423,14 +423,14 @@ async function shortPlan(
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Swap ${String(stamp)}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(
     page,
     orgSlug,
     Array.from({ length: 12 }, (_, i) => ({ name: `Swap ${String(i + 1)}`, laneIndex: i })),
   );
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await page.setViewportSize(size);
   await expect(expandButton(page)).toBeVisible();
   return orgSlug;

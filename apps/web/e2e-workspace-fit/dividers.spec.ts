@@ -2,10 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { showActivities } from '../e2e/workspace';
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -44,7 +44,7 @@ test.describe('A divider is pressed to type a size', () => {
     const orgSlug = await onboard(page, Date.now() + 29);
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Dividers');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },

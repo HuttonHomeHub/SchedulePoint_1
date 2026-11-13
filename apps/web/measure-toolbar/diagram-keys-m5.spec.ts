@@ -9,12 +9,11 @@ import {
   diagramList,
   newPlan,
   onboard,
-  releasePen,
   seedActivities,
   selectedActivityId,
 } from '../e2e-copy-paste/support';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
-import { ensurePen } from '../e2e-workspace-chrome/support';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 import { LANE_HEIGHT } from '../src/features/tsld/render/geometry';
 
@@ -230,8 +229,8 @@ async function escapeSelection(page: Page): Promise<void> {
 }
 
 async function holdPen(page: Page, want: boolean): Promise<void> {
-  if (want) await ensurePen(page);
-  else await releasePen(page);
+  if (want) await holdThePen(page);
+  else await releaseThePen(page);
 }
 
 async function openPlan(
@@ -275,7 +274,7 @@ test('diagram keys M5: the two selection bars on a short window, and the jump', 
 
   await createHierarchy(page);
   await newPlan(page, 'Bars');
-  await ensurePen(page);
+  await holdThePen(page);
   const names = Array.from({ length: 12 }, (_, i) => `Task ${String(i + 1).padStart(2, '0')}`);
   const seeded = await seedActivities(
     page,

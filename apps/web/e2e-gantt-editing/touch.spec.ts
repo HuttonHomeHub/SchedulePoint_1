@@ -10,8 +10,8 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -71,7 +71,7 @@ async function touchPlan(page: Page, pointer: 'coarse' | 'fine' = 'coarse'): Pro
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);

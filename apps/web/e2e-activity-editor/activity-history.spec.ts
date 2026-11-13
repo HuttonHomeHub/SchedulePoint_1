@@ -2,16 +2,10 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { holdRead } from '../e2e-support/hold-read';
+import { holdThePen } from '../e2e-support/pen';
 
 import { expect, test } from './fixtures';
-import {
-  addActivity,
-  createAndOpenPlan,
-  enterOrg,
-  ensurePen,
-  openEditor,
-  openProject,
-} from './support';
+import { addActivity, createAndOpenPlan, enterOrg, openEditor, openProject } from './support';
 
 /**
  * The **History** tab journey (ADR-0174, M1), against the real API with the plan edit-lock enforced.
@@ -34,7 +28,7 @@ test('a planner sees their duration edit, a link on both ends and a resource in 
   await enterOrg(page, orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
 
@@ -111,7 +105,7 @@ test('a group move and a deleted neighbour show in History', async ({ account, p
   await enterOrg(page, orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   for (const name of ['Excavate', 'Pour slab', 'Cure']) await addActivity(page, name);
 
   const planId = new URL(page.url()).pathname.split('/plans/')[1]?.split('/')[0];
@@ -183,7 +177,7 @@ test('History shows entry-shaped placeholders and one sentence while its read is
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
 
   const held = await holdRead(page, /\/organizations\/[^/]+\/activities\/[^/]+\/history/);

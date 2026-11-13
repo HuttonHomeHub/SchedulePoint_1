@@ -1,9 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { addActivity, onboard, openNewPlan, startEditing } from './support';
+import { addActivity, onboard, openNewPlan } from './support';
 
 // Under a browser text-size setting (CDP below) a 1024 px window is 32 rem wide, which is under the
 // designed floor, so the viewport notice would take a banner row of its own and move every reading.
@@ -69,7 +70,7 @@ test('the help sheet lists the touch gestures, in the diagram and in the Gantt',
   await expect(accountChip).toBeFocused();
 
   // ---------------------------------------------------------------- the Gantt, with the pen
-  await startEditing(page);
+  await holdThePen(page);
   await page.getByRole('button', { name: 'Gantt', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Gantt', exact: true })).toHaveAttribute(
     'aria-pressed',
@@ -301,7 +302,7 @@ test('a finger raises the tip once; a mouse or pen does not; it never returns', 
   await page.setViewportSize({ width: 1024, height: 600 });
   await onboard(page, Date.now() + 1);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   // The diagram's dock (where the tip renders) is mounted only once there is something to draw.
   await addActivity(page, 'Excavate');
   const tip = page.getByText(TIP);
@@ -393,7 +394,7 @@ test('the tip is raised in the Gantt too, on a coarse pointer', async ({ browser
   try {
     await onboard(page, Date.now() + 2);
     await openNewPlan(page);
-    await startEditing(page);
+    await holdThePen(page);
     const gantt = page.getByRole('button', { name: 'Gantt', exact: true });
     await gantt.click();
     await expect(gantt).toHaveAttribute('aria-pressed', 'true');

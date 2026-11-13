@@ -52,24 +52,6 @@ export async function createPlan(page: Page, planName: string): Promise<void> {
   await page.getByRole('link', { name: planName, exact: true }).click();
 }
 
-/**
- * Hold the pen, whether or not this session already does (ADR-0028). The API seeding below is
- * pen-gated too and would 423 without it; a reload may leave the lease already held, in which case
- * clicking "Start editing" would hang.
- */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
-/** Release the pen, so every pen-gated affordance shades with its reason. */
-export async function releasePen(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Stop editing' }).click();
-  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
-}
-
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());

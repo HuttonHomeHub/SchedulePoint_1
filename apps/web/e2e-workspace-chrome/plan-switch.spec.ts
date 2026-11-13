@@ -1,15 +1,9 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import {
-  createHierarchy,
-  ensurePen,
-  newPlan,
-  onboard,
-  recalculate,
-  seedActivities,
-} from './support';
+import { createHierarchy, newPlan, onboard, recalculate, seedActivities } from './support';
 
 /**
  * **Opening another plan is not an edit** (`docs/TECH_DEBT.md` #451).
@@ -49,7 +43,7 @@ async function calculatedPlan(
   keepPen = false,
 ): Promise<void> {
   await newPlan(page, name);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: `${name} one`, laneIndex: 0 },
     { name: `${name} two`, laneIndex: 1 },
@@ -120,7 +114,7 @@ test.describe('Switching plans', () => {
     });
 
     await switchTo(page, 'Charlie');
-    await ensurePen(page);
+    await holdThePen(page);
     await staysCurrent(page);
     await switchTo(page, 'Delta');
     await staysCurrent(page);

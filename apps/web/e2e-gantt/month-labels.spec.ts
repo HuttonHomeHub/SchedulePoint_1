@@ -1,5 +1,6 @@
 import { type CDPSession, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -11,7 +12,6 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from './support';
 
@@ -68,7 +68,7 @@ async function longPlan(page: Page): Promise<void> {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Month labels');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 1);
   // Months to label: the seeded 5-day activity alone would frame days, not a ruler of months.
   const planId = openPlanId(page);

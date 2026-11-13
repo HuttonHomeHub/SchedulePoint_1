@@ -49,12 +49,6 @@ export async function setPlannedStart(page: Page, isoDate: string): Promise<void
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
 }
 
-/** Take the pen so the pen-gated editing affordances are live (flag-on). */
-export async function startEditing(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-}
-
 /** Add an activity through the activities-table dialog (requires the pen when enforced). */
 /**
  * Make the activities table visible.

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { createHierarchy, ensurePen, newPlan, onboard } from '../e2e-workspace-chrome/support';
+import { holdThePen } from '../e2e-support/pen';
+import { createHierarchy, newPlan, onboard } from '../e2e-workspace-chrome/support';
 
 import { clearMeasurement, writeMeasurement } from './output';
 
@@ -111,7 +112,7 @@ test('F3b — a form at 390 under a coarse pointer', async ({ page }) => {
   await onboard(page, Date.now() + 41);
   await createHierarchy(page);
   await newPlan(page, 'Dialog coarse');
-  await ensurePen(page);
+  await holdThePen(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
 

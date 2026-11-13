@@ -10,8 +10,8 @@ import {
   seedActivities,
   showGantt,
   syncClient,
-  startEditing,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -34,7 +34,7 @@ async function planWithLink(page: Page): Promise<string> {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
 
   const planId = openPlanId(page);

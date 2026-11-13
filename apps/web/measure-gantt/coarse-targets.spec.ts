@@ -13,12 +13,12 @@ import {
 import {
   createClient,
   createProject,
-  ensurePen,
   ganttGrid,
   ganttRow,
   onboard,
   openPlanId,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { writeMeasurement } from '../measure-toolbar/output';
 
 /**
@@ -320,7 +320,7 @@ async function openFresh(
   await page.goto(`${setup.origin}${planPath}?view=gantt`);
   await expect(ganttGrid(page)).toBeVisible();
   await expect(ganttRow(page, TARGET)).toBeVisible();
-  await ensurePen(page);
+  await holdThePen(page);
   return { context, page };
 }
 
@@ -344,7 +344,7 @@ async function fresh(page: Page): Promise<void> {
   await page.reload();
   await expect(ganttGrid(page)).toBeVisible();
   await expect(ganttRow(page, TARGET)).toBeVisible();
-  await ensurePen(page);
+  await holdThePen(page);
   await page.waitForTimeout(600);
 }
 
@@ -1011,7 +1011,7 @@ async function provision(page: Page, stamp: number, orgSlug: string): Promise<st
   await page.reload();
   await page.getByRole('link', { name: PLAN_NAME }).first().click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
-  await ensurePen(page);
+  await holdThePen(page);
   const recalc = await page.evaluate(
     async ({ slug, id }: { slug: string; id: string }) =>
       (
@@ -1087,13 +1087,13 @@ test('M0-T1 — Gantt target sizes and touch behaviour, fine and coarse', async 
           // The geometry limbs open menus and select; start the gestures from a clean page.
           await p.reload();
           await expect(ganttRow(p, TARGET)).toBeVisible();
-          await ensurePen(p);
+          await holdThePen(p);
           const gestures = await gestureLimbs(p, context, pointer);
           let canvas: Record<string, unknown> = {};
           if (viewport.width === 1646) {
             await p.reload();
             await expect(ganttRow(p, TARGET)).toBeVisible();
-            await ensurePen(p);
+            await holdThePen(p);
             canvas = (await limb(() => canvasLimbs(p, context))) as Record<string, unknown>;
           }
           results[key].push({ media, geometry: geom, gestures, canvas });

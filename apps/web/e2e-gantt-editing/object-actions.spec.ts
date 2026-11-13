@@ -9,9 +9,9 @@ import {
   onboard,
   seedActivities,
   showGantt,
-  startEditing,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate, toolbarOffers } from '../e2e-support/toolbar';
 
@@ -51,7 +51,7 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 4);
 
   // Recalculate so the chart has bars — the Gantt renders its not-calculated state otherwise, and a
@@ -92,7 +92,7 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -148,7 +148,7 @@ test('a planner reaches an activity’s notes from a Gantt selection', async ({ 
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -184,7 +184,7 @@ test('a planner opens Float paths from the Gantt bar and from a row menu', async
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -264,7 +264,7 @@ test('Float paths from a row menu with nothing selected returns focus, and the c
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -341,7 +341,7 @@ test('the docked bar in the Gantt is accessible', async ({ page }) => {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -398,7 +398,7 @@ test("a Gantt row's ⋯ closes the menu it opened, from either way of opening it
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 2);
   await recalculate(page);
   await showGantt(page);

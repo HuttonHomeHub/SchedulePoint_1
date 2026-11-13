@@ -1,14 +1,13 @@
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createPlan,
-  ensurePen,
   lanesByName,
   onboard,
   openProject,
   placeRelativeTo,
   recalculate,
-  releasePen,
   seedActivities,
   seedDependency,
   validXerFile,
@@ -52,10 +51,10 @@ test('a planner is offered the press, takes Tidy, the overlap goes, and one undo
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Overlapping');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, OVERLAPPING);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // (1) The offer states what is wrong, which is a fact, not a result it has not worked out.
   const offer = page.getByTestId('canvas-arrange-offer');
@@ -106,10 +105,10 @@ test('Re-layout packs scattered rows, and one undo puts them back', async ({ pag
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Scattered');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, SCATTERED);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // Nothing overlaps, so there is no offer: rows a pack would change are not a defect.
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
@@ -147,10 +146,10 @@ test('Re-layout says it may use the rows the diagram has, and does not spend the
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Budgeted');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, SCATTERED);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   await page.locator('[data-toolbar-item="auto-arrange"]').click();
   const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });
@@ -183,7 +182,7 @@ test('closing the dialog while Re-layout is searching leaves no worker running a
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Pooled');
-  await ensurePen(page);
+  await holdThePen(page);
   const [a, b, c, d] = await seedActivities(page, orgSlug, [
     { name: 'Dig', laneIndex: 0, durationDays: 5 },
     { name: 'Pour', laneIndex: 6, durationDays: 5 },
@@ -193,7 +192,7 @@ test('closing the dialog while Re-layout is searching leaves no worker running a
   await seedDependency(page, orgSlug, a!.id, b!.id);
   await seedDependency(page, orgSlug, c!.id, d!.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   const before = await lanesByName(page, orgSlug);
 
   await page.locator('[data-toolbar-item="auto-arrange"]').click();
@@ -213,14 +212,14 @@ test('an already-arranged plan opens the dialog and says there is nothing to mov
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Tidy');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Mobilise', laneIndex: 0 },
     { name: 'Excavate', laneIndex: 1 },
     { name: 'Pour', laneIndex: 2 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
 
@@ -258,16 +257,16 @@ test('the offer is omitted without the pen, not shaded', async ({ page }) => {
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Gated');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, OVERLAPPING);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // The pinned positive case, in the same test: without it, "the strip is absent" passes equally
   // against a strip that can never render (ADR-0093's shape).
   await expect(page.getByTestId('canvas-arrange-offer')).toBeVisible();
 
-  await releasePen(page);
+  await releaseThePen(page);
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
 });
 
@@ -295,7 +294,7 @@ test('a real .xer import lands with nothing to offer, because phase 3 already pa
   await dialog.getByRole('button', { name: 'Confirm import' }).click();
   await expect(page).toHaveURL(/\/orgs\/[^/]+\/plans\/[^/]+$/);
 
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
 });
 
@@ -315,20 +314,20 @@ test('a bar placed on top of its predecessor is moved to its own row (reported 2
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Placed on top');
-  await ensurePen(page);
+  await holdThePen(page);
   const [found, frame] = await seedActivities(page, orgSlug, [
     { name: 'Found', laneIndex: 0, durationDays: 10 },
     { name: 'Frame', laneIndex: 0, durationDays: 10 },
   ]);
   await seedDependency(page, orgSlug, found!.id, frame!.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   // No offer yet, and that absence is the control: end to end, the two fit one row.
   await expect(page.getByTestId('canvas-arrange-offer')).toBeHidden();
 
   await placeRelativeTo(page, orgSlug, 'Frame', 'Found', 3);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // `Frame` is placed three days before its logic allows, so the standing whole-plan Follow logic offer
   // (ADR-0216 D6) ranks first in the dock, above the Arrange offer (`resolveDockStrip`). Putting it

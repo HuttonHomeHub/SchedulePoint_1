@@ -1,14 +1,8 @@
 import { type Page } from '@playwright/test';
 
-import {
-  createPlan,
-  ensurePen,
-  onboard,
-  openPlanId,
-  openProject,
-  recalculate,
-} from '../e2e-arrange/support';
+import { createPlan, onboard, openPlanId, openProject, recalculate } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -116,7 +110,7 @@ test.describe('NetPoint grammar — text', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Codes');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedCoded(page, orgSlug);
     await recalculate(page, orgSlug);
     await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
@@ -143,7 +137,7 @@ test.describe('NetPoint grammar — text', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Tiers');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedCoded(page, orgSlug);
     await recalculate(page, orgSlug);
     await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });

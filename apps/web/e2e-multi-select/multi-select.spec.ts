@@ -1,5 +1,6 @@
 import type { Request } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { findBar } from '../e2e-workspace-chrome/support';
 
@@ -8,7 +9,6 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   newPlan,
   onboard,
   openPlanId,
@@ -73,7 +73,7 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Multi-select ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(
     page,
     orgSlug,
@@ -82,7 +82,7 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
   const planId = openPlanId(page);
   // `seedActivities` reloads, and the pen survives the reload as a lease — but the button is the
   // product's own answer to "do I hold it", so it is asked rather than assumed.
-  await ensurePen(page);
+  await holdThePen(page);
 
   /**
    * Read the plan's dependencies **from the API**, through the page.
@@ -245,13 +245,13 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
     // before it. Three unconstrained tasks all start at the data date and stack one lane apart,
     // which is the assumption `mapBars` is bounded on.
     await newPlan(page, 'Plural drag');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Drag A' },
       { name: 'Drag B' },
       { name: 'Drag C' },
     ]);
-    await ensurePen(page);
+    await holdThePen(page);
     await clearSelection(page);
     const bars = await mapBars(page);
     const ids = [...bars.keys()].slice(0, 3);
@@ -413,13 +413,13 @@ test('the canvas plural selection: build a set, chain it, delete it, undo it', a
     // collapsed, and the overlap resolver (ADR-0153) re-spreads them, hiding the defect. Its own
     // plan, so the steps above leave nothing in the way.
     await newPlan(page, 'Plural drag at the top');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Top A', durationDays: 2, startOn: '2026-01-05' },
       { name: 'Top B', durationDays: 2, startOn: '2026-01-08' },
       { name: 'Top C', durationDays: 2, startOn: '2026-01-11' },
     ]);
-    await ensurePen(page);
+    await holdThePen(page);
     await clearSelection(page);
     const bars = await mapBarsAcross(page, [200, 760, 1400]);
     const ids = [...bars.keys()].slice(0, 3);
@@ -473,12 +473,12 @@ test('focus on a selection-bar command survives a context rebuild and then the b
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Bar focus ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const [subject, bystander] = await seedActivities(page, orgSlug, [
     { name: 'Bar subject', durationDays: 2 },
     { name: 'Bar bystander', durationDays: 2 },
   ]);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // The query client keeps data fresh for 30 s (`DEFAULT_STALE_TIME`) and a window-focus refetch
   // skips fresh data, so the activities must be allowed to go stale before the nudge means anything.
@@ -552,14 +552,14 @@ test('Escape clears a selection made with the mouse, and empty ground selects no
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Mouse keys ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Excavate', durationDays: 3 },
     { name: 'Pour slab', durationDays: 3 },
   ]);
   const first = seeded[0];
   if (!first) throw new Error('seeding returned no activity');
-  await ensurePen(page);
+  await holdThePen(page);
 
   const selectedCount = async (): Promise<number> =>
     page.locator('[role="option"][aria-selected="true"]').count();
@@ -613,14 +613,14 @@ test('Delete and Backspace ask first, confirm deletes, undo restores, and typing
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Delete key ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Excavate', durationDays: 3 },
     { name: 'Pour slab', durationDays: 3 },
   ]);
   const first = seeded[0];
   if (!first) throw new Error('seeding returned no activity');
-  await ensurePen(page);
+  await holdThePen(page);
 
   const stored = async (): Promise<number> => (await placements(page, orgSlug)).size;
   const confirm = (name: RegExp | string) => page.getByRole('alertdialog', { name });
@@ -698,13 +698,13 @@ test('Ctrl-click toggles and Shift-click extends, with the pen and without it', 
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Ctrl click ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Excavate', durationDays: 3 },
     { name: 'Pour slab', durationDays: 3 },
     { name: 'Cure', durationDays: 3 },
   ]);
-  await ensurePen(page);
+  await holdThePen(page);
   const bars = await mapBars(page);
   const [a, b, c] = seeded.map((row) => {
     const point = bars.get(row.id);
@@ -766,14 +766,14 @@ test('the plural bar is one short line, and a second chain over the same activit
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Plural bar ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Excavate', startOn: '2026-01-05', durationDays: 2 },
     { name: 'Pour slab', startOn: '2026-01-07', durationDays: 2 },
     { name: 'Cure', startOn: '2026-01-09', durationDays: 2 },
   ]);
   const planId = openPlanId(page);
-  await ensurePen(page);
+  await holdThePen(page);
 
   const storedCount = async (): Promise<number> =>
     page.evaluate(

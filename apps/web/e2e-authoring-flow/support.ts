@@ -70,14 +70,6 @@ export async function newPlan(page: Page, planName: string): Promise<void> {
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 }
 
-/** Hold the pen, whether or not this session already does (ADR-0028). Idempotent. */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());

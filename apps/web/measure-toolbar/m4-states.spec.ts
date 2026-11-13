@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -43,13 +43,13 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   const read = (state: string, width: number) =>
@@ -97,8 +97,8 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
   }
 
   // Make the schedule stale: add an activity and do NOT recalculate.
-  // `ensurePen` first — the reload loop above drops the lease, and a write without it is a 423.
-  await ensurePen(page);
+  // `holdThePen` first — the reload loop above drops the lease, and a write without it is a 423.
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Blind and reinforce', laneIndex: 2, durationDays: 9 },
   ]);

@@ -3,10 +3,10 @@ import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { showActivities } from '../e2e/workspace';
 import { ganttRow } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -558,7 +558,7 @@ async function sweepDividers(page: Page, state: string): Promise<number> {
 async function assertDividersInEveryState(page: Page, orgSlug: string): Promise<void> {
   const readings: Record<string, number> = {};
   await page.setViewportSize({ width: 1646, height: 1097 });
-  await ensurePen(page);
+  await holdThePen(page);
 
   readings['pen held'] = await sweepDividers(page, 'pen held');
 
@@ -586,7 +586,7 @@ async function assertDividersInEveryState(page: Page, orgSlug: string): Promise<
   await page.getByRole('button', { name: 'Stop editing' }).click();
   await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
   readings['pen not held'] = await sweepDividers(page, 'pen not held');
-  await ensurePen(page);
+  await holdThePen(page);
 
   // A cycling conflict is LOOK's widest state. It mutates the shared plan, so it comes last.
   await page.setViewportSize({ width: 1646, height: 1097 });
@@ -600,7 +600,7 @@ async function assertDividersInEveryState(page: Page, orgSlug: string): Promise<
   );
   await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect
     .poll(async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true), {
       timeout: 25_000,
@@ -644,7 +644,7 @@ test.describe('The plan command surface', () => {
     orgSlugForDividers = orgSlug;
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -653,7 +653,7 @@ test.describe('The plan command surface', () => {
     await recalculate(page, orgSlug);
     // `recalculate` reloads, which drops the pen. Take it back: the deck is pen-gated, so a sweep
     // without it measures a different, smaller set of enabled controls.
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   });
 
@@ -1354,7 +1354,7 @@ test.describe('The plan command surface', () => {
     ).toBe(420);
     await page.evaluate((key) => localStorage.removeItem(key), KEY);
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
   });
 
   /**
@@ -1930,7 +1930,7 @@ test.describe('The plan command surface', () => {
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.goto(page.url());
       await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
-      await ensurePen(page);
+      await holdThePen(page);
     }
   });
 
@@ -1957,7 +1957,7 @@ test.describe('The plan command surface', () => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: 1912, height: 1080 });
     await page.waitForTimeout(450);
-    await ensurePen(page);
+    await holdThePen(page);
     const deck = page.getByRole('toolbar', { name: 'Plan commands' });
     await expect(deck.locator('[data-toolbar-item="colour-by-criticality"]')).toBeVisible();
 
@@ -2081,7 +2081,7 @@ test.describe('The plan command surface', () => {
    */
   test("Settings… is the DO row's last control from 79 rem, behind a rule, and not below it", async () => {
     test.setTimeout(180_000);
-    await ensurePen(page);
+    await holdThePen(page);
     for (const cell of DIVIDER_CELLS) {
       await page.setViewportSize(cell);
       await page.waitForTimeout(450);
@@ -2131,7 +2131,7 @@ test.describe('The plan command surface', () => {
    */
   test('Settings… keeps focus across a resize over 80 rem, and nothing is announced as gone', async () => {
     test.setTimeout(120_000);
-    await ensurePen(page);
+    await holdThePen(page);
     const gear = page
       .getByRole('toolbar', { name: 'Plan commands', exact: true })
       .getByRole('button', { name: 'Settings…', exact: true });
@@ -2163,7 +2163,7 @@ test.describe('The plan command surface', () => {
    */
   test('Link keeps focus across a resize over the Add-milestone stage, and nothing is announced as gone', async () => {
     test.setTimeout(120_000);
-    await ensurePen(page);
+    await holdThePen(page);
     const stage = PROMOTION_STAGES.find(({ name }) => name === PROMOTION_LADDER.P2.fine);
     if (!stage) throw new Error('P2 names a stage that PROMOTION_STAGES does not declare');
     const edge = stage.rem * 16;
@@ -2201,7 +2201,7 @@ test.describe('The plan command surface', () => {
    */
   test('Add and Undo are each behind an inset rule from 79 rem, and none is drawn below it', async () => {
     test.setTimeout(180_000);
-    await ensurePen(page);
+    await holdThePen(page);
     for (const cell of DIVIDER_CELLS) {
       await page.setViewportSize(cell);
       await page.waitForTimeout(450);
@@ -2252,7 +2252,7 @@ test.describe('The plan command surface', () => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1912, height: 1080 });
     await page.waitForTimeout(450);
-    await ensurePen(page);
+    await holdThePen(page);
     await page.mouse.move(2, 2);
     const reading = await page.evaluate(() => {
       const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
@@ -2539,14 +2539,14 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     orgSlugForSweep = orgSlug;
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Touch');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
     ]);
     await seedWbsSummary(page, orgSlug);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   });
 
@@ -3061,7 +3061,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
     // A fresh navigation re-acquires the plan lock from scratch; do not leave a later test in the
     // serial group depending on the pen `beforeAll` took.
-    await ensurePen(page);
+    await holdThePen(page);
   });
 
   /**
@@ -3138,7 +3138,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     await page.setViewportSize({ width: 1646, height: 1097 });
     await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ size: 200 })), KEY);
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
     const row = page.getByRole('tree').getByRole('treeitem', { name: /Riverside Quarter/ });
     await expect(row).toBeVisible();
     const reading = await row.evaluate((el) => {
@@ -3172,7 +3172,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     });
     await page.evaluate((key) => localStorage.removeItem(key), KEY);
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
   });
   /**
    * **The collapsed spine holds its controls at 44 and holds the stage to the spine's growth**
@@ -3247,7 +3247,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     await showView('tsld');
     await page.setViewportSize({ width: 1912, height: 1080 });
     await page.waitForTimeout(450);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(
       page
         .getByRole('toolbar', { name: 'Plan commands' })
@@ -3386,7 +3386,7 @@ test.describe('The plan command surface, at a fractional device scale', () => {
     const orgSlug = await onboard(seeded, Date.now() + 41);
     await createHierarchy(seeded);
     await newPlan(seeded, 'Riverside Quarter — Device scale');
-    await ensurePen(seeded);
+    await holdThePen(seeded);
     await seedActivities(seeded, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -3403,7 +3403,7 @@ test.describe('The plan command surface, at a fractional device scale', () => {
    * **Closing in a `finally` is the point.** Each test used to close its own context as its last
    * line, so a failure or a timeout leaked the context with its page, its live session and its
    * heartbeat, still holding the pen. The next test then opened a plan whose lease was already
-   * this user's, which draws `Stop editing` rather than `Start editing` (see `ensurePen`).
+   * this user's, which draws `Stop editing` rather than `Start editing` (see `holdThePen`).
    * Releasing explicitly starts the next context from a free pen instead of racing the
    * best-effort keepalive release a closing page fires.
    */
@@ -3421,7 +3421,7 @@ test.describe('The plan command surface, at a fractional device scale', () => {
       await acknowledgeViewportNotice(context);
       const page = await context.newPage();
       await page.goto(planUrl);
-      await ensurePen(page);
+      await holdThePen(page);
       await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
       expect(await page.evaluate(() => window.devicePixelRatio)).toBe(options.deviceScaleFactor);
       try {

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   recalculate,
   seedActivities,
@@ -131,7 +131,7 @@ test('#278 — what a taller dock header costs the canvas', async ({ page }) => 
 
   await createHierarchy(page);
   await newPlan(page, `Dock header ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
   // A computed plan, so the canvas is in its ordinary state rather than its empty one — the
   // quantity under test is the canvas's height, and an empty plan renders different chrome.

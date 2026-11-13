@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -11,7 +12,6 @@ import {
   createProject,
   drawActivity,
   onboard,
-  startEditing,
 } from './support';
 
 /**
@@ -131,7 +131,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
 
   // Assign it to an activity on the Riverside plan.
   await openPlan(page, 'Riverside', 'Riverside Plan');
-  await startEditing(page);
+  await holdThePen(page);
   await drawActivity(page, 'Excavate', { x: 220, y: 120 });
   await selectOnlyActivity(page);
 
@@ -184,7 +184,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   // Re-take the pen: navigating away released it, and assignment writes are pen-gated (ADR-0028),
   // so without it the dialog renders read-only and its assign form — the picker asserted below —
   // is not rendered at all.
-  await startEditing(page);
+  await holdThePen(page);
   await selectOnlyActivity(page);
   await page.getByRole('button', { name: 'Resources', exact: true }).click();
   const reopened = activityEditor(page);

@@ -1,16 +1,15 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 
 import { expect, test } from './fixtures';
 import {
   addActivity,
   createAndOpenPlan,
-  ensurePen,
   enterOrg,
   openEditor,
   openProject,
-  releasePen,
   showActivities,
 } from './support';
 
@@ -36,7 +35,7 @@ test('a planner edits two scopes in one session, and the second save carries the
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Erect frame');
 
   await openEditor(page, 'Erect frame', 'Edit');
@@ -76,7 +75,7 @@ test('Report progress and Steps open the same editor on the Progress tab', async
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Pour slab');
 
   await openEditor(page, 'Pour slab', 'Progress');
@@ -119,7 +118,7 @@ test('weighted steps save, then take over the physical % with a reason', async (
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Fit windows');
 
   await openEditor(page, 'Fit windows', 'Progress');
@@ -154,9 +153,9 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Strip formwork');
-  await releasePen(page);
+  await releaseThePen(page);
 
   await openEditor(page, 'Strip formwork', 'Progress');
   const editor = activityEditor(page);
@@ -173,7 +172,7 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await expect(editor.getByRole('button', { name: 'Save measure' })).toBeDisabled();
   await expect(editor.getByRole('button', { name: 'Save steps' })).toBeDisabled();
   await expect(editor.getByRole('button', { name: 'Add step' })).toBeDisabled();
-  // Nobody holds the pen here — `releasePen` above — so the frame is "Start editing", the one this
+  // Nobody holds the pen here — `releaseThePen` above — so the frame is "Start editing", the one this
   // reader can act on. The peer-holds-it frame is proven in `e2e-edit/pen-handoff.spec.ts`, which
   // is the only place two real actors exist (ADR-0083 M7, `docs/TECH_DEBT.md` #115).
   await expect(editor.getByText(/Start editing to change this activity/i).first()).toBeVisible();
@@ -193,7 +192,7 @@ test('asks before discarding unsaved work on Escape', async ({ account, page }) 
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Backfill');
 
   await openEditor(page, 'Backfill', 'Edit');
@@ -240,7 +239,7 @@ test('a planner adds a link from the Logic tab, and the row appears in Predecess
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
 
@@ -276,7 +275,7 @@ test('a row’s Edit keeps focus, shaded, when the pen is taken under it', async
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
 
@@ -326,7 +325,7 @@ test('an open Edit dialog closes when the pen is taken, and focus is back on the
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
 
@@ -365,10 +364,10 @@ test('without the pen, the Logic tab is read-only and the server refuses a write
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
-  await releasePen(page);
+  await releaseThePen(page);
 
   await openEditor(page, 'Pour slab', 'Logic');
   const editor = activityEditor(page);
@@ -413,7 +412,7 @@ test('a resource assigned from the Resources tab persists', async ({ account, pa
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Pour slab');
 
   // The library is org-level; create one row through the API rather than a second UI journey.
@@ -468,7 +467,7 @@ test('J2 — a discarded draft leaves nothing armed for the next opening', async
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Backfill');
 
   await openEditor(page, 'Backfill', 'Edit');
@@ -515,7 +514,7 @@ test('a clean Close returns focus to the control that opened the editor', async 
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Compact fill');
 
   await openEditor(page, 'Compact fill', 'Edit');
@@ -543,7 +542,7 @@ test('Escape, Escape, Escape on a dirty editor ends in a consistent state', asyn
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Screed');
 
   await openEditor(page, 'Screed', 'Edit');
@@ -597,7 +596,7 @@ test('J4 — a Progress draft and a weighted step survive a visit to another tab
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Fit windows');
 
   await openEditor(page, 'Fit windows', 'Progress');
@@ -640,7 +639,7 @@ test('J5 — New activity opens clean after a failed submit was discarded', asyn
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await showActivities(page);
 
   await page.getByRole('button', { name: 'New activity' }).click();
@@ -690,7 +689,7 @@ test('J1 — a name typed the moment the editor opens is the name that saves', a
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Set out');
 
   await openEditor(page, 'Set out', 'Edit');
@@ -713,7 +712,7 @@ test('J3 — "Saved." belongs to the opening that saved, not the next one', asyn
   await enterOrg(page, account.orgSlug);
   await openProject(page, stamp);
   await createAndOpenPlan(page, 'Tower');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Blind');
 

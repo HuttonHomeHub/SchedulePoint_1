@@ -1,11 +1,11 @@
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -111,7 +111,7 @@ async function footHeight(page: Page): Promise<number> {
 async function reopen(page: Page): Promise<void> {
   await page.reload();
   await expect(canvas(page)).toBeVisible({ timeout: 30_000 });
-  await ensurePen(page);
+  await holdThePen(page);
   await page.waitForTimeout(600);
   await settle(page);
 }
@@ -126,7 +126,7 @@ test('on a short window the selection bar takes the whole row, and the clicked b
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Short bar ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(
     page,
     orgSlug,

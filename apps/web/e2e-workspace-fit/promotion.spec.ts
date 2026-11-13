@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -328,7 +328,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await createHierarchy(page);
       await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
       planId = openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
       const [s0, s1] = await seedActivities(page, orgSlug, [
         { name: 'Site setup', laneIndex: 0, durationDays: 12 },
         { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -337,7 +337,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       if (!s0 || !s1) throw new Error('seed too short');
       await linkActivities(page, orgSlug, s0.id, s1.id);
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       planUrl = page.url();
     });
 
@@ -818,7 +818,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await page.setViewportSize({ width: 1646, height: 1097 });
         await page.goto(planUrl);
         await expect(deck(page)).toBeVisible();
-        await ensurePen(page);
+        await holdThePen(page);
       }
     });
 
@@ -828,7 +828,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       // reader steps the conflict so the read-out is the long "Conflict n of m".
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.goto(planUrl);
-      await ensurePen(page);
+      await holdThePen(page);
       await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
       await recalculate(page, orgSlug);
       await expect

@@ -2,13 +2,13 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   addActivity,
   createAndOpenPlan,
   createEightHourCalendar,
-  ensurePen,
   onboard,
   showActivities,
   openEdit,
@@ -42,7 +42,7 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
   const calendarId = await createEightHourCalendar(page, orgSlug);
   await openProject(page);
   await createAndOpenPlan(page, 'Fit-out', orgSlug, calendarId);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ------------------------------------------------- 1. Four hours is four hours, not four days
   await addActivity(page, 'Lift plant', '4h');
@@ -52,9 +52,9 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
 
   // Reload, so nothing below can be served from the client's own cache. The pen is a server-side
   // lease that survives the reload, but the client re-derives its write gate from scratch — so
-  // re-assert it before touching a writer surface. `ensurePen` returns immediately if it is held.
+  // re-assert it before touching a writer surface. `holdThePen` returns immediately if it is held.
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   // The panel's collapsed default comes back with the reload, so the table below is not in the DOM
   // until this runs. On the legacy stacked page the table was simply always there.
   await showActivities(page);
@@ -113,7 +113,7 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
   const calendarId = await createEightHourCalendar(page, orgSlug);
   await openProject(page);
   await createAndOpenPlan(page, 'Fit-out', orgSlug, calendarId);
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Pour slab', '2');
   await addActivity(page, 'Strike formwork', '1');
 
@@ -180,7 +180,7 @@ test('a whole-day lag nudge keeps the sub-day remainder', async ({ page }) => {
   const calendarId = await createEightHourCalendar(page, orgSlug);
   await openProject(page);
   await createAndOpenPlan(page, 'Cure and strike', orgSlug, calendarId);
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Pour slab', '2');
   await addActivity(page, 'Strike formwork', '1');
 

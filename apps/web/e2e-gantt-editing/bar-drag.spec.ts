@@ -9,9 +9,9 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -86,7 +86,7 @@ async function ganttPlan(page: Page, count = 3, monFri = false): Promise<string>
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   // A weekend proves nothing on a plan that does not skip it, so the working-day cases bind a
   // Mon–Fri calendar — asserted, not assumed — before anything is seeded (ADR-0170).
   if (monFri) await bindMonFriCalendar(page, orgSlug);

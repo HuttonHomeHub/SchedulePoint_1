@@ -1,10 +1,10 @@
 import { type CDPSession, expect, type Page, test } from '@playwright/test';
 
-import { canvas, drawActivity, openNewPlan, startEditing } from '../e2e-authoring/support';
+import { canvas, drawActivity, openNewPlan } from '../e2e-authoring/support';
 import { ganttRow, showGantt } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import {
   diagramList,
-  ensurePen,
   linkActivities,
   placeViaApi,
   recalculate,
@@ -603,7 +603,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         'FollowC',
       );
       await openNewPlan(page);
-      await startEditing(page);
+      await holdThePen(page);
       const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
       const count = (n: number) =>
         expect(diagram.getByRole('option')).toHaveCount(n, { timeout: 15_000 });
@@ -766,7 +766,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await linkActivities(page, orgSlug, byName('Excavate').id, byName('Pour slab').id);
       await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-06');
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       const settled = await settle(
         page,
         orgSlug,
@@ -1016,7 +1016,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       }
       expect(await rootPx()).toBe(32);
       await page.waitForTimeout(800);
-      await ensurePen(page);
+      await holdThePen(page);
       await installRules(page);
       for (const selection of SELECTIONS) {
         await applySelection(page, orgSlug, 'diagram', selection);
@@ -1032,7 +1032,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       expect(await rootPx()).toBe(16);
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.waitForTimeout(800);
-      await ensurePen(page);
+      await holdThePen(page);
       await installRules(page);
       writeMeasurement(name, record);
 
@@ -1078,7 +1078,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await page.getByRole('button', { name: 'Diagram', exact: true }).click();
         await seedActivities(page, orgSlug, [{ name: 'Stale probe', laneIndex: 6 }]);
         await page.reload();
-        await ensurePen(page);
+        await holdThePen(page);
         await installRules(page);
         await page.waitForTimeout(1500);
         const stateNow = await read(page, 'r3-state');

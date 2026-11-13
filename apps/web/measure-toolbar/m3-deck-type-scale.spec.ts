@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -50,13 +50,13 @@ test('M3: the deck type scale, in lines', async ({ page }) => {
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, PLAN_NAME);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME };

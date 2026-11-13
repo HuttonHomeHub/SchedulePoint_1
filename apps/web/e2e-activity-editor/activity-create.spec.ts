@@ -1,10 +1,10 @@
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 
 import { expect, test } from './fixtures';
 import {
   addActivity,
   createAndOpenPlan,
-  ensurePen,
   enterOrg,
   openEditor,
   openProject,
@@ -39,7 +39,7 @@ test.describe('the create dialog and the editor agree', () => {
     await enterOrg(page, account.orgSlug);
     await openProject(page, stamp);
     await createAndOpenPlan(page, 'Convergence');
-    await ensurePen(page);
+    await holdThePen(page);
 
     // A phase to nest under, and an activity to nest. Both are ordinary creates.
     await showActivities(page);
@@ -87,7 +87,7 @@ test.describe('the create dialog and the editor agree', () => {
     await enterOrg(page, account.orgSlug);
     await openProject(page, stamp);
     await createAndOpenPlan(page, 'Breakdown');
-    await ensurePen(page);
+    await holdThePen(page);
 
     await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
@@ -132,7 +132,7 @@ test.describe('the create dialog and the editor agree', () => {
     await enterOrg(page, account.orgSlug);
     await openProject(page, stamp);
     await createAndOpenPlan(page, 'Duration type');
-    await ensurePen(page);
+    await holdThePen(page);
     await addActivity(page, 'Excavate');
 
     // The hint is reached through `aria-describedby`, which is how a screen-reader user reaches it

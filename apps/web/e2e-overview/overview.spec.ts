@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import { probeRowSubjects, type ProbeResult } from '../scripts/row-subject-probe.mjs';
 
@@ -9,7 +10,6 @@ import {
   createPlan,
   createProject,
   countOverviewRequests,
-  ensurePen,
   onboard,
   openOverview,
   section,
@@ -54,7 +54,7 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   await createClient(page, 'Bellway');
   await createProject(page, 'Northgate');
   await createPlan(page, 'Northgate — Phase 1');
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, orgSlug, 'Pour slab');
 
   // -------------------------------------------------- 3. The overview noticed
@@ -703,7 +703,7 @@ test('the landing offers the plans this browser was recently in', async ({ page 
   await page.goto(planUrl);
   const planId = /\/plans\/([0-9a-f-]{36})/.exec(planUrl)?.[1];
   expect(planId).toBeDefined();
-  await ensurePen(page);
+  await holdThePen(page);
   const renamed = await page.evaluate(
     async ({ org, id }: { org: string; id: string }) => {
       const current = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {

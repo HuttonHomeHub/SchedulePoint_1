@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -19,10 +19,10 @@ test('diag: what a ToolbarPopover actually puts in the DOM', async ({ page }) =>
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, 'Diag plan');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   const out: Array<Record<string, unknown>> = [];

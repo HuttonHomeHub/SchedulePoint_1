@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   newPlan,
   recalculate,
   seedActivities,
@@ -352,14 +352,14 @@ test('#287 — the pen foot row with a hand-off outstanding and an activity sele
   await createHierarchy(a);
   await newPlan(a, `Foot row ${stamp}`);
   const planUrl = a.url();
-  await ensurePen(a);
+  await holdThePen(a);
   await seedActivities(a, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
   // `recalculate` RELOADS, and a reload fires the holder's `pagehide` pen release — so the plan is
   // brought to a computed state first and the pen re-taken afterwards. Getting this the other way
   // round leaves the fixture without the pen and the hand-off branch unreachable, which would
   // measure a state this row is not about.
   await recalculate(a, orgSlug);
-  await ensurePen(a);
+  await holdThePen(a);
 
   // --- Peer B: accept, open the plan, request control -----------------------------------------
   const ctxB = await browser.newContext();

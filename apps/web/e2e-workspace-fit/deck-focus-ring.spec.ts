@@ -1,7 +1,8 @@
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
-import { createHierarchy, ensurePen, newPlan, onboard } from '../e2e-workspace-chrome/support';
+import { createHierarchy, newPlan, onboard } from '../e2e-workspace-chrome/support';
 
 /**
  * **The command deck's rows clip their edges, and the forced-colours focus ring must still show at
@@ -124,7 +125,7 @@ async function openPlan(page: Page): Promise<void> {
   await onboard(page, Date.now() + Math.floor(Math.random() * 1000));
   await createHierarchy(page);
   await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-  await ensurePen(page);
+  await holdThePen(page);
 }
 
 async function sweep(page: Page, expectRing: boolean): Promise<number> {

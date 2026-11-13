@@ -1,11 +1,11 @@
 import { type Browser, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import { pickAddKind } from '../e2e-support/toolbar';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -153,7 +153,7 @@ test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)',
     await expectFloor(page, 'empty plan', { canvas: false, cluster: true });
     await page.setViewportSize({ width: 1646, height: 1097 });
 
-    await ensurePen(page);
+    await holdThePen(page);
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -168,7 +168,7 @@ test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)',
       await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
         timeout: 30_000,
       });
-      if (pen) await ensurePen(page);
+      if (pen) await holdThePen(page);
       const mm = page.locator('[data-toolbar-item="minimap"]').first();
       if ((await mm.getAttribute('aria-pressed')) === 'true') await mm.click();
       const comments = page.locator('[data-toolbar-item="comments"]').first();
@@ -270,7 +270,7 @@ test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)',
     await reopen(true);
     await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect
       .poll(async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true), {
         timeout: 25_000,

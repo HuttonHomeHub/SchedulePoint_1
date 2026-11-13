@@ -1,8 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { canvas, drawActivity, onboard, openNewPlan, startEditing } from './support';
+import { canvas, drawActivity, onboard, openNewPlan } from './support';
 
 /**
  * **Canvas-first plan authoring** journey (ADR-0032) — the layer
@@ -32,7 +33,7 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
 
   // Take the pen — the Row 2 · Do authoring cluster (Add split-button, Link tool) lights up. (The
   // data date lives off the toolbar now — set silently on first draw, changed via Edit plan.)
-  await startEditing(page);
+  await holdThePen(page);
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   // Match the Add split-button ("Add" / "Adding <kind>") exactly. The regex was written to avoid
   // colliding with an inline "Add note" that shared this row; that item moved to the object bar
@@ -85,7 +86,7 @@ test('the Add caret closes the menu it opened, and focus lands on the main half'
 }) => {
   await onboard(page, Date.now() + 31);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const caret = page.getByRole('button', { name: /^Activity type:/ });
   // The main half is the caret's previous sibling inside the split button.
@@ -121,7 +122,7 @@ test('the Link tool picks a milestone and a one-day bar', async ({ page }) => {
   const stamp = Date.now() + 47;
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
 

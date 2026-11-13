@@ -1,13 +1,7 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import {
-  assignResource,
-  createResource,
-  drawTask,
-  onboard,
-  openNewPlan,
-  startEditing,
-} from './support';
+import { assignResource, createResource, drawTask, onboard, openNewPlan } from './support';
 
 /**
  * The **stacked** resource histogram journey (ADR-0121, `docs/specs/stacked-resource-histogram/`).
@@ -34,7 +28,7 @@ test('a planner stacks two trades, tells them apart by colour, and reads the tot
   await createResource(page, 'Crew A');
   await createResource(page, 'Crew B');
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();

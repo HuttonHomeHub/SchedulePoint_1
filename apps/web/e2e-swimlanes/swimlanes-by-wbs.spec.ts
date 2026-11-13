@@ -1,13 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { pickAddKind } from '../e2e-support/toolbar';
 
 import {
   WBS_PLAN,
   diagramList,
-  ensurePen,
   findBar,
   groupPlaces,
   gutterLabels,
@@ -63,7 +63,7 @@ test.describe('swimlanes from the WBS', () => {
   }) => {
     test.setTimeout(300_000);
     const orgSlug = await openWbsPlan(page, Date.now());
-    await ensurePen(page);
+    await holdThePen(page);
     const list = diagramList(page);
     const labels = gutterLabels(page);
     const wire = recordActivityWrites(page);
@@ -234,7 +234,7 @@ test.describe('swimlanes from the WBS', () => {
   }) => {
     test.setTimeout(180_000);
     const orgSlug = await openWbsPlan(page, Date.now() + 1);
-    await ensurePen(page);
+    await holdThePen(page);
     const list = diagramList(page);
 
     const panel = await openStructure(page);

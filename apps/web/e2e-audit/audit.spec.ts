@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 /**
@@ -136,8 +137,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await admin.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await admin.getByRole('link', { name: 'Programme', exact: true }).click();
 
-  await admin.getByRole('button', { name: 'Start editing' }).click();
-  await expect(admin.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(admin);
 
   // Seeded through the API, deliberately: creating an activity is `DURABLY_ATTRIBUTED` and records
   // nothing by design, so how it got there is not what this assertion is about. The DELETE is
@@ -163,11 +163,7 @@ test('the audit log records real actions and only an Org Admin can read them', a
   // test-only path. The reload releases the pen — the client flushes the lease on unmount
   // (ADR-0028) — so it is retaken here, and the delete below is genuinely gated.
   await admin.reload();
-  const stopEditing = admin.getByRole('button', { name: 'Stop editing' });
-  if (!(await stopEditing.isVisible().catch(() => false))) {
-    await admin.getByRole('button', { name: 'Start editing' }).click();
-  }
-  await expect(stopEditing).toBeVisible();
+  await holdThePen(admin);
 
   const expand = admin.getByRole('button', { name: 'Expand activities panel' });
   if ((await expand.count()) > 0) await expand.click();

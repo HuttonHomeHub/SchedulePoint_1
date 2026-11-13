@@ -9,10 +9,10 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -42,7 +42,7 @@ async function ganttPlanWithSelection(page: Page, stamp: number): Promise<string
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -227,7 +227,7 @@ test('Make milestone… converts from a Gantt selection and returns focus to its
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   const id = await page.evaluate(
     async ({ org, planId }: { org: string; planId: string }) => {
       const res = await fetch(`/api/v1/organizations/${org}/plans/${planId}/activities`, {
@@ -304,7 +304,7 @@ test('a duration typed into the grid offers the bar it strands, and Follow logic
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
 
@@ -454,7 +454,7 @@ test('a plan opened with an early-placed bar offers it, and Follow logic lets it
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
 

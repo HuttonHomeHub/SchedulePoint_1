@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { pickAddKind, planCommands } from '../e2e-support/toolbar';
 
@@ -9,7 +10,6 @@ import {
   calculateSeededPlan,
   cursorTo,
   diagramList,
-  ensurePen,
   expectFocusKept,
   expectFocused,
   gutterLabels,
@@ -210,7 +210,7 @@ test.describe('swimlanes by hand', () => {
     page,
   }) => {
     await openSeededPlan(page, Date.now() + 1);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const dialog = await openManageFromView(page);
     await dialog.getByRole('button', { name: 'Close', exact: true }).click();
@@ -228,7 +228,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(120_000);
     await openSeededPlan(page, Date.now() + 2);
-    await ensurePen(page);
+    await holdThePen(page);
     const labels = gutterLabels(page);
     const confirm = page.getByRole('button', { name: 'Delete swimlane', exact: true });
 
@@ -255,7 +255,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(120_000);
     await openSeededPlan(page, Date.now() + 3);
-    await ensurePen(page);
+    await holdThePen(page);
     const dialog = await openManageFromView(page);
 
     const deleteRow = async (prefix: string): Promise<void> => {
@@ -278,7 +278,7 @@ test.describe('swimlanes by hand', () => {
     page,
   }) => {
     await openSeededPlan(page, Date.now() + 4);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const expectNameFieldHoldsFocus = async (): Promise<void> => {
       const rename = page.getByRole('dialog', { name: 'Rename swimlane' });
@@ -314,7 +314,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(120_000);
     await openSeededPlan(page, Date.now() + 5);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const manage = await openManageFromView(page);
     const down = manage.getByRole('button', { name: /^Move Substructure.* down$/ });
@@ -337,7 +337,7 @@ test.describe('swimlanes by hand', () => {
     page,
   }) => {
     await openSeededPlan(page, Date.now() + 6);
-    await ensurePen(page);
+    await holdThePen(page);
     const manage = await openManageFromView(page);
 
     const rename = manage.getByRole('button', { name: /^Rename Électricité/ });
@@ -360,7 +360,7 @@ test.describe('swimlanes by hand', () => {
     page,
   }) => {
     await openSeededPlan(page, Date.now() + 7);
-    await ensurePen(page);
+    await holdThePen(page);
     const label = gutterLabels(page).getByRole('button', { name: /^Substructure/ });
     const menu = page.getByRole('menu', { name: /^Actions for / });
 
@@ -383,7 +383,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(150_000);
     const orgSlug = await openSeededPlan(page, Date.now() + 8);
-    await ensurePen(page);
+    await holdThePen(page);
     // Enough swimlanes that the last ones are below the fold of the diagram.
     await seedSwimlanes(page, orgSlug, 30);
     await page.reload();
@@ -419,7 +419,7 @@ test.describe('swimlanes by hand', () => {
   }) => {
     test.setTimeout(180_000);
     await openPlainPlan(page, Date.now() + 12);
-    await ensurePen(page);
+    await holdThePen(page);
     const dialog = page.getByRole('dialog', { name: 'Set up swimlanes', exact: true });
     const names = dialog.getByLabel('Swimlane names, one per line');
 

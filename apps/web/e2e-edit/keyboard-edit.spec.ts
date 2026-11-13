@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -9,7 +10,6 @@ import {
   onboard,
   openNewPlan,
   setPlannedStart,
-  startEditing,
 } from './support';
 
 /**
@@ -28,7 +28,7 @@ test('a planner nudges an activity by keyboard; Alt+arrows never navigate histor
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
   await setPlannedStart(page, '2026-01-01');
-  await startEditing(page); // take the pen — editing affordances go live
+  await holdThePen(page); // take the pen — editing affordances go live
 
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');

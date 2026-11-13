@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -141,7 +141,7 @@ test('M0 repaired: baselines per row, deck height in both geometries, bands by h
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, PLAN_NAME);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 12 },
     { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -151,7 +151,7 @@ test('M0 repaired: baselines per row, deck height in both geometries, bands by h
   // `recalculate` reloads, which drops the pen. Take it back: the deck is pen-gated, so a probe run
   // with the pen free measures a different set of enabled controls — and the old run did exactly
   // that without noticing.
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME, penHeld: true };

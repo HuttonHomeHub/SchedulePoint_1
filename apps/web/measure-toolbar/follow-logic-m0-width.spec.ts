@@ -1,9 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { canvas, drawActivity, openNewPlan, startEditing } from '../e2e-authoring/support';
+import { canvas, drawActivity, openNewPlan } from '../e2e-authoring/support';
+import { holdThePen } from '../e2e-support/pen';
 import {
   diagramList,
-  ensurePen,
   placeViaApi,
   recalculate,
   selectedActivityId,
@@ -297,7 +297,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         'FollowW',
       );
       await openNewPlan(page);
-      await startEditing(page);
+      await holdThePen(page);
       const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
 
       await drawActivity(page, 'Task', 'Excavate', { x: 220, y: 120 });
@@ -341,7 +341,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       // Make Pour slab a placed, flagged bar: placed before its predecessor finishes.
       await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-06');
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       const settled = await settle(
         page,
         orgSlug,

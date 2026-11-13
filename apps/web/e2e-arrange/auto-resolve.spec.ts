@@ -1,10 +1,10 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createPlan,
-  ensurePen,
   lanesByName,
   onboard,
   openProject,
@@ -46,17 +46,17 @@ test('stretching a bar into its neighbour moves the stretched bar, once, and Und
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Stretch');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Clad', laneIndex: 0, durationDays: 5 },
     { name: 'Dress', laneIndex: 0, durationDays: 5 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   // Dress starts the Monday after Clad finishes: same lane, touching nothing.
   await placeRelativeTo(page, orgSlug, 'Dress', 'Clad', 7);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect.poll(async () => lanesByName(page, orgSlug)).toEqual({ Clad: 0, Dress: 0 });
 
   // (1) One day longer: Clad now finishes on the day Dress starts, and inclusive spans overlap.
@@ -98,14 +98,14 @@ test('a bar dropped onto an occupied lane goes on to the next free one, in one w
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Drop');
-  await ensurePen(page);
+  await holdThePen(page);
   // Both start at the data date, so they overlap in time; only their lanes keep them apart.
   await seedActivities(page, orgSlug, [
     { name: 'Alpha', laneIndex: 0, durationDays: 5 },
     { name: 'Bravo', laneIndex: 1, durationDays: 5 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   await select(page, 'Alpha');
   await page.keyboard.press('Alt+ArrowDown');

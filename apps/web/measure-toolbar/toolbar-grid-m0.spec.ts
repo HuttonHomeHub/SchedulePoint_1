@@ -1,8 +1,8 @@
 import { expect, type Browser, type Locator, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   openPlanId,
@@ -349,7 +349,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       // The M5/M6 fixture: a long plan name, three activities and one link.
       await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
       const planId = openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Site setup', laneIndex: 0, durationDays: 12 },
         { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -366,7 +366,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await page.setViewportSize({ width: 1646, height: 1097 });
         await page.goto(planUrl);
         await waitDeck(page);
-        if (pen) await ensurePen(page);
+        if (pen) await holdThePen(page);
         await page.waitForTimeout(400);
       };
 
@@ -551,7 +551,7 @@ test.describe('toolbar-grid M0 (forced colours)', () => {
     const orgSlug = await signUp(page, stamp);
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
     await page.setViewportSize({ width: 1912, height: 1080 });

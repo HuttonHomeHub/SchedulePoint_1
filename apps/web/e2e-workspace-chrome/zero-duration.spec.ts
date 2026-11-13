@@ -1,11 +1,11 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   findBarInRow,
   findBarWide,
   linkActivities,
@@ -157,7 +157,7 @@ test.describe('A zero-duration task converted in the editor', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Zero-duration conversion');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const pre = await createActivity(page, orgSlug, { name: 'Pre', durationDays: 5, laneIndex: 0 });
     const z = await createActivity(page, orgSlug, {
@@ -176,7 +176,7 @@ test.describe('A zero-duration task converted in the editor', () => {
     await linkActivities(page, orgSlug, pre.id, z.id);
     await linkActivities(page, orgSlug, z.id, succ.id);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const before = await rowsByName(page, orgSlug);
     // The fixture, before anything is concluded from it: the successor starts the day Z is pinned to.
@@ -246,7 +246,7 @@ test.describe('Make milestone… (M4)', () => {
     await test.step('hierarchy', () => createHierarchy(page));
     await test.step('plan', async () => {
       await newPlan(page, 'Make milestone');
-      await ensurePen(page);
+      await holdThePen(page);
     });
 
     const { pre, z, loose } = await test.step('seed activities', async () => {
@@ -277,7 +277,7 @@ test.describe('Make milestone… (M4)', () => {
       await linkActivities(page, orgSlug, pre.id, z.id);
       await linkActivities(page, orgSlug, z.id, succ.id);
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       return { pre, z, loose };
     });
 
@@ -409,7 +409,7 @@ test.describe('Make milestone… (M4)', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Resourced zero task');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const z = await createActivity(page, orgSlug, {
       name: 'Inspection',
@@ -418,7 +418,7 @@ test.describe('Make milestone… (M4)', () => {
     });
     await assignResource(page, orgSlug, z.id);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await findBarWide(page, z.id);
     const button = page

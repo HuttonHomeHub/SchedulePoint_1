@@ -1,12 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-import {
-  createHierarchy,
-  ensurePen,
-  newPlan,
-  onboard,
-  seedActivities,
-} from '../e2e-workspace-chrome/support';
+import { holdThePen } from '../e2e-support/pen';
+import { createHierarchy, newPlan, onboard, seedActivities } from '../e2e-workspace-chrome/support';
 
 import { clearMeasurement, writeMeasurement } from './output';
 
@@ -46,7 +41,7 @@ test('the bottom band at its busiest, photographed rather than asserted', async 
   const orgSlug = await onboard(page, Date.now());
   await createHierarchy(page);
   await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-  await ensurePen(page);
+  await holdThePen(page);
   // Two linked activities so the plan has a critical path — the critical-count fact only renders
   // when there is one, and it is the fact the review named.
   const seeded = await seedActivities(page, orgSlug, [
@@ -59,7 +54,7 @@ test('the bottom band at its busiest, photographed rather than asserted', async 
   // into `stale` and renders Recalculate — the busiest the fact cluster gets. Recalculating first
   // would photograph the calm state, which is the one that already looks fine.
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
 
   const report: Record<string, unknown> = {};
 

@@ -56,12 +56,6 @@ export async function createPlan(page: Page, name: string): Promise<void> {
   await page.getByRole('link', { name }).click();
 }
 
-/** Take the pen so the authoring affordances go live. */
-export async function startEditing(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-}
-
 /** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */
 export function canvas(page: Page): ReturnType<Page['locator']> {
   return page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();

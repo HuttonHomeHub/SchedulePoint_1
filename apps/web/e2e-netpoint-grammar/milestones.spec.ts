@@ -1,13 +1,7 @@
 import { type Page } from '@playwright/test';
 
-import {
-  createPlan,
-  ensurePen,
-  onboard,
-  openPlanId,
-  openProject,
-  recalculate,
-} from '../e2e-arrange/support';
+import { createPlan, onboard, openPlanId, openProject, recalculate } from '../e2e-arrange/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -46,7 +40,7 @@ test.describe('NetPoint grammar — milestones', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Milestones');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedMilestone(page, orgSlug);
     await recalculate(page, orgSlug);
     await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
