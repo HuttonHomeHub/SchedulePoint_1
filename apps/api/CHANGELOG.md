@@ -1,5 +1,12 @@
 # @repo/api
 
+## 1.3.0
+
+### Minor Changes
+
+- [#1352](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1352) [`8cf4ed8`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8cf4ed8083d8446517b35c11115c01f9f3fb7503) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Withdraw a pending request for control of a plan. A planner who asked for the pen can now take the
+  request back; it clears only their own request and leaves the current holder's pen untouched.
+
 ## 1.2.0
 
 ### Minor Changes
