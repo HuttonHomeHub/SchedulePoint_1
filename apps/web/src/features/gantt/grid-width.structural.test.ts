@@ -48,7 +48,7 @@ import { GANTT_COLUMNS } from './layout/grid-columns';
  *
  * That journey immediately earned its place by finding a **live defect this file was green
  * against**: with a baseline active the pinned block summed to `pane + 72` at every width, because
- * `vs baseline` is not a `GanttColumn` and nothing here summed it. See {@link VARIANCE} below.
+ * `Start vs baseline` is not a `GanttColumn` and nothing here summed it. See {@link VARIANCE} below.
  *
  * **And the division of labour between the two is worth stating, because it was checked rather
  * than assumed.** This file pins the HELPER: dropping `extraPinnedWidth` from `ganttFixedWidth`
@@ -75,7 +75,7 @@ describe('the Gantt grid width', () => {
     GANTT_COLUMNS.filter((c) => !hidden.includes(c.key));
 
   /**
-   * The `vs baseline` column's width, and the reason this file sweeps two values rather than one.
+   * The `Start vs baseline` column's width, and the reason this file sweeps two values rather than one.
    *
    * That column renders inside the pinned block when a baseline is active and is **not** a
    * `GanttColumn` — not sortable, not hideable, not in the vocabulary. So every assertion below

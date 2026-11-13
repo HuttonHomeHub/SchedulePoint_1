@@ -134,7 +134,7 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   await chartMeetsGrid(page, 'one step above the floor');
 
   /**
-   * And with a **baseline active**, which adds a `vs baseline` column to the pinned block.
+   * And with a **baseline active**, which adds a `Start vs baseline` column to the pinned block.
    *
    * This is the state the arithmetic is least likely to hold in, and it was not in #151's brief:
    * the variance column is rendered inside the pinned block with its own width, and it is NOT one
@@ -168,7 +168,7 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   // The pinned positive: without it the two assertions below would pass equally on a Gantt that
   // never rendered the column, which is the state they exist to test.
   await expect(
-    ganttGrid(page).getByRole('columnheader', { name: 'vs baseline' }),
+    ganttGrid(page).getByRole('columnheader', { name: 'Start vs baseline' }),
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
   await chartMeetsGrid(page, 'with a baseline, at the seeded width');

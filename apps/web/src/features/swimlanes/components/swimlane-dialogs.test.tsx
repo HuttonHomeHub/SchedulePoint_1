@@ -549,6 +549,13 @@ describe('the manage dialog', () => {
     expect(screen.getByText(/No swimlanes yet/)).toBeInTheDocument();
   });
 
+  it('says the bands from the WBS or a code are kept when none are made by hand', () => {
+    mount(actions(), GATE, { swimlanes: [] });
+    expect(screen.getByText(/No swimlanes yet/)).toHaveTextContent(
+      'they have not been deleted: choose that source again and they come back',
+    );
+  });
+
   describe('where swimlanes come from', () => {
     const switchButton = (): HTMLElement =>
       screen.getByRole('button', { name: /^(Use WBS groups|Make by hand|Switching…)$/ });

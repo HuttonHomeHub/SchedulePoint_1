@@ -425,6 +425,8 @@ export function CalendarExceptionsEditor({
         <h3 className="text-sm font-semibold">Exceptions</h3>
         <p className="text-muted-foreground text-sm">
           Override the weekly pattern for specific dates (e.g. holidays or a worked weekend).
+          Exceptions are saved as soon as you press Add or remove one. “Save changes” above is only
+          for the name and working week.
         </p>
       </div>
 

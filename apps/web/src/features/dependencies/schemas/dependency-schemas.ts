@@ -25,8 +25,8 @@ export const DEPENDENCY_TYPES = Object.keys(DEPENDENCY_TYPE_LABELS) as [
 /**
  * Human labels for the lag-calendar sources (ADR-0036 §6). Exhaustive
  * `Record<LagCalendarSource, …>` so a new source fails to compile until labelled.
- * Today only **24-hour** behaves distinctly; Predecessor/Successor coincide with the
- * project calendar until per-activity calendars land (M5) — the editor says so.
+ * Predecessor/Successor count the lag on that endpoint activity's own calendar and fall back to
+ * the plan calendar when it has none (`toEngineEdge` in `schedule.service.ts`) — the editor says so.
  */
 export const LAG_CALENDAR_LABELS: Record<LagCalendarSource, string> = {
   PROJECT_DEFAULT: 'Project calendar',
@@ -57,8 +57,8 @@ export const LAG_CALENDAR_DISPLAY_ORDER: readonly LagCalendarSource[] = [
  */
 export const LAG_CALENDAR_HINT =
   'Choose 24-hour (elapsed) for waits that run around the clock — a concrete cure of ' +
-  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor match the ' +
-  'project calendar until per-activity calendars arrive.';
+  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor count the wait on that activity’s own working ' +
+  'calendar, or on the plan’s calendar if it has none of its own.';
 
 /**
  * Format a signed lag for display: `0d`, `+3d` (lag), `−2d` (lead, with a real minus sign).

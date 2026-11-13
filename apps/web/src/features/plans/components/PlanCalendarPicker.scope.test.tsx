@@ -243,6 +243,24 @@ describe('PlanCalendarPicker — combobox + tier grouping (flag on)', () => {
     expect(screen.getByText(/Pick an organisation calendar/)).toBeInTheDocument();
   });
 
+  it('says in the hint that a refused save left the old calendar in place', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new ApiFetchError(422, {
+        code: 'UNPROCESSABLE_ENTITY',
+        message: 'Validation failed.',
+        details: { reason: 'CALENDAR_ARCHIVED' },
+      }),
+    );
+    renderPicker();
+    open();
+    fireEvent.keyDown(field(), { key: 'End' });
+    fireEvent.keyDown(field(), { key: 'Enter' });
+
+    expect(
+      await screen.findByText('Not saved, so the plan keeps its old calendar.'),
+    ).toBeInTheDocument();
+  });
+
   it('maps a 422 CALENDAR_ARCHIVED to an actionable message', async () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(422, {

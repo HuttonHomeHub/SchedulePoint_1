@@ -235,7 +235,7 @@ test('the pinned columns still end where the chart begins at every width, with a
   test.setTimeout(240_000);
   const orgSlug = await ganttPlan(page);
 
-  // A baseline adds the `vs baseline` column to the pinned block — the state the floor-wins ceiling
+  // A baseline adds the `Start vs baseline` column to the pinned block — the state the floor-wins ceiling
   // exists for (ADR-0095's Float incident was this arithmetic missing that column).
   const planId = openPlanId(page);
   const captured = await page.evaluate(
@@ -256,14 +256,14 @@ test('the pinned columns still end where the chart begins at every width, with a
   await syncClient(page);
   await showGantt(page);
   await expect(
-    ganttGrid(page).getByRole('columnheader', { name: 'vs baseline' }),
+    ganttGrid(page).getByRole('columnheader', { name: 'Start vs baseline' }),
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
   await chartMeetsGrid(page, 'with a baseline, at standard widths');
-  // The `vs baseline` value sits under its heading: the row-menu cell used to push it 28 px right.
+  // The `Start vs baseline` value sits under its heading: the row-menu cell used to push it 28 px right.
   const variance = await ganttGrid(page).evaluate((grid) => {
     const head = [...grid.querySelectorAll('[role="columnheader"]')].find(
-      (h) => (h.textContent ?? '').trim() === 'vs baseline',
+      (h) => (h.textContent ?? '').trim() === 'Start vs baseline',
     );
     const index = head?.getAttribute('aria-colindex');
     const cell = grid.querySelector(
@@ -273,7 +273,7 @@ test('the pinned columns still end where the chart begins at every width, with a
       ? { head: head.getBoundingClientRect().right, cell: cell.getBoundingClientRect().right }
       : null;
   });
-  expect(variance, 'no vs baseline header or first-row cell to compare').not.toBeNull();
+  expect(variance, 'no Start vs baseline header or first-row cell to compare').not.toBeNull();
   expect(Math.round(variance?.cell ?? -1)).toBe(Math.round(variance?.head ?? -2));
 
   // **All at the maximum**, written straight to storage: typing is chart-guarded (a width that would

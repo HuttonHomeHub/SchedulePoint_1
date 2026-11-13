@@ -65,7 +65,7 @@ export function ImportScheduleDialog({
       onClose={onClose}
       size="lg"
       title="Import schedule from file"
-      description={`Review what will be imported into “${projectName}” before creating the plan.`}
+      description={`Importing always creates a new plan in “${projectName}”. It never changes a plan you already have. Review what will be imported before you confirm.`}
     >
       <ImportFlow
         orgSlug={orgSlug}

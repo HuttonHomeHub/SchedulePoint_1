@@ -140,6 +140,34 @@ describe('PlanCalendarPicker', () => {
     expect(JSON.parse(init?.body as string)).toEqual({ calendarId: null, version: 4 });
   });
 
+  it('says where Recalculate is, since this dialog has no such button', () => {
+    renderPicker();
+    expect(
+      screen.getByText(
+        /After you change it, close this box and press Recalculate in the bar at the bottom/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a visible "Saved" line once the new calendar has been kept', async () => {
+    const queryClient = new QueryClient();
+    const ui = (plan: PlanSummary): React.ReactElement => (
+      <QueryClientProvider client={queryClient}>
+        <PlanCalendarPicker orgSlug="acme" plan={plan} calendars={CALENDARS} canEdit />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(PLAN));
+    choose('Seven-day');
+    // The refetched plan arrives carrying the new calendar, which is what ends the busy state.
+    rerender(ui({ ...PLAN, calendarId: 'cal-7', version: 5 }));
+
+    expect(
+      await screen.findByText(
+        /^Saved\. Close this box, then press Recalculate in the bar at the bottom/,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('keeps the current calendar selected (not blank) while the calendars list loads', () => {
     // Plan has a calendar, but the list hasn't arrived yet — the control must not silently show
     // "None", which would misrepresent the plan's actual calendar. The Combobox carries this as its

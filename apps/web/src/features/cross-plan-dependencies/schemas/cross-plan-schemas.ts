@@ -45,8 +45,8 @@ export const CROSS_PLAN_LAG_CALENDAR_DISPLAY_ORDER: readonly LagCalendarSource[]
 /** The shared lag-calendar hint — one voice with the intra-plan dependency editor. */
 export const CROSS_PLAN_LAG_CALENDAR_HINT =
   'Choose 24-hour (elapsed) for waits that run around the clock — a concrete cure of ' +
-  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor match the ' +
-  'project calendar until per-activity calendars arrive.';
+  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor count the wait on that activity’s own working ' +
+  'calendar, or on the plan’s calendar if it has none of its own.';
 
 /**
  * Label for the signed-lag numeric field. The unit depends on the chosen lag calendar: a 24-hour
