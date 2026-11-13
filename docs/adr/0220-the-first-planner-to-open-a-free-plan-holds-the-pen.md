@@ -64,6 +64,12 @@ different holder is seen, because the request was to that person and not to whoe
 own record of the request with the lease row on release, so only the client can remember it. A colleague who wins the
 race is silent, as in D1. Unlike D1 it may act on a poll, because the person asked for exactly this.
 
+The cost, plainly: a requester cannot yet withdraw a request, so someone who asked and then wandered off starts
+editing when they next look at the tab. The waiting sentence says so ("Requested — you will start editing when
+{Name} hands over or leaves.") and the live region goes straight from it to "You’re editing this plan." without a
+"Checking…" between. A "Cancel request" control needs a server-side withdrawal and its own spec
+(`docs/TECH_DEBT.md` #588).
+
 **D5 — A tab hidden for 15 minutes stops heartbeating.** While this tab holds the pen and has been hidden for 15
 continuous minutes (`HIDDEN_LET_GO_MS`), its heartbeat interval skips its beat. It never sends a release: the lock is
 per person, not per tab, so a visible sibling tab of the same person keeps the lease alive with its own beats. The

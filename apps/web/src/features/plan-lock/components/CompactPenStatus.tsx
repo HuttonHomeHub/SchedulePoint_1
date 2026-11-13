@@ -83,7 +83,7 @@ const TONE_TINT: Record<LockTone, string> = {
  * - **The announcement stays complete, and it needs nothing added to make it so.** `aria-atomic`
  *   announces the whole region, and the region is now the sentence alone — but every one of the ten
  *   sentences in `lock-copy.ts` is self-contained ("No one is editing this plan.", "Alexandra is
- *   editing this plan.", "Editing control was taken over — you're now read-only."). The badge is a
+ *   editing this plan.", "Someone else is now editing this plan — you're read-only. Request control to carry on."). The badge is a
  *   one-word **summary** of the sentence, not extra information, so nothing is lost by the region
  *   no longer containing it.
  *

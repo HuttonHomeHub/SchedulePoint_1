@@ -35,9 +35,18 @@ async function recordPenSurface(
     const seen = { status: [] as string[], pen: [] as string[] };
     const read = (): void => {
       for (const el of document.querySelectorAll('[role="status"]')) {
-        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // The grace countdown is aria-hidden and ticks every second: it is not what is announced.
+        const text = (el.textContent ?? '')
+          .replace(/\s+/g, ' ')
+          .replace(/\(~\d+s\)$/, '')
+          .trim();
         // Only the pen's own sentences: other regions (a saved toast, a recalculation) come and go.
-        if (!/editing this plan|Checking who|taken over|no longer editing/i.test(text)) continue;
+        if (
+          !/editing this plan|Checking who|taken over|no longer editing|Requested|waiting/i.test(
+            text,
+          )
+        )
+          continue;
         const entry = el.getAttribute('aria-busy') === 'true' ? `busy: ${text}` : text;
         if (!seen.status.includes(entry)) seen.status.push(entry);
       }
@@ -243,6 +252,7 @@ test('a planner who asked for control gets the pen when the holder leaves, press
   await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('HELD_BY_OTHER');
 
   const acquires = countAcquires(b);
+  const penSurface = await recordPenSurface(b);
   // A leaves the plan; leaving releases the lease (the unmount / pagehide release).
   await a.goto('about:blank');
   await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('FREE');
@@ -254,6 +264,15 @@ test('a planner who asked for control gets the pen when the holder leaves, press
   await expect(b.getByRole('alert')).toHaveCount(0);
   expect(acquires()).toBe(1);
   expect(await lockState(b, planUrl)).toBe('HELD_BY_ME');
+
+  // Where a screen reader listens: from the waiting sentence straight to the holding one, with no
+  // "Checking who’s editing…" announced in between.
+  const seen = await penSurface();
+  expect(seen.status.filter((text) => text.startsWith('busy:'))).toEqual([]);
+  expect(seen.status).toEqual([
+    expect.stringMatching(/^Requested — you will start editing when \w+ hands over or leaves\.$/),
+    HOLDING,
+  ]);
 
   await ctxA.close();
   await ctxB.close();
@@ -307,9 +326,13 @@ test('a tab hidden for fifteen minutes stops heartbeating, and carries on when s
 
   // Shown again: it beats at once, still holds, and says nothing. The lease was never really idle
   // (only the page's clock moved), so this proves the resume path, not the server's expiry.
+  const penSurface = await recordPenSurface(a);
   await setTabVisibility(a, 'visible');
   await expect.poll(() => beats, CROSS_ACTOR).toBe(atThreshold + 1);
   await expectHeldWithoutPressing(a);
+  const seen = await penSurface();
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
 
   await ctxA.close();
   await ctxB.close();

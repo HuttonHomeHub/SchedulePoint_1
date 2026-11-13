@@ -65,7 +65,7 @@ export const lockCopy = {
     return secs > 0 ? `~${secs}s` : null;
   },
   waitingForHandover: (holder: PlanEditLockActor): string =>
-    `Requested — waiting for ${firstName(holder)} to hand over.`,
+    `Requested — you will start editing when ${firstName(holder)} hands over or leaves.`,
   // Covers both take-over paths (grace elapsed after a request, or holder inactive),
   // so the copy never over-claims "hasn't responded" when no request was made.
   canTakeOver: (holder: PlanEditLockActor): string =>
@@ -74,9 +74,11 @@ export const lockCopy = {
   /** Shown at the Activities / Logic-diagram sections when the pen is held elsewhere. */
   scheduleReadOnlyHint: 'Read-only — you are not editing this plan.',
   /** Distinct from the 409 "changed elsewhere — refresh" copy (ADR-0028). */
-  lost: (reason: PlanEditLockReason): string =>
+  // `holder` is the status read since the loss, when it has already landed; the sentence is complete
+  // without it, so it never waits on the read.
+  lost: (reason: PlanEditLockReason, holder?: PlanEditLockActor | null): string =>
     reason === 'PLAN_EDIT_LOCK_LOST'
-      ? 'Editing control was taken over — you’re now read-only.'
+      ? `${holder ? firstName(holder) : 'Someone else'} is now editing this plan — you’re read-only. Request control to carry on.`
       : 'You’re no longer editing this plan. Press Start editing to carry on.',
   // Control labels.
   startEditing: 'Start editing',

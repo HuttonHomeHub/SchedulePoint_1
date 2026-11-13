@@ -737,6 +737,34 @@ describe('usePlanPen — a requester takes the freed pen', () => {
     expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
   });
 
+  it('keeps showing the holder while the freed pen is taken, never a free or loading status', async () => {
+    const seen: string[] = [];
+    serve([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME], (path) =>
+      path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME,
+    );
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(
+      () => {
+        const pen = usePlanPen('acme', 'p1');
+        seen.push(`${pen.status?.state ?? 'none'}${pen.autoAcquiring ? '+auto' : ''}`);
+        return pen;
+      },
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(seen.filter((s) => s.startsWith('FREE') || s.includes('+auto'))).toEqual([]);
+    expect(seen.at(-1)).toBe('HELD_BY_ME');
+  });
+
   it('no request → a freed pen is not taken', async () => {
     const { result, qc } = mount([HELD_BY_OTHER, FREE]);
     await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));

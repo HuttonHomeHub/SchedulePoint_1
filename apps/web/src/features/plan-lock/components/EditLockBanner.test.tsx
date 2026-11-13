@@ -140,7 +140,7 @@ describe('EditLockBanner', () => {
       lostControl: 'PLAN_EDIT_LOCK_LOST',
     });
     render(<EditLockBanner pen={pen} />);
-    expect(screen.getByText(/taken over/i)).toBeInTheDocument();
+    expect(screen.getByText(/Jane is now editing this plan/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(pen.dismissLost).toHaveBeenCalled();
   });

@@ -1,7 +1,7 @@
 # Implementation Plan: The first planner to open a free plan gets the pen
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 and M1 merged; M2 and M3 built, not yet merged.
 - **Owner:** product owner (approval); builder agent (implementation)
 
 ## Breakdown

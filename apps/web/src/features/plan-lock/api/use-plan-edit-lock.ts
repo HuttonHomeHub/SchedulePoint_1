@@ -322,6 +322,11 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   // flip Stop editing to Start editing for a retake that is meant to be silent.
   const [lastHeld, setLastHeld] = useState<PlanEditLockStatus | undefined>(undefined);
   if (status?.state === 'HELD_BY_ME' && lastHeld !== status) setLastHeld(status);
+  // The last status that named another holder, kept for the freed-pen acquire for the same reason:
+  // the refetch in the middle reads FREE, and the requester should go from the waiting sentence
+  // straight to holding the plan.
+  const [lastOther, setLastOther] = useState<PlanEditLockStatus | undefined>(undefined);
+  if (status?.state === 'HELD_BY_OTHER' && lastOther !== status) setLastOther(status);
 
   const acknowledgeLost = useCallback(
     (reason: PlanEditLockReason) => {
@@ -368,7 +373,11 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
     setOpening(wantsAuto ? 'taking' : 'done');
   }
   const wantsFreed = shouldTakeOnFree({ status, visible, iRequested: requestedOf !== null });
-  const autoAcquiring = wantsAuto || opening === 'taking' || wantsFreed || takingFreed;
+  // The opening acquire reads as loading (one sentence per opening). The freed-pen acquire must not:
+  // the requester is already reading "Requested — …", and a "Checking…" in between would be announced
+  // twice before "You're editing". It feeds `isPending` and the held-display below instead.
+  const autoAcquiring = wantsAuto || opening === 'taking';
+  const takingFreedPen = wantsFreed || takingFreed;
 
   const { mutate: mutateFreed } = freedAcquire;
   useEffect(() => {
@@ -496,7 +505,12 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
 
   return {
-    status: retaking && lastHeld ? lastHeld : status,
+    status:
+      retaking && lastHeld
+        ? lastHeld
+        : takingFreedPen && lastOther && (status?.state === 'FREE' || status?.state === 'EXPIRED')
+          ? lastOther
+          : status,
     holdsPen: Boolean(holdsPen),
     isPending:
       acquire.isPending ||
@@ -504,6 +518,7 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
       request.isPending ||
       handoffMutation.isPending ||
       autoAcquiring ||
+      takingFreedPen ||
       retaking,
     autoAcquiring,
     lostControl,

@@ -1,6 +1,6 @@
 # Feature Spec: The first planner to open a free plan gets the pen
 
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 and M1 merged; M2 and M3 built, not yet merged.
 - **Author(s):** feature-analyst (Claude Code), for the product owner
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** none yet — the request is the product owner's runbook chapter 6 overall note, 2026-11-11

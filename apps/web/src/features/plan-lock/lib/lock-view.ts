@@ -172,7 +172,7 @@ export function resolveLockView(
     return {
       tone: 'lost',
       badge: lockCopy.badgeReadOnly,
-      message: lockCopy.lost(lostControl),
+      message: lockCopy.lost(lostControl, status?.state === 'HELD_BY_OTHER' ? status.holder : null),
       messageVisible: true,
       actions: ['dismiss'],
     };
