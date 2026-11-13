@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 28 API modules
-> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1906 web
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1907 web
 > source files with 48 Playwright suites beside the base journey, and
-> 218 ADRs.
+> 219 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -621,6 +621,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0216** _(Accepted; extends ADR-0148, ADR-0153 and ADR-0094; amends ADR-0187 D3, ADR-0092 D2, ADR-0114 D1 and D2)_ — A bar you placed stays put, and an edit that leaves it behind offers to let it follow → [`0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md`](docs/adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
 - **ADR-0217** _(Accepted; extends ADR-0060 §6)_ — A refusal is shown where it was asked for, and on the field it is about → [`0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md`](docs/adr/0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md)
 - **ADR-0218** _(Accepted; amends ADR-0048 M5, extends ADR-0026 §7; D3–D5 added by M2–M4)_ — A click on the diagram gives it the keyboard → [`0218-a-click-on-the-diagram-gives-it-the-keyboard.md`](docs/adr/0218-a-click-on-the-diagram-gives-it-the-keyboard.md)
+- **ADR-0219** _(Accepted; amends ADR-0092, extends ADR-0216 D9 and ADR-0026)_ — A selected activity's bar takes the whole foot row on a short window, and the facts wait → [`0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md`](docs/adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

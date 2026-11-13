@@ -54,6 +54,26 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
     expect(region).toHaveAttribute('aria-live', 'polite');
   });
 
+  it('marks its badge for the foot row, which sets it aside while a bar is selected on a short window', () => {
+    const { container } = render(
+      <CompactPenStatus pen={makePen({ status: status({ state: 'FREE', canAcquire: true }) })} />,
+    );
+    // The hook `SELECTION_FACTS_YIELD` (activity-bottom-panel.tsx) reads. Renaming it silently turns
+    // the rule off, and only a short-window journey would notice.
+    expect(container.querySelectorAll('[data-pen-badge]')).toHaveLength(1);
+  });
+
+  it.each([
+    ['neutral', status({ state: 'FREE', canAcquire: true }), {}, 1],
+    ['editing', status({ state: 'HELD_BY_ME', holder: JANE }), { holdsPen: true }, 1],
+    ['locked', status({ state: 'HELD_BY_OTHER', holder: JANE }), {}, 0],
+    ['lost', status({ state: 'HELD_BY_ME' }), { lostControl: 'PLAN_EDIT_LOCK_LOST' as const }, 0],
+  ])('%s tone: the badge hook is present only for the quiet tones', (_tone, s, extra, count) => {
+    const { container } = render(<CompactPenStatus pen={makePen({ status: s, ...extra })} />);
+    // A locked or lost badge is a standing warning (ADR-0132) and must never be hidden by the rule.
+    expect(container.querySelectorAll('[data-pen-badge]')).toHaveLength(count);
+  });
+
   it('offers Start editing on a free plan and calls startEditing (parity with the banner)', () => {
     const pen = makePen({ status: status({ state: 'FREE', canAcquire: true }) });
     render(<CompactPenStatus pen={pen} />);

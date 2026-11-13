@@ -218,6 +218,9 @@ export function BulkSelectionBar({
         // 350 px the facts leave at 1024. It wraps rather than clips (`flex-wrap`), so a refusal beside
         // all five costs one more line and never a lost control.
         data-dock-row=""
+        // Read by the foot row, which sets the passive plan facts aside on a short window while a
+        // selection bar is docked (`SELECTION_FACTS_YIELD`): this bar is never dearer than the single one.
+        data-selection-bar=""
         // `grow`, not the default `truncate`: the caption is two words and must never take an ellipsis.
         messageFit="grow"
         className="flex-wrap gap-2"

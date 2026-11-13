@@ -50,6 +50,11 @@ describe('when to render at all', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('carries the marker the foot row reads to set the plan facts aside on a short window', () => {
+    renderBar({ count: 3 });
+    expect(screen.getByTestId('bulk-selection-bar')).toHaveAttribute('data-selection-bar');
+  });
+
   it('reads as a short caption, and keeps the subject sentence off the screen', () => {
     renderBar({ count: 12, primaryName: 'Pour slab' });
     const bar = screen.getByTestId('bulk-selection-bar');

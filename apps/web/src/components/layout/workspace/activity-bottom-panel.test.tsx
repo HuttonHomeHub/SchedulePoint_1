@@ -87,6 +87,23 @@ describe('PlanActivitiesFootRow', () => {
     ).toEqual(['facts-outlet', 'Collapse']);
   });
 
+  it('sets the passive facts aside on a short window while a selection bar is docked (M6)', () => {
+    const { container } = render(<PlanActivitiesFootRow />);
+    const row = container.querySelector('[data-activities-bar]');
+    const classes = (row?.className ?? '').split(/\s+/);
+    // **Verified red** by deleting the constant from the row's class list. jsdom applies no
+    // stylesheet, so the declaration and the three hooks it reads are the checkable half; the
+    // 1024 x 600 journey (`e2e-workspace-fit/floor-states.spec.ts`) is the proof it takes effect.
+    for (const hook of ['plan-facts', 'plan-fact-list', 'pen-badge']) {
+      expect(
+        classes.some((c) => c.startsWith('short:has-[[data-selection-bar]]:') && c.includes(hook)),
+        hook,
+      ).toBe(true);
+    }
+    // Only the passive things yield: a pressable control is never in the list.
+    expect(classes.filter((c) => /button|recalc|handoff/i.test(c))).toEqual([]);
+  });
+
   it('renders the toggle when given one, and nothing in its place when not', () => {
     const { rerender } = render(
       <PlanActivitiesFootRow toggle={<button type="button">Collapse</button>} />,

@@ -1596,12 +1596,29 @@ export function TsldCanvas({
     onGutterRoomChange?.(gutterRoom);
   }, [gutterRoom, onGutterRoomChange]);
 
+  // The bar a POINTER last selected, so the reveal effect below can tell a click from an arrow key
+  // (diagram-keys-and-selection M6, ADR-0219). Cleared by the reveal effect the moment the selection
+  // moves to anything else, so an arrow back to the same bar later is a keyboard selection again.
+  const pointerSelectRef = useRef<string | null>(null);
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
   // navigation or chain-nav to an off-screen bar — pan the minimum distance so the selected bar's
   // ring is fully on-screen, kept off the edges by a margin so nothing obscures it. A no-op when
-  // it's already visible (so pointer selection doesn't jump), or when it has no drawn position.
+  // it has no drawn position.
+  //
+  // **The margin is for the keyboard.** The old comment promised "a no-op when it's already visible
+  // (so pointer selection doesn't jump)", and the 60 px margin made that false for a bar within 60 px
+  // of the edge the dock had just shrunk: a click on a low bar slid it up 12 px, and 130 px where the
+  // shrink had hidden it (`docs/specs/diagram-keys-and-selection/m5-measurement.md`, H2). A bar the
+  // pointer selected is the one the planner just aimed at, so it moves only when the stage really
+  // hides some of it, and then by the minimum (margin 0). A keyboard selection keeps `LANE_HEIGHT`,
+  // which is what WCAG 2.4.11 wants the focus ring held clear of the edge by.
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId) {
+      pointerSelectRef.current = null;
+      return;
+    }
+    const pointerSelected = pointerSelectRef.current === selectedId;
+    if (!pointerSelected) pointerSelectRef.current = null;
     // Skip while a (re-)fit is pending: the next frame reframes the whole plan and would discard
     // this pan anyway, so revealing off the pre-fit viewport is pointless (and would flicker).
     if (!fittedRef.current) return;
@@ -1622,7 +1639,7 @@ export function TsldCanvas({
         ? { x: bandBar.x, y: 0, w: bandBar.w, h: 0 }
         : null;
     if (!rect) return;
-    const margin = LANE_HEIGHT;
+    const margin = pointerSelected ? 0 : LANE_HEIGHT;
     // The shared `revealOffset` (render/viewport.ts) — extracted for #152 so `zoomToActivity`
     // repairs the lane axis with the SAME arithmetic rather than a second opinion.
     let dx = revealOffset(rect.x, rect.w, size.width, margin);
@@ -1639,7 +1656,11 @@ export function TsldCanvas({
     // band bar is pinned above the scene, so it has nothing to clear.
     const column = columnRef.current;
     const container = containerRef.current;
-    if (column && container && !bandBar && clusterRoomRef.current) {
+    // **A bar the pointer selected does not clear the column either.** The press proved a visible part
+    // of the bar is not under it (the column's box is wider than its painted cards), and the 1024 x 600
+    // journey caught the obstacle step sliding a wholly clickable bar 37 px before the dock had taken
+    // anything. The keyboard has no such proof, so it keeps the clearance.
+    if (column && container && !bandBar && !pointerSelected && clusterRoomRef.current) {
       const c = column.getBoundingClientRect();
       const o = container.getBoundingClientRect();
       const origin = sceneOrigin(wbsBandHeightPx, gutterWidthPx);
@@ -2669,6 +2690,7 @@ export function TsldCanvas({
         // The modifier the press CARRIED, captured by the machine at press (ADR-0218 D5): an unmoved
         // Ctrl- or Shift-click on a bar toggles or extends, not replaces. Absent for a plain click, so
         // that call stays the one-argument call it has always been.
+        pointerSelectRef.current = select;
         if (selectModifier) onSelect(select, selectModifier);
         else onSelect(select);
       }
@@ -2709,6 +2731,7 @@ export function TsldCanvas({
     const modifier = selectModifierOf(e);
     const target = hitTest(sceneRef.current.activities, p, viewRef.current, dataDate);
     notePlainSelect(modifier ? null : target);
+    if (target) pointerSelectRef.current = target;
     if (modifier) onSelect(target, modifier);
     else onSelect(target);
   };

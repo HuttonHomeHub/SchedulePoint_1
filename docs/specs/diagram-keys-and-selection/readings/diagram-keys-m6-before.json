@@ -1,0 +1,521 @@
+{
+  "measuredAt": "2026-11-12T22:13:03.785Z",
+  "1024x600": {
+    "idle": {
+      "viewport": {
+        "w": 1024,
+        "h": 600
+      },
+      "footHeight": 51,
+      "footWidth": 747,
+      "sceneHeight": 362,
+      "barWidth": 0,
+      "lines": 0,
+      "controlCount": 0,
+      "controls": [],
+      "factsWidth": 329.3,
+      "footScrollX": 0
+    },
+    "today": {
+      "viewport": {
+        "w": 1024,
+        "h": 600
+      },
+      "footHeight": 227,
+      "footWidth": 747,
+      "sceneHeight": 200,
+      "barWidth": 345.7,
+      "lines": 5,
+      "controlCount": 15,
+      "controls": [
+        {
+          "label": "Review the constraint…",
+          "shaded": false,
+          "top": 400,
+          "left": 285,
+          "width": 188.6
+        },
+        {
+          "label": "Logic",
+          "shaded": false,
+          "top": 400,
+          "left": 477.6,
+          "width": 71.3
+        },
+        {
+          "label": "Notes",
+          "shaded": false,
+          "top": 400,
+          "left": 552.9,
+          "width": 75.6
+        },
+        {
+          "label": "Progress",
+          "shaded": false,
+          "top": 440,
+          "left": 285,
+          "width": 94.1
+        },
+        {
+          "label": "Resources",
+          "shaded": false,
+          "top": 440,
+          "left": 383.1,
+          "width": 104.7
+        },
+        {
+          "label": "Edit",
+          "shaded": false,
+          "top": 440,
+          "left": 491.8,
+          "width": 63.3
+        },
+        {
+          "label": "Duplicate",
+          "shaded": false,
+          "top": 480,
+          "left": 285,
+          "width": 99.3
+        },
+        {
+          "label": "Move to swimlane…",
+          "shaded": false,
+          "top": 480,
+          "left": 388.3,
+          "width": 184.7
+        },
+        {
+          "label": "Set code…",
+          "shaded": false,
+          "top": 520,
+          "left": 285,
+          "width": 125.1
+        },
+        {
+          "label": "Delete",
+          "shaded": false,
+          "top": 520,
+          "left": 414.1,
+          "width": 79.9
+        },
+        {
+          "label": "Follow logic",
+          "shaded": false,
+          "top": 520,
+          "left": 498,
+          "width": 113.8
+        },
+        {
+          "label": "Zoom to selection",
+          "shaded": false,
+          "top": 560,
+          "left": 298,
+          "width": 152.2
+        },
+        {
+          "label": "Isolate logic path",
+          "shaded": false,
+          "top": 560,
+          "left": 454.2,
+          "width": 79
+        },
+        {
+          "label": "Isolate logic path options",
+          "shaded": false,
+          "top": 560,
+          "left": 533.2,
+          "width": 24
+        },
+        {
+          "label": "Float paths",
+          "shaded": false,
+          "top": 560,
+          "left": 561.2,
+          "width": 32
+        }
+      ],
+      "factsWidth": 329.3,
+      "footScrollX": 0
+    },
+    "fullWidth": {
+      "viewport": {
+        "w": 1024,
+        "h": 600
+      },
+      "footHeight": 147,
+      "footWidth": 747,
+      "sceneHeight": 266,
+      "barWidth": 683,
+      "lines": 3,
+      "controlCount": 15,
+      "controls": [
+        {
+          "label": "Review the constraint…",
+          "shaded": false,
+          "top": 480,
+          "left": 285,
+          "width": 188.6
+        },
+        {
+          "label": "Logic",
+          "shaded": false,
+          "top": 480,
+          "left": 477.6,
+          "width": 71.3
+        },
+        {
+          "label": "Notes",
+          "shaded": false,
+          "top": 480,
+          "left": 552.9,
+          "width": 75.6
+        },
+        {
+          "label": "Progress",
+          "shaded": false,
+          "top": 480,
+          "left": 632.5,
+          "width": 94.1
+        },
+        {
+          "label": "Resources",
+          "shaded": false,
+          "top": 480,
+          "left": 730.6,
+          "width": 104.7
+        },
+        {
+          "label": "Edit",
+          "shaded": false,
+          "top": 480,
+          "left": 839.3,
+          "width": 63.3
+        },
+        {
+          "label": "Duplicate",
+          "shaded": false,
+          "top": 520,
+          "left": 285,
+          "width": 99.3
+        },
+        {
+          "label": "Move to swimlane…",
+          "shaded": false,
+          "top": 520,
+          "left": 388.3,
+          "width": 184.7
+        },
+        {
+          "label": "Set code…",
+          "shaded": false,
+          "top": 520,
+          "left": 576.9,
+          "width": 125.1
+        },
+        {
+          "label": "Delete",
+          "shaded": false,
+          "top": 520,
+          "left": 706,
+          "width": 79.9
+        },
+        {
+          "label": "Follow logic",
+          "shaded": false,
+          "top": 520,
+          "left": 790,
+          "width": 113.8
+        },
+        {
+          "label": "Zoom to selection",
+          "shaded": false,
+          "top": 560,
+          "left": 298,
+          "width": 152.2
+        },
+        {
+          "label": "Isolate logic path",
+          "shaded": false,
+          "top": 560,
+          "left": 454.2,
+          "width": 79
+        },
+        {
+          "label": "Isolate logic path options",
+          "shaded": false,
+          "top": 560,
+          "left": 533.2,
+          "width": 24
+        },
+        {
+          "label": "Float paths",
+          "shaded": false,
+          "top": 560,
+          "left": 561.2,
+          "width": 32
+        }
+      ],
+      "factsWidth": 0,
+      "footScrollX": 0
+    }
+  },
+  "1280x720": {
+    "idle": {
+      "viewport": {
+        "w": 1280,
+        "h": 720
+      },
+      "footHeight": 51,
+      "footWidth": 1003,
+      "sceneHeight": 482,
+      "barWidth": 0,
+      "lines": 0,
+      "controlCount": 0,
+      "controls": [],
+      "factsWidth": 329.3,
+      "footScrollX": 0
+    },
+    "today": {
+      "viewport": {
+        "w": 1280,
+        "h": 720
+      },
+      "footHeight": 187,
+      "footWidth": 1003,
+      "sceneHeight": 346,
+      "barWidth": 601.7,
+      "lines": 4,
+      "controlCount": 15,
+      "controls": [
+        {
+          "label": "Review the constraint…",
+          "shaded": false,
+          "top": 560,
+          "left": 285,
+          "width": 188.6
+        },
+        {
+          "label": "Logic",
+          "shaded": false,
+          "top": 560,
+          "left": 477.6,
+          "width": 71.3
+        },
+        {
+          "label": "Notes",
+          "shaded": false,
+          "top": 560,
+          "left": 552.9,
+          "width": 75.6
+        },
+        {
+          "label": "Progress",
+          "shaded": false,
+          "top": 560,
+          "left": 632.5,
+          "width": 94.1
+        },
+        {
+          "label": "Resources",
+          "shaded": false,
+          "top": 560,
+          "left": 730.6,
+          "width": 104.7
+        },
+        {
+          "label": "Edit",
+          "shaded": false,
+          "top": 600,
+          "left": 285,
+          "width": 63.3
+        },
+        {
+          "label": "Duplicate",
+          "shaded": false,
+          "top": 600,
+          "left": 352.3,
+          "width": 99.3
+        },
+        {
+          "label": "Move to swimlane…",
+          "shaded": false,
+          "top": 600,
+          "left": 455.5,
+          "width": 184.7
+        },
+        {
+          "label": "Set code…",
+          "shaded": false,
+          "top": 600,
+          "left": 644.2,
+          "width": 125.1
+        },
+        {
+          "label": "Delete",
+          "shaded": false,
+          "top": 600,
+          "left": 773.3,
+          "width": 79.9
+        },
+        {
+          "label": "Follow logic",
+          "shaded": false,
+          "top": 640,
+          "left": 285,
+          "width": 113.8
+        },
+        {
+          "label": "Zoom to selection",
+          "shaded": false,
+          "top": 680,
+          "left": 298,
+          "width": 152.2
+        },
+        {
+          "label": "Isolate logic path",
+          "shaded": false,
+          "top": 680,
+          "left": 454.2,
+          "width": 79
+        },
+        {
+          "label": "Isolate logic path options",
+          "shaded": false,
+          "top": 680,
+          "left": 533.2,
+          "width": 24
+        },
+        {
+          "label": "Float paths",
+          "shaded": false,
+          "top": 680,
+          "left": 561.2,
+          "width": 32
+        }
+      ],
+      "factsWidth": 329.3,
+      "footScrollX": 0
+    },
+    "fullWidth": {
+      "viewport": {
+        "w": 1280,
+        "h": 720
+      },
+      "footHeight": 147,
+      "footWidth": 1003,
+      "sceneHeight": 386,
+      "barWidth": 939,
+      "lines": 3,
+      "controlCount": 15,
+      "controls": [
+        {
+          "label": "Review the constraint…",
+          "shaded": false,
+          "top": 600,
+          "left": 285,
+          "width": 188.6
+        },
+        {
+          "label": "Logic",
+          "shaded": false,
+          "top": 600,
+          "left": 477.6,
+          "width": 71.3
+        },
+        {
+          "label": "Notes",
+          "shaded": false,
+          "top": 600,
+          "left": 552.9,
+          "width": 75.6
+        },
+        {
+          "label": "Progress",
+          "shaded": false,
+          "top": 600,
+          "left": 632.5,
+          "width": 94.1
+        },
+        {
+          "label": "Resources",
+          "shaded": false,
+          "top": 600,
+          "left": 730.6,
+          "width": 104.7
+        },
+        {
+          "label": "Edit",
+          "shaded": false,
+          "top": 600,
+          "left": 839.3,
+          "width": 63.3
+        },
+        {
+          "label": "Duplicate",
+          "shaded": false,
+          "top": 600,
+          "left": 906.6,
+          "width": 99.3
+        },
+        {
+          "label": "Move to swimlane…",
+          "shaded": false,
+          "top": 600,
+          "left": 1009.8,
+          "width": 184.7
+        },
+        {
+          "label": "Set code…",
+          "shaded": false,
+          "top": 640,
+          "left": 285,
+          "width": 125.1
+        },
+        {
+          "label": "Delete",
+          "shaded": false,
+          "top": 640,
+          "left": 414.1,
+          "width": 79.9
+        },
+        {
+          "label": "Follow logic",
+          "shaded": false,
+          "top": 640,
+          "left": 498,
+          "width": 113.8
+        },
+        {
+          "label": "Zoom to selection",
+          "shaded": false,
+          "top": 680,
+          "left": 298,
+          "width": 152.2
+        },
+        {
+          "label": "Isolate logic path",
+          "shaded": false,
+          "top": 680,
+          "left": 454.2,
+          "width": 79
+        },
+        {
+          "label": "Isolate logic path options",
+          "shaded": false,
+          "top": 680,
+          "left": 533.2,
+          "width": 24
+        },
+        {
+          "label": "Float paths",
+          "shaded": false,
+          "top": 680,
+          "left": 561.2,
+          "width": 32
+        }
+      ],
+      "factsWidth": 0,
+      "footScrollX": 0
+    }
+  }
+}

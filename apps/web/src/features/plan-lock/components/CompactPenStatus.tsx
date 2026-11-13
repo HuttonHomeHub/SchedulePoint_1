@@ -179,7 +179,13 @@ export function PenStatusCluster({
         TONE_TINT[view.tone],
       )}
     >
-      <Badge variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}>
+      <Badge
+        // The hook the foot row's selection rule reads (`SELECTION_FACTS_YIELD`). Only the quiet
+        // tones carry it: `Locked · Alexandra` and the lost-lock badge are standing warnings
+        // (ADR-0132) and the only sighted statement of who holds the pen, so they stay painted.
+        data-pen-badge={view.tone === 'editing' || view.tone === 'neutral' ? '' : undefined}
+        variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}
+      >
         {/* `Locked · Alexandra` where a holder exists — the one thing the four-word badge
             vocabulary cannot say on its own. Measured at 120 px for the longest realistic name
             against 106 px of header headroom at 1646 plus a row that wraps (ADR-0112 D4), so it

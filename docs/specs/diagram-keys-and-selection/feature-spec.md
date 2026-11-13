@@ -1,6 +1,6 @@
 # Feature Spec: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 ([`m5-measurement.md`](./m5-measurement.md)), M7 built 2026-11-12 (the plural bar and Link in sequence over linked activities; as-built readings in [`m5-measurement.md`](./m5-measurement.md)); M6 waits for the owner's look at M5's pictures.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 ([`m5-measurement.md`](./m5-measurement.md)), M7 built 2026-11-12 (the plural bar and Link in sequence over linked activities; as-built readings in [`m5-measurement.md`](./m5-measurement.md)); M6 built 2026-11-12 as shape S-B (ADR-0219: the selection bar takes the whole foot row on a short window, the facts step aside; the clicked bar no longer jumps; as-built readings in [`m5-measurement.md`](./m5-measurement.md)).
 - **Author(s):** feature-analyst (for the product owner)
 - **Date:** 2026-11-12
 - **Tracking issue / epic:** the owner's GUI review, first severity-2 batch (chosen 2026-11-12): runbook steps 3.3,
@@ -464,6 +464,8 @@ shortcuts sheet gains two rows. Alternatives: B and C alone (§4.7). Reviewed un
 moved".** Amends ADR-0187 (order on a short window), ADR-0092 / ADR-0114 (the dock's vertical budget in selection
 states), and records the bounded exception to the `Toolbar` no-overflow position. If S1 needs a `Toolbar` prop, it is
 a public-contract change: component-reviewer and accessibility-reviewer before release (ADR-0111).
+
+_Superseded by what was decided: S-B, no overflow menu, no `Toolbar` change; see ADR-0219 as filed._
 
 ### 4.10 Implementation approach & alternatives
 

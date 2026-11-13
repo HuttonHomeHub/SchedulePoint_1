@@ -28,6 +28,7 @@ import {
 import { BaselineVarianceSummary } from '@/features/baselines';
 import { CodeColumnsMenu } from '@/features/codes';
 import { NO_CODE_COLUMNS, type CodeColumn, type CodeColumnsChoice } from '@/lib/code-columns';
+import { cn } from '@/lib/utils';
 
 /**
  * What {@link ActivityBottomPanel} reads from the workspace — narrowed, and stable.
@@ -200,6 +201,30 @@ export const TOOL_PUT_AWAY_NOTE = 'Drawing tool put away.';
  * `ml-auto` so that when the row wraps the button keeps the trailing edge of its own line.
  */
 const FOOT_TOGGLE_CLASS = 'ml-auto shrink-0';
+
+/**
+ * **On a short window a selected activity's bar takes the foot row's whole width, and the plan's
+ * passive facts step aside while it is there** (diagram-keys-and-selection M6, ADR-0219).
+ *
+ * Declared at the row, in CSS, and from the two things the row can already see: the existing `short`
+ * variant (`globals.css`, the window at most 44 rem high) and the `data-selection-bar` marker both
+ * selection bars carry (the single one, and the plural one so that it is never dearer than the single
+ * one on the same window, which `e2e-multi-select` holds). No JS state, so nothing can disagree with the bar: the facts
+ * return the moment the bar unmounts. Four things yield, and each is **visually hidden, never
+ * removed** (`sr-only` keeps the text in the accessibility tree, so what a screen reader reads does
+ * not change): the data date, finish, count and critical-count list, the pen's badge, and the
+ * inset and gap the facts' own row carries around them. What does NOT yield is anything a reader
+ * can press or that announces: Recalculate and the schedule's state, the pen's hand-off actions and
+ * its live sentence. A command is shaded with its reason, never hidden (ADR-0082), and the same
+ * rule keeps a stale schedule's remedy on the row while a bar is selected. For the editing and free
+ * states the pen's state is still on screen in the command deck's Stop editing / Start editing
+ * control; the locked and lost badges do not yield (`CompactPenStatus` emits the hook only for the
+ * quiet tones), because they are standing warnings (ADR-0132). "Fewer lines" means lines of
+ * controls: a conflict reason sentence sits above them as a further row. A literal string, because
+ * Tailwind reads classes from source.
+ */
+const SELECTION_FACTS_YIELD =
+  'short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:gap-x-0 short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:px-0 short:has-[[data-selection-bar]]:[&_[data-plan-fact-list]]:sr-only short:has-[[data-selection-bar]]:[&_[data-pen-badge]]:sr-only';
 
 /**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
@@ -559,7 +584,10 @@ export function PlanActivitiesFootRow({
        * `e2e-minimap/viewport-cluster.spec.ts` holds; 4 px here and 4 px of caption leading put it at 122.
        * Fine pointers keep `py-1`, and the deck keeps its own inset.
        */
-      className="border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1 pointer-coarse:py-0.5"
+      className={cn(
+        'border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1 pointer-coarse:py-0.5',
+        SELECTION_FACTS_YIELD,
+      )}
     >
       {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the
           order moved, and why the reason originally given for facts-leading did not hold). This row said "Activities" and the status bar said
