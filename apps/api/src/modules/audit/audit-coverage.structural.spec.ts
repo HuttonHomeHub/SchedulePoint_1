@@ -236,6 +236,7 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'DELETE /api/v1/organizations/:orgSlug/cross-plan-dependencies/:id': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/notes/:noteId': REASONS.PLAN_CONTENT,
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock': REASONS.EDIT_LOCK,
+  'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/request': REASONS.EDIT_LOCK,
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
   'GET /api/v1/me': REASONS.READ,

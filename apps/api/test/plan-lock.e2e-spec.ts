@@ -298,6 +298,68 @@ describe.skipIf(!hasDatabase)('Plan edit-lock API (e2e)', () => {
     await contributor.agent.post(lockUrl(planId, '/request')).expect(403);
   });
 
+  it('withdraws a request: only the caller’s own, idempotent, lease untouched', async () => {
+    const { actor: admin, orgId } = await adminWithOrg();
+    const holder = await addMember(orgId, 'holder@example.com', 'PLANNER');
+    const b = await addMember(orgId, 'b@example.com', 'PLANNER');
+    const c = await addMember(orgId, 'c@example.com', 'PLANNER');
+    const planId = await makePlan(admin);
+
+    await holder.agent.post(lockUrl(planId)).send({}).expect(200);
+    await b.agent.post(lockUrl(planId, '/request')).expect(200);
+
+    const cancelled = await b.agent.delete(lockUrl(planId, '/request')).expect(200);
+    expect(cancelled.body.data).toMatchObject({ state: 'HELD_BY_OTHER', requestedBy: null });
+
+    // The holder sees no request, so a hand-off has nothing to give; and the lease is still
+    // the holder's, which proves this is not the release route.
+    const seen = await holder.agent.get(lockUrl(planId)).expect(200);
+    expect(seen.body.data).toMatchObject({ state: 'HELD_BY_ME', requestedBy: null });
+    await holder.agent.post(lockUrl(planId, '/handoff')).expect(409);
+    expect(
+      (await holder.agent.post(lockUrl(planId, '/heartbeat')).expect(200)).body.data.holder.id,
+    ).toBe(holder.userId);
+
+    // Idempotent.
+    await b.agent.delete(lockUrl(planId, '/request')).expect(200);
+
+    // A later requester's record survives the earlier requester's cancel.
+    await b.agent.post(lockUrl(planId, '/request')).expect(200);
+    await c.agent.post(lockUrl(planId, '/request')).expect(200);
+    const afterB = await b.agent.delete(lockUrl(planId, '/request')).expect(200);
+    expect(afterB.body.data.requestedBy.id).toBe(c.userId);
+    const holderView = await holder.agent.get(lockUrl(planId)).expect(200);
+    expect(holderView.body.data.requestedBy.id).toBe(c.userId);
+  });
+
+  it('answers a cancel after hand-over with HELD_BY_ME and leaves the new lease alone', async () => {
+    const { actor: admin, orgId } = await adminWithOrg();
+    const holder = await addMember(orgId, 'holder@example.com', 'PLANNER');
+    const b = await addMember(orgId, 'b@example.com', 'PLANNER');
+    const planId = await makePlan(admin);
+
+    await holder.agent.post(lockUrl(planId)).send({}).expect(200);
+    await b.agent.post(lockUrl(planId, '/request')).expect(200);
+    await holder.agent.post(lockUrl(planId, '/handoff')).expect(200);
+
+    const res = await b.agent.delete(lockUrl(planId, '/request')).expect(200);
+    expect(res.body.data).toMatchObject({ state: 'HELD_BY_ME' });
+    expect(res.body.data.holder.id).toBe(b.userId);
+  });
+
+  it('refuses a cancel from Viewer and Contributor (403), an outsider (404) and no session (401)', async () => {
+    const { actor: admin, orgId } = await adminWithOrg();
+    const viewer = await addMember(orgId, 'viewer@example.com', 'VIEWER');
+    const contributor = await addMember(orgId, 'contributor@example.com', 'CONTRIBUTOR');
+    const outsider = await signUp('outsider@example.com');
+    const planId = await makePlan(admin);
+
+    await viewer.agent.delete(lockUrl(planId, '/request')).expect(403);
+    await contributor.agent.delete(lockUrl(planId, '/request')).expect(403);
+    await outsider.agent.delete(lockUrl(planId, '/request')).expect(404);
+    await request(server()).delete(lockUrl(planId, '/request')).expect(401);
+  });
+
   it('404s a cross-org plan (anti-IDOR)', async () => {
     const { actor: admin } = await adminWithOrg();
     // A plan in a DIFFERENT org, addressed through the caller's `acme` slug.
