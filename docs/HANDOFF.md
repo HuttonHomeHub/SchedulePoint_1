@@ -75,10 +75,12 @@ that merged. Five releases; the owner's host pulls each one automatically.
 
 ## What is next
 
-**Updated 2026-11-13 (second session of the day).** Nothing was built; this session checked, specified and asked.
-The owner's answers to the questions below had not arrived when this was written.
+**Updated 2026-11-13 (second session of the day).** When this was written nothing had been built yet. **The owner
+answered every question below the same day: yes to each recommendation** (Cancel request with the reload fix; the
+idle tab lets go quietly at 30 minutes, spec first; "Ask a Planner"; remember Dismiss; a short-window "let all
+follow" action, spec first; shorten the Select hint) **and chose every batch, in the order G, A, B, C, then D, E, F.**
 
-**Two specs written, awaiting the owner's approval (no code yet):**
+**Two specs written and approved (no code yet):**
 
 1. **"Cancel request"** ([`docs/specs/cancel-request-control/`](specs/cancel-request-control/feature-spec.md),
    `docs/TECH_DEBT.md` #588). `DELETE …/edit-lock/request` (clears only the caller's own request, returns the
