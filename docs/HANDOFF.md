@@ -75,29 +75,62 @@ that merged. Five releases; the owner's host pulls each one automatically.
 
 ## What is next
 
-**Questions waiting for the owner** (none blocks anything released):
+**Updated 2026-11-13 (second session of the day).** When this was written nothing had been built yet. **The owner
+answered every question below the same day: yes to each recommendation** (Cancel request with the reload fix; the
+idle tab lets go quietly at 30 minutes, spec first; "Ask a Planner"; remember Dismiss; a short-window "let all
+follow" action, spec first; shorten the Select hint) **and chose every batch, in the order G, A, B, C, then D, E, F.**
 
-1. **"Cancel request".** Once you press Request control there is no way to withdraw it, and since 1.8.0 a forgotten
-   request means you start editing the next time you look at that tab. The waiting sentence now says so
-   ("Requested — you will start editing when {Name} hands over or leaves."). A real Cancel needs a server endpoint
-   and a button, so a short spec and approval first: `docs/TECH_DEBT.md` #588.
-2. **A tab left in front, unattended, holds the plan with no time limit.** The 15-minute rule covers hidden tabs
-   only (ADR-0220, Consequences). Does the owner want a limit for a visible idle tab?
-3. **"Your role cannot draw activities."** is what someone who cannot edit sees on an empty plan. A friendlier
-   "Ask a planner to add activities." needs the panel to know the role: a small spec (ADR-0105).
-4. **Three "Follow logic" choices**, unchanged from the last hand-off: remember "Dismiss" after a reload; give the
-   whole-plan offer some form on a short window; shorten the Select hint so it fits one line at 1024 px.
-5. **Which batch next.** The list has no open first-severity problem. The open second-severity ones should be
-   proposed grouped by screen (the list's `kind` and `step` fields give the grouping); nothing has been proposed yet.
+**Two specs written and approved (no code yet):**
+
+1. **"Cancel request"** ([`docs/specs/cancel-request-control/`](specs/cancel-request-control/feature-spec.md),
+   `docs/TECH_DEBT.md` #588). `DELETE …/edit-lock/request` (clears only the caller's own request, returns the
+   status), a **Cancel request** button beside the waiting "Take over now", and the tab's memory of a request made
+   to follow the server's record. No schema change (the two request columns exist). Two milestones: M1 the route
+   (api minor), M2 the button and journey (web minor). ADR-0220 gains a D7; no new ADR.
+   **Found while checking, and fixed by the spec's Q1 if approved:** after a reload the requester still reads "you
+   will start editing when {Name} hands over or leaves", but the reloaded tab no longer takes the plan when the
+   holder merely leaves (`use-plan-edit-lock.ts`, `requestedOf` starts empty); and a tab whose request was replaced
+   by a later requester can still race for the freed plan. An Org Admin is never offered Request control
+   (`lock-view.ts`: override is checked first), so Cancel is a Planner's control on screen.
+2. **Wording for people who cannot edit** ([`docs/specs/read-only-wording/`](specs/read-only-wording/feature-spec.md)).
+   The empty plan says "Ask a Planner to add activities." for a Viewer or Contributor, through an optional
+   `form: 'ask'` on `scheduleRefusal` (the panel still does not learn the role). Eleven sentences change in all,
+   including every leftover "edit lock" (`use-plan-workspace-model.ts`, `unsaved-work/report.ts`, `RolesPanel`,
+   `ProgrammeScheduleSection`, and `NeedsAttentionSection.tsx` "You are holding the editing lock.", which the last
+   hand-off missed). One of them was wrong, not just old: the selection bar says "Take the edit lock…" even when a
+   colleague is editing. Web patch, two small milestones, accessibility review in a browser before release.
+
+**Questions put to the owner on 2026-11-13:**
+
+3. **A visible, unattended tab.** Options put: leave it (a colleague can already Request control and take over
+   after the 45-second grace, so the plan is never stuck); let go quietly after a period with no mouse or keyboard
+   input in the tab (recommended: 30 minutes, no prompt, resumes on the next input); or an "Are you still
+   editing?" prompt (not recommended: it interrupts reading). A yes needs a spec.
+4. **Three "Follow logic" choices:** remember Dismiss per device after a reload (recommended yes); a whole-plan
+   action on a short window (recommended: inside the conflict review, not a strip; needs a short spec); shorten
+   the Select tool's hint ("Marquee select · drag to select, Ctrl to add · Esc to stop", `CanvasModeBand.tsx`)
+   so it fits one line at 1024 px (recommended yes, measured in a journey).
+5. **Which batch next.** All 57 open second-severity problems on the walkthrough list were checked against the
+   1.8.0 code by reading it (no browser): **1 fixed** (rank 74, the SF link, by the 1.2.0 offer; an SF case was
+   not run), **3 partly fixed** (21, 61, 75; 46 also partly, by 1.8.0), **5 changed** (40, 41, 51, 56 and 34
+   slightly), **6 need a browser to tell** (20, 42, 43, 47, 49, 53), the rest still open. The per-item evidence is
+   in the three tables this session produced; the walkthrough page itself was **not** updated with these verdicts.
+   Batches proposed by screen: quick copy fixes across screens; home, members and invitations; plan set-up
+   (new plan, calendar dialog, schedule settings); baseline and progress feedback on the plan; Gantt; share page;
+   import; and a "needs a browser first" group.
+
+**The runbook** (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`) had 32 hints corrected against web 1.8.0 by
+reading the code (double-click, the Delete key, keys after a drag, Ctrl-click, "3 selected", every "press Start
+editing", and the hand-over wording in chapter 12). Step 3.1's goal and the "expect" lines of 7.14, 8.4 and 12.6
+were also corrected, because they described behaviour that has changed. The 94 answers were not touched and none
+is newer than 2026-11-11, so the problem list gained nothing.
 
 **Known and recorded, not started:**
 
 - `docs/TECH_DEBT.md` **#586** (data date moved backwards is unchecked), **#587** (an administrator's force-release
   would be undone by the released editor's silent retake; no screen reaches force-release today) and **#588**
-  (above).
+  (specified above, not built).
 - At 1024 × 600 the diagram with a selection is still 64 to 84 px under the 350 px floor.
-- User-facing strings that still say "edit lock": `use-plan-workspace-model.ts` (two refusal messages),
-  `lib/unsaved-work/report.ts`, and the `RolesPanel` copy. Not in any reviewed list; found while fixing others.
 - When the pen is lost to a colleague the sentence can be announced twice: first "Someone else is now editing…",
   then with the name once the status read lands.
 - Two suggestions from `security-reviewer`, neither a defect: mark automatic acquires in the lock's log line (needs
