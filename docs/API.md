@@ -241,7 +241,7 @@ and then sweeps the new row with its siblings. The OpenAPI 404 on each create sa
 
 The single-editor "pen" lives under a plan as an `edit-lock` sub-resource. Reads
 are open to any member (`plan:read`); acquire/heartbeat/release/hand-off need
-`plan:acquire_lock`; request-control needs `plan:request_control`; immediate
+`plan:acquire_lock`; request-control and withdrawing it need `plan:request_control`; immediate
 override needs `plan:override_lock` (Org Admin).
 
 | Method | Path                                  | Notes                                                                    |
@@ -250,6 +250,7 @@ override needs `plan:override_lock` (Org Admin).
 | POST   | `…/plans/:planId/edit-lock`           | Acquire/renew; `{ takeover: true }` steals per server policy · 423 held. |
 | POST   | `…/plans/:planId/edit-lock/heartbeat` | Renew the holder's lease · 423 `PLAN_EDIT_LOCK_LOST`.                    |
 | POST   | `…/plans/:planId/edit-lock/request`   | Register a peer request-control (no transfer).                           |
+| DELETE | `…/plans/:planId/edit-lock/request`   | Withdraw your own pending request · 200 + status, idempotent.            |
 | POST   | `…/plans/:planId/edit-lock/handoff`   | Holder hands the pen to the requester · 409 if none pending.             |
 | DELETE | `…/plans/:planId/edit-lock`           | Release (holder) / force-release (override) · 204, idempotent.           |
 

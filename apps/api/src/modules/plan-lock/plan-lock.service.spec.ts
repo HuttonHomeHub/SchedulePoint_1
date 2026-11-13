@@ -69,10 +69,16 @@ describe('PlanEditLockService', () => {
     renewOwnLease: ReturnType<typeof vi.fn>;
     heartbeat: ReturnType<typeof vi.fn>;
     stampRequest: ReturnType<typeof vi.fn>;
+    clearOwnRequest: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
     findActors: ReturnType<typeof vi.fn>;
   };
   let prisma: { $transaction: ReturnType<typeof vi.fn> };
+  let logger: {
+    info: ReturnType<typeof vi.fn>;
+    warn: ReturnType<typeof vi.fn>;
+    error: ReturnType<typeof vi.fn>;
+  };
   let service: PlanEditLockService;
 
   beforeEach(() => {
@@ -88,6 +94,7 @@ describe('PlanEditLockService', () => {
       renewOwnLease: vi.fn().mockResolvedValue(1),
       heartbeat: vi.fn().mockResolvedValue(lockRow({ holderUserId: ME })),
       stampRequest: vi.fn().mockResolvedValue(1),
+      clearOwnRequest: vi.fn().mockResolvedValue(0),
       remove: vi.fn().mockResolvedValue(1),
       findActors: vi.fn().mockResolvedValue(new Map()),
     };
@@ -95,7 +102,7 @@ describe('PlanEditLockService', () => {
     prisma = {
       $transaction: vi.fn((cb: (tx: unknown) => unknown) => cb({ $executeRaw: vi.fn() })),
     };
-    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as PinoLogger;
+    logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     // Enforcement ON so the assertHoldsPen tests exercise the gate (the staged
     // rollout flag is covered separately below).
     const config = { planEditLockEnforced: true } as unknown as AppConfigService;
@@ -105,7 +112,7 @@ describe('PlanEditLockService', () => {
       repository as unknown as PlanLockRepository,
       config,
       prisma as unknown as PrismaService,
-      logger,
+      logger as unknown as PinoLogger,
     );
   });
 
@@ -290,6 +297,81 @@ describe('PlanEditLockService', () => {
       const s = await service.request(principal(ME, PLANNER), SLUG, PLAN_ID);
       expect(repository.stampRequest).not.toHaveBeenCalled();
       expect(s.state).toBe('FREE');
+    });
+  });
+
+  describe('cancelRequest', () => {
+    it('denies a caller without plan:request_control (403)', async () => {
+      await expect(
+        service.cancelRequest(principal(ME, VIEWER), SLUG, PLAN_ID),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect(repository.clearOwnRequest).not.toHaveBeenCalled();
+    });
+
+    it('404s an out-of-scope plan', async () => {
+      plans.findActiveByIdInOrg.mockResolvedValue(null);
+      await expect(
+        service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    it('clears the caller’s own request and logs it once with the holder', async () => {
+      const mine = lockRow({ holderUserId: OTHER, requestedByUserId: ME, requestedAt: new Date() });
+      repository.find
+        .mockResolvedValueOnce(mine)
+        .mockResolvedValueOnce(lockRow({ holderUserId: OTHER }));
+      repository.clearOwnRequest.mockResolvedValue(1);
+      const s = await service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID);
+      expect(repository.clearOwnRequest).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ planId: PLAN_ID, organizationId: ORG_ID, requesterId: ME }),
+      );
+      const logged = logger.info.mock.calls.filter(
+        (c) => (c[0] as { event?: string }).event === 'plan_edit_lock.request_cancelled',
+      );
+      expect(logged).toHaveLength(1);
+      expect(logged[0]?.[0]).toMatchObject({ holder: OTHER, userId: ME });
+      expect(s.state).toBe('HELD_BY_OTHER');
+      expect(s.requestedBy).toBeNull();
+    });
+
+    it('is a quiet no-op when no lock row exists', async () => {
+      repository.find.mockResolvedValue(null);
+      const s = await service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID);
+      expect(s.state).toBe('FREE');
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('is a quiet no-op when there is no request', async () => {
+      repository.find.mockResolvedValue(lockRow({ holderUserId: OTHER }));
+      const s = await service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID);
+      expect(s.state).toBe('HELD_BY_OTHER');
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('leaves another user’s request standing and logs nothing', async () => {
+      repository.find.mockResolvedValue(
+        lockRow({ holderUserId: OTHER, requestedByUserId: 'user-third', requestedAt: new Date() }),
+      );
+      const s = await service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID);
+      expect(s.requestedBy?.id).toBe('user-third');
+      expect(logger.info).not.toHaveBeenCalled();
+    });
+
+    it('clears my request on an expired row and reports EXPIRED', async () => {
+      const expired = lockRow({
+        holderUserId: OTHER,
+        expiresAt: new Date(Date.now() - 1_000),
+        requestedByUserId: ME,
+        requestedAt: new Date(),
+      });
+      repository.find
+        .mockResolvedValueOnce(expired)
+        .mockResolvedValueOnce({ ...expired, requestedByUserId: null, requestedAt: null });
+      repository.clearOwnRequest.mockResolvedValue(1);
+      const s = await service.cancelRequest(principal(ME, PLANNER), SLUG, PLAN_ID);
+      expect(s.state).toBe('EXPIRED');
+      expect(logger.info).toHaveBeenCalledTimes(1);
     });
   });
 

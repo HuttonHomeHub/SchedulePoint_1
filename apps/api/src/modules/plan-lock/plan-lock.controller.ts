@@ -32,7 +32,7 @@ import { PlanEditLockService } from './plan-lock.service';
 /**
  * Plan edit-lock routes (ADR-0028) — the single-editor "pen". Reads are open to any
  * member (`plan:read`); acquire/heartbeat/release/hand-off need `plan:acquire_lock`;
- * request-control needs `plan:request_control`. Lock-precondition failures return
+ * request-control and withdrawing it need `plan:request_control`. Lock-precondition failures return
  * **423 Locked** (distinct from the 409 optimistic conflict), documented on each route.
  */
 @ApiTags('plan-edit-lock')
@@ -105,6 +105,21 @@ export class PlanLockController {
     @Param('planId', ParseUUIDPipe) planId: string,
   ): Promise<PlanEditLockStatusDto> {
     return PlanEditLockStatusDto.from(await this.service.request(principal, orgSlug, planId));
+  }
+
+  @Delete('request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Withdraw your own pending request-control (Planner or Org Admin).' })
+  @ApiOkResponse({
+    type: PlanEditLockStatusDto,
+    description: "Idempotent; clears only the caller's own request.",
+  })
+  async cancelRequest(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUUIDPipe) planId: string,
+  ): Promise<PlanEditLockStatusDto> {
+    return PlanEditLockStatusDto.from(await this.service.cancelRequest(principal, orgSlug, planId));
   }
 
   @Post('handoff')

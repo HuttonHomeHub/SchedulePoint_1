@@ -154,6 +154,23 @@ export class PlanLockRepository {
   }
 
   /**
+   * Clear a pending request-control, but only if the caller made it. The WHERE carries the
+   * requester id so a later requester's record (newest wins) is never touched; with no
+   * matching row the write is a no-op and the count is 0.
+   */
+  async clearOwnRequest(
+    tx: Prisma.TransactionClient,
+    params: { planId: string; organizationId: string; requesterId: string },
+  ): Promise<number> {
+    const { planId, organizationId, requesterId } = params;
+    const res = await tx.planLock.updateMany({
+      where: { planId, organizationId, requestedByUserId: requesterId },
+      data: { requestedByUserId: null, requestedAt: null },
+    });
+    return res.count;
+  }
+
+  /**
    * Delete the lock row (release). Scoped to the holder unless `holderUserId` is
    * omitted (a force-release by an override-holder). Idempotent — returns the count.
    */

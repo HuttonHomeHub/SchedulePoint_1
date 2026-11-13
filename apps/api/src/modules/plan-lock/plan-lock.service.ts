@@ -226,6 +226,42 @@ export class PlanEditLockService {
     });
   }
 
+  /**
+   * Withdraw the caller's own pending request-control. Idempotent: with no request, or one
+   * made by someone else, nothing is written and the current status comes back.
+   */
+  async cancelRequest(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<PlanEditLockStatus> {
+    const organizationId = await this.resolvePlanOrg(
+      principal,
+      orgSlug,
+      planId,
+      'plan:request_control',
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      await acquirePlanWriteLock(tx, planId);
+      const now = new Date();
+      const row = await this.repository.find(planId, organizationId, tx);
+      const cleared = await this.repository.clearOwnRequest(tx, {
+        planId,
+        organizationId,
+        requesterId: principal.userId,
+      });
+      if (cleared === 0) {
+        return this.buildStatus(planId, organizationId, row, now, principal, tx);
+      }
+      this.audit('request_cancelled', principal, organizationId, planId, {
+        holder: (row as NonNullable<typeof row>).holderUserId,
+      });
+      const refreshed = await this.repository.find(planId, organizationId, tx);
+      return this.buildStatus(planId, organizationId, refreshed, now, principal, tx);
+    });
+  }
+
   /** Hand the pen directly to the pending requester (holder-initiated, graceful). */
   async handoff(
     principal: Principal,
