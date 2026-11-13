@@ -216,8 +216,11 @@ const FOOT_TOGGLE_CLASS = 'ml-auto shrink-0';
  * inset and gap the facts' own row carries around them. What does NOT yield is anything a reader
  * can press or that announces: Recalculate and the schedule's state, the pen's hand-off actions and
  * its live sentence. A command is shaded with its reason, never hidden (ADR-0082), and the same
- * rule keeps a stale schedule's remedy on the row while a bar is selected. The pen's state is still
- * on screen in the command deck's Stop editing / Start editing control. A literal string, because
+ * rule keeps a stale schedule's remedy on the row while a bar is selected. For the editing and free
+ * states the pen's state is still on screen in the command deck's Stop editing / Start editing
+ * control; the locked and lost badges do not yield (`CompactPenStatus` emits the hook only for the
+ * quiet tones), because they are standing warnings (ADR-0132). "Fewer lines" means lines of
+ * controls: a conflict reason sentence sits above them as a further row. A literal string, because
  * Tailwind reads classes from source.
  */
 const SELECTION_FACTS_YIELD =

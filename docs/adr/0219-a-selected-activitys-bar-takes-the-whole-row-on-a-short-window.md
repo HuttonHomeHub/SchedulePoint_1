@@ -6,9 +6,12 @@
 - **Date:** 2026-11-12
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:** [ADR-0092](0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md) (the dock's vertical budget in a
-  selection state, on a short window) and [ADR-0216](0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
-  D9 (the trailing facts group is no longer always painted).
-- **Extends:** [ADR-0026](0026-tsld-canvas-rendering-and-architecture.md) (the selection reveal: a click is not a key).
+  selection state, on a short window).
+- **Extends:** [ADR-0216](0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
+  D9 (it changes nothing in D9's text; the trailing facts group is, on a short window while a selection bar is docked,
+  visually hidden rather than always painted) and [ADR-0026](0026-tsld-canvas-rendering-and-architecture.md) (the
+  selection reveal: a click is not a key). `docs/UX_STANDARDS.md`'s rule "a fact relocates; it never disappears" gains
+  an exception for this state.
 - **Spec:** [`docs/specs/diagram-keys-and-selection/`](../specs/diagram-keys-and-selection/feature-spec.md) §4.8–§4.9 ·
   **Plan:** [`implementation-plan.md`](../specs/diagram-keys-and-selection/implementation-plan.md) (M6) ·
   **Measurement:** [`m5-measurement.md`](../specs/diagram-keys-and-selection/m5-measurement.md) ("M6 before building",
@@ -38,8 +41,9 @@ first, and if it did not fit, stop rather than fall back to an overflow.
 held). The fullest single-selection bar: a hand-placed, constraint-conflicted task under a WBS summary, on a plan with
 hand-made swimlanes and a code type. Its fifteen controls: Review the constraint…, Logic, Notes, Progress, Resources,
 Edit, Duplicate, Move to swimlane…, Set code…, Delete, Follow logic, Zoom to selection, Isolate logic path, its options,
-Float paths. Today it takes **five lines** (foot 227 px, diagram 200). At the full foot width it takes **three** (foot
-147 px, diagram 266), the object group on two lines and the view group on the third. The stop conditions (more than three
+Float paths. Today it takes **five lines** (foot 227 px, diagram 200). At the full foot width it takes **three** lines of controls (foot
+147 px, diagram 266), the object group on two lines and the view group on the third. A conflict reason sentence sits
+above the controls as a fourth row. The stop conditions (more than three
 lines, or less diagram than today) were **not met**.
 
 ## Decision
@@ -51,8 +55,11 @@ plan facts that **only inform** step aside: the data date / finish / count / cri
 together with the inset and gap the facts' row carries around them. They return the moment the bar unmounts.
 
 They are **visually hidden and kept in the accessibility tree** (`sr-only`), not removed: nothing a screen reader reads
-changes. State is never carried by absence alone: the pen's state is also on the command deck's Start editing / Stop
-editing control, and the schedule's state stays on the row (below).
+changes. State is never carried by absence alone. That holds for the editing and free states, where the pen's state is also on
+the command deck's Stop editing / Start editing control. **The `locked` and `lost` badges do not yield**
+(`Locked · Alexandra`, the lost-lock badge): they are standing warnings (ADR-0132) and the only sighted statement of who
+holds the pen, so `data-pen-badge` is emitted only for the `editing` and `neutral` tones. The schedule's state stays on
+the row (below).
 
 What does **not** yield, because it is pressable or announces: **Recalculate** and the schedule-state text (a command is
 shaded with its reason, never hidden, ADR-0082; a stale schedule's one remedy stays where it was), the pen's **hand-off
@@ -67,7 +74,8 @@ the single bar on a short window (97 px against 87), which `e2e-multi-select` ho
 JavaScript state (nothing can disagree with the bar), no new media query, **no change to the shared `Toolbar`'s public
 contract**, no overflow. The facts and the pen's badge carry one data hook each (`data-plan-fact-list`,
 `data-pen-badge`, and `data-plan-facts` for the row's inset); unit tests pin the declaration and the hooks, the journey
-proves it takes effect.
+proves it takes effect. The rule is declared on the row, so it cannot see how many actions the bar has: a selection bar
+with very few actions (a viewer's) hides the facts for no space gain. That is accepted as the price of a CSS-only rule.
 
 ### D3 — 1280 × 720 is left as it is
 
@@ -91,13 +99,17 @@ of the bar was clear of it.
 
 ## Consequences
 
-- At 1024 × 600 the fullest bar costs three lines instead of five and the diagram keeps 66 px more (266 against 200);
-  the plain bar costs fewer lines in the same proportion. The journey states the claim as a comparison measured in the
+- At 1024 × 600 the fullest bar costs three lines of controls instead of five and the diagram keeps 66 px more (266
+  against 200); the plain bar costs fewer lines in the same proportion. **The diagram is still under the 350 px floor
+  there**: about 84 px short with the fullest bar and 64 px with a plain one (`m5-measurement.md`). This shortens the
+  gap; it does not close it. The journey states the claim as a comparison measured in the
   same run (the same bar with the one rule removed from the row), never a literal.
 - While an activity is selected on a short window, a sighted reader does not see the data date, finish or count. They are
   one Escape away, the foot row is unchanged once the selection clears, and a screen reader still reads them. This is the
   owner's accepted loss of context, and `docs/UX_STANDARDS.md` records it.
 - A click on a bar no longer moves it unless the stage hides it. Keyboard navigation is unchanged.
+- A locked or lost pen badge stays painted while a bar is selected, so the one sighted statement of who holds the pen is
+  never hidden.
 - The Gantt's selection bar is the same component, so the rule applies on a short window there as well.
 
 ## Alternatives considered

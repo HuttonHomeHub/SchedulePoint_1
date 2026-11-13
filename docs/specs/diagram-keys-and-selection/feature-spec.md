@@ -465,6 +465,8 @@ moved".** Amends ADR-0187 (order on a short window), ADR-0092 / ADR-0114 (the do
 states), and records the bounded exception to the `Toolbar` no-overflow position. If S1 needs a `Toolbar` prop, it is
 a public-contract change: component-reviewer and accessibility-reviewer before release (ADR-0111).
 
+_Superseded by what was decided: S-B, no overflow menu, no `Toolbar` change; see ADR-0219 as filed._
+
 ### 4.10 Implementation approach & alternatives
 
 Thin slices, cheapest first: M0 verify (no product change), M1 keys after a click (+ ADR), M2 Delete, M3 double-click,

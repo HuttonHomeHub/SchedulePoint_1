@@ -496,7 +496,9 @@ status row — has a **width budget its occupants must be ranked against, and th
 ranking is declared rather than emergent**. Three rules, each of which this
 product got wrong once:
 
-- **A fact relocates; it never disappears.** The plan's facts (activity count,
+- **A fact relocates; it never disappears** — except while a selection bar is docked on a short window, when
+  the plan facts and the quiet pen badge are visually hidden and still read by a screen reader (ADR-0219).
+  The plan's facts (activity count,
   critical count, project finish, schedule state) render in the workspace's foot
   row when that row exists and in the shell's status row when it does not. The
   foot row wraps (ADR-0181), so at 320 px the facts take their own lines and
@@ -563,7 +565,8 @@ width, so every action keeps its label and no overflow menu is needed.
   of a selection is the owner's accepted cost (2026-11-12).
 - **They are visually hidden, never removed:** a screen reader reads them as before. What a reader can
   press or that announces does not yield: Recalculate and the schedule's state, the pen's hand-off actions and
-  its live sentence. Pen state is also on the command deck's Start / Stop editing control.
+  its live sentence. The editing and free states are also on the command deck's Start / Stop editing control;
+  the **Locked** and lost-lock badges stay painted, because they are standing warnings (ADR-0132).
 - **A bar you click stays where it is** unless the bottom row hides it, and then it moves by the least. Keyboard
   navigation keeps its margin (WCAG 2.4.11).
 

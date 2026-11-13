@@ -180,8 +180,10 @@ export function PenStatusCluster({
       )}
     >
       <Badge
-        // The hook the foot row's selection rule reads (`SELECTION_FACTS_YIELD`).
-        data-pen-badge=""
+        // The hook the foot row's selection rule reads (`SELECTION_FACTS_YIELD`). Only the quiet
+        // tones carry it: `Locked · Alexandra` and the lost-lock badge are standing warnings
+        // (ADR-0132) and the only sighted statement of who holds the pen, so they stay painted.
+        data-pen-badge={view.tone === 'editing' || view.tone === 'neutral' ? '' : undefined}
         variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}
       >
         {/* `Locked · Alexandra` where a holder exists — the one thing the four-word badge
