@@ -456,6 +456,9 @@ keep `main` releasable.
   click or a drag on the diagram, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y, Ctrl+C, Ctrl+V, Escape and the arrow keys act on the
   diagram, and undo, redo, copy and paste also work from the page body or the shell, in the Gantt as well. Escape now
   clears a selection after a click. Delete, double-click and Ctrl-click, and the short-window selection bars, follow in M2 to M7.
+  **M6 (decided in [ADR-0219](adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)):** on a window up to 704 px
+  high, a selected activity's bar takes the whole bottom row while the plan facts step aside, and a bar you click stays put
+  unless the bottom row covers it.
 
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at

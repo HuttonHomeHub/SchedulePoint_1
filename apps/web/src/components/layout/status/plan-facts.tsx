@@ -70,6 +70,9 @@ export function PlanFacts({
   return (
     <div
       data-schedule-state={scheduleStateAttr(scheduleState)}
+      // The hook the foot row's selection rule reads (`SELECTION_FACTS_YIELD`).
+      data-plan-facts=""
+
       /*
        * **`flex-wrap` with a ZERO row gap** (foot-row-and-deck M4).
        *
@@ -212,7 +215,7 @@ function FactList({
   pending: boolean;
 }): React.ReactElement {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-plan-fact-list="">
       <div className="flex items-center gap-x-4">
         <Fact
           label="Data date"

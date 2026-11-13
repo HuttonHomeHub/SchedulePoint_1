@@ -1431,6 +1431,9 @@ function SelectionActionsBarBody({
     <div
       // Asks the dock outlet for a line of its own on a finger-sized window — see `CanvasDockOutlet`.
       data-dock-wide=""
+      // Read by the foot row, which sets the passive plan facts aside on a short window while a
+      // selection bar is docked — see `SELECTION_FACTS_YIELD`.
+      data-selection-bar=""
       {...wrapperProps}
       // **It has a card now, and the invariant this comment used to assert is not gone — it is a
       // variant.** It read: "No border, padding or radius: docked, the ROW is the container, and a

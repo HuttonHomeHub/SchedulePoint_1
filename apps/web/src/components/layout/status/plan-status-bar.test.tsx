@@ -103,6 +103,31 @@ describe('PlanStatusBar', () => {
     expect(screen.queryByText('Recalculating…')).not.toBeInTheDocument();
   });
 
+  it('carries the two hooks the foot row sets aside on a short window, and only on the passive facts', () => {
+    const { container } = render(
+      <PlanStatusBar
+        {...base}
+        scheduleState={{
+          kind: 'stale',
+          edits: 1,
+          failed: false,
+          refusal: null,
+          editedSinceCalculated: false,
+        }}
+      />,
+    );
+    // `SELECTION_FACTS_YIELD` (activity-bottom-panel.tsx) reads these. The list holds the dates and
+    // counts and never the Recalculate button, which a reader must still be able to press.
+    const list = container.querySelector('[data-plan-fact-list]');
+    expect(container.querySelector('[data-plan-facts]')).not.toBeNull();
+    expect(list).not.toBeNull();
+    expect(list?.textContent).toMatch(/Data date/);
+    expect(list?.querySelector('button')).toBeNull();
+    expect(screen.getByRole('button', { name: /Recalculate/ })).not.toHaveAttribute(
+      'data-plan-fact-list',
+    );
+  });
+
   describe('the schedule state, and Recalculate attached to it (M3-T5)', () => {
     it('publishes `pending`, and NOT `current`, before the summary arrives', () => {
       // **The second half is the assertion; the first is only how it is read.** With the summary

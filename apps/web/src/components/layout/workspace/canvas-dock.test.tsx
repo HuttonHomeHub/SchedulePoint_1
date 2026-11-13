@@ -158,6 +158,26 @@ describe('the data-dock-wide marker', () => {
 });
 
 /**
+ * **The `data-selection-bar` marker** (diagram-keys-and-selection M6, ADR-0219): both selection bars set
+ * it and the foot row's `SELECTION_FACTS_YIELD` reads it, in three files and under one literal name.
+ */
+describe('the data-selection-bar marker', () => {
+  const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8');
+
+  it('is set by both selection bars and read by the foot row under the same name', () => {
+    expect(read('src/components/layout/workspace/activity-bottom-panel.tsx')).toMatch(
+      /short:has-\[\[data-selection-bar\]\]:/,
+    );
+    expect(read('src/features/plan-actions/selection-actions.tsx')).toMatch(
+      /\n\s+data-selection-bar=""/,
+    );
+    expect(read('src/features/tsld/components/BulkSelectionBar.tsx')).toMatch(
+      /\n\s+data-selection-bar=""/,
+    );
+  });
+});
+
+/**
  * **The `data-dock-row` marker** (placed-bar-follows-link M2, ADR-0216 D8). A strip that must be read
  * whole marks itself and the outlet asks for 36 rem on any pointer. Same literal-class constraint
  * as `data-dock-wide`, so the pair is pinned in the source: renaming either side would leave the

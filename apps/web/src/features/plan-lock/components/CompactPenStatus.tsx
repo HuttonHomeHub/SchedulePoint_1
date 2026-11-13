@@ -179,7 +179,11 @@ export function PenStatusCluster({
         TONE_TINT[view.tone],
       )}
     >
-      <Badge variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}>
+      <Badge
+        // The hook the foot row's selection rule reads (`SELECTION_FACTS_YIELD`).
+        data-pen-badge=""
+        variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}
+      >
         {/* `Locked · Alexandra` where a holder exists — the one thing the four-word badge
             vocabulary cannot say on its own. Measured at 120 px for the longest realistic name
             against 106 px of header headroom at 1646 plus a row that wraps (ADR-0112 D4), so it

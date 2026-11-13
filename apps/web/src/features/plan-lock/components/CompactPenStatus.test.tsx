@@ -54,6 +54,15 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
     expect(region).toHaveAttribute('aria-live', 'polite');
   });
 
+  it('marks its badge for the foot row, which sets it aside while a bar is selected on a short window', () => {
+    const { container } = render(
+      <CompactPenStatus pen={makePen({ status: status({ state: 'FREE', canAcquire: true }) })} />,
+    );
+    // The hook `SELECTION_FACTS_YIELD` (activity-bottom-panel.tsx) reads. Renaming it silently turns
+    // the rule off, and only a short-window journey would notice.
+    expect(container.querySelectorAll('[data-pen-badge]')).toHaveLength(1);
+  });
+
   it('offers Start editing on a free plan and calls startEditing (parity with the banner)', () => {
     const pen = makePen({ status: status({ state: 'FREE', canAcquire: true }) });
     render(<CompactPenStatus pen={pen} />);

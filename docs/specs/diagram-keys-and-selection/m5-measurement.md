@@ -224,6 +224,73 @@ row, 200 % text included.
   Clear already is on a finger), which frees about 80 px and is borderline. It was **not** built: the brief keeps the visible
   label, and it is a decision for the owner, not for a builder.
 
+## M6 before building: the fullest single bar, and what the whole foot row would give it
+
+- **Date:** 2026-11-12, tree `keys-work` at M7 plus the plural-bar fix. **Harness:** a throwaway Playwright spec on the
+  measure config, [`measure-toolbar/diagram-keys-m6-before.spec.ts`](../../../apps/web/measure-toolbar/diagram-keys-m6-before.spec.ts)
+  (asserts nothing about a pixel). **Raw readings:** [`readings/diagram-keys-m6-before.json`](./readings/diagram-keys-m6-before.json).
+  Real sign-up, real API, real Chromium, fine pointer, the browser's default text size, the pen held.
+- **The bar.** The seeded "three long-named bands made by hand" swimlane plan, plus a WBS summary the activity sits under, a
+  code type with a value, and "Pile caps" given a mandatory-start constraint earlier than its hand-placed start (so it is
+  hand-placed and conflicted). **Fifteen controls**, in order: Review the constraint…, Logic, Notes, Progress, Resources,
+  Edit, Duplicate, Move to swimlane…, Set code…, Delete, Follow logic, Zoom to selection, Isolate logic path, Isolate logic
+  path options, Float paths. The conflict's reason sentence sits on a line above them. Not on this bar: Make milestone…
+  (a zero-duration task only), Duplicate band and Dissolve (a summary only), so this is the fullest bar for one task, not
+  for every selection.
+- **"Full width"** is the same bar with the plan facts hidden by a rule injected into the page for the reading (the whole
+  first child of the foot row's trailing group), which is the layout the owner chose, read before it was built.
+
+| Size       | State                            | Foot | Diagram | Lines | Controls |
+| ---------- | -------------------------------- | ---- | ------- | ----- | -------- |
+| 1024 × 600 | idle                             | 51   | 362     | 0     | 0        |
+| 1024 × 600 | fullest, today (facts beside it) | 227  | 200     | **5** | 15       |
+| 1024 × 600 | fullest, at the full foot width  | 147  | 266     | **3** | 15       |
+| 1280 × 720 | idle                             | 51   | 482     | 0     | 0        |
+| 1280 × 720 | fullest, today                   | 187  | 346     | 4     | 15       |
+| 1280 × 720 | fullest, at the full foot width  | 147  | 386     | 3     | 15       |
+
+- **The stop conditions were not met.** The fullest bar needs **three** lines at the full width, not more than three, and
+  leaves the diagram **266 px against the 200 px it has today** for this bar (246 px was the plain bar's figure in M5; this
+  is the dearer bar). Nothing clipped and no sideways scroll in any reading. So S-B was built and the More menu was not.
+- **Where the three lines come from.** The object group (eleven controls here) takes two lines at 675 px (six, then five);
+  the view group (Zoom to selection, Isolate and its options, Float paths) is its own group and takes the third, because the
+  second line has about 310 px left and that group needs about 310 plus its divider. Nothing in S-B makes a line of it
+  cheaper; only a narrower control or a shorter label would.
+- **1280 × 720** is not `short`. It reads four lines for this bar today and would read three at the full width (+40 px for
+  the diagram). Whether to extend the rule there is ADR-0219 D3: no.
+
+## M6 as built
+
+- **Date:** 2026-11-12. **Harness:** [`measure-toolbar/diagram-keys-m6-after.spec.ts`](../../../apps/web/measure-toolbar/diagram-keys-m6-after.spec.ts),
+  same plan and conditions as above, the product's own rule (nothing injected). **Raw readings:**
+  [`readings/diagram-keys-m6-after.json`](./readings/diagram-keys-m6-after.json). **Picture for the owner, 1024 × 600 at
+  device scale factor 2:** [`readings/m6-1024x600-fullest-selected.png`](./readings/m6-1024x600-fullest-selected.png).
+
+| Size       | State                     | Foot | Diagram | Lines | Controls | Facts painted |
+| ---------- | ------------------------- | ---- | ------- | ----- | -------- | ------------- |
+| 1024 × 600 | idle                      | 51   | 362     | 0     | 0        | yes (329 px)  |
+| 1024 × 600 | fullest bar selected      | 147  | **266** | **3** | 15       | no            |
+| 1024 × 600 | a plain bar (13 controls) | 127  | 286     | 3     | 13       | no            |
+| 1024 × 600 | after Escape              | 51   | 362     | 0     | 0        | yes (329 px)  |
+| 1280 × 720 | fullest bar selected      | 187  | 346     | 4     | 15       | yes           |
+| 1280 × 720 | a plain bar (13 controls) | 127  | 406     | 3     | 13       | yes           |
+
+- **It matches the reading taken before building, to the pixel:** 147 and 266, three lines, at 1024 × 600, so the injected
+  rule was a faithful forecast. The facts return exactly (foot 51, diagram 362, facts 329 px wide) the moment the selection
+  clears.
+- **What a reader still sees on that row while the bar is up:** the schedule state and Recalculate when the schedule is
+  stale, the pen's hand-off actions when there are any, the foot row's Collapse button. The facts and the badge are
+  visually hidden and read out as before.
+- **The diagram is 84 px under the 350 px floor** with the fullest bar at 1024 × 600 (and 64 px under with a plain
+  13-control bar). S-B does not close that gap, it cuts the shortfall from 150 px (200 px of diagram today) to 84 px; closing it is a different decision
+  (the owner's, S-A or fewer controls).
+- **The jump.** The 1024 × 600 journey (`e2e-workspace-fit/selection-bar-short.spec.ts`) reads the clicked bar's place before
+  and after in the same run: a bar still wholly visible does not move, and one the dock's shrink hides moves up by about what
+  was hidden and no more. It found a second mover the M5 record had not: at 1024 × 600 the reveal's corner-column clearance
+  slid a wholly clickable low bar 37 px before the dock had taken anything, so a pointer selection skips that step too
+  (ADR-0219 D4). Keyboard selections keep both the 60 px margin and the clearance.
+- **Not read:** coarse pointer, 200 % text, 1920 × 1080, Firefox and WebKit.
+
 ## What was not done
 
 - No candidate was built in the probe; the S-A, S-B, S-C and plural-bar figures are inferences from the line-cost reading

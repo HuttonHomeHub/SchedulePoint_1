@@ -553,6 +553,20 @@ A panel that shows no rows is not an expanded panel.
 - **Size constants are measured, and coarse-sized.** One set for both pointers, because a Surface
   with its cover on reports a fine pointer (ADR-0118 D7).
 
+### A selected activity's bar takes the whole foot row on a short window (ADR-0219)
+
+On a window at most 704 px high (`short`), selecting one activity gives its action bar the foot row's full
+width, so every action keeps its label and no overflow menu is needed.
+
+- **The passive facts step aside while the bar is there:** the data date, finish, activity count, the critical
+  count and the pen's badge. They return the moment the selection clears. The loss of context for the length
+  of a selection is the owner's accepted cost (2026-11-12).
+- **They are visually hidden, never removed:** a screen reader reads them as before. What a reader can
+  press or that announces does not yield: Recalculate and the schedule's state, the pen's hand-off actions and
+  its live sentence. Pen state is also on the command deck's Start / Stop editing control.
+- **A bar you click stays where it is** unless the bottom row hides it, and then it moves by the least. Keyboard
+  navigation keeps its margin (WCAG 2.4.11).
+
 ## Perceived performance playbook
 
 - Prefetch route data on link hover/focus (intent).
