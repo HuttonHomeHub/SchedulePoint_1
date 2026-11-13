@@ -1,8 +1,9 @@
 # Implementation Plan: A fifth web end-to-end shard
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted; the owner chose the re-pack
-- **Status:** Approved 2026-10-12 as **M1' only** ("Just rebalance four"). M0 and M1 were not run and
-  stay documented as the alternative, to be taken up on the trigger in the spec's decision record.
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted; shipped
+- **Status:** Approved 2026-10-12 as **M1' only** ("Just rebalance four"); on 2026-11-13 the owner chose
+  M1 (five shards) after a shard was cancelled by its timeout, and it was built from re-harvested
+  durations without the three-run M0 (one fully green run existed). Shipped (ADR-0138, amended 2026-11-13).
 - **Owner:** builder agent (Sonnet), with devops-reviewer at review
 
 ## Breakdown

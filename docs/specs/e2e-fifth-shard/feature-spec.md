@@ -1,8 +1,8 @@
 # Feature Spec: A fifth web end-to-end shard
 
-- **Status:** Accepted — shipped (ADR-0138, amended 2026-10-12): the owner chose **option A, re-pack
-  four** ("Just rebalance four", 2026-10-12), so the five-shard design below is the documented
-  alternative, not the build. Commissioned the same day as "Spec a fifth group".
+- **Status:** Accepted — shipped (ADR-0138, amended 2026-10-12 and 2026-11-13): the owner first chose
+  **option A, re-pack four** ("Just rebalance four", 2026-10-12), and on 2026-11-13, after a shard was
+  cancelled by its 30-minute timeout on PR #1357, chose this five-shard design, which is now built. Commissioned the same day as "Spec a fifth group".
 - **Author(s):** feature-analyst, for the product owner
 - **Date:** 2026-10-12
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #491 (as re-measured on branch
@@ -36,6 +36,10 @@ M1' and nothing else:
 shard above `quality` again (§4.1: ~1,000 s against 1,103 s leaves 10 %, and ADR-0138 measures a
 27 % swing), or when ADR-0138's re-derived triggers fire. M0's measurement is then the first step,
 as written. §§1-4 below are unedited from the draft and argue for B; read them as that argument.
+
+**Built 2026-11-13.** The trigger fired and the owner chose five shards (ADR-0138's amendment of that
+date). The figures in §0 below are the 2026-10-12 ones and are not edited; the re-derived durations,
+pack and projection are in `scripts/e2e-durations.json` and the `ci.yml` comment above `e2e-web`.
 
 **Trigger restated 2026-10-13** (ADR-0138's amendment of that date): the "above `quality`" trigger fired on four
 consecutive runs and no four-way pack can meet it now that `quality` takes ~690 s. The trigger in force is: the slowest

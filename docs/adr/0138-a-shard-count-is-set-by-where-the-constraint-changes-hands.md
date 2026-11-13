@@ -5,6 +5,8 @@
 - **Amended:** 2026-10-12 (`docs/TECH_DEBT.md` #491) — the four shards were re-packed from fresh
   durations and the budget re-derived; the count stays four. See "Amendment 2026-10-12" at the end
   of this file.
+- **Amended:** 2026-11-13 — the fifth web shard was built after a shard was cancelled by its
+  30-minute timeout; the count becomes five. See "Amendment 2026-11-13" at the end of this file.
 - **Deciders:** product owner ("Approve — build it", 2026-09-12, on the four-shard spec); this pass
   (the milestone slicing, the approval gate's verdict, and every measurement that changed a number)
 - **Extends:** ADR-0058 (a gate that fails on day one gets deleted rather than fixed), ADR-0076
@@ -278,3 +280,45 @@ and is excluded):
   `docs/TECH_DEBT.md` #502 with its own trigger.
 - The fifth-shard trigger above is not near: the slowest shard's median over these four runs is about
   1,062 s against 1,250 s.
+
+## Amendment 2026-11-13 — a fifth web shard, after a shard was cancelled by its timeout
+
+**Trigger.** The 2026-10-13 amendment named two: the slowest web shard's median over three consecutive
+runs above 1,250 s, or any shard cancelled by its 30-minute timeout. The second fired on PR #1357:
+"End-to-end tests (web shard 2)" was cancelled at 16:26:06Z after starting 15:55:53Z, with every suite
+it had run passing and six still to run.
+
+**Evidence** (job logs read with `gh api`, step time taken as step start to next step start).
+
+- Run 43447550605 (PR #1355, head f9057c4b, all four shards green): suite steps summed to 1,570 /
+  1,643 / 1,164 / 1,016 s, 5,392 s in all, against 3,950 s recorded in `scripts/e2e-durations.json`
+  (2026-10-13). Job wall was 1,657 / 1,740 / 1,262 / 1,121 s, so shards 1 and 2 were already inside
+  about 5 minutes of the timeout while passing.
+- PR #1357 (head 63a84cb3): shard 1 took 1,539 s and shard 2 was cancelled at 1,813 s with 1,725 s of
+  suite steps done. The two PRs' figures for one suite differ by up to about 30 %.
+- What grew: base `test:e2e` 389 to 510-660 s, `edit` 124 to 527-604 s (five two-user pen-handoff
+  journeys with real 45-54 s waits, in web 1.9.0), `workspace-chrome` 510 to 745-823 s, `multi-select`
+  29 to 168-183 s. One more 130 s journey is about to land in `edit`.
+- Fixed cost (job wall less suite steps): 87-105 s on #1355 and 88-100 s on #1357.
+
+**Why four cannot hold.** 5,392 s plus the planned 130 s is 5,522 s. A perfect four-way pack is
+~1,380 s of suite time and ~1,480 s of wall time, so no four-way pack meets the 1,350 s (22.5-minute)
+ceiling the re-pack was asked to meet, which leaves 25 % under the timeout. The owner chose a fifth
+shard over raising the timeout on 2026-11-13, having declined one on 2026-10-12.
+
+**Decision.** D1's count becomes five. A longest-processing-time pack over the new durations, with
+`csp`, `forced-colors` and `splitting` kept as one unit on shard 1, gives suite sums of 1,089 / 1,109 /
+1,108 / 1,108 / 1,108 s and, with ~97 s of fixed cost, a projected ~1,205 s a shard (20 minutes).
+`timeout-minutes: 30` is kept; it is ~1.5 times the projection. `scripts/e2e-durations.json` carries the
+new figures with their provenance: one run, not a median, because it is the only fully green run
+since the editing suite grew. The `ci.yml` comment, `CLAUDE.md` §19.9 (eleven checks, five shards),
+`CONTRIBUTING.md`, `.claude/agents/devops-reviewer.md` and `docs/TESTING.md` were updated with it.
+
+**Triggers, restated.** Any shard's job wall above 1,350 s on a run whose head is otherwise green, or
+any shard cancelled by its timeout again, or the recorded durations found to be more than ~25 % below
+a fresh measurement (`docs/TECH_DEBT.md` #590, which records that the 2026-10-13 figures had drifted to
+73 % of measured with nothing gating it). The 2026-10-13 trigger of 1,250 s on the median of three
+runs stands as a reading; nothing asserts it.
+
+**Acceptance, to be recorded after merge.** Read the first three green `ci.yml` runs on `main` per
+`CLAUDE.md` §19.9: the slowest shard's wall below 1,350 s on each. That is a reading, not a gate (D4).

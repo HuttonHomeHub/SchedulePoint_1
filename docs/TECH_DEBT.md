@@ -9165,6 +9165,8 @@ _(2026-11-09: deleting the `authoring-flow-off` suite in 1.1.0 took 25 s off sha
 
 ADR-0138's re-pack projected an 18 s spread and measured 36 / 206 / 235 / 210 s. The slowest shard is 1,047 to 1,067 s on all four runs, so the point of the re-pack (a shorter wait) is met; the plan's "four within ~120 s" is not. The shortest shard rotates (shard 4, 4, 2, 2), which reads as run-to-run variation in the suites rather than a shard the pack under-filled, so no second re-pack was made on one reading (plan Task 1.2 step 4).
 
+_(2026-11-13: the pack was redone for five shards and the premise changed: the recorded durations had drifted, row 590. Spread is still a reading, not a gate.)_
+
 **Next:** if the same shard is shortest or longest again, re-derive `scripts/e2e-durations.json` from more than three runs before packing. **Trigger:** the same shard is the shortest, or the longest, on three consecutive `main` runs, or ADR-0138's fifth-shard trigger fires. Not work now.
 
 > **2026-10-16 — the 30-minute half of the fifth-shard trigger fired, and was not a suite-time
@@ -9377,3 +9379,12 @@ Since ADR-0220 D3 a refused heartbeat that finds the plan free is retaken silent
 While a request waits out the grace window the foot row shows **Take over now** shaded with the native `disabled` attribute. That takes it out of the Tab order and gives it no reason, so a person who cannot see the countdown has a control that does nothing and does not say when it will.
 
 **Next:** make it `aria-disabled` with a reason echoed beside it (the countdown, in words), as ADR-0082 and ADR-0204 do for the other shaded controls. **Trigger:** the next change to `EditLockControls`.
+
+### 590. The recorded end-to-end durations drifted to 73 % of what CI measures, and nothing gates the drift
+
+**Status:** open · **Verified:** 2026-11-13, by reading the web shard job logs of run 43447550605 (PR #1355, all green) with `gh api` and summing each suite's step time: 5,392 s measured against 3,950 s recorded in `scripts/e2e-durations.json` (2026-10-13), 73 %. `check-e2e-roster.mjs` only prints a projection from that file and `e2e-durations.test.mjs` asserts coverage and the file's own sum, never age or accuracy (both by reading).
+**Raised:** 2026-11-13 (building the fifth web shard) · **Size:** S · **Owner:** web/ci
+
+The four-shard pack of 2026-10-13 was derived from those figures and looked balanced at 936-953 s a shard, while real shards were already 1,016-1,643 s of suite time. The first sign was PR #1357's shard 2 cancelled by the 30-minute timeout. `workspace-chrome` alone grew from 510 to 745-823 s, `edit` from 124 to 527-604 s and base `test:e2e` from 389 to 510-660 s. The file's own docblock says to re-harvest rather than trust it, which is the vigilance ADR-0058 says to replace with a check. The fifth shard (ADR-0138's amendment of 2026-11-13) re-harvested the file from one run.
+
+**Next:** add a check or a scheduled refresh: for instance a CI step that prints each shard's measured suite sum beside its projection and flags a shard more than ~25 % off, or a periodic job that rewrites the durations from the last green run on `main`. **Trigger:** the next web shard whose job wall exceeds 1,350 s.

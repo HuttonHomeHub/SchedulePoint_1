@@ -844,7 +844,7 @@ Three kinds of job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   drift, runs the API Supertest suite and then the pairwise differential.
 - **e2e-web** — the same setup plus a Playwright browser install, then each web
   suite as its own step (default, plus one per surface), **spread across
-  four shard jobs** (ADR-0138). Each shard gets its own disposable Postgres, so
+  five shard jobs** (ADR-0138). Each shard gets its own disposable Postgres, so
   there is nothing between them to race.
 
 A further job, **image**, builds and smoke-boots the container images. All must
@@ -853,9 +853,9 @@ pass before merge.
 **Reading a red end-to-end check.** The check name gives you the shard — _End-to-end tests (web
 shard 3)_ — and the failing **step** inside it names the suite, exactly as it did when there was one
 job. The Playwright report artefact is per-shard (`playwright-report-shard-3`), because
-`upload-artifact` v4 refuses two uploads sharing a name and four shards uploading one name would
+`upload-artifact` v4 refuses two uploads sharing a name and shards uploading one name would
 turn a green test run red at the upload step. `fail-fast` is **off**: a red shard does not cancel
-the other three, because the whole value of sharding is lost if one failure hides what the rest
+the others, because the whole value of sharding is lost if one failure hides what the rest
 would have said.
 
 **Nothing about the local workflow changed, and that is deliberate.** No suite was renamed, merged

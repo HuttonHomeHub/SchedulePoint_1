@@ -537,7 +537,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0135** _(Accepted)_ — A container hands focus back when somebody else removes the control you were on → [`0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md`](docs/adr/0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md)
 - **ADR-0136** _(Accepted)_ — A rule is enforced where the artefact lands, and the roster is derived → [`0136-a-rule-is-enforced-where-the-artefact-lands.md`](docs/adr/0136-a-rule-is-enforced-where-the-artefact-lands.md)
 - **ADR-0137** _(Accepted)_ — A notification is a record, and the build waits for somebody to notify → [`0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md`](docs/adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)
-- **ADR-0138** _(Accepted; amended 2026-10-12 by #491 and 2026-10-13 by the re-pack)_ — A shard count is set by where the constraint changes hands → [`0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md`](docs/adr/0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)
+- **ADR-0138** _(Accepted; amended 2026-10-12 by #491, 2026-10-13 by the re-pack and 2026-11-13 by the fifth shard)_ — A shard count is set by where the constraint changes hands → [`0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md`](docs/adr/0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)
 - **ADR-0139** _(Accepted)_ — A sentinel is not a calendar → [`0139-a-sentinel-is-not-a-calendar.md`](docs/adr/0139-a-sentinel-is-not-a-calendar.md)
 - **ADR-0140** _(Accepted; amended 2026-10-11 by #456)_ — A diagnostic takes no input, so it cannot ask about anybody → [`0140-a-diagnostic-takes-no-input.md`](docs/adr/0140-a-diagnostic-takes-no-input.md)
 - **ADR-0141** _(Accepted)_ — A thumbnail's legibility is a pitch, not a zoom → [`0141-a-thumbnails-legibility-is-a-pitch-not-a-zoom.md`](docs/adr/0141-a-thumbnails-legibility-is-a-pitch-not-a-zoom.md)
@@ -904,27 +904,27 @@ When operating in this repo, Claude Code should:
    survivor is `completed` with `conclusion: success`.
 
    **The roster is a property of the pull request, not of the repository, so never
-   count it.** Ten checks come from workflows here — `ci.yml`'s four jobs, one of
-   which fans out to four `e2e-web` shards (`quality`, `e2e-api`, four shards and
+   count it.** Eleven checks come from workflows here — `ci.yml`'s four jobs, one of
+   which fans out to five `e2e-web` shards (`quality`, `e2e-api`, five shards and
    `image`), the PR-title check, and CodeQL's two entries; before ADR-0138 it was
-   six, `ci.yml` having declared three jobs rather than seven. **Others are
+   six, `ci.yml` having declared three jobs rather than eight. **Others are
    conditional on what the pull request touches and are declared in no workflow at
-   all.** #595 (2026-09-14) carried an eleventh — a `.github/dependabot.yml`
+   all.** #595 (2026-09-14) carried an eleventh, when the fixed roster was ten — a `.github/dependabot.yml`
    validation check served by Dependabot's own API — because it edited that file,
    so its `total_count: 11` was eleven distinct names with nothing stale in the
    list.
 
    **That is also why this stays prose rather than becoming a gate**, against
-   ADR-0058's usual preference: the fixed ten could be derived from
+   ADR-0058's usual preference: the fixed eleven could be derived from
    `.github/workflows/` easily enough, and deriving them would keep a number
    accurate while leaving the advice wrong. The number was never the thing worth
    protecting.
 
-   So reading the list before merge is slightly longer and no less necessary: four
-   of the ten are shards of what used to be one check, and `fail-fast` is off
+   So reading the list before merge is slightly longer and no less necessary: five
+   of the eleven are shards of what used to be one check, and `fail-fast` is off
    precisely so a second red shard is visible rather than cancelled. **"The
    end-to-end check is green" is no longer a single fact** — and neither is "there
-   should be ten of them". The test is that every survivor of the dedupe is
+   should be eleven of them". The test is that every survivor of the dedupe is
    `completed` with `conclusion: success`, whatever the length.
 
    **The dedupe clause is not tidiness.** One SHA can carry two runs of the same
