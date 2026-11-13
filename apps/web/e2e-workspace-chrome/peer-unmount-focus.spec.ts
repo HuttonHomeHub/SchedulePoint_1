@@ -1,12 +1,12 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   newPlan,
   openPlanId,
   recalculate,
@@ -121,7 +121,7 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
   await createHierarchy(a);
   await newPlan(a, `Peer unmount ${stamp}`);
   const planId = openPlanId(a);
-  await ensurePen(a);
+  await holdThePen(a);
   const seeded = await seedActivities(a, orgSlug, [
     { name: 'Excavate', laneIndex: 0, durationDays: 5 },
   ]);

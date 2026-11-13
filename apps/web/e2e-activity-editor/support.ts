@@ -48,20 +48,6 @@ export async function createAndOpenPlan(page: Page, name: string): Promise<void>
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
-/** Take the pen, whether or not this session already holds it. Writes are pen-gated (ADR-0028). */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
-/** Release the pen, so the definition scopes shade with the lock reason. */
-export async function releasePen(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Stop editing' }).click();
-  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
-}
-
 /**
  * Make the activities table reachable.
  *

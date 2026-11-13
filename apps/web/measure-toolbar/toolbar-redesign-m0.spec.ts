@@ -1,9 +1,9 @@
 import { expect, type Browser, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   openPlanId,
@@ -809,7 +809,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await createHierarchy(page);
       await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
       const planId = openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Site setup', laneIndex: 0, durationDays: 12 },
         { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -827,7 +827,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await page.setViewportSize({ width: 1646, height: 1097 });
         await page.goto(planUrl);
         await waitDeck(page);
-        if (pen) await ensurePen(page);
+        if (pen) await holdThePen(page);
         // Normalise the toggles a previous state may have persisted.
         const comments = page.locator('[data-toolbar-item="comments"]').first();
         if ((await comments.getAttribute('aria-pressed')) === 'true') await comments.click();
@@ -950,7 +950,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
       await recalculate(page, orgSlug);
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       await expect
         .poll(
           async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true),
@@ -983,7 +983,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await page.getByRole('link', { name: 'Riverside', exact: true }).click();
       await newPlan(page, 'Empty plan');
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       await sweep('no-diagram (empty plan)', CELLS, 1);
 
       // ---- 200 % text ---------------------------------------------------------------------
@@ -994,7 +994,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       const rootPx = await page.evaluate(() => getComputedStyle(document.documentElement).fontSize);
       record.fontScale2RootPx = rootPx;
       if (rootPx === '32px') {
-        await ensurePen(page);
+        await holdThePen(page);
         await sweep('base', CELLS_200, 2);
         await reopen(true);
         await sweep('base-after-reopen', CELLS_200, 2);
@@ -1006,7 +1006,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       // ---- promoted widths (3840 x 1440) ---------------------------------------------------
       await page.goto(planUrl);
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       await page.setViewportSize({ width: 3840, height: 1440 });
       await page.waitForTimeout(700);
       record.promotedWidths = await page.evaluate(readPromotedWidths, LADDER);

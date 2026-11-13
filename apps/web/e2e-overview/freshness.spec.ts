@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -7,7 +8,6 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   onboard,
   openOverview,
   openPlanId,
@@ -68,7 +68,7 @@ test('the landing says a plan was edited since it was calculated, and stops sayi
   await createProject(page, 'Dockside Regeneration');
   await createPlan(page, 'Quay Wall Reconstruction');
   const planId = openPlanId(page);
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, orgSlug, 'Pour slab');
 
   const recent = () => section(page, 'Recently changed');

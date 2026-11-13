@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
 import { holdRead } from '../e2e-support/hold-read';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { openShare } from '../e2e-support/toolbar';
 
@@ -18,7 +19,6 @@ import {
   recalculatePlan,
   seedActivities,
   seedDependencies,
-  startEditing,
 } from './support';
 
 /**
@@ -48,7 +48,7 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   await openNewPlan(page);
 
   // Author one activity on the canvas so the guest view has a non-empty diagram to render.
-  await startEditing(page);
+  await holdThePen(page);
   await drawActivity(page, 'Task', 'Excavate', { x: 220, y: 120 });
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
@@ -302,7 +302,7 @@ test('a guest reads the SAME placed span the member does — the picture and the
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Pour', laneIndex: 1, durationDays: 5 },
@@ -426,7 +426,7 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Foundation', laneIndex: 0, durationDays: 5 },

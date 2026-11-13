@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -14,7 +15,6 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from './support';
 
@@ -47,7 +47,7 @@ async function ganttPlan(page: Page): Promise<string> {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await showGantt(page);
   return orgSlug;

@@ -1,3 +1,4 @@
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { findBar } from '../e2e-workspace-chrome/support';
 
@@ -10,10 +11,8 @@ import {
   diagramList,
   duplicateBandButton,
   duplicateButton,
-  ensurePen,
   newPlan,
   onboard,
-  releasePen,
   seedActivities,
   seedLink,
   selectByName,
@@ -47,7 +46,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
 
   await test.step('duplicate one activity carries its definition and nothing of its history', async () => {
     await newPlan(page, 'Single duplicate');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Excavate', durationDays: 4 },
@@ -79,7 +78,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
 
   await test.step('duplicating a band clones every internal link and none to the originals', async () => {
     await newPlan(page, 'Band duplicate');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Level 2', type: 'WBS_SUMMARY', durationDays: 0 },
@@ -102,7 +101,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
     await page.reload();
     // Every reload drops the pen client-side, so it is re-taken after each one. The suite has now
     // been caught by this twice; the shaded button it produces looks exactly like a product defect.
-    await ensurePen(page);
+    await holdThePen(page);
 
     const before = await apiDependencies(page, orgSlug);
     expect(before).toHaveLength(3);
@@ -208,7 +207,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
 
   await test.step('Ctrl+C with a live text selection does not capture activities', async () => {
     await newPlan(page, 'Text selection');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Excavate' }, { name: 'Pour slab' }]);
 
     await selectByName(page, 'Excavate');
@@ -250,7 +249,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
   });
 
   await test.step('without the pen the Duplicate action is present, shaded, and says why', async () => {
-    await releasePen(page);
+    await releaseThePen(page);
     await selectByName(page, 'Excavate');
 
     const duplicate = duplicateButton(page, 'Excavate');
@@ -282,7 +281,7 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
   });
 
   await test.step('the clone is selected after a duplicate, so the next action has a subject', async () => {
-    await ensurePen(page);
+    await holdThePen(page);
     await selectByName(page, 'Excavate');
 
     await duplicateButton(page, 'Excavate').click();
@@ -320,7 +319,7 @@ test('click a bar with the mouse, then Ctrl+C and Ctrl+V duplicate it', async ({
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Mouse then keys');
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [{ name: 'Excavate', durationDays: 4 }]);
   const excavate = seeded.find((a) => a.name === 'Excavate');
   if (!excavate) throw new Error('seeding produced no Excavate');

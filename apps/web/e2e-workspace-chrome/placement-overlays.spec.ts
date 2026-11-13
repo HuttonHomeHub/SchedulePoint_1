@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { planCommands } from '../e2e-support/toolbar';
 
@@ -9,7 +10,6 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   isoDay,
   linkActivities,
   newPlan,
@@ -82,12 +82,12 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Overlays');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [dig] = await seedActivities(page, orgSlug, [{ name: 'Dig trench', laneIndex: 0 }]);
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // **The entry point, which is the whole of ADR-0081's requirement.** The lens is in
     // `View ▾ ▸ Insight overlays`; the window is there too until the viewport has room to promote it
@@ -148,10 +148,10 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Unlevelled');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Pour slab', laneIndex: 0 }]);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // `levelResources` is off by default (ADR-0041's parity gate), so this is the state every plan
     // in the estate is in — asserted rather than assumed, because a default that had flipped would
@@ -183,14 +183,14 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Levelled');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Erect steel', laneIndex: 0 }]);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await setLevelResources(page, orgSlug, true);
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
 
     /**
      * **The lens is NOT shaded here, and that is the decision M-E-T3 turns on.** Levelling ran; it
@@ -243,7 +243,7 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 4);
     await createHierarchy(page);
     await newPlan(page, 'Placed lifts');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const lifts = await seedActivities(page, orgSlug, [
       { name: 'Lift A', laneIndex: 0 },
@@ -260,7 +260,7 @@ test.describe('the feasible window and the levelled lens', () => {
     await placeViaApi(page, orgSlug, 'Lift B', '2026-02-02');
     await setLevelResources(page, orgSlug, true);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // The fixture is what it claims: B is drawn at its placement, which is NOT its early date.
     // Without this the case would pass on a plan where nothing had been placed at all.
@@ -300,7 +300,7 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 6);
     await createHierarchy(page);
     await newPlan(page, 'Levelled finish');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [liftA, liftB] = await seedActivities(page, orgSlug, [
       { name: 'Lift A', laneIndex: 0 },
@@ -313,7 +313,7 @@ test.describe('the feasible window and the levelled lens', () => {
     await placeViaApi(page, orgSlug, 'Late slab', '2026-03-02');
     await setLevelResources(page, orgSlug, true);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // The fixture is what it claims: the slab is drawn at its placement, well after its early date
     // and after both lifts. Without this the case passes on a plan where nothing had been placed.
@@ -354,7 +354,7 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 5);
     await createHierarchy(page);
     await newPlan(page, 'Apply levelled');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const lifts = await seedActivities(page, orgSlug, [
       { name: 'Lift A', laneIndex: 0 },
@@ -368,7 +368,7 @@ test.describe('the feasible window and the levelled lens', () => {
     );
     await setLevelResources(page, orgSlug, true);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // Nothing is hand-placed to begin with, so every `visualStart` read below is the apply's own.
     const placedCount = async (): Promise<number> =>
@@ -413,7 +413,7 @@ test.describe('the feasible window and the levelled lens', () => {
     await expect(reasonTip).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Apply levelled dates' })).toHaveCount(0);
     expect(await placedCount()).toBe(0);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(command).not.toHaveAttribute('aria-disabled', 'true');
 
     // ── 2 · The dialog lists every move before anything is written ────────────────────────────
@@ -496,7 +496,7 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 7);
     await createHierarchy(page);
     await newPlan(page, 'Follower levelled');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [liftA, liftB, slab] = await seedActivities(page, orgSlug, [
       { name: 'Lift A', laneIndex: 0 },
@@ -509,7 +509,7 @@ test.describe('the feasible window and the levelled lens', () => {
     await linkActivities(page, orgSlug, liftB.id, slab.id);
     await setLevelResources(page, orgSlug, true);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── The fixture guard, read from the API so a plan where nothing moved cannot pass vacuously ──
     const before = await placements(page, orgSlug);
@@ -620,7 +620,7 @@ test.describe('the feasible window and the levelled lens', () => {
     const orgSlug = await onboard(page, STAMP + 3);
     await createHierarchy(page);
     await newPlan(page, 'Conflicted');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [first, second] = await seedActivities(page, orgSlug, [
       { name: 'Excavate', laneIndex: 0 },
@@ -628,7 +628,7 @@ test.describe('the feasible window and the levelled lens', () => {
     ]);
     if (!first || !second) throw new Error('seeding returned too few activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // Place the successor BEFORE its own earliest feasible start by writing `visualStart` directly.
     // The gesture that produces this is a drag, which `placement.spec.ts` already drives; what is

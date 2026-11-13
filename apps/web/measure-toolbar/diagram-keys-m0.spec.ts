@@ -6,15 +6,14 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   newPlan,
   onboard,
-  releasePen,
   seedActivities,
   selectedActivityId,
   selectionToolbar,
 } from '../e2e-copy-paste/support';
 import { showGantt } from '../e2e-gantt/support';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { findBar, dragBarBy } from '../e2e-workspace-chrome/support';
 
@@ -122,7 +121,7 @@ test('diagram keys M0: what the browser does with focus, keys and gestures', asy
   const org = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Keys');
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, org, [
     { name: 'Alpha', durationDays: 4 },
     { name: 'Bravo', durationDays: 4 },
@@ -299,10 +298,10 @@ test('diagram keys M0: what the browser does with focus, keys and gestures', asy
   };
   await ctrlClickReading('step4 Ctrl-click, pen held');
   await shiftClickReading('step4 Shift-click, pen held');
-  await releasePen(page);
+  await releaseThePen(page);
   await ctrlClickReading('step4 Ctrl-click, no pen');
   await shiftClickReading('step4 Shift-click, no pen');
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ---- Step 5: Delete (key) and the Delete button -------------------------------------------------
   await findBar(page, id('Alpha'));

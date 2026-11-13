@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -23,7 +24,6 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   findBar,
   findBarWide,
   linkActivities,
@@ -140,7 +140,7 @@ test.describe('Conflict review', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Conflict review');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Excavate', laneIndex: 0 },
@@ -155,7 +155,7 @@ test.describe('Conflict review', () => {
     // would make the conflict unreachable rather than absent.
     await linkActivities(page, orgSlug, excavate.id, pour.id);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── 1 · With nothing wrong, the control is on the row and says so ─────────────────────────
     const nextConflict = lookRow(page).locator('[data-toolbar-item="next-conflict"]');
@@ -350,7 +350,7 @@ test.describe('Conflict review', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Conflict routes');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [beam] = await seedActivities(page, orgSlug, [{ name: 'Steel beam', laneIndex: 0 }]);
     if (!beam) throw new Error('seeding returned no activity');
@@ -376,7 +376,7 @@ test.describe('Conflict review', () => {
     );
     if (failure !== null) throw new Error(`pinning the constraint failed: ${failure}`);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await findBar(page, beam.id);
     const remedy = dock(page).locator('[data-toolbar-item="conflict-remedy"]');
@@ -454,7 +454,7 @@ test.describe('Conflict review', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Conflict stepping');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const [beam, roof] = await seedActivities(page, orgSlug, [
       { name: 'Steel beam', laneIndex: 0 },
@@ -484,7 +484,7 @@ test.describe('Conflict review', () => {
       visualStart: '2026-01-19',
     });
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     const nextConflict = lookRow(page).locator('[data-toolbar-item="next-conflict"]');
     await expect(nextConflict).not.toHaveAttribute('aria-disabled', 'true', { timeout: 20_000 });
@@ -528,7 +528,7 @@ test.describe('The edit offer', () => {
     const orgSlug = await onboard(page, FOLLOW_STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Follow logic');
-    await ensurePen(page);
+    await holdThePen(page);
     await recordAnnouncements(page);
     // The closest the chain's two bars sit, so one lengthening strands BOTH (the spec's chain case).
     const bars = await drawThreeBars(page, orgSlug, [220, 300, 330]);
@@ -751,7 +751,7 @@ test.describe('The edit offer', () => {
     const orgSlug = await onboard(page, FOLLOW_STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Follow logic link');
-    await ensurePen(page);
+    await holdThePen(page);
     await recordAnnouncements(page);
     // B is drawn LEFT of A, so linking A to B strands B at the moment of the link itself.
     const bars = await drawThreeBars(page, orgSlug, [440, 220, 660]);
@@ -837,7 +837,7 @@ test.describe('The edit offer', () => {
     const orgSlug = await onboard(page, FOLLOW_STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Follow logic undo link');
-    await ensurePen(page);
+    await holdThePen(page);
     await raiseOfferByLinking(page, orgSlug);
     await offer(page).getByRole('button', { name: 'Undo link' }).click();
     await expect(offer(page)).toHaveCount(0);
@@ -871,7 +871,7 @@ test.describe('The edit offer', () => {
     const orgSlug = await onboard(page, FOLLOW_STAMP + 3);
     await createHierarchy(page);
     await newPlan(page, 'Follow logic ctrl z');
-    await ensurePen(page);
+    await holdThePen(page);
     await raiseOfferByLinking(page, orgSlug);
     await offer(page).getByTestId('canvas-follow-logic').focus();
     await page.keyboard.press('Control+z');
@@ -890,7 +890,7 @@ test.describe('The edit offer', () => {
     const orgSlug = await onboard(page, FOLLOW_STAMP + 4);
     await createHierarchy(page);
     await newPlan(page, 'Follow logic failure');
-    await ensurePen(page);
+    await holdThePen(page);
     await recordAnnouncements(page);
     await raiseOfferForPourSlab(page, orgSlug);
     const before = await activityRows(page, orgSlug);

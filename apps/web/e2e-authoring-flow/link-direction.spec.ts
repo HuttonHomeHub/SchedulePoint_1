@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -13,7 +14,6 @@ import {
   dependencies,
   disarm,
   drawTask,
-  ensurePen,
   mapBars,
   newPlan,
   onboard,
@@ -123,14 +123,14 @@ test.describe('A2 — which click becomes the predecessor', () => {
     second: { id: string; name: string; point: { x: number; y: number } };
   }> {
     await newPlan(page, planName);
-    await ensurePen(page);
+    await holdThePen(page);
     const [a, b] = await seedActivities(page, orgSlug, [
       { name: firstName, laneIndex: 0 },
       { name: secondName, laneIndex: 1 },
     ]);
     if (!a || !b) throw new Error('seeding returned fewer than two activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     const map = await mapBars(page);
     return {
       first: { ...a, point: requireBarPoint(map, a.id, a.name) },

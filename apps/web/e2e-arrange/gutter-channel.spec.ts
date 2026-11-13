@@ -1,9 +1,9 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   canvasInk,
   createPlan,
-  ensurePen,
   onboard,
   openProject,
   placeRelativeTo,
@@ -63,7 +63,7 @@ test('a link forced into the gutter is painted there, clear of the bar borders',
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Blocked corridor');
-  await ensurePen(page);
+  await holdThePen(page);
   const made = await seedActivities(page, orgSlug, BLOCKED);
   const from = made.find((a) => a.name === 'Mobilise');
   const to = made.find((a) => a.name === 'Pour');
@@ -76,10 +76,10 @@ test('a link forced into the gutter is painted there, clear of the bar borders',
   // classifier reads as link; its waiting run is dashed, which `linkRun` bridges.
   // The anchor has no drawn start until the plan is computed.
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await placeRelativeTo(page, orgSlug, 'Pour', 'Mobilise', 10);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // `recalculate` reloads, so the workspace remounts — wait for the diagram rather than racing it.
   await expect(page.locator('canvas').first()).toBeAttached();
@@ -194,7 +194,7 @@ test('a link over a bar in its own lane is routed and painted', async ({ page })
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'One lane');
-  await ensurePen(page);
+  await holdThePen(page);
   const made = await seedActivities(page, orgSlug, SAME_LANE);
   const a = made.find((m) => m.name === 'Strip out');
   const b = made.find((m) => m.name === 'First fix');
@@ -205,7 +205,7 @@ test('a link over a bar in its own lane is routed and painted', async ({ page })
   await seedDependency(page, orgSlug, b.id, c.id);
   await seedDependency(page, orgSlug, a.id, c.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(page.locator('canvas').first()).toBeAttached();
 
   const { rows } = await canvasInk(page);

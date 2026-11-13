@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { planCommands, recalculate } from '../e2e-support/toolbar';
 
 /**
@@ -164,7 +165,7 @@ export const CODES_WIDE_PLAN: SeededPlan = {
 /**
  * Sign up, seed a catalogue plan into a fresh project through the public API, open it and wait for
  * the diagram. Defaults to `plan:capability-swimlanes`. The pen is NOT taken: a case that writes calls
- * {@link ensurePen}.
+ * {@link holdThePen}.
  *
  * Returns the organisation slug, which the API probes below need.
  */
@@ -216,17 +217,6 @@ export async function openSeededPlan(
   return orgSlug;
 }
 
-/** Hold the pen, whether or not this session already does (ADR-0028). Idempotent. */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  const start = page.getByRole('button', { name: 'Start editing' });
-  // Wait for the pen control to render before deciding: `isVisible()` answers at once.
-  await expect(start.or(stop).first()).toBeVisible({ timeout: 15_000 });
-  if (await stop.isVisible()) return;
-  await start.click();
-  await expect(stop).toBeVisible();
-}
-
 /**
  * Take the pen and calculate the plan. The catalogue plan arrives "Not yet calculated", so no bar has
  * dates and nothing is drawn: Move to swimlane… would refuse every activity as not drawn yet. A case
@@ -234,7 +224,7 @@ export async function ensurePen(page: Page): Promise<void> {
  * this cannot run through the API without the lock.)
  */
 export async function calculateSeededPlan(page: Page): Promise<void> {
-  await ensurePen(page);
+  await holdThePen(page);
   await recalculate(page);
 }
 
@@ -516,7 +506,7 @@ export const WBS_PLAN = {
  * Recalculated, so every bar (and each summary's rolled-up span) is drawn.
  *
  * Returns the organisation slug. The pen is held by the API session that built it, as in
- * {@link openPlainPlan}; a case that writes through the UI calls {@link ensurePen}.
+ * {@link openPlainPlan}; a case that writes through the UI calls {@link holdThePen}.
  */
 export async function openWbsPlan(page: Page, stamp: number): Promise<string> {
   const orgSlug = await onboard(page, stamp);

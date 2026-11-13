@@ -9,8 +9,8 @@ import {
   onboard,
   openPlanId,
   showGantt,
-  startEditing,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { writeMeasurement } from '../measure-toolbar/output';
 
 /**
@@ -79,7 +79,7 @@ test('R5 — links crossing the viewport, across three sort orders', async ({ pa
   // Seeding writes through the API, which is pen-gated (ADR-0028) — the harness must hold the plan
   // edit lock like any other client. Omitting this failed with 200 × 423 LOCKED, which is the guard
   // working correctly on a caller that had not asked for the pen.
-  await startEditing(page);
+  await holdThePen(page);
 
   // Seed from the REAL scale generator, not `seedActivities`. That helper creates a flat chain of
   // N activities — it exists to make rows exist — and the first run of this harness measured it at

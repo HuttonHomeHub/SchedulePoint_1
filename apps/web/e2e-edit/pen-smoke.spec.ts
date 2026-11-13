@@ -1,6 +1,7 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { addActivity, showActivities, onboard, openNewPlan, startEditing } from './support';
+import { addActivity, showActivities, onboard, openNewPlan } from './support';
 
 /**
  * Smoke journey (TECH_DEBT #25b/#27b harness). Proves the editing surface
@@ -33,7 +34,7 @@ test('the pen gates schedule editing; taking it unlocks writes (flag-on stack)',
   await expect(page.getByText('Available')).toBeVisible();
 
   // Take the pen → the editing affordances come alive (the pen gate flips).
-  await startEditing(page);
+  await holdThePen(page);
   // The activities panel is collapsed by default on the workspace, so the create affordance is not
   // on screen until it is expanded — the pen gate is what this asserts, not the panel state.
   await showActivities(page);

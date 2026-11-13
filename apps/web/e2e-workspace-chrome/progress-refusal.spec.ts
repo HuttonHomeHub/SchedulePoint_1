@@ -1,9 +1,9 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createHierarchy,
   DATA_DATE,
-  ensurePen,
   findBar,
   newPlan,
   onboard,
@@ -46,13 +46,13 @@ test.describe('Progress refusal', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Progress refusal');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await findBar(page, dig.id);
     await page.setViewportSize({ width: 1024, height: 600 });
@@ -134,13 +134,13 @@ test.describe('Progress refusal', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Save refusal');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await findBar(page, dig.id);
     await page.setViewportSize({ width: 1024, height: 600 });
@@ -229,13 +229,13 @@ test.describe('Progress refusal', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Data date');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [{ name: 'Dig footings', laneIndex: 0 }]);
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await findBar(page, dig.id);
     await page.setViewportSize({ width: 1024, height: 600 });

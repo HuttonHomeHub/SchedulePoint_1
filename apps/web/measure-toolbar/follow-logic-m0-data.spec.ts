@@ -1,7 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 import { scaleSpec } from '@repo/seed/scale';
 
-import { openNewPlan, startEditing } from '../e2e-authoring/support';
+import { openNewPlan } from '../e2e-authoring/support';
+import { holdThePen } from '../e2e-support/pen';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
 import { brief, planIdOf, readRows, settle, signUp } from './follow-logic-m0-support';
@@ -70,7 +71,7 @@ test.describe('follow-logic M0 data questions', () => {
     await page.setViewportSize({ width: 1646, height: 1097 });
     const { orgSlug } = await signUp(page, Date.now() + 91, 'FollowData');
     await openNewPlan(page);
-    await startEditing(page);
+    await holdThePen(page);
     const org = `organizations/${orgSlug}`;
     const plan = planIdOf(page);
 

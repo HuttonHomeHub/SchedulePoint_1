@@ -1,11 +1,11 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -49,7 +49,7 @@ async function build(
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Reason fit');
-  await ensurePen(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Excavate', laneIndex: 0 },
     { name: 'Pour slab', laneIndex: 1 },
@@ -62,7 +62,7 @@ async function build(
   if (!excavate || !pour) throw new Error('seed too short');
   await linkActivities(page, orgSlug, excavate.id, pour.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-05');
   const patch = async (name: string, body: Record<string, unknown>): Promise<void> => {
     const row = (await placements(page, orgSlug)).find((p) => p.name === name);
@@ -99,7 +99,7 @@ async function build(
     visualStart: '2026-01-20',
   });
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   return { orgSlug, ids };
 }
 

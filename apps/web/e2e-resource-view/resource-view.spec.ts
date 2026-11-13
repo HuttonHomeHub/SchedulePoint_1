@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -10,7 +11,6 @@ import {
   onboard,
   openNewPlan,
   placeAndRecalculate,
-  startEditing,
 } from './support';
 
 /**
@@ -50,7 +50,7 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   await onboard(page, stamp);
   await createResource(page, 'Crew A'); // seed the org resource library before opening any plan
   await openNewPlan(page);
-  await startEditing(page); // take the pen — Add + drawing go live
+  await holdThePen(page); // take the pen — Add + drawing go live
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
@@ -178,7 +178,7 @@ test('a placed activity loads its resource in the week it is drawn, and follows 
   const orgSlug = await onboard(page, stamp);
   await createResource(page, 'Crew B');
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   await drawTask(page, 'Survey', { x: 260, y: 140 });
   await expect(
     page.getByRole('region', { name: 'Time-scaled logic diagram' }).getByRole('option'),
@@ -209,11 +209,7 @@ test('a placed activity loads its resource in the week it is drawn, and follows 
 
   // `placeAndRecalculate` reloads, and leaving the page hands back the pen (the edit lock is
   // released on unload), so the second write needs it taken again or the API answers 423.
-  const takePen = page.getByRole('button', { name: 'Start editing' });
-  await expect(takePen.or(page.getByRole('button', { name: 'Stop editing' }))).toBeVisible();
-  if (await takePen.isVisible()) {
-    await startEditing(page);
-  }
+  await holdThePen(page);
   await placeAndRecalculate(page, orgSlug, 'Survey', '2026-03-02');
   await revealTable();
   await expect.poll(() => loadedBuckets(page)).toEqual(['2026-03-02']);

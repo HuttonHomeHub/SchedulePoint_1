@@ -1,8 +1,9 @@
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { addActivity, showActivities, openNewPlan, setPlannedStart, startEditing } from './support';
+import { addActivity, showActivities, openNewPlan, setPlannedStart } from './support';
 
 /**
  * Flag-ON multi-actor pen hand-off journey (TECH_DEBT #27b). Two real users in one org:
@@ -121,7 +122,7 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   // --- A takes the pen ----------------------------------------------------------------------
   await a.bringToFront();
   await a.goto(planUrl);
-  await startEditing(a);
+  await holdThePen(a);
   // One activity, so B has a row (and therefore a row menu) to look at while locked out.
   await addActivity(a, 'Excavate');
 
@@ -264,7 +265,7 @@ test('an Org Admin overrides a peer who is editing, and the peer is told they lo
   // --- B (Planner) takes the pen first, so A has somebody to override -----------------------
   await b.bringToFront();
   await b.goto(planUrl);
-  await startEditing(b);
+  await holdThePen(b);
   await addActivity(b, 'Piling');
   await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 
@@ -351,7 +352,7 @@ test('a requester takes the pen once grace elapses, and the silent holder is tol
   // --- A takes the pen and then simply stops answering ---------------------------------------
   await a.bringToFront();
   await a.goto(planUrl);
-  await startEditing(a);
+  await holdThePen(a);
   await addActivity(a, 'Formwork');
 
   // --- B requests control ---------------------------------------------------------------------

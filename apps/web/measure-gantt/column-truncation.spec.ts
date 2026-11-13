@@ -9,9 +9,9 @@ import {
   ganttGrid,
   onboard,
   openPlanId,
-  startEditing,
   syncClient,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { writeMeasurement } from '../measure-toolbar/output';
 
 /**
@@ -322,7 +322,7 @@ test('M1-T0 — Gantt column truncation, width model and touch, at 1646 / 1024 /
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedStructuredPlan(page, orgSlug);
 
   const setup: Setup = {

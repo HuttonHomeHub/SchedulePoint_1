@@ -1,8 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { armLoeTool, drawTask, onboard, openNewPlan, pickLoeSpan, startEditing } from './support';
+import { armLoeTool, drawTask, onboard, openNewPlan, pickLoeSpan } from './support';
 
 /**
  * **On-canvas advanced activity types** journey (Stage D,
@@ -28,7 +29,7 @@ test('a planner composes a level-of-effort span from two picked driver activitie
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page); // take the pen — the Add split-button + LOE tool go live
+  await holdThePen(page); // take the pen — the Add split-button + LOE tool go live
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();

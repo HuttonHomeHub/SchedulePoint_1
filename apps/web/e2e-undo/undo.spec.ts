@@ -4,7 +4,6 @@ import {
   apiActivities,
   apiDependencies as apiDependenciesShared,
   diagramList,
-  ensurePen,
   openPlanId,
   seedActivities,
   seedLink,
@@ -12,6 +11,7 @@ import {
   selectedActivityId,
 } from '../e2e-copy-paste/support';
 import { ganttGrid, ganttRow, showGantt } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { dragBarBy, findBar, placements, requirePlacement } from '../e2e-workspace-chrome/support';
 
@@ -24,7 +24,6 @@ import {
   openLogic,
   openNewPlan,
   showActivities,
-  startEditing,
 } from './support';
 
 /**
@@ -50,7 +49,7 @@ test('a planner undoes and redoes canvas edits with the toolbar and the keyboard
   await expect(diagram).toBeVisible();
 
   // Take the pen — the Row 2 · Do authoring cluster (Add split-button, Undo/Redo) lights up.
-  await startEditing(page);
+  await holdThePen(page);
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   const announcer = page.getByTestId('announcer');
 
@@ -112,7 +111,7 @@ test('a planner undoes an Edit-link save, and the stored lag comes back exactly'
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await drawTask(page, 'Excavate', { x: 220, y: 120 });
@@ -186,7 +185,7 @@ test('a planner undoes deleting a WBS phase, and the earlier edits are still und
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   // A phase with three members, one link inside it, and one crossing its boundary. The crossing
   // link is the sharper case: both its endpoints are live again after the restore, so the endpoint
@@ -307,7 +306,7 @@ test('deleting a phase and then its parent undoes in the order it was done', asy
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Structure', type: 'WBS_SUMMARY' },
@@ -382,7 +381,7 @@ test('a planner sees what undo and redo did, in the diagram and the Gantt', asyn
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -455,7 +454,7 @@ test('focus on the strip’s Redo lands on the plan surface when Ctrl+Z replaces
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -553,7 +552,7 @@ test('an undo that cannot apply is set aside and explained, and the next undo ca
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -633,7 +632,7 @@ test('undo history survives releasing and retaking the edit lock', async ({ page
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -653,7 +652,7 @@ test('undo history survives releasing and retaking the edit lock', async ({ page
   await expect(strip).toContainText(/to undo/i);
   await expect(diagram.getByRole('option')).toHaveCount(2);
 
-  await startEditing(page);
+  await holdThePen(page);
   await toolbar.getByRole('button', { name: /^Undo\b/ }).click();
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
   await expect(strip).toContainText('Undid add “Foundations”.');
@@ -678,7 +677,7 @@ test('an activity added from either dialog is one undo step, and redo brings the
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Excavate' }]);
 
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -743,7 +742,7 @@ test('Indent and Outdent in the Gantt are each undone and redone', async ({ page
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Phase A', type: 'WBS_SUMMARY' },
     { name: 'Excavate' },
@@ -807,7 +806,7 @@ test('a planner undoes dissolving a summary, and the earlier edit is still undoa
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const seeded = await seedActivities(page, orgSlug, [
     { name: 'Substructure', type: 'WBS_SUMMARY' },
@@ -878,7 +877,7 @@ test('an undo or redo selects the activity it changed and brings it into view', 
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   const fillers = Array.from({ length: 60 }, (_, i) => ({
     name: `Filler ${String(i + 1).padStart(2, '0')}`,
   }));
@@ -951,7 +950,7 @@ test('Ctrl+Z undoes from the page body, and inside a text box it leaves the plan
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await drawTask(page, 'Excavate', { x: 220, y: 120 });
@@ -1018,7 +1017,7 @@ test('Ctrl+Z undoes a bar dragged with the mouse, from the diagram or from empty
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
   // Three bars, not one: a lone bar fits the view at about a screen per day, so a drag would be
   // less than a day and write nothing.
   const [excavate] = await seedActivities(page, orgSlug, [
@@ -1078,7 +1077,7 @@ test('a planner undoes back several steps at once from the Recent edits menu', a
   const stamp = Date.now();
   await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
@@ -1151,7 +1150,7 @@ test('an undo refused for a deleted calendar keeps its step, and retries once th
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
   await openNewPlan(page);
-  await startEditing(page);
+  await holdThePen(page);
 
   const base = `/api/v1/organizations/${orgSlug}`;
   const calendar = await page.request.post(`${base}/calendars`, {
@@ -1166,7 +1165,7 @@ test('an undo refused for a deleted calendar keeps its step, and retries once th
   const activityId = ((await created.json()) as { data: { id: string } }).data.id;
   // The panel reads the list on load, and a reload drops the pen client-side.
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
 
   const strip = page.getByTestId('canvas-history-result');
 

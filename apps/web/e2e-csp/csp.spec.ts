@@ -2,12 +2,12 @@ import { type Page } from '@playwright/test';
 
 import {
   createPlan,
-  ensurePen,
   onboard,
   openProject,
   recalculate,
   seedActivities,
 } from '../e2e-arrange/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { deployedCspPolicy } from './csp-policy';
@@ -187,10 +187,10 @@ test('the Arrange worker loads and runs with no CSP violation', async ({ page })
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'CSP worker');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Mobilise', laneIndex: 0 }]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   await page.locator('[data-toolbar-item="auto-arrange"]').click();
   const dialog = page.getByRole('dialog', { name: 'Arrange the diagram' });

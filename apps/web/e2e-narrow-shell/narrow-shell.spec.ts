@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
@@ -108,14 +109,6 @@ async function seedActivity(page: Page, orgSlug: string, name: string): Promise<
     { org: orgSlug, id: planId, label: name },
   );
   expect(status, 'seeding the activity').toBe(201);
-}
-
-/** Hold the pen (ADR-0028); the row menu's Edit is shaded without it. Idempotent. */
-async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
 }
 
 /** WCAG 2.2 AA with `target-size` on: axe ships it disabled and tags it `wcag22aa`. */
@@ -405,7 +398,7 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   // `docs/TECH_DEBT.md` #471 owns. 1.4.10 is a width obligation and the dialog is what it covers.
   await page.setViewportSize({ width: 700, height: 900 });
   await page.goto(planUrl);
-  await ensurePen(page);
+  await holdThePen(page);
   await page.getByRole('button', { name: 'Expand activities panel' }).click();
   await page.getByRole('button', { name: 'Actions for Dig footings' }).click();
   await page.getByRole('menuitem', { name: 'Edit' }).click();
@@ -430,7 +423,7 @@ test('a live narrowing gets a banner: focus, typed text and the editor survive',
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   await page.getByRole('button', { name: 'Expand activities panel' }).click();
   await page.getByRole('button', { name: 'Actions for Dig footings' }).click();
   await page.getByRole('menuitem', { name: 'Edit' }).click();
@@ -1023,7 +1016,7 @@ test.describe('one workspace layout at every width (ADR-0181)', () => {
     // stage is back. It is Go to today, not Fit: Fit moved into the cluster inside the stage
     // (toolbar-redesign M4), which is inert in exactly this state (`docs/TECH_DEBT.md` #480). Go to
     // today is shaded until the schedule is calculated, and calculating needs the pen.
-    await ensurePen(page);
+    await holdThePen(page);
     await recalculate(page);
     await openDock(page, health);
     expect(await stageInert(page), 'the squeezed dock made the stage inert').toBe(true);
@@ -1860,7 +1853,7 @@ test('a fully shaded activities row menu fits 1024 x 600 and keeps every action 
 
   await page.setViewportSize({ width: 1024, height: 600 });
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   await page.getByRole('button', { name: 'Expand activities panel' }).click();
   // Giving up the pen shades every write action in the row menu, each with its reason.
   await page.getByRole('button', { name: 'Stop editing' }).click();

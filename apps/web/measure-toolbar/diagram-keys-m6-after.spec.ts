@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   calculateSeededPlan,
   cursorTo,
   diagramList,
-  ensurePen,
   openPlanId,
   openSeededPlan,
 } from '../e2e-swimlanes/support';
@@ -69,7 +69,7 @@ test('M6 after: the fullest and a plain single bar, as built', async ({ page }) 
   mkdirSync(OUT, { recursive: true });
   const stamp = Date.now();
   const orgSlug = await openSeededPlan(page, stamp);
-  await ensurePen(page);
+  await holdThePen(page);
   await calculateSeededPlan(page);
   const planId = openPlanId(page);
 
@@ -118,7 +118,7 @@ test('M6 after: the fullest and a plain single bar, as built', async ({ page }) 
   );
   expect(setup).toBe(true);
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
 
   const out: Record<string, unknown> = {};
   const states = [
@@ -164,7 +164,7 @@ test('M6 after: the fullest and a plain single bar, as built', async ({ page }) 
   await acknowledgeViewportNotice(ctx);
   const shot = await ctx.newPage();
   await shot.goto(page.url());
-  await ensurePen(shot);
+  await holdThePen(shot);
   const sl = diagramList(shot);
   await expect(sl.getByRole('option').first()).toBeVisible({ timeout: 30_000 });
   await sl.focus();

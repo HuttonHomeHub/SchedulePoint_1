@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { ganttRow, showGantt } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   placeViaApi,
@@ -201,7 +201,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
       await createHierarchy(page);
       await newPlan(page, 'Fit M4');
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Excavate', laneIndex: 0 },
         { name: 'Pour slab', laneIndex: 1 },
@@ -219,7 +219,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       };
       await linkActivities(page, orgSlug, id('Excavate'), id('Pour slab'));
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-05');
       await patchActivity(page, orgSlug, 'Steel beam', {
         constraintType: 'MANDATORY_START',
@@ -232,7 +232,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       });
       await patchActivity(page, orgSlug, 'Sitework', { visualStart: '2026-02-02' });
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
 
       for (const cell of CELLS) {
         await page.setViewportSize({ width: cell.w, height: cell.h });

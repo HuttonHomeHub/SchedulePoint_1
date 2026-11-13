@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { canvas, drawActivity, openNewPlan, startEditing } from '../e2e-authoring/support';
+import { canvas, drawActivity, openNewPlan } from '../e2e-authoring/support';
+import { holdThePen } from '../e2e-support/pen';
 import { diagramList, selectedActivityId } from '../e2e-workspace-chrome/support';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -142,7 +143,7 @@ for (const { pointer, scenario } of RUNS) {
         'FollowM0',
       );
       await openNewPlan(page);
-      await startEditing(page);
+      await holdThePen(page);
       const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
 
       // 3.5: draw three tasks. Each is drawn by the Add tool, so each carries a placement.

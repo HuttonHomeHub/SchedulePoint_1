@@ -53,14 +53,6 @@ export async function newPlan(page: Page, name: string, dataDate: string): Promi
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 }
 
-/** Hold the pen (ADR-0028). Idempotent. */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
 /** The open plan's id, from the route. */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());

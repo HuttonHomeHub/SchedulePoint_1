@@ -1,3 +1,4 @@
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -5,13 +6,11 @@ import {
   createPlan,
   derivedDurationDays,
   diagramActivityList,
-  ensurePen,
   onboard,
   openActivitiesPanel,
   openRowMenu,
   parentOf,
   recalculate,
-  releasePen,
   rowCheckbox,
   seedActivities,
   toggleView,
@@ -43,7 +42,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
 
   orgSlug = await onboard(page, STAMP);
   await createPlan(page, 'Riverside Programme');
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ---------------------------------------------------------------- seed
   // One summary and five loose activities. Seeded through the API: what this journey is about is
@@ -57,7 +56,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
     { name: 'Strike' },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   const seeded = await activityCount(page, orgSlug);
   expect(seeded).toBe(6);
@@ -121,7 +120,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   expect(await activityCount(page, orgSlug)).toBe(seeded);
 
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ------------------------------------------------- ADR-0197: the summary states its own length
   // Before the engine wrote it, a summary's Duration cell read an em dash (and an LOE's read `0 d`).
@@ -189,7 +188,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
 
   await seedActivities(page, orgSlug, [{ name: 'Loose end' }]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await page.getByRole('button', { name: 'Gantt', exact: true }).click();
   await expect(grid.getByText('Unassigned')).toBeVisible();
   await expect(grid.getByText('Loose end')).toBeVisible();
@@ -221,7 +220,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   ]);
   expect(second).toBeDefined();
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   await openActivitiesPanel(page);
 
   await rowCheckbox(page, 'Excavate').check();
@@ -239,7 +238,7 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   await expect(deleteConfirm).toBeHidden();
 
   // ------------------------------------------------- the pen actually gates
-  await releasePen(page);
+  await releaseThePen(page);
   // Dissolve is a structural write, so without the pen the row menu **shades** it and says why —
   // the same as Edit and Delete, and the same as the bulk-assign bar asserted a few lines below.
   //
@@ -313,13 +312,13 @@ test('every item in the tallest row menu is reachable by pointer, not just prese
   test.setTimeout(180_000);
   const org = await onboard(page, Date.now() + 11);
   await createPlan(page, 'Menu reach');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, org, [
     { name: 'Substructure', type: 'WBS_SUMMARY' },
     { name: 'Excavate' },
   ]);
   await recalculate(page, org);
-  await ensurePen(page);
+  await holdThePen(page);
   await openActivitiesPanel(page);
 
   // A **summary** carries the most items — Logic, Notes, Progress, Members, Resources, Edit,
@@ -370,14 +369,14 @@ test('WBS: nest a summary from the Members panel, and the ancestor is shaded', a
   test.setTimeout(180_000);
   const org = await onboard(page, Date.now() + 23);
   await createPlan(page, 'Nesting');
-  await ensurePen(page);
+  await holdThePen(page);
   const [structure, piling] = await seedActivities(page, org, [
     { name: 'Structure', type: 'WBS_SUMMARY' },
     { name: 'Piling', type: 'WBS_SUMMARY' },
   ]);
   if (structure === undefined || piling === undefined) throw new Error('seeding returned no rows');
   await recalculate(page, org);
-  await ensurePen(page);
+  await holdThePen(page);
   await openActivitiesPanel(page);
 
   // --- Structure's panel: Piling is offered, and ticking it files it.

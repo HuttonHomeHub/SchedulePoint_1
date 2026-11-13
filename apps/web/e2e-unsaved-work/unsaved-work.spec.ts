@@ -1,12 +1,8 @@
-import {
-  ensurePen as reacquirePen,
-  openEditor,
-  showActivities,
-} from '../e2e-activity-editor/support';
+import { openEditor, showActivities } from '../e2e-activity-editor/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -43,7 +39,7 @@ test.describe('Navigating away from unsaved work', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Unsaved work journey');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
     await recalculate(page, orgSlug);
 
@@ -63,7 +59,7 @@ test.describe('Navigating away from unsaved work', () => {
 
     // A full load drops the ADR-0028 pen lease and resets the workspace pane — both established by
     // reading a failure's page snapshot rather than assumed.
-    await reacquirePen(page);
+    await holdThePen(page);
     await showActivities(page);
     await expect(page.getByRole('button', { name: 'Actions for Excavate' }).first()).toBeVisible();
 

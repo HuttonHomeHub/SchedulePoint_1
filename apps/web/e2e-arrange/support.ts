@@ -51,29 +51,6 @@ export async function createPlan(page: Page, planName: string): Promise<void> {
   await page.getByRole('link', { name: planName, exact: true }).click();
 }
 
-/**
- * Hold the pen, whether or not this session already does (ADR-0028). The API seeding below is
- * pen-gated too and would 423 without it; a reload may leave the lease already held, in which case
- * clicking "Start editing" would hang.
- */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  const start = page.getByRole('button', { name: 'Start editing' });
-  // Wait for the pen control to render before deciding. `isVisible()` answers at once, so straight
-  // after a reload it saw neither button, took the "not held" branch, and then waited for a
-  // "Start editing" that never came, because this session still held the lease (PR #669, CI).
-  await expect(start.or(stop).first()).toBeVisible({ timeout: 15_000 });
-  if (await stop.isVisible()) return;
-  await start.click();
-  await expect(stop).toBeVisible();
-}
-
-/** Release the pen — the state in which the offer must be omitted entirely. */
-export async function releasePen(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Stop editing' }).click();
-  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
-}
-
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
 export function openPlanId(page: Page): string {
   const match = /\/plans\/([0-9a-f-]{36})/.exec(page.url());

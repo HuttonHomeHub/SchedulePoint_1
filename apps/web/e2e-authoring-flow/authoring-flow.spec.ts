@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type BrowserContext, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -12,7 +13,6 @@ import {
   dependencies,
   diagramList,
   doToolbar,
-  ensurePen,
   mapBars,
   newPlan,
   onboard,
@@ -54,7 +54,7 @@ test.describe('the canvas says what it is doing', () => {
 
   test('an empty plan names the first gesture, and the affordance arms Add', async () => {
     await newPlan(page, 'Empty');
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByTestId('canvas-empty-state')).toContainText(
       'This plan has no activities yet.',
     );
@@ -73,14 +73,14 @@ test.describe('the canvas says what it is doing', () => {
 
   test('the band states the open pick, and the confirmation names the direction', async () => {
     await newPlan(page, 'Stated');
-    await ensurePen(page);
+    await holdThePen(page);
     const [a, b] = await seedActivities(page, orgSlug, [
       { name: 'Set out', laneIndex: 0 },
       { name: 'Reinforce', laneIndex: 1 },
     ]);
     if (!a || !b) throw new Error('seeding returned fewer than two activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     const map = await mapBars(page);
     const first = requireBarPoint(map, a.id, a.name);
     const second = requireBarPoint(map, b.id, b.name);
@@ -115,14 +115,14 @@ test.describe('the canvas says what it is doing', () => {
 
   test('the keyboard creates the same link, in the same direction', async () => {
     await newPlan(page, 'Keyboard');
-    await ensurePen(page);
+    await holdThePen(page);
     const [a, b] = await seedActivities(page, orgSlug, [
       { name: 'Formwork', laneIndex: 0 },
       { name: 'Strike', laneIndex: 1 },
     ]);
     if (!a || !b) throw new Error('seeding returned fewer than two activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await armLink(page);
     const listbox = diagramList(page);
@@ -142,7 +142,7 @@ test.describe('the canvas says what it is doing', () => {
 
   test('a press that opens the create popover keeps its focus in the name field', async () => {
     await newPlan(page, 'Popover focus');
-    await ensurePen(page);
+    await holdThePen(page);
     await armAdd(page, 'Task');
     await canvas(page).click({ position: { x: 240, y: 120 } });
     const form = page.getByRole('form', { name: 'Name the new activity' });
@@ -158,7 +158,7 @@ test.describe('the canvas says what it is doing', () => {
 
   test("a press on the open create popover's padding does not hand the plan its keys", async () => {
     await newPlan(page, 'Popover keys');
-    await ensurePen(page);
+    await holdThePen(page);
     await armAdd(page, 'Task');
     await canvas(page).click({ position: { x: 240, y: 120 } });
     const form = page.getByRole('form', { name: 'Name the new activity' });
@@ -175,14 +175,14 @@ test.describe('the canvas says what it is doing', () => {
 
   test('a click in the Link tool gives the diagram the keyboard, and Escape drops the pick', async () => {
     await newPlan(page, 'Link keys');
-    await ensurePen(page);
+    await holdThePen(page);
     const [a] = await seedActivities(page, orgSlug, [
       { name: 'Set out', laneIndex: 0 },
       { name: 'Reinforce', laneIndex: 1 },
     ]);
     if (!a) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     const map = await mapBars(page);
     const first = requireBarPoint(map, a.id, a.name);
 
@@ -199,7 +199,7 @@ test.describe('the canvas says what it is doing', () => {
 
   test('Add stays armed for a run of activities, and Escape ends it', async () => {
     await newPlan(page, 'Run');
-    await ensurePen(page);
+    await holdThePen(page);
     await armAdd(page, 'Task');
     // Armed is read from the TRIGGER now (D3): its label swaps and it takes `aria-pressed`. The
     // band assertion this replaces was the withdrawn `adding` statement.
@@ -243,14 +243,14 @@ test.describe('a link pick survives losing the pen, and the write does not', () 
 
   test('releasing the pen mid-pick refuses the link rather than dropping the gesture', async () => {
     await newPlan(page, 'Pen loss');
-    await ensurePen(page);
+    await holdThePen(page);
     const [a, b] = await seedActivities(page, orgSlug, [
       { name: 'Excavate', laneIndex: 0 },
       { name: 'Blind', laneIndex: 1 },
     ]);
     if (!a || !b) throw new Error('seeding returned fewer than two activities');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     const map = await mapBars(page);
     const first = requireBarPoint(map, a.id, a.name);
     const second = requireBarPoint(map, b.id, b.name);
@@ -274,7 +274,7 @@ test.describe('a link pick survives losing the pen, and the write does not', () 
     // refused attempt left no wedged state behind. The bars are re-measured rather than reused —
     // the mode band takes height above the scene, so a coordinate from before it appeared points
     // at the wrong row (the `sceneOrigin` lesson of ADR-0063, from the test's side).
-    await ensurePen(page);
+    await holdThePen(page);
     // The refused attempt left the tool armed and the pick open — which is the point — so disarm
     // before measuring: `mapBars` probes by clicking in `select` mode, and with Link still armed
     // every probe would be another pick and the map would come back empty.

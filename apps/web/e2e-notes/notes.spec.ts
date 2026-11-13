@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { holdRead } from '../e2e-support/hold-read';
-import { takeThePen } from '../e2e-support/pen';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { addActivity, createAndOpenPlan, onboard, openProject } from './support';
@@ -29,7 +29,7 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await onboard(page, stamp);
   await openProject(page);
   await createAndOpenPlan(page, 'Tower');
-  await takeThePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Erect frame');
 
   // **The row menu has a `Notes` route now** (`docs/specs/object-bar-defects/` M2), so this is one
@@ -120,7 +120,7 @@ test('Notes shows note-shaped placeholders and one sentence while its read is he
   await onboard(page, stamp);
   await openProject(page);
   await createAndOpenPlan(page, 'Tower');
-  await takeThePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Erect frame');
 
   const held = await holdRead(page, /\/organizations\/[^/]+\/activities\/[^/]+\/notes(\?|$)/);

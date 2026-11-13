@@ -1,11 +1,11 @@
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   DATA_DATE,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -200,7 +200,7 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
   });
 
   test('Zoom in changes the scale, and Fit puts it back', async () => {
-    await ensurePen(page);
+    await holdThePen(page);
     const seeded = await seedActivities(
       page,
       orgSlug,
@@ -442,7 +442,7 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
     orgSlug = await onboard(page, Date.now() + 5300);
     await createHierarchy(page);
     await newPlan(page, 'Cluster touch');
-    await ensurePen(page);
+    await holdThePen(page);
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate', laneIndex: 1, durationDays: 18 },
@@ -513,7 +513,7 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
   });
 
   test('with a conflict selected the diagram keeps at least 120 px of stage and the cluster stays on screen', async () => {
-    await ensurePen(page);
+    await holdThePen(page);
     await placeViaApi(page, orgSlug, 'Excavate', DATA_DATE);
     await recalculate(page, orgSlug);
     await page.reload();

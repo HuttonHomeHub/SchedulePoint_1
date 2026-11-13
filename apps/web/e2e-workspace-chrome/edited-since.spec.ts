@@ -1,8 +1,8 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   openPlanId,
@@ -33,7 +33,7 @@ test('a plan edited elsewhere since its calculation says so, and Recalculate cle
   const orgSlug = await onboard(page, STAMP);
   await createHierarchy(page);
   await newPlan(page, 'Echo');
-  await ensurePen(page);
+  await holdThePen(page);
   const [first] = await seedActivities(page, orgSlug, [
     { name: 'Echo one', laneIndex: 0 },
     { name: 'Echo two', laneIndex: 1 },
@@ -45,7 +45,7 @@ test('a plan edited elsewhere since its calculation says so, and Recalculate cle
 
   // A scheduling-input edit this tab does not make: a duration change straight to the API. The
   // reload inside `recalculate` released the pen (pagehide), so it is taken again first.
-  await ensurePen(page);
+  await holdThePen(page);
   const planId = openPlanId(page);
   await page.evaluate(
     async ({ org, plan, id }: { org: string; plan: string; id: string }) => {
@@ -69,7 +69,7 @@ test('a plan edited elsewhere since its calculation says so, and Recalculate cle
 
   // Opened afresh, the tab has made no edit — and must still say what the overview says.
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(bar).toHaveAttribute('data-schedule-state', 'stale');
   await expect(bar.getByText('Edited since it was last calculated')).toBeVisible();
 
@@ -95,7 +95,7 @@ test('a calendar exception added elsewhere marks the plans on that calendar stal
   const orgSlug = await onboard(page, STAMP + 1);
   await createHierarchy(page);
   await newPlan(page, 'Foxtrot');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Foxtrot one', laneIndex: 0 }]);
   const planId = openPlanId(page);
 
@@ -151,7 +151,7 @@ test('a calendar exception added elsewhere marks the plans on that calendar stal
   );
 
   await page.reload();
-  await ensurePen(page);
+  await holdThePen(page);
   await expect(bar).toHaveAttribute('data-schedule-state', 'stale');
 
   await bar.getByRole('button', { name: 'Recalculate' }).click();

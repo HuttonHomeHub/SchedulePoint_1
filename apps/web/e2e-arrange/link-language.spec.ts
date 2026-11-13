@@ -1,10 +1,10 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
   createPlan,
-  ensurePen,
   onboard,
   openProject,
   placeRelativeTo,
@@ -57,7 +57,7 @@ test('the non-driving link ink is a real token on the canvas and in its key', as
   const orgSlug = await onboard(page, stamp);
   await openProject(page);
   await createPlan(page, 'Link language');
-  await ensurePen(page);
+  await holdThePen(page);
   const made = await seedActivities(page, orgSlug, [
     { name: 'Excavate', laneIndex: 0, durationDays: 5 },
     { name: 'Pour', laneIndex: 2, durationDays: 5 },
@@ -69,7 +69,7 @@ test('the non-driving link ink is a real token on the canvas and in its key', as
   // Placed well after its only predecessor, so the link does not drive it: it waits.
   // The anchor has no drawn start until the plan is computed.
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await placeRelativeTo(page, orgSlug, 'Pour', 'Excavate', 20);
   await recalculate(page, orgSlug);
   await expect(page.locator('canvas').first()).toBeAttached();

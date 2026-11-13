@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -20,7 +21,6 @@ import {
   DATA_DATE,
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -83,7 +83,7 @@ async function seedChain(page: Page, orgSlug: string): Promise<void> {
   await linkActivities(page, orgSlug, excavate.id, pour.id);
   await linkActivities(page, orgSlug, excavate.id, beam.id);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 }
 
 /** Place both followers early through the API, recalculate so the engine flags them, and reload. */
@@ -91,7 +91,7 @@ async function placeEarly(page: Page, orgSlug: string): Promise<void> {
   await placeViaApi(page, orgSlug, 'Pour slab', DATA_DATE);
   await placeViaApi(page, orgSlug, 'Steel beam', DATA_DATE);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
   await expect
     .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
       message: 'the engine never flagged the early-placed bars',
@@ -108,7 +108,7 @@ test.describe('The whole-plan offer', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Whole plan offer');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await expect(
       planOffer(page),
@@ -236,7 +236,7 @@ test.describe('The whole-plan offer', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, 'Whole plan failure');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
     await recordAnnouncements(page);
@@ -313,7 +313,7 @@ test.describe('The whole-plan offer', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Whole plan dismiss failed');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
     await expect(planOffer(page)).toBeVisible({ timeout: 15_000 });
@@ -352,7 +352,7 @@ test.describe('The whole-plan offer', () => {
     // Not remembered across a reload: a known trade-off, recorded in ADR-0216.
     await page.unroute('**/activities/placements');
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(planOffer(page)).toBeVisible({ timeout: 20_000 });
   });
 
@@ -363,7 +363,7 @@ test.describe('The whole-plan offer', () => {
     const orgSlug = await onboard(page, STAMP + 3);
     await createHierarchy(page);
     await newPlan(page, 'Whole plan shaded');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
     await expect(planOffer(page)).toBeVisible({ timeout: 15_000 });
@@ -432,7 +432,7 @@ for (const { pointer, touch } of [
       const orgSlug = await onboard(page, STAMP + (touch ? 11 : 10));
       await createHierarchy(page);
       await newPlan(page, 'Plan offer row');
-      await ensurePen(page);
+      await holdThePen(page);
       await seedChain(page, orgSlug);
       await placeEarly(page, orgSlug);
       expect(
@@ -509,7 +509,7 @@ test.describe('The whole-plan offer at 200 % text', () => {
     const orgSlug = await onboard(page, STAMP + 20);
     await createHierarchy(page);
     await newPlan(page, 'Plan offer 200');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
 
@@ -539,7 +539,7 @@ test.describe('The whole-plan offer reflows at 320 CSS px (WCAG 1.4.10)', () => 
     const orgSlug = await onboard(page, STAMP + 30);
     await createHierarchy(page);
     await newPlan(page, 'Plan offer reflow');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedChain(page, orgSlug);
     await placeEarly(page, orgSlug);
 

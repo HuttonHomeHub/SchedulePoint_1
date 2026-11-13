@@ -1,5 +1,6 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -7,7 +8,6 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   onboard,
   openOverview,
   openPlanId,
@@ -80,7 +80,7 @@ test('the landing says where each programme stands, through every state a plan p
 
   // ---- PLAN_NOT_SCHEDULED. Distinct from empty, with a different remedy. ----------------------
   await page.goto(`/orgs/${orgSlug}/plans/${planId}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, orgSlug, 'Pour slab');
   await openOverview(page, orgSlug);
   await expect(stands().getByText(/Not yet calculated/)).toBeVisible();
@@ -141,7 +141,7 @@ test('a Viewer is told where the work stands, having no way to change it', async
   await createClient(adminPage, 'Harbourside Estates');
   await createProject(adminPage, 'Dockside Regeneration');
   await createPlan(adminPage, 'Quay Wall Reconstruction');
-  await ensurePen(adminPage);
+  await holdThePen(adminPage);
   await addActivity(adminPage, orgSlug, 'Pour slab');
 
   await adminPage.goto(`/orgs/${orgSlug}/members`);

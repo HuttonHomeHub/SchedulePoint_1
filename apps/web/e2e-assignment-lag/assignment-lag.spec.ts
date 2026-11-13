@@ -1,5 +1,6 @@
 import { chooseComboboxOption } from '../e2e/combobox';
 import { activityEditor } from '../e2e-support/activity-editor';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -7,7 +8,6 @@ import {
   createAndOpenPlan,
   createEightHourCalendar,
   createResource,
-  ensurePen,
   onboard,
   openProject,
   openResources,
@@ -47,7 +47,7 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   await openProject(page);
   const planId = await createAndOpenPlan(page, 'Lag Plan', orgSlug, calendarId);
 
-  await ensurePen(page);
+  await holdThePen(page);
   await addActivity(page, 'Steel erection');
   await openResources(page, 'Steel erection');
 
@@ -152,8 +152,7 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   // Take the pen back so the UI release below is still what shuts the control.
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
 
   // Then released deliberately from this page rather than by navigating away. Leaving the plan flushes a
   // release on unmount, so a `goto` would also arrive pen-less — but then the assertion below would

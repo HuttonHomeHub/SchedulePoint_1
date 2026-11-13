@@ -1,9 +1,9 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
   diagramList,
-  ensurePen,
   linkActivities,
   newPlan,
   openPlanId,
@@ -238,7 +238,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await createHierarchy(page);
       await newPlan(page, 'Reason M0');
       const planId = openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
 
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Excavate', laneIndex: 0 },
@@ -257,7 +257,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       };
       await linkActivities(page, orgSlug, id('Excavate'), id('Pour slab'));
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
       await placeViaApi(page, orgSlug, 'Pour slab', '2026-01-05');
       await patchActivity(page, orgSlug, 'Steel beam', {
         constraintType: 'MANDATORY_START',
@@ -275,7 +275,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       });
       await patchActivity(page, orgSlug, 'Sitework', { visualStart: '2026-02-02' });
       await recalculate(page, orgSlug);
-      await ensurePen(page);
+      await holdThePen(page);
 
       // What the engine actually flagged: the fixture is only as good as this table.
       const flags = await page.evaluate(

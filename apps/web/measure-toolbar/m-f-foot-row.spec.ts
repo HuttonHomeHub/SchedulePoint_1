@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -40,13 +40,13 @@ test('the foot row, at rest and with a selection', async ({ page }) => {
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, `Foot row ${stamp}`);
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Dig', laneIndex: 0, durationDays: 5 },
     { name: 'Pour', laneIndex: 1, durationDays: 5 },
   ]);
   await recalculate(page, orgSlug);
-  await ensurePen(page);
+  await holdThePen(page);
 
   const readings: unknown[] = [];
   for (const vp of VIEWPORTS) {

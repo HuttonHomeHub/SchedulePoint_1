@@ -44,12 +44,6 @@ export async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Logic' }).click();
 }
 
-/** Take the pen (the compact status lives in the slim header). */
-export async function startEditing(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-}
-
 /** Add an activity via the bottom panel — expanding it first (collapsed by default here). */
 export async function addActivity(page: Page, name: string): Promise<void> {
   const expand = page.getByRole('button', { name: 'Expand activities panel' });

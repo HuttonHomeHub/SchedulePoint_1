@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
 import { drawActivity } from '../e2e-authoring/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { pressPromotable, planCommands, recalculate } from '../e2e-support/toolbar';
 
@@ -11,7 +12,6 @@ import {
   calculateSeededPlan,
   cursorTo,
   diagramList,
-  ensurePen,
   findBar,
   gutterLabels,
   manageButton,
@@ -116,7 +116,7 @@ test.describe('swimlanes by a code', () => {
     await test.step('1. the source set through the API: the gutter reads the values in use, then No Area', async () => {
       await setSourceToCode(page, orgSlug, 'Area');
       await page.reload();
-      await ensurePen(page);
+      await holdThePen(page);
       await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 30_000 });
       const labels = gutterLabels(page).getByRole('button');
       // L2 is a value of Area that nobody carries, so it is not a swimlane.
@@ -305,7 +305,7 @@ test.describe('writes under a code source', () => {
     const area = await areaOf(page, orgSlug);
     await setSourceToCode(page, orgSlug, 'Area');
     await page.reload();
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 30_000 });
     const list = diagramList(page);
     const wire = recordActivityWrites(page);
@@ -661,7 +661,7 @@ test.describe('choosing a code in Swimlanes…', () => {
       expect(failure, 'deleting First-fix services').toBeNull();
       await recalculate(page);
       await page.reload();
-      await ensurePen(page);
+      await holdThePen(page);
       await expect(page.getByTestId('tsld-swimlane-gutter')).toBeVisible({ timeout: 30_000 });
       const frozen = await page.evaluate(
         async ({ org, id, from }: { org: string; id: string; from: string }) => {
@@ -849,7 +849,7 @@ test.describe('a code with more values in use than a swimlane can draw', () => {
   }) => {
     test.setTimeout(420_000);
     const orgSlug = await openSeededPlan(page, Date.now() + 3, CODES_WIDE_PLAN);
-    await ensurePen(page);
+    await holdThePen(page);
 
     await test.step('1. Room is listed shaded with the sentence, still takes focus, and the first choosable code is preselected', async () => {
       const panel = await openStructure(page);

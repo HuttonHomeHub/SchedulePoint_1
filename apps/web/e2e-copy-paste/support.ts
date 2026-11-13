@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 /**
  * Journey helpers for the **activity copy / paste / duplicate** suite
  * (`docs/specs/activity-copy-paste/` M5-T2).
@@ -66,22 +68,6 @@ export async function newPlan(page: Page, planName: string): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: planName, exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
-}
-
-/** Hold the pen, whether or not this session already does (ADR-0028). Idempotent. */
-export async function ensurePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) return;
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(stop).toBeVisible();
-}
-
-/** Release the pen, so the "shaded with a reason" assertions run against a real refusal. */
-export async function releasePen(page: Page): Promise<void> {
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (!(await stop.isVisible().catch(() => false))) return;
-  await stop.click();
-  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 }
 
 /** The open plan's id, read from the route — never "the first plan the list endpoint returns". */
@@ -235,10 +221,10 @@ export async function seedActivities(
   await recalculate(page, orgSlug);
   await page.reload();
   // Re-take the pen. The reload drops it client-side, and the first run of this suite failed
-  // exactly there: `ensurePen` had been called before seeding (recalculate is pen-gated), the
+  // exactly there: `holdThePen` had been called before seeding (recalculate is pen-gated), the
   // reload landed on "Start editing", and every authoring control was correctly shaded — which
   // read as a product defect for as long as it took to open the accessibility snapshot.
-  await ensurePen(page);
+  await holdThePen(page);
   return apiActivities(page, orgSlug);
 }
 

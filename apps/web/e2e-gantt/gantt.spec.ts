@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -8,7 +9,6 @@ import {
   createPlan,
   createProject,
   diagramActivityList,
-  ensurePen,
   ganttGrid,
   onboard,
   openPlanId,
@@ -46,7 +46,7 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   await createPlan(page, 'Substructure');
 
   // Three activities, so arrow-key movement has somewhere to go. Writes are pen-gated (ADR-0028).
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await page.reload();
 

@@ -1,16 +1,9 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import {
-  createHierarchy,
-  ensurePen,
-  findBar,
-  newPlan,
-  onboard,
-  recalculate,
-  seedActivities,
-} from './support';
+import { createHierarchy, findBar, newPlan, onboard, recalculate, seedActivities } from './support';
 
 /**
  * **Report progress lives on the object, and only there** (ADR-0093).
@@ -46,7 +39,7 @@ test.describe('Progress entry', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Progress entry');
-    await ensurePen(page);
+    await holdThePen(page);
 
     const seeded = await seedActivities(page, orgSlug, [
       { name: 'Dig footings', laneIndex: 0 },
@@ -56,7 +49,7 @@ test.describe('Progress entry', () => {
     const [dig] = seeded;
     if (!dig) throw new Error('seeding returned no activity');
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
 
     // ── The command surface does not offer it, at any selection state. ────────────────────────
     const commandCopy = buildRow(page).locator('[data-toolbar-item="update-progress"]');

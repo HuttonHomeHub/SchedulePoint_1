@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { takeThePen } from '../e2e-support/pen';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { showActivities } from './workspace';
@@ -52,7 +52,7 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
-  await takeThePen(page);
+  await holdThePen(page);
 
   await showActivities(page);
   await page.getByRole('button', { name: 'New activity' }).click();
@@ -115,7 +115,7 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Baseline' }).click();
-  await takeThePen(page);
+  await holdThePen(page);
 
   for (const name of ['Excavate', 'Pour slab']) {
     await showActivities(page);

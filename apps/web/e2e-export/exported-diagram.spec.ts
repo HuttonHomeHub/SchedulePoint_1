@@ -1,12 +1,12 @@
 import { type Page } from '@playwright/test';
 
 import { assignResource, createResource } from '../e2e-resource-view/support';
+import { holdThePen } from '../e2e-support/pen';
 import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   onboard,
@@ -103,7 +103,7 @@ test.describe('The exported diagram', () => {
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
     await newPlan(page, 'Export journey');
-    await ensurePen(page);
+    await holdThePen(page);
     // Distinct lanes deliberately: unconstrained activities all start at the data date, and an
     // earlier harness in this repository had them collide in lane 0 and assert against a picture
     // of one bar. Long enough, together, to span more than one month so the band alternation is
@@ -329,7 +329,7 @@ test.describe('The exported diagram', () => {
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
     await newPlan(page, planName);
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
 
@@ -452,7 +452,7 @@ test.describe('The exported diagram', () => {
     const orgSlug = await onboard(page, STAMP + 2);
     await createHierarchy(page);
     await newPlan(page, 'Paper face');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
 
@@ -530,7 +530,7 @@ test.describe('The exported diagram', () => {
     const orgSlug = await onboard(page, STAMP + 4);
     await createHierarchy(page);
     await newPlan(page, 'Print timing');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
     await expect(
@@ -589,13 +589,13 @@ test.describe('The exported diagram', () => {
     await createResource(page, 'Crew B');
     await createHierarchy(page);
     await newPlan(page, planName);
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Excavate', laneIndex: 0, durationDays: 12 },
       { name: 'Pour slab', laneIndex: 1, durationDays: 12 },
     ]);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await assignResource(page, 'Excavate', 'Crew A', 8);
     await assignResource(page, 'Pour slab', 'Crew B', 6);
 

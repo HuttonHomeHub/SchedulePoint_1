@@ -1,12 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import {
-  createHierarchy,
-  ensurePen,
-  newPlan,
-  onboard,
-  seedActivities,
-} from '../e2e-workspace-chrome/support';
+import { holdThePen } from '../e2e-support/pen';
+import { createHierarchy, newPlan, onboard, seedActivities } from '../e2e-workspace-chrome/support';
 
 import { clearMeasurement, writeMeasurement } from './output';
 
@@ -109,7 +104,7 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
   const orgSlug = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Height cost');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 8 }]);
 }
 

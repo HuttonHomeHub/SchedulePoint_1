@@ -2,13 +2,13 @@ import { resolve } from 'node:path';
 
 import {
   createPlan,
-  ensurePen,
   onboard,
   openProject,
   recalculate,
   seedActivities,
   seedDependency,
 } from '../e2e-arrange/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { openReferencePlan, sceneCanvasToken } from './support';
@@ -109,7 +109,7 @@ test.describe('NetPoint grammar — bars and nodes', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Rungs');
-    await ensurePen(page);
+    await holdThePen(page);
     const [pour, rebar, cure] = await seedActivities(page, orgSlug, [
       { name: 'Pour', laneIndex: 0, durationDays: 10 },
       { name: 'Rebar', laneIndex: 1, durationDays: 7 },
@@ -119,7 +119,7 @@ test.describe('NetPoint grammar — bars and nodes', () => {
     await seedDependency(page, orgSlug, pour!.id, cure!.id);
     await seedDependency(page, orgSlug, rebar!.id, cure!.id);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.locator('canvas').first()).toBeAttached({ timeout: 20_000 });
     await page.waitForTimeout(800);
 

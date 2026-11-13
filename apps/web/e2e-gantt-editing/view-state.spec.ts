@@ -9,9 +9,9 @@ import {
   onboard,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -42,7 +42,7 @@ async function ganttPlan(page: Page): Promise<string> {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -135,10 +135,10 @@ test('Indent files a row under the summary above it, and the write reaches the A
     },
     { org: orgSlug, id: planId },
   );
-  // `syncClient` = reload + `ensurePen`, and the second half is what this case learnt the hard way:
+  // `syncClient` = reload + `holdThePen`, and the second half is what this case learnt the hard way:
   // the reload DROPS THE PEN LEASE, so every structure action shades with the pen's refusal rather
   // than its own — which read as "Indent is refused" when the summary above it was perfectly valid.
-  // `ensurePen`, not `startEditing`: a reload may leave the lease already held, and clicking a
+  // `holdThePen` is idempotent: a reload may leave the lease already held, and clicking a
   // button that is not there would hang. Four files had a copy of this before it had a name
   // (`docs/TECH_DEBT.md` #183).
   await syncClient(page);

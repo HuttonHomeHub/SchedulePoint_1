@@ -2,7 +2,6 @@ import { type Page } from '@playwright/test';
 
 import {
   createPlan,
-  ensurePen,
   onboard,
   openProject,
   recalculate,
@@ -10,6 +9,7 @@ import {
   seedDependency,
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { openReferencePlan, paintedRgb } from './support';
@@ -93,7 +93,7 @@ test.describe('Diagram mark contrast', () => {
     const orgSlug = await onboard(page, stamp);
     await openProject(page);
     await createPlan(page, 'Mark contrast');
-    await ensurePen(page);
+    await holdThePen(page);
     // Alone and long, A is the critical path. C and D finish about thirty days short of it, so the
     // link between them is an ordinary (neither critical nor near-critical) DRIVING link, and the
     // two bars are ordinary bars: exactly the pair the rule is about.

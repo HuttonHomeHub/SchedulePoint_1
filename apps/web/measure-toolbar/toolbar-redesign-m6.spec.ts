@@ -1,8 +1,8 @@
 import { expect, type Browser, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   openPlanId,
@@ -248,7 +248,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await createHierarchy(page);
       await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
       const planId = openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Site setup', laneIndex: 0, durationDays: 12 },
         { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -273,7 +273,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       // ---- the header's numbers: a plan, then an organisation screen ------------------------
       await page.goto(planUrl);
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       for (const c of HEADER_CELLS) {
         await page.setViewportSize({ width: c.w, height: c.h });
         await page.waitForTimeout(500);
@@ -296,7 +296,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.goto(planUrl);
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       for (const c of PHOTO_CELLS) {
         await page.setViewportSize({ width: c.w, height: c.h });
         await page.waitForTimeout(550);
@@ -316,7 +316,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         await shoot(c.label, 'nopen');
       }
       await page.setViewportSize({ width: 1646, height: 1097 });
-      await ensurePen(page);
+      await holdThePen(page);
 
       // A Filter applied: V4a's count, and the pressed state beside it.
       await page.setViewportSize({ width: 1646, height: 1097 });
@@ -357,7 +357,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await page.setViewportSize({ width: 1646, height: 1097 });
       await page.goto(planUrl);
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
       await recalculate(page, orgSlug);
       await waitDeck(page);
@@ -371,7 +371,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
         .toBe(true);
       await page.reload();
       await waitDeck(page);
-      await ensurePen(page);
+      await holdThePen(page);
       await page.locator('[data-toolbar-item="next-conflict"]').first().click();
       await page.waitForTimeout(500);
       for (const c of PHOTO_CELLS) {

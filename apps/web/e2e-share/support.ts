@@ -47,12 +47,6 @@ export async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Guest Plan' }).click();
 }
 
-/** Take the pen so the authoring affordances go live (compact status lives in the slim header). */
-export async function startEditing(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
-}
-
 /** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */
 export function canvas(page: Page): ReturnType<Page['locator']> {
   return page.locator('section[aria-label="Time-scaled logic diagram"] canvas').first();
@@ -104,7 +98,7 @@ interface SeededActivity {
 /**
  * Create activities in the open plan through the API, at the given lanes, and return their id +
  * version (needed for the placements PATCH below). The pen must already be held
- * (`PLAN_EDIT_LOCK_ENFORCED=true` in this suite's `webServer`, `startEditing` above) — a helper that
+ * (`PLAN_EDIT_LOCK_ENFORCED=true` in this suite's `webServer`, `holdThePen` above) — a helper that
  * ignores a non-2xx status turns a 423 into "the placement never happened", which reads as a product
  * defect three assertions later rather than as a seeding mistake.
  */

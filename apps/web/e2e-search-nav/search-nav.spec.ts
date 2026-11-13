@@ -1,3 +1,4 @@
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -7,7 +8,6 @@ import {
   canvas,
   createHierarchy,
   diagramList,
-  ensurePen,
   ganttGrid,
   jumpNext,
   jumpPrevious,
@@ -52,7 +52,7 @@ test('search that navigates: cycle, count, announce, frame — in both views', a
   const orgSlug = await onboard(page, STAMP);
   await createHierarchy(page);
   await newPlan(page, 'Search plan');
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ------------------------------------------------------------------ seed
   // Through the API: this journey is about what a planner does with activities that already exist,
@@ -68,7 +68,7 @@ test('search that navigates: cycle, count, announce, frame — in both views', a
   ]);
   expect(seeded.filter((a) => a.name.startsWith('Pile'))).toHaveLength(PILE_COUNT);
   await expect(canvas(page)).toBeVisible();
-  await ensurePen(page);
+  await holdThePen(page);
 
   // ------------------------------------------------------- forwards, and the wrap
   await search(page, 'Pile');
@@ -149,7 +149,7 @@ test('search that navigates: cycle, count, announce, frame — in both views', a
   // an armed tool to a keystroke in a text field. It is only observable in a real browser: that
   // listener is native and on `window`, while the toolbar reaches the chrome band through a React
   // portal, and React events follow the React tree rather than the DOM one.
-  await ensurePen(page);
+  await holdThePen(page);
   await armLink(page);
   await search(page, 'Pile');
   await searchField(page).focus();

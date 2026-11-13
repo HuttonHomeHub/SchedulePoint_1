@@ -1,8 +1,8 @@
 import { expect, type Page, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import {
   createHierarchy,
-  ensurePen,
   linkActivities,
   newPlan,
   openPlanId,
@@ -218,7 +218,7 @@ for (const pointer of ['fine', 'coarse'] as const) {
       await createHierarchy(page);
       await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
       openPlanId(page);
-      await ensurePen(page);
+      await holdThePen(page);
       const seeded = await seedActivities(page, orgSlug, [
         { name: 'Site setup', laneIndex: 0, durationDays: 12 },
         { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },

@@ -9,8 +9,8 @@ import {
   onboard,
   seedActivities,
   showGantt,
-  startEditing,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 
 /**
  * **M0-T1 R2 — how the Gantt spends its horizontal budget**, measured before M2 adds a column.
@@ -54,7 +54,7 @@ test('R2 — the grid/chart split and the real column boxes at 1646', async ({ p
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 12);
   await page.getByRole('button', { name: 'Recalculate' }).click();
   await showGantt(page);

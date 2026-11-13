@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 import { writeMeasurement } from './output';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   seedAndRecalculate,
@@ -46,9 +47,9 @@ test('M0-T1/T3/T7 — label widths, ruler occupancy, and the cost of a layout re
   const org = await onboard(page, stamp);
   await createHierarchy(page);
   await newPlan(page, 'Axis', '2026-01-05');
-  await ensurePen(page);
+  await holdThePen(page);
   await seedAndRecalculate(page, org, ['Excavate', 'Pour slab', 'Erect frame']);
-  await ensurePen(page);
+  await holdThePen(page);
 
   const ruler = page.getByTestId('tsld-ruler');
   await expect(ruler).toBeVisible();

@@ -9,9 +9,9 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
-  startEditing,
   syncClient,
 } from '../e2e-gantt/support';
+import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -126,7 +126,7 @@ async function useEightHourCalendar(page: Page, orgSlug: string): Promise<void> 
   // handle on the query client, and this is what a planner's own calendar change amounts to.
   //
   // The reload drops the pen lease, which the next line restores — found by the seeding 423ing three
-  // times immediately after the reload landed. `ensurePen` rather than `startEditing`, because a
+  // times immediately after the reload landed. `holdThePen` is idempotent, because a
   // reload may leave the lease already held and clicking "Start editing" would then hang on a
   // button that is not there.
   await syncClient(page);
@@ -281,7 +281,7 @@ test('a sub-day duration typed into the grid is stored as minutes', async ({ pag
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
@@ -309,7 +309,7 @@ test('a whole-day duration on the same calendar stores its own minutes', async (
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
@@ -335,7 +335,7 @@ test('Escape discards, so a mistyped cell writes nothing', async ({ page }) => {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
@@ -362,7 +362,7 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -453,7 +453,7 @@ test('a start date typed places the bar and writes NO constraint', async ({ page
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
   await showGantt(page);
@@ -494,7 +494,7 @@ test('a finish date typed writes a duration and pins nothing', async ({ page }) 
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   // A Mon–Fri plan, asserted rather than assumed: the weekend below is the point of the case.
   await bindMonFriCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
@@ -554,7 +554,7 @@ test('a start date typed across a weekend leaves the finish where it was', async
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await bindMonFriCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
@@ -610,7 +610,7 @@ test('a start date cannot be typed on a started activity, and the cell says why'
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Programme');
-  await startEditing(page);
+  await holdThePen(page);
   await seedActivities(page, orgSlug, 3);
   await recalculate(page);
 

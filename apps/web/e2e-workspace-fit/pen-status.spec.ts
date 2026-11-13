@@ -1,9 +1,9 @@
 import { type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
-  ensurePen,
   newPlan,
   onboard,
   recalculate,
@@ -50,7 +50,7 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     const orgSlug = await onboard(page, Date.now());
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
@@ -58,7 +58,7 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     await recalculate(page, orgSlug);
     // `recalculate` reloads, which drops the pen. Take it back — the whole subject here is what the
     // held state renders and where.
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   });
 
@@ -165,7 +165,7 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
       .poll(() => page.evaluate(() => document.activeElement?.getAttribute('data-toolbar-item')))
       .toBe('pen');
 
-    await ensurePen(page);
+    await holdThePen(page);
   });
 
   test('releasing the pen updates the sentence in place, in the facts row', async () => {
@@ -182,7 +182,7 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     await expect(factsRow.getByRole('status')).toHaveCount(1);
 
     // Put the pen back so this spec leaves the fixture as it found it, for any spec that follows.
-    await ensurePen(page);
+    await holdThePen(page);
   });
 });
 
@@ -213,10 +213,10 @@ test.describe('the merged header row', () => {
     // A long-but-plausible construction plan name. A short one is how three prior costings of this
     // row reported slack that a real plan did not have (ADR-0091 M7).
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-    await ensurePen(page);
+    await holdThePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
-    await ensurePen(page);
+    await holdThePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan view' })).toBeVisible();
   });
 

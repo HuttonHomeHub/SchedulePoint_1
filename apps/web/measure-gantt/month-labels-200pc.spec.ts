@@ -1,7 +1,8 @@
 import { expect, type CDPSession, type Page, test } from '@playwright/test';
 
 import { createClient, createPlan, createProject, onboard, showGantt } from '../e2e-gantt/support';
-import { ensurePen, recalculate, seedActivities } from '../e2e-workspace-chrome/support';
+import { holdThePen } from '../e2e-support/pen';
+import { recalculate, seedActivities } from '../e2e-workspace-chrome/support';
 import { clearMeasurement, writeMeasurement } from '../measure-toolbar/output';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -97,7 +98,7 @@ test('#501 Gantt month labels at 100 % and 200 % text', async ({ page }) => {
   await createClient(page, 'Northgate');
   await createProject(page, 'Riverside');
   await createPlan(page, 'Month labels');
-  await ensurePen(page);
+  await holdThePen(page);
   // Long enough that every preset has months to label; the arrival framing fits the plan.
   await seedActivities(page, orgSlug, [
     { name: 'Site setup', laneIndex: 0, durationDays: 120 },
