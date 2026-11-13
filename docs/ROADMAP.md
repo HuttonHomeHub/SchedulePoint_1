@@ -459,6 +459,12 @@ keep `main` releasable.
   **M6 (decided in [ADR-0219](adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)):** on a window up to 704 px
   high, a selected activity's bar takes the whole bottom row while the plan facts step aside, and a bar you click stays put
   unless the bottom row covers it.
+- **The first planner to open a free plan holds the pen** (M1 in progress,
+  [ADR-0220](adr/0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md); spec and plan at
+  [`docs/specs/first-planner-gets-the-pen/`](specs/first-planner-gets-the-pen/feature-spec.md)). A Planner or Org Admin
+  who opens a plan nobody is editing now holds the pen without pressing Start editing; if someone else holds it, the
+  hand-off controls are as before, and Stop editing is respected until the plan is opened again. The requester's
+  retake and the hidden-tab release follow in M2 and M3.
 
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at

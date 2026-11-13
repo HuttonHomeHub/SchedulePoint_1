@@ -1,6 +1,6 @@
 # ADR-0028: Single-editor plan edit-lock (advisory lease + peer hand-off + write gate)
 
-- **Status:** Accepted
+- **Status:** Accepted; the acquire model (an explicit Start editing) amended by ADR-0220
 - **Date:** 2026-07-11
 - **Deciders:** Engineering
 - **Related:** ADR-0012 (RBAC + resource scoping), ADR-0016 (roles/tenancy),

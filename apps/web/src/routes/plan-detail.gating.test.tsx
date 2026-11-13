@@ -243,6 +243,7 @@ function pen(over: Record<string, unknown> = {}): Record<string, unknown> {
     holdsPen: false,
     status: undefined,
     isPending: false,
+    autoAcquiring: false,
     lostControl: null,
     dismissLost: vi.fn(),
     startEditing: vi.fn(),

@@ -1,9 +1,7 @@
-import { type Browser, type BrowserContext, type Page } from '@playwright/test';
-
 import { holdThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { addActivity, showActivities, openNewPlan, setPlannedStart } from './support';
+import { addActivity, refetchLock, setUpTwoActors, showActivities } from './support';
 
 /**
  * Flag-ON multi-actor pen hand-off journey (TECH_DEBT #27b). Two real users in one org:
@@ -17,91 +15,6 @@ import { addActivity, showActivities, openNewPlan, setPlannedStart } from './sup
  * timeout is a backstop). The propagation mechanism itself is covered by the unit tests.
  */
 const CROSS_ACTOR = { timeout: 20_000 };
-
-/**
- * Force the lock-status query to re-pull the peer's latest action WITHOUT unloading the page — a
- * `reload()` would fire the holder's `pagehide` pen-release. Bringing the page to front + a
- * `visibilitychange` triggers TanStack Query's focus refetch (the status query is always stale).
- */
-async function refetchLock(page: Page): Promise<void> {
-  await page.bringToFront();
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-}
-
-async function signUp(page: Page, name: string, email: string): Promise<void> {
-  await page.goto('/sign-up');
-  await page.getByLabel('Full name').fill(name);
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill('correct-horse-battery');
-  await page.getByRole('button', { name: /create an account/i }).click();
-  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
-    timeout: 15_000,
-  });
-}
-
-interface TwoActors {
-  ctxA: BrowserContext;
-  a: Page;
-  ctxB: BrowserContext;
-  b: Page;
-  planUrl: string;
-  orgName: string;
-}
-
-/**
- * Two real actors in one organisation, with a plan created and nobody holding the pen.
- *
- * **Extracted at the `docs/TECH_DEBT.md` #286 slice, and the extraction is a MOVE.** Every
- * assertion in the hand-off test below is unchanged by it, so that test is the oracle for this
- * function being correct — the ADR-0078 barrel-preserving argument applied to a fixture rather
- * than to a module. Three transitions had no client coverage and each needs this same thirty-line
- * setup; re-typing it three times is how two fixtures drift into describing different worlds.
- *
- * **A is the organisation's creator and therefore an Org Admin.** That is not incidental: it is
- * what makes the override transition reachable at all, since `canTakeOverNow` returns true on
- * `perms.override` before it looks at a request or a heartbeat. **B is a Planner** — it can
- * request, and it can take over once grace has elapsed, and it can never override. The two roles
- * are the two halves of ADR-0028's hand-off model, so one fixture serves every case.
- */
-async function setUpTwoActors(browser: Browser): Promise<TwoActors> {
-  const stamp = Date.now();
-  const orgName = `Handoff Co ${stamp}`;
-
-  // --- Holder A: create the org, invite a Planner B, then create + open a plan --------------
-  const ctxA = await browser.newContext();
-  const a = await ctxA.newPage();
-  await signUp(a, 'Holder A', `holder-${stamp}@example.com`);
-  await a.getByLabel('Organisation name').fill(orgName);
-  await a.getByRole('button', { name: /create organisation/i }).click();
-  // The landing is the organisation overview (ADR-0098), so its `<h1>` is the organisation's own
-  // name — it was 'Welcome to SchedulePoint' until that screen was replaced. Asserting the name is
-  // the stronger claim anyway: it proves this actor landed in the organisation they just created.
-  await expect(a.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
-
-  await a.getByRole('link', { name: 'Members' }).click();
-  await a.getByRole('button', { name: 'Invite member' }).click();
-  const dialog = a.getByRole('dialog');
-  await dialog.getByLabel('Email').fill(`peer-${stamp}@example.com`);
-  await dialog.getByLabel('Role', { exact: true }).selectOption('PLANNER');
-  await dialog.getByRole('button', { name: /send invitation/i }).click();
-  const acceptUrl = await a.getByLabel('Invitation link').inputValue();
-  await a.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
-
-  await openNewPlan(a);
-  await setPlannedStart(a, '2026-01-01');
-  const planUrl = a.url();
-
-  // --- Peer B: accept the invite, joining A's org as a Planner -------------------------------
-  const ctxB = await browser.newContext();
-  const b = await ctxB.newPage();
-  await signUp(b, 'Peer B', `peer-${stamp}@example.com`);
-  await b.goto(acceptUrl);
-  await b.getByRole('button', { name: /accept and join/i }).click();
-  await expect(b).toHaveURL(/\/orgs\//);
-
-  return { ctxA, a, ctxB, b, planUrl, orgName };
-}
 
 test('a Planner requests control and the holder hands the pen over (peer hand-off)', async ({
   browser,

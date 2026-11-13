@@ -1,6 +1,6 @@
 import { type Browser, type Page } from '@playwright/test';
 
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
 import { pickAddKind } from '../e2e-support/toolbar';
 import {
@@ -168,7 +168,9 @@ test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)',
       await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
         timeout: 30_000,
       });
-      if (pen) await holdThePen(page);
+      await holdThePen(page);
+      // An opening takes the pen on its own (ADR-0220), so a reading taken without it lets go.
+      if (!pen) await releaseThePen(page);
       const mm = page.locator('[data-toolbar-item="minimap"]').first();
       if ((await mm.getAttribute('aria-pressed')) === 'true') await mm.click();
       const comments = page.locator('[data-toolbar-item="comments"]').first();

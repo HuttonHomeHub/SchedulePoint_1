@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import type { Locator, Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { openPrintDocument } from '../e2e-support/print';
 import { expect, test } from '../e2e-support/test';
 import { planCommands, unfoldViewSections } from '../e2e-support/toolbar';
@@ -105,6 +105,10 @@ test.describe('Codes…', () => {
     const types = await storedTypes(page, orgSlug);
 
     await test.step('1. without the pen: three tabs in order, Area’s values, and every write shaded with one sentence', async () => {
+      // The plan opened free, so this planner took the pen on opening (ADR-0220); step 1 is the read
+      // without it, so let it go and wait until the control offers it back.
+      await holdThePen(page);
+      await releaseThePen(page);
       const dialog = await openCodes(page);
       await expect(dialog.getByRole('tab')).toHaveText(['Area', 'Trade', 'Phase']);
       await expect(dialog.getByRole('tablist', { name: 'Code types' })).toBeVisible();

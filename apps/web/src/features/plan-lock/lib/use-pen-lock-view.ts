@@ -123,6 +123,7 @@ export function usePenLockView(
     currentUserId,
     dismissedRequestId,
     effectiveNow,
+    pen.autoAcquiring,
   );
   const signature = view ? `${view.tone}:${view.actions.join('|')}` : 'none';
 

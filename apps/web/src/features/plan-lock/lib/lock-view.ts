@@ -156,6 +156,9 @@ export function lockViewKey(view: LockView | null): string {
  * @param currentUserId to tell "my pending request" (row 6) from someone else's (row 5)
  * @param dismissedRequestId a requester id the holder chose to "Keep editing" past
  * @param now injectable clock for the relative "active …" phrase (tests)
+ * @param autoAcquiring the app is taking the pen on the reader's behalf (ADR-0220): a `FREE` or
+ *   `EXPIRED` plan then reads as still loading, so one sentence is announced per opening rather than
+ *   "No one is editing this plan." followed a moment later by "You're editing this plan."
  */
 export function resolveLockView(
   status: PlanEditLockStatus | undefined,
@@ -163,6 +166,7 @@ export function resolveLockView(
   currentUserId: string | undefined,
   dismissedRequestId: string | null,
   now?: number,
+  autoAcquiring = false,
 ): LockView | null {
   if (lostControl) {
     return {
@@ -177,6 +181,7 @@ export function resolveLockView(
 
   switch (status.state) {
     case 'FREE':
+      if (autoAcquiring) return null;
       return {
         // "Available" (not "Read-only") when the caller can take the pen, so the
         // badge invites the adjacent "Start editing" CTA instead of contradicting it.
@@ -186,6 +191,7 @@ export function resolveLockView(
         actions: status.canAcquire ? ['start'] : [],
       };
     case 'EXPIRED':
+      if (autoAcquiring) return null;
       return {
         tone: 'neutral',
         badge: status.canAcquire ? lockCopy.badgeAvailable : lockCopy.badgeReadOnly,

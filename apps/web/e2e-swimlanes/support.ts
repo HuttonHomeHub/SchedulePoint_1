@@ -164,8 +164,9 @@ export const CODES_WIDE_PLAN: SeededPlan = {
 
 /**
  * Sign up, seed a catalogue plan into a fresh project through the public API, open it and wait for
- * the diagram. Defaults to `plan:capability-swimlanes`. The pen is NOT taken: a case that writes calls
- * {@link holdThePen}.
+ * the diagram. Defaults to `plan:capability-swimlanes`. Opening the plan takes the pen (ADR-0220), so a
+ * case that needs it free says `releaseThePen`, and one that writes calls {@link holdThePen}, which
+ * is correct either way.
  *
  * Returns the organisation slug, which the API probes below need.
  */

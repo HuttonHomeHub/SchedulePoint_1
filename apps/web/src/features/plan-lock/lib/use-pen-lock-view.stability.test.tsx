@@ -56,6 +56,7 @@ function pen(over: Partial<PlanPen> = {}): PlanPen {
     } as unknown as PlanPen['status'],
     holdsPen: false,
     isPending: false,
+    autoAcquiring: false,
     lostControl: null,
     ...CALLBACKS,
     ...over,
@@ -111,6 +112,24 @@ describe('usePenLockView keeps one identity while the lock is unchanged', () => 
 
     expect(result.current).not.toBe(first);
     expect(result.current.view?.actions).toEqual(['stop']);
+  });
+
+  it('returns a null view while the app takes the pen, and a new object once it has (ADR-0220)', () => {
+    // A free plan with an automatic acquire in the air reads as loading, so the first sentence a
+    // screen reader hears is the holding one; the identity must follow that change, and only that.
+    const { result, rerender } = renderHook(
+      ({ p }: { p: PlanPen }) => usePenLockView(p, 'u-me', 1_700_000_000_000),
+      { initialProps: { p: pen({ autoAcquiring: true, isPending: true }) } },
+    );
+    const loading = result.current;
+    expect(loading.view).toBeNull();
+
+    rerender({ p: pen({ autoAcquiring: true, isPending: true }) });
+    expect(result.current).toBe(loading);
+
+    rerender({ p: pen() });
+    expect(result.current).not.toBe(loading);
+    expect(result.current.view?.actions).toEqual(['start']);
   });
 
   it('returns a new object when a mutation goes in flight, because the buttons shade', () => {

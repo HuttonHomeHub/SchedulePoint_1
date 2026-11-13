@@ -216,14 +216,6 @@ describe('usePlanPen', () => {
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
   });
 
-  it('does not auto-acquire on mount/focus — acquire is a user action only', async () => {
-    vi.mocked(apiFetch).mockResolvedValue(FREE);
-    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
-    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
-    const posts = vi.mocked(apiFetch).mock.calls.filter(([, init]) => init?.method === 'POST');
-    expect(posts).toHaveLength(0);
-  });
-
   it('onWriteRejected classifies a 423 as a lock event and raises lostControl', async () => {
     vi.mocked(apiFetch).mockResolvedValue(FREE);
     const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
@@ -251,5 +243,232 @@ describe('usePlanPen', () => {
     );
     expect(outcome).toEqual({ kind: 'passthrough' });
     expect(result.current.lostControl).toBeNull();
+  });
+});
+
+// --- the pen on opening (ADR-0220) -------------------------------------------
+
+const HELD_BY_OTHER: PlanEditLockStatus = {
+  ...FREE,
+  state: 'HELD_BY_OTHER',
+  holder: { id: 'u2', name: 'Holder A', email: 'a@x.com' },
+  canAcquire: false,
+  canRequest: true,
+  canTakeOver: false,
+  canOverride: false,
+};
+
+const LOCKED_HELD = new ApiFetchError(423, {
+  code: 'LOCKED',
+  message: 'held',
+  details: { reason: 'PLAN_EDIT_LOCK_HELD' },
+});
+const LOCKED_LOST = new ApiFetchError(423, {
+  code: 'LOCKED',
+  message: 'lost',
+  details: { reason: 'PLAN_EDIT_LOCK_LOST' },
+});
+
+const posts = (suffix = ''): unknown[][] =>
+  vi
+    .mocked(apiFetch)
+    .mock.calls.filter(
+      ([path, init]) => init?.method === 'POST' && path.endsWith(`/edit-lock${suffix}`),
+    );
+
+/** Answer the status GET from `reads` in turn (the last repeats) and every POST per `post`. */
+function serve(reads: PlanEditLockStatus[], post: (path: string) => unknown = () => HELD_BY_ME) {
+  let n = 0;
+  vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' || init?.method === 'DELETE') {
+      const out = post(path);
+      return out instanceof Error ? Promise.reject(out) : Promise.resolve(out);
+    }
+    const next = reads[Math.min(n, reads.length - 1)];
+    n += 1;
+    return Promise.resolve(next);
+  });
+}
+
+function setVisibility(state: 'visible' | 'hidden'): void {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+describe('usePlanPen — the pen on opening', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    setVisibility('visible');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('opens FREE → one acquire, and never a take-over', async () => {
+    serve([FREE, HELD_BY_ME], () => HELD_BY_ME);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
+  });
+
+  it('is busy from the first render that has the free status, before the POST resolves', async () => {
+    let resolvePost: (s: PlanEditLockStatus) => void = () => {};
+    let posted = false;
+    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Promise<PlanEditLockStatus>((r) => {
+            posted = true;
+            resolvePost = r;
+          })
+        : Promise.resolve(posted ? HELD_BY_ME : FREE),
+    );
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.autoAcquiring).toBe(true));
+    expect(result.current.isPending).toBe(true);
+    act(() => resolvePost(HELD_BY_ME));
+    await waitFor(() => expect(result.current.autoAcquiring).toBe(false));
+    expect(result.current.holdsPen).toBe(true);
+  });
+
+  it('opens HELD_BY_ME → zero acquires', async () => {
+    serve([HELD_BY_ME]);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('opens HELD_BY_OTHER → zero acquires, even when the server offers an override', async () => {
+    serve([{ ...HELD_BY_OTHER, canOverride: true }]);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    expect(posts()).toHaveLength(0);
+    expect(result.current.autoAcquiring).toBe(false);
+  });
+
+  it('opens with canAcquire false (Viewer, Contributor) → zero acquires', async () => {
+    serve([{ ...FREE, canAcquire: false }]);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+    expect(result.current.autoAcquiring).toBe(false);
+  });
+
+  it('opens in a hidden tab → waits; one acquire when first shown', async () => {
+    setVisibility('hidden');
+    serve([FREE, HELD_BY_ME]);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('absorbs a 423 HELD from the automatic acquire — no lostControl, the refetch shows the holder', async () => {
+    let held = false;
+    vi.mocked(apiFetch).mockImplementation((_path: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        held = true;
+        return Promise.reject(LOCKED_HELD);
+      }
+      return Promise.resolve(held ? HELD_BY_OTHER : FREE);
+    });
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    await waitFor(() => expect(result.current.autoAcquiring).toBe(false));
+    expect(result.current.lostControl).toBeNull();
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('Stop editing is respected: the pen freeing up again sends no further acquire', async () => {
+    serve([FREE, HELD_BY_ME, FREE, FREE], (path) =>
+      path.endsWith('/edit-lock') ? HELD_BY_ME : undefined,
+    );
+    const { result, rerender } = renderHook(() => usePlanPen('acme', 'p1'), {
+      wrapper: wrapper(),
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    act(() => result.current.stopEditing());
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    rerender();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(1);
+  });
+
+  it('a pen that frees up while a reader is watching is not taken from the poll', async () => {
+    serve([HELD_BY_OTHER, FREE]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    await act(async () => {
+      await client.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(result.current.autoAcquiring).toBe(false);
+    expect(posts()).toHaveLength(0);
+  });
+});
+
+describe('usePlanPen — a loss nobody caused', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    setVisibility('visible');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** HELD_BY_ME at first; the heartbeat is refused; later reads follow `after`. */
+  function lose(after: PlanEditLockStatus, retake: () => unknown = () => HELD_BY_ME) {
+    let lost = false;
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && path.endsWith('/heartbeat')) {
+        lost = true;
+        return Promise.reject(LOCKED_LOST);
+      }
+      if (init?.method === 'POST') {
+        const out = retake();
+        if (out instanceof Error) return Promise.reject(out);
+        lost = false;
+        return Promise.resolve(out);
+      }
+      return Promise.resolve(lost ? after : HELD_BY_ME);
+    });
+  }
+
+  it('heartbeat 423 then FREE → one silent acquire, no banner', async () => {
+    lose(FREE);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    await waitFor(() => expect(result.current.autoAcquiring).toBe(false));
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.holdsPen).toBe(true);
+  });
+
+  it('heartbeat 423 then HELD_BY_OTHER → today’s lostControl, and no acquire', async () => {
+    lose(HELD_BY_OTHER);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST'));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('a retake that is itself refused shows the banner rather than looping', async () => {
+    lose(FREE, () => LOCKED_HELD);
+    const { result } = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: wrapper() });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    // The immediate beat a tab owes when it returns to the foreground — no 30 s wait.
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST'));
+    expect(posts()).toHaveLength(1);
   });
 });
