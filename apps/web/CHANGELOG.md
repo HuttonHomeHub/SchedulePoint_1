@@ -1,5 +1,26 @@
 # @repo/web
 
+## 1.9.1
+
+### Patch Changes
+
+- [#1357](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1357) [`f40bf97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f40bf9781ebf687ec93f38853d958caa03714fcc) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dismiss on the "bars stay where they were placed" strip is now remembered on this browser for you, in
+  each plan, including after a reload or in a new tab. Follow logic is still on each bar's own row of
+  actions.
+
+- [#1358](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1358) [`584feef`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/584feefe6f2938491103093a7554903a8ae3822d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Clearer wording in eight places. Levelling now says what to do after you switch it on, the link
+  forms say how Predecessor and Successor lags are counted, and the calendar dialog says exceptions
+  save as you add them. The plan calendar picker confirms a save, the Gantt column is now "Start vs
+  baseline", the import box says it always makes a new plan, and the swimlanes box says the bands
+  from a WBS level or a code are kept when you switch to by hand. The critical float threshold hint
+  now says "this plan's calendar".
+
+- [#1355](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1355) [`58a205b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/58a205b32bf50f0abd4cf5137b577df32a64d8e1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Clearer wording for people who cannot edit a plan. An empty plan now tells a Viewer or Contributor to
+  ask a Planner to add activities, instead of only saying their role cannot. When someone is editing a
+  plan, the selection bar names them and points to Request control; for a Planner who is not editing it
+  says to start editing. Messages now say "editing" rather than "edit lock" in the activity editor's unsaved-changes warning, the Make milestone dialog, the Members
+  role list, the organisation overview and the programme recalculation message.
+
 ## 1.9.0
 
 ### Minor Changes
