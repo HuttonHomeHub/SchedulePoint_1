@@ -1,7 +1,7 @@
 import type { PlanEditLockStatus } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { shouldAutoAcquire, shouldRetakeAfterLoss } from './auto-acquire';
+import { shouldAutoAcquire, shouldRetakeAfterLoss, shouldTakeOnFree } from './auto-acquire';
 
 const STATES = ['FREE', 'EXPIRED', 'HELD_BY_ME', 'HELD_BY_OTHER'] as const;
 
@@ -110,5 +110,30 @@ describe('shouldRetakeAfterLoss', () => {
   it('never takes a live lease over', () => {
     const heldByOther = status('HELD_BY_OTHER', { canOverride: true, canTakeOver: true });
     expect(shouldRetakeAfterLoss({ status: heldByOther, retakenForThisLoss: false })).toBe(false);
+  });
+});
+
+describe('shouldTakeOnFree', () => {
+  const rows = STATES.flatMap((state) =>
+    BOOLS.flatMap((canAcquire) =>
+      BOOLS.flatMap((visible) =>
+        BOOLS.map((iRequested) => ({ state, canAcquire, visible, iRequested })),
+      ),
+    ),
+  );
+
+  it.each(rows)(
+    '$state canAcquire=$canAcquire visible=$visible requested=$iRequested',
+    ({ state, canAcquire, visible, iRequested }) => {
+      const expected =
+        (state === 'FREE' || state === 'EXPIRED') && canAcquire && visible && iRequested;
+      expect(shouldTakeOnFree({ status: status(state, { canAcquire }), visible, iRequested })).toBe(
+        expected,
+      );
+    },
+  );
+
+  it('does nothing while the status is unknown', () => {
+    expect(shouldTakeOnFree({ status: undefined, visible: true, iRequested: true })).toBe(false);
   });
 });

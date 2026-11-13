@@ -53,7 +53,7 @@ _M2 exit: full structural coverage, still dark._
 
 - **M3.1 — conflict + pen-loss contract.** 409/404 → abort + refetch (`scheduleKeys`/activity invalidate)
   - clear redo + `role="status"`; 423 → clear stack + status. _Complexity: M. Risk: matching the existing
-    refetch patterns. Tests: 409/404/423 branches._
+    refetch patterns. Tests: 409/404/423 branches._ (The 423 clear is superseded by ADR-0176 D4.)
 - **M3.2 — toolbar Undo/Redo + keybindings.** ADR-0031 registry items (pen-gated group), disabled from
   `canUndo`/`canRedo`; `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` (+ `Ctrl+Y`) with Back/Forward suppression
   (TECH_DEBT #25). Announce each undo/redo via `useAnnounce`. _Complexity: M. Risk: key collisions.

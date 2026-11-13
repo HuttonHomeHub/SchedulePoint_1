@@ -107,7 +107,9 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   // Asserting the STATUS region is strictly stronger than what it replaces: it says the sentence
   // reached the live region a requester is told to watch, which the old line could have satisfied
   // from the sr-only span alone.
-  await expect(b.getByRole('status').filter({ hasText: /Requested — waiting/i })).toBeVisible();
+  await expect(
+    b.getByRole('status').filter({ hasText: /Requested — you will start editing when/i }),
+  ).toBeVisible();
 
   // --- A sees the incoming request and hands over -------------------------------------------
   await refetchLock(a);
@@ -227,9 +229,9 @@ test('an Org Admin overrides a peer who is editing, and the peer is told they lo
   // "somebody took this" and "the application broke", and those need different responses.
   await refetchLock(b);
   await expect(
-    b
-      .getByRole('status')
-      .filter({ hasText: /Editing control was taken over — you’re now read-only\./ }),
+    b.getByRole('status').filter({
+      hasText: /is now editing this plan — you’re read-only\. Request control to carry on\./,
+    }),
   ).toBeVisible(CROSS_ACTOR);
   await expect(b.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
   await expect(b.getByRole('button', { name: 'New activity' })).toHaveCount(0);
@@ -272,7 +274,9 @@ test('a requester takes the pen once grace elapses, and the silent holder is tol
   await b.bringToFront();
   await b.goto(planUrl);
   await b.getByRole('button', { name: 'Request control' }).click();
-  await expect(b.getByRole('status').filter({ hasText: /Requested — waiting/i })).toBeVisible();
+  await expect(
+    b.getByRole('status').filter({ hasText: /Requested — you will start editing when/i }),
+  ).toBeVisible();
 
   // --- The WAITING state: the control exists, names itself, and refuses ------------------------
   // This is the state ADR-0028 designed and nothing had ever driven. It matters because the
@@ -324,9 +328,9 @@ test('a requester takes the pen once grace elapses, and the silent holder is tol
   // The silent holder is the case most likely to be surprised, and the least likely to be watching.
   await refetchLock(a);
   await expect(
-    a
-      .getByRole('status')
-      .filter({ hasText: /Editing control was taken over — you’re now read-only\./ }),
+    a.getByRole('status').filter({
+      hasText: /is now editing this plan — you’re read-only\. Request control to carry on\./,
+    }),
   ).toBeVisible(CROSS_ACTOR);
   await expect(a.getByRole('button', { name: 'Stop editing' })).toHaveCount(0);
 

@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { shouldAutoAcquire, shouldRetakeAfterLoss } from '../lib/auto-acquire';
+import { shouldAutoAcquire, shouldRetakeAfterLoss, shouldTakeOnFree } from '../lib/auto-acquire';
 import { classifyLockError } from '../lib/lock-error';
 
 import { API_BASE_URL } from '@/config/env';
@@ -22,6 +22,12 @@ export { planLockKeys };
 const POLL_MS = 15_000;
 /** Holder heartbeat cadence (ADR-0028 config; the server enforces the 120 s TTL). */
 const HEARTBEAT_MS = 30_000;
+/**
+ * A tab hidden this long stops beating (ADR-0220 D5), so a plan left in the background does not keep
+ * colleagues out for ever. 15 minutes by the product owner's answer; the server then calls the
+ * holder inactive after 90 s without a beat and expires the lease at 120 s.
+ */
+const HIDDEN_LET_GO_MS = 15 * 60_000;
 
 const lockPath = (orgSlug: string, planId: string): string =>
   `/organizations/${orgSlug}/plans/${planId}/edit-lock`;
@@ -116,6 +122,11 @@ export function useHandoff(orgSlug: string, planId: string) {
  *   what proves a retaken lease is live.
  * - On `visibilitychange → visible`, fire an immediate heartbeat to recover from
  *   background-tab interval throttling (a beat can slip toward 60 s, still < TTL).
+ * - A tab hidden for {@link HIDDEN_LET_GO_MS} skips its beats (D5) but never releases: a visible
+ *   sibling tab of the same person shares the lease and keeps it alive with its own beats. The
+ *   hidden time is measured from the `visibilitychange` that hid the tab, not by counting ticks,
+ *   because a hidden tab's timers are throttled. The visible-again beat resumes the lease, or meets
+ *   the 423 the caller's `onLost` already handles.
  */
 export function useLockHeartbeat(
   orgSlug: string,
@@ -159,21 +170,34 @@ export function useLockHeartbeat(
     holdingRef.current = holding;
   });
 
+  // When this tab was hidden, or null while it is visible.
+  const hiddenSinceRef = useRef<number | null>(null);
+
   // The heartbeat interval — only while holding.
   useEffect(() => {
     if (!holding) return;
-    const id = setInterval(() => beatRef.current(), HEARTBEAT_MS);
+    const id = setInterval(() => {
+      const hiddenSince = hiddenSinceRef.current;
+      if (hiddenSince !== null && Date.now() - hiddenSince >= HIDDEN_LET_GO_MS) return;
+      beatRef.current();
+    }, HEARTBEAT_MS);
     return () => clearInterval(id);
   }, [holding]);
 
   // Immediate recovery beat when a backgrounded tab returns to the foreground.
   useEffect(() => {
     if (!holding) return;
-    const onVisible = (): void => {
+    hiddenSinceRef.current = document.visibilityState === 'hidden' ? Date.now() : null;
+    const onChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current ??= Date.now();
+        return;
+      }
+      hiddenSinceRef.current = null;
       if (document.visibilityState === 'visible') beatRef.current();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
   }, [holding]);
 
   // Release on nav-away (unmount) and tab close — keepalive DELETE, only while holding.
@@ -298,6 +322,11 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   // flip Stop editing to Start editing for a retake that is meant to be silent.
   const [lastHeld, setLastHeld] = useState<PlanEditLockStatus | undefined>(undefined);
   if (status?.state === 'HELD_BY_ME' && lastHeld !== status) setLastHeld(status);
+  // The last status that named another holder, kept for the freed-pen acquire for the same reason:
+  // the refetch in the middle reads FREE, and the requester should go from the waiting sentence
+  // straight to holding the plan.
+  const [lastOther, setLastOther] = useState<PlanEditLockStatus | undefined>(undefined);
+  if (status?.state === 'HELD_BY_OTHER' && lastOther !== status) setLastOther(status);
 
   const acknowledgeLost = useCallback(
     (reason: PlanEditLockReason) => {
@@ -308,7 +337,21 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
   const dismissLost = useCallback(() => setLostControl(null), []);
 
+  // The holder this tab asked for control (Request control), until the pen is free to take, this tab
+  // holds it, or a different holder shows up (ADR-0220 D4: the request was to that person, not to
+  // whoever comes next).
+  const [requestedOf, setRequestedOf] = useState<string | null>(null);
+  const seenOther = status?.state === 'HELD_BY_OTHER' ? (status.holder?.id ?? null) : null;
+  if (requestedOf !== null && (holdsPen || (seenOther !== null && seenOther !== requestedOf))) {
+    setRequestedOf(null);
+  }
+  // The freed-pen acquire is in flight. Its own mutation, so it never shares an observer with the
+  // opening acquire or the silent retake.
+  const [takingFreed, setTakingFreed] = useState(false);
+  const freedFiredRef = useRef(false); // effect-side guard, so a strict-mode replay cannot send twice
+
   const acquire = useAcquireLock(orgSlug, planId);
+  const freedAcquire = useAcquireLock(orgSlug, planId);
   const autoAcquire = useAcquireLock(orgSlug, planId);
   const release = useReleaseLock(orgSlug, planId);
   const request = useRequestControl(orgSlug, planId);
@@ -329,7 +372,23 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   if (opening === 'waiting' && openingStatus && visible) {
     setOpening(wantsAuto ? 'taking' : 'done');
   }
+  const wantsFreed = shouldTakeOnFree({ status, visible, iRequested: requestedOf !== null });
+  // The opening acquire reads as loading (one sentence per opening). The freed-pen acquire must not:
+  // the requester is already reading "Requested — …", and a "Checking…" in between would be announced
+  // twice before "You're editing". It feeds `isPending` and the held-display below instead.
   const autoAcquiring = wantsAuto || opening === 'taking';
+  const takingFreedPen = wantsFreed || takingFreed;
+
+  const { mutate: mutateFreed } = freedAcquire;
+  useEffect(() => {
+    if (!wantsFreed || freedFiredRef.current) return;
+    freedFiredRef.current = true;
+    setTakingFreed(true);
+    setRequestedOf(null);
+    // Never `takeover: true`: if a colleague got there first, the refusal is silent and the refetch
+    // shows who holds it.
+    mutateFreed({ takeover: false }, { onSuccess: resume, onSettled: () => setTakingFreed(false) });
+  }, [wantsFreed, mutateFreed, resume]);
 
   const { mutate: mutateAuto, mutateAsync: mutateAutoAsync } = autoAcquire;
   // This acquire and the retake in `handleLost` share ONE mutation observer (`autoAcquire`), so they
@@ -414,7 +473,14 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   }, [release, decline]);
 
   const requestControl = useCallback(() => {
-    request.mutate();
+    request.mutate(undefined, {
+      onSuccess: (data) => {
+        const holderId = data.holder?.id ?? null;
+        if (data.state !== 'HELD_BY_OTHER' || holderId === null) return;
+        freedFiredRef.current = false;
+        setRequestedOf(holderId);
+      },
+    });
   }, [request]);
 
   const handoff = useCallback(() => {
@@ -439,7 +505,12 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
 
   return {
-    status: retaking && lastHeld ? lastHeld : status,
+    status:
+      retaking && lastHeld
+        ? lastHeld
+        : takingFreedPen && lastOther && (status?.state === 'FREE' || status?.state === 'EXPIRED')
+          ? lastOther
+          : status,
     holdsPen: Boolean(holdsPen),
     isPending:
       acquire.isPending ||
@@ -447,6 +518,7 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
       request.isPending ||
       handoffMutation.isPending ||
       autoAcquiring ||
+      takingFreedPen ||
       retaking,
     autoAcquiring,
     lostControl,

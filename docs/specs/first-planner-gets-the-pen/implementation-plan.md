@@ -1,7 +1,7 @@
 # Implementation Plan: The first planner to open a free plan gets the pen
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. Not started.
+- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 and M1 merged; M2 and M3 built, not yet merged.
 - **Owner:** product owner (approval); builder agent (implementation)
 
 ## Breakdown
@@ -133,7 +133,7 @@ via the existing `setUpTwoActors` fixture (`e2e-edit/pen-handoff.spec.ts:66-103`
     fields are primitives; the stability test (`use-pen-lock-view.stability.test.tsx`) is extended, not edited.
   - A retake loop (lose → retake → lose) → `retakenForThisLoss` caps it at one per loss; a second loss in the
     same opening without an intervening successful beat shows the banner.
-  - Undo: a 423 clears the stack as today (ADR-0048, `0048-undo-redo-command-stack.md:48-50`); not changed and
+  - Undo: the history survives a lost pen as today (ADR-0176 D4, amending ADR-0048); not changed and
     stated in the ADR.
 - **Testing:** `use-plan-edit-lock.test.ts` — opens FREE → one POST; HELD_BY_ME → zero POSTs; HELD_BY_OTHER →
   zero; canAcquire false → zero; hidden then visible → one POST on visible; 423 HELD → no `lostControl`; Stop
@@ -244,8 +244,8 @@ further 90 s a peer can take over at once, and after 120 s it is free for whoeve
 > alive with its own beats.
 > **Complexity:** S–M
 > **Dependencies:** M1 (US-4 handles the return)
-> **Risks:** the returning planner's undo history is cleared by the resulting 423 (ADR-0048) — stated in the
-> owner's Q3 and in the ADR; a hidden tab's timers are throttled, so the threshold is measured from the
+> **Risks:** the returning planner finds the plan taken (US-4's banner) or retakes silently; the undo history is kept (ADR-0176 D4; the Q3 wording said a 423 clears it, which ADR-0176
+> superseded, corrected in ADR-0220); a hidden tab's timers are throttled, so the threshold is measured from the
 > `visibilitychange` timestamp, not by counting ticks.
 > **Testing requirements:** `useLockHeartbeat` tests with fake timers and a stubbed `document.visibilityState`;
 > the journey step; accessibility-reviewer on the return path (the US-4 silent retake, or the true lost banner).
@@ -295,4 +295,4 @@ tests, docs, security, performance, accessibility, Docker build, CI, changelog, 
 | Screen readers hear "No one is editing" then "You're editing" on every open                      | med without the suppression | low               | `resolveLockView` returns the loading view while the automatic acquire is pending (US-1); accessibility review                       |
 | Admin auto-acquire surprises an admin who only browses                                           | med                         | low               | Q2; Stop editing; never an override                                                                                                  |
 | Log volume from `plan_edit_lock.acquired`                                                        | high                        | negligible        | One info line per Planner opening; no alerting keys on it                                                                            |
-| Lost undo history on return from a long hidden spell (M3)                                        | med                         | low–med           | Stated to the owner in Q3 and in ADR-0220 D5                                                                                         |
+| Returning to a plan taken during a long hidden spell (M3)                                        | med                         | low–med           | The US-4 banner; undo history is kept (ADR-0176 D4); ADR-0220 D5                                                                     |

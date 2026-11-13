@@ -35,9 +35,18 @@ async function recordPenSurface(
     const seen = { status: [] as string[], pen: [] as string[] };
     const read = (): void => {
       for (const el of document.querySelectorAll('[role="status"]')) {
-        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        // The grace countdown is aria-hidden and ticks every second: it is not what is announced.
+        const text = (el.textContent ?? '')
+          .replace(/\s+/g, ' ')
+          .replace(/\(~\d+s\)$/, '')
+          .trim();
         // Only the pen's own sentences: other regions (a saved toast, a recalculation) come and go.
-        if (!/editing this plan|Checking who|taken over|no longer editing/i.test(text)) continue;
+        if (
+          !/editing this plan|Checking who|taken over|no longer editing|Requested|waiting/i.test(
+            text,
+          )
+        )
+          continue;
         const entry = el.getAttribute('aria-busy') === 'true' ? `busy: ${text}` : text;
         if (!seen.status.includes(entry)) seen.status.push(entry);
       }
@@ -222,6 +231,106 @@ test('closing a second tab does not tell the first it was taken over', async ({ 
   // the person may be standing on never changed its name.
   const seen = await penSurface();
   expect(seen.status.filter((text) => /Checking/.test(text))).toEqual([]);
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('a planner who asked for control gets the pen when the holder leaves, pressing nothing', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { ctxA, ctxB, a, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.goto(planUrl);
+  await holdThePen(a);
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  // The request is on the server, so the pen is no longer simply "held": B's last press is behind us.
+  await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('HELD_BY_OTHER');
+
+  const acquires = countAcquires(b);
+  const penSurface = await recordPenSurface(b);
+  // A leaves the plan; leaving releases the lease (the unmount / pagehide release).
+  await a.goto('about:blank');
+  await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('FREE');
+
+  // B pressed nothing after Request: the next read it makes finds the plan free and takes it.
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByText(HOLDING, { exact: true })).toBeVisible();
+  await expect(b.getByRole('alert')).toHaveCount(0);
+  expect(acquires()).toBe(1);
+  expect(await lockState(b, planUrl)).toBe('HELD_BY_ME');
+
+  // Where a screen reader listens: from the waiting sentence straight to the holding one, with no
+  // "Checking who’s editing…" announced in between.
+  const seen = await penSurface();
+  expect(seen.status.filter((text) => text.startsWith('busy:'))).toEqual([]);
+  expect(seen.status).toEqual([
+    expect.stringMatching(/^Requested — you will start editing when \w+ hands over or leaves\.$/),
+    HOLDING,
+  ]);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+/** A pause on the test's own clock: `page.waitForTimeout` follows the page's, which is faked here. */
+const realPause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Make the page report itself hidden (or shown again), the way a background tab does. */
+async function setTabVisibility(page: Page, state: 'hidden' | 'visible'): Promise<void> {
+  await page.evaluate((value) => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, state);
+}
+
+test('a tab hidden for fifteen minutes stops heartbeating, and carries on when shown again', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const { ctxA, ctxB, a, planUrl } = await setUpTwoActors(browser);
+  const MINUTE = 60_000;
+
+  // The clock is installed before the page loads so the heartbeat interval is made on it; no
+  // fifteen-minute wait happens. The invariant asserted is a network one: how many heartbeats left.
+  await a.clock.install();
+  let beats = 0;
+  a.on('request', (req) => {
+    if (req.method() === 'POST' && /\/edit-lock\/heartbeat$/.test(new URL(req.url()).pathname)) {
+      beats += 1;
+    }
+  });
+  await a.goto(planUrl);
+  await expectHeldWithoutPressing(a);
+
+  // Positive control: a hidden tab still beats before the threshold, so the later silence is the
+  // threshold and not a clock that never ran.
+  await setTabVisibility(a, 'hidden');
+  await a.clock.runFor(2 * MINUTE);
+  await expect.poll(() => beats, CROSS_ACTOR).toBeGreaterThan(0);
+
+  // Jump past the threshold in one step (a hidden tab's timers are throttled to about this anyway,
+  // which is why the threshold is measured from when the tab was hidden and not from ticks), then
+  // let a few more beats fall due. None may leave.
+  const beforeJump = beats;
+  await a.clock.fastForward(16 * MINUTE);
+  await a.clock.runFor(2 * MINUTE);
+  await realPause(500); // let a request that was due leave the page
+  expect(beats).toBe(beforeJump);
+  const atThreshold = beats;
+
+  // Shown again: it beats at once, still holds, and says nothing. The lease was never really idle
+  // (only the page's clock moved), so this proves the resume path, not the server's expiry.
+  const penSurface = await recordPenSurface(a);
+  await setTabVisibility(a, 'visible');
+  await expect.poll(() => beats, CROSS_ACTOR).toBe(atThreshold + 1);
+  await expectHeldWithoutPressing(a);
+  const seen = await penSurface();
   expect(seen.status).toEqual([HOLDING]);
   expect(seen.pen).toEqual(['Stop editing']);
 

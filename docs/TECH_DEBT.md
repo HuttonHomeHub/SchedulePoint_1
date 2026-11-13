@@ -9368,3 +9368,11 @@ A progress save is refused when an actual is after the data date (ADR-0035 §6, 
 Since ADR-0220 D3 a refused heartbeat that finds the plan free is retaken silently, once, because the common cause is the person's own other tab or a reload. A force-release leaves the plan free in the same way, and nothing the client can read tells the two apart, so the editor an admin released would take the plan straight back and the admin's act would be undone without anyone seeing it. It cannot happen from the product's screens today, only from a direct call to the endpoint.
 
 **Next:** have the API say why a lease ended (a reason on the heartbeat's 423 or on the status), so the web declines the retake and shows the lost-control banner. That is an API change and needs a spec (ADR-0105). **Trigger:** force-release gaining a screen, or its use on the owner's host.
+
+### 588. A planner who asked for control cannot withdraw the request
+
+**Status:** open · **Verified:** 2026-11-13, by reading `apps/web/src/features/plan-lock/api/use-plan-edit-lock.ts` (`requestControl` remembers the holder in `requestedOf`, and a later `FREE` or `EXPIRED` status makes the tab send one acquire) and `apps/api/src/modules/plan-lock/plan-lock.service.ts` (no endpoint deletes a request; the record goes with the lease row on release).
+
+Since ADR-0220 D4 a requester takes the pen that is freed, and nothing lets them take the request back. Someone who asked and then wandered off with the tab in front starts editing when they next look at it. The waiting sentence says "you will start editing when {Name} hands over or leaves", which is the mitigation and not a remedy.
+
+**Next:** a "Cancel request" control backed by a withdrawal endpoint on the API, which clears the web's memory of the request too. That adds a user-facing entry point and an API route, so it needs a spec (ADR-0105). **Trigger:** owner approval of that spec.

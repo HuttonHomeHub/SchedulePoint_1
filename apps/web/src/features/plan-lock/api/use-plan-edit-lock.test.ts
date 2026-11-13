@@ -160,6 +160,79 @@ describe('useLockHeartbeat', () => {
     expect(onLost).toHaveBeenCalledWith('PLAN_EDIT_LOCK_LOST');
   });
 
+  describe('a hidden tab lets go (ADR-0220 D5)', () => {
+    const beats = (): number =>
+      vi.mocked(apiFetch).mock.calls.filter(([path]) => path.endsWith('/heartbeat')).length;
+    const MINUTE = 60_000;
+
+    beforeEach(() => setVisibility('visible'));
+    afterEach(() => setVisibility('visible'));
+
+    it('keeps beating for a tab hidden less than 15 minutes', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(14 * MINUTE);
+      expect(beats()).toBeGreaterThan(20);
+    });
+
+    it('stops beating once hidden for 15 minutes, and never releases', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(15 * MINUTE);
+      const atThreshold = beats();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(beats()).toBe(atThreshold);
+      expect(vi.mocked(fetch)).not.toHaveBeenCalled(); // the keepalive DELETE is the release
+      expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(
+        false,
+      );
+    });
+
+    it('measures from when it was hidden, not from the ticks it managed to fire', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      // A throttled timer fires once, late: one tick after 16 minutes is already past the threshold.
+      vi.setSystemTime(Date.now() + 16 * MINUTE);
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(beats()).toBe(before);
+    });
+
+    it('beats at once when the tab is shown again, and keeps beating', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(20 * MINUTE);
+      const paused = beats();
+      act(() => setVisibility('visible'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(beats()).toBe(paused + 1);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(beats()).toBe(paused + 2);
+    });
+
+    it('a short hide resets: hidden 10 minutes, shown, hidden again, still beats at minute 20', async () => {
+      renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
+        wrapper: wrapper(),
+      });
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      act(() => setVisibility('visible'));
+      await vi.advanceTimersByTimeAsync(0);
+      act(() => setVisibility('hidden'));
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(beats()).toBeGreaterThan(before + 15);
+    });
+  });
+
   it('releases via a keepalive DELETE on pagehide (while holding)', () => {
     renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
       wrapper: wrapper(),
@@ -623,5 +696,115 @@ describe('usePlanPen — a loss nobody caused', () => {
     await waitFor(() => expect(posts()).toHaveLength(2));
     await waitFor(() => expect(result.current.isPending).toBe(false));
     expect(result.current.lostControl).toBeNull();
+  });
+});
+
+describe('usePlanPen — a requester takes the freed pen', () => {
+  const HELD_BY_OTHER_2: PlanEditLockStatus = {
+    ...HELD_BY_OTHER,
+    holder: { id: 'u3', name: 'Holder B', email: 'b@x.com' },
+  };
+  const client = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    setVisibility('visible');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mount(reads: PlanEditLockStatus[]) {
+    // The request answers with the held status; the acquire answers with the pen.
+    serve(reads, (path) => (path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME));
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const hook = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Wrapper });
+    return { ...hook, qc };
+  }
+
+  it('request, then the holder leaves → exactly one acquire, never a take-over', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
+  });
+
+  it('keeps showing the holder while the freed pen is taken, never a free or loading status', async () => {
+    const seen: string[] = [];
+    serve([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME], (path) =>
+      path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME,
+    );
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(
+      () => {
+        const pen = usePlanPen('acme', 'p1');
+        seen.push(`${pen.status?.state ?? 'none'}${pen.autoAcquiring ? '+auto' : ''}`);
+        return pen;
+      },
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(seen.filter((s) => s.startsWith('FREE') || s.includes('+auto'))).toEqual([]);
+    expect(seen.at(-1)).toBe('HELD_BY_ME');
+  });
+
+  it('no request → a freed pen is not taken', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, FREE]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('request, then a different holder, then free → zero acquires', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, HELD_BY_OTHER_2, FREE]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.holder?.id).toBe('u3'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('request in a hidden tab → waits until shown, then one acquire', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    act(() => setVisibility('hidden'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
   });
 });

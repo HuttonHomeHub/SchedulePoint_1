@@ -136,12 +136,12 @@ inverse is just another validated mutation. No new fields.
 
 ### Error scenarios
 
-| Scenario                                   | Detection             | User-facing result                                          | Status |
-| ------------------------------------------ | --------------------- | ----------------------------------------------------------- | ------ |
-| Inverse targets a row changed since record | optimistic `version`  | abort, refetch, clear redo, "plan changed — review & retry" | 409    |
-| Inverse targets a deleted/foreign row      | anti-IDOR / not-found | abort, refetch, clear redo, same status                     | 404    |
-| Pen lost before undo                       | `assertHoldsPen`      | clear stack, "editing is paused (you don't hold the pen)"   | 423    |
-| Empty stack                                | client                | control disabled; no-op                                     | —      |
+| Scenario                                   | Detection             | User-facing result                                                                    | Status |
+| ------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------- | ------ |
+| Inverse targets a row changed since record | optimistic `version`  | abort, refetch, clear redo, "plan changed — review & retry"                           | 409    |
+| Inverse targets a deleted/foreign row      | anti-IDOR / not-found | abort, refetch, clear redo, same status                                               | 404    |
+| Pen lost before undo                       | `assertHoldsPen`      | clear stack (superseded by ADR-0176 D4), "editing is paused (you don't hold the pen)" | 423    |
+| Empty stack                                | client                | control disabled; no-op                                                               | —      |
 
 ## 3. Technical analysis
 
@@ -213,6 +213,7 @@ flowchart TD
   Undo -->|200| Recalc[recalc + announce] --> Idle
   Undo -->|409/404| Conflict[abort + refetch + clear redo + status] --> Idle
   Undo -->|423| PenLost[clear stack + status] --> Idle
+  %% superseded by ADR-0176 D4: a lost pen no longer clears the stack
   Idle -->|Ctrl+Shift+Z / Redo btn| Redo[re-apply] --> Recalc
   Idle -->|new edit| Push
 ```

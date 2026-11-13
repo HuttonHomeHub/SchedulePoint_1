@@ -33,7 +33,9 @@ describe('resolveLockView', () => {
     const view = resolveLockView(status({ state: 'HELD_BY_ME' }), 'PLAN_EDIT_LOCK_LOST', ME, null);
     expect(view?.tone).toBe('lost');
     expect(view?.actions).toEqual(['dismiss']);
-    expect(view?.message).toMatch(/taken over/i);
+    expect(view?.message).toBe(
+      'Someone else is now editing this plan — you’re read-only. Request control to carry on.',
+    );
   });
 
   it('FREE + canAcquire → Start editing (row 1)', () => {
@@ -118,7 +120,9 @@ describe('resolveLockView', () => {
       null,
     );
     expect(view?.actions).toEqual(['waiting']);
-    expect(view?.message).toMatch(/waiting/i);
+    expect(view?.message).toBe(
+      'Requested — you will start editing when Jane hands over or leaves.',
+    );
   });
 
   it('HELD_BY_OTHER + canTakeOver → Take over now (row 7)', () => {

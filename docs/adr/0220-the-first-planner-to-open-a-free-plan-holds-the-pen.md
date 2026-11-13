@@ -9,7 +9,7 @@
   was asked about, `docs/features/plan-edit-lock/feature-spec.md:149-150`).
 - **Spec:** [`docs/specs/first-planner-gets-the-pen/`](../specs/first-planner-gets-the-pen/feature-spec.md) §4.7 ·
   **Plan:** [`implementation-plan.md`](../specs/first-planner-gets-the-pen/implementation-plan.md) (M1 builds D1–D3
-  and D6)
+  and D6, M2 D4, M3 D5)
 - **Builds on:** ADR-0048 (undo is per pen session), ADR-0081 (an entry point and a journey), ADR-0088 D1 (no flag),
   ADR-0112 (the pen sentence), ADR-0133 D5 (the pen leads the row it unlocks), ADR-0190 (what 1.0 promises).
 
@@ -52,13 +52,34 @@ silently, **once** per loss, until a heartbeat the server accepts proves the lea
 the retake is refused) today's "Editing control was taken over" shows, and now it is true. This corrects
 `docs/archive/design/plan-edit-lock-web.md:441-445`, which said the other tab's next heartbeat "re-acquires": the code
 never did, so closing a second tab told the first that somebody took over. A heartbeat that was already in flight when
-Stop was pressed is not answered with a retake. Undo is unchanged: a lost pen clears the history as ADR-0048 records.
+Stop was pressed is not answered with a retake. Undo is unchanged: the history survives a lost pen (ADR-0176 D4, which amended ADR-0048's "a 423 clears the stack"; `use-plan-edit-history.ts` `clear`), and each step is checked against the server before it writes.
 
 **D6 — No flag, no API, schema or environment change.** ADR-0088 D1: a `VITE_` flag cannot be switched on a published
 image, and the rollback is pinning `WEB_IMAGE_TAG`. `apps/api` is untouched.
 
-D4 (a requester takes a pen that is freed) and D5 (a tab hidden for 15 minutes stops heartbeating) are decided in the
-spec and arrive in the epic's later milestones; this ADR is amended there rather than re-filed.
+**D4 — A requester takes the pen that is freed.** A tab that pressed Request control remembers the holder it asked
+(the id in the response). When a later status read shows `FREE` or `EXPIRED` and `canAcquire`, in a visible tab, it
+sends one acquire, `{ takeover: false }`, and pressing nothing. The memory is dropped when this tab holds the pen or a
+different holder is seen, because the request was to that person and not to whoever comes next; the server deletes its
+own record of the request with the lease row on release, so only the client can remember it. A colleague who wins the
+race is silent, as in D1. Unlike D1 it may act on a poll, because the person asked for exactly this.
+
+The cost, plainly: a requester cannot yet withdraw a request, so someone who asked and then wandered off starts
+editing when they next look at the tab. The waiting sentence says so ("Requested — you will start editing when
+{Name} hands over or leaves.") and the live region goes straight from it to "You’re editing this plan." without a
+"Checking…" between. A "Cancel request" control needs a server-side withdrawal and its own spec
+(`docs/TECH_DEBT.md` #588).
+
+**D5 — A tab hidden for 15 minutes stops heartbeating.** While this tab holds the pen and has been hidden for 15
+continuous minutes (`HIDDEN_LET_GO_MS`), its heartbeat interval skips its beat. It never sends a release: the lock is
+per person, not per tab, so a visible sibling tab of the same person keeps the lease alive with its own beats. The
+time is measured from the `visibilitychange` that hid the tab, never by counting ticks, because a hidden tab's timers
+are throttled. Without a beat the server calls the holder inactive after 90 s, so a peer may Take over now without the
+grace wait, and the lease expires at 120 s, after which the next Planner to open the plan gets it under D1. The
+existing beat when the tab is shown again resumes the lease if nobody has taken it; if the lease is gone the 423 goes
+through D3: a silent retake when the plan is free, the "taken over" notice when someone else holds it. The undo history
+is not cleared by that return (ADR-0176 D4), though a step the server can no longer apply is set aside as ADR-0176
+describes.
 
 ## Alternatives considered
 
@@ -78,10 +99,10 @@ spec and arrive in the epic's later milestones; this ADR is amended there rather
 ## Consequences
 
 - A Planner who opens a plan only to look holds the pen while that tab stays open, so a colleague who arrives later has
-  to ask for it (Request control, then up to the 45-second grace). Until the hidden-tab release (D5, M3) ships, an open
-  tab holds the pen with **no time limit**: the heartbeat every 30 seconds renews a 120-second lease whether or not
-  anyone is at the screen. M3 will not cover a **visible** idle tab either, since a tab in the foreground is not hidden.
-  For this reason M1 is not released on its own: M1, M2 and M3 ship in one release.
+  to ask for it (Request control, then up to the 45-second grace). A tab left **hidden** lets go after 15 minutes (D5): a peer may take over 90 s after
+  that and the plan is free 120 s after that. A **visible** idle tab still holds the pen with **no time limit**: the
+  heartbeat every 30 seconds renews a 120-second lease whether or not anyone is at the screen, because a tab in the
+  foreground is not hidden. That is a known cost of taking the pen on opening, not an oversight.
 - A heartbeat refused while the plan reads free is retaken silently, once, and nothing the client can read says why the
   plan is free. An Org Admin's force-release (`force_released`, `plan-lock.service.ts` `release`) also leaves the plan
   free, so the released editor's tab would take it back within about 30 seconds and undo that admin act. The web has no
