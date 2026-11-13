@@ -3,150 +3,112 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-09, brought up to date 2026-11-10 and again 2026-11-12 (after the "Follow logic" epic closed at web 1.3.0),
-after **1.1.0 was released and the owner's server was switched to it**. The fresh-start epic
-([ADR-0215](adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md), spec and plan in
-[`docs/specs/fresh-start-1-1/`](specs/fresh-start-1-1/feature-spec.md)) is **closed**. The owner's **hard rule**
-still stands: nothing that needs the owner to run or check anything on their server or devices (a decision question
-is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
+**Written:** 2026-11-13, after the GUI-fixes session of 2026-11-12/13 closed at **web 1.8.0 and api 1.2.0**. Two
+approved plans are **finished and released**: "diagram keys and selection"
+([`docs/specs/diagram-keys-and-selection/`](specs/diagram-keys-and-selection/feature-spec.md), ADR-0218 and ADR-0219)
+and "the first planner gets the pen" ([`docs/specs/first-planner-gets-the-pen/`](specs/first-planner-gets-the-pen/feature-spec.md),
+ADR-0220). So is the smaller "progress before the data date" ([`docs/specs/progress-before-data-date/`](specs/progress-before-data-date/feature-spec.md),
+ADR-0217). The owner's **hard rule** still stands: nothing that needs the owner to run or check anything on their
+server or devices (a decision question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do
+not offer them.
 
-## What shipped
+## What shipped (2026-11-12 and 13)
 
-- **1.1.0, "the fresh start"** — PR #1292 and the Version Packages PR #1293, merged 2026-11-09 (tags
-  `api-v1.1.0`, `web-v1.1.0`). One baseline migration, a boot `preflight` that refuses a pre-1.1 database, all 48
-  web flags retired, organisation export format **3.0**. The owner switched the server to it the same day on a
-  fresh, empty database and discarded the 1.0 data by choice (`docs/DECISIONS.md`, 2026-11-09).
-- **The ten Dependabot bumps (#1282–#1291)** — one change, PR #1295 (merge `3b2ea050`), at the versions
-  Dependabot proposed, with `@hookform/resolvers` 7 included on the owner's say. All ten checks green on the head
-  that merged, after one whole-workflow re-run (the first run was marked failed with its API-test and image jobs
-  missing; cause not established).
-- **#576 closed as not a race, #575 done, and the reconciliation pass run** — PR #1296 (merge `d4599293`).
-  #576's premise was wrong (the import holds the project `FOR SHARE`, and the project delete takes its conflicting
-  lock before it reads its plans), so it closed with a test assertion and corrected comments instead of a code
-  change. #575 deleted the legacy painter modes (`visualRefresh`, `timeTrueLinks`, `linkRouting`) and the
-  handle-origin linking path, 59 files, with the live-mode paint output shown byte-identical before and after. The
-  2026-11-09 pass found the agent files, about a dozen documents and a dozen register rows still describing retired
-  flags or 1.0 shapes; see `docs/DECISIONS.md` (2026-11-09, "The reconciliation pass at the 1.1.0 boundary").
-- **Two hardening fixes the pass suggested** — PR #1297 (merge `8ee9c0a4`): `pnpm.overrides` for `dompurify`,
-  `fast-uri`, `qs` and `seroval` (`pnpm audit --prod` 37 to 16 advisories, none critical; the 16 left are dev-time
-  tooling, the unused `mysql2` adapter and Prisma's config loader), and a new boot refusal, `other_schema`, for a
-  `DATABASE_URL` that names a schema other than `public` (`docs/DECISIONS.md`, "Four dependency overrides…"). It
-  carries a patch changeset for `@repo/api`; the Version Packages PR it opened was merged the same night as #1298
-  (`9ac6882a`, its Release run succeeded), so nothing from it is pending.
-- **One branch, `main`** — 2026-11-10. Five branches whose work was already in `main`
-  (`fix/project-delete-import-race`,
-  `claude/vibrant-dijkstra-tmdl7x` and three closed `dependabot/…` updates) and `wip/history-numerator-preaggregate`
-  were deleted by the owner on GitHub (the cloud session's proxy refuses branch deletion). The one commit the wip
-  branch held, a possible speed-up for the staff-console history counts, is kept as
-  `docs/specs/staff-server-readings/m1-preaggregate-numerators.patch` (PR #1300, merge `d798a4d7`): **not measured and
-  not adopted**, and it is still the first remedy to try if the history counts pass about 250,000 rows (gate S-4 would
-  need widening, an ADR-0105 trigger). Decision-log entry: `docs/DECISIONS.md`, 2026-11-10.
-- **`docs/TECH_DEBT.md` #577 closed** — PR #1302 (merge `38fe4983`), test-only, no changeset, so no release. It
-  removed 21 `vi.mock('@/config/env', …)` blocks from web tests (13 set the retired `LIBRARY_SCOPING_ENABLED`; 8
-  more, which the row had not counted, only passed the real module back) and rewrote the comments that still described
-  a "pinned OFF" native `<select>`, flag-off sibling suites that no longer exist, or `VITE_LIBRARY_SCOPING`.
-  `flagDefaultOn`/`flagDefaultOff` were **kept** with their test, as `env.ts`'s docblock argues (ADR-0084). The row is
-  in the register's "Closed numbers" ledger. "Flag-off" wording remains elsewhere: 98 files under `apps/web/src`
-  (44 of them tests) match `grep -rli "flag-off\|flag off"`. Many are accurate history; it was outside the row and
-  not swept.
-- **The GUI review, 2026-11-10 and 11: two pages, no product change.** Nothing in the repository changed except
-  this file.
-  - **The owner's runbook** is the artifact `https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma` ("SchedulePoint
-    Runbook"):
-    150 goal-phrased steps in twelve chapters, each with an Easy / OK / Struggled answer, a notes box and a folded
-    hint. Chapters 1 to 6 (68 steps: getting in 8, setting up 14, building a plan 19, running a plan 10, sharing and
-    output 9, deeper features 8) are what most people do; chapters 7 to 12 (82 steps: finding your way around 14,
-    more ways to edit 14, activity details 12, plan settings and analysis 14, the Gantt view and the libraries 14,
-    people, control and unusual situations 14) were added on 2026-11-11 from a code-derived inventory of every
-    user-facing feature, at the owner's request that both pages cover everything a user can do. Answers are saved in
-    the page's own database, collection `answers`, one document per step with id `<chapter>-<two-digit step>`
-    (`3-05`) or `<chapter>-overall`, fields `rating` (`easy` / `ok` / `struggled` / null), `notes`, `goal`, `step`,
-    `updatedAt`. Read them with the `ArtifactData` tool (action `list`, collection `answers`, that URL). **The
-    owner has started**: on 2026-11-11 it held 32 answers, chapters 1 and 2 complete and chapter 3 up to step 3.8,
-    with two "Struggled" (2.4, accepting an invitation; 2.9, adding a holiday).
-  - **The automated walkthrough** is the artifact `https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo` ("SchedulePoint
-    Walkthrough"): in two parts, each run at 1024 × 600 and 1440 × 900 with a screenshot and a click / key count per
-    step. Part one is the five journeys of `docs/PROJECT_BRIEF.md` §10 (80 steps). Part two follows the runbook step
-    for step, all twelve chapters (346 shots; every runbook step except 3.18 and 3.19, added later, has at least one
-    at each size, labelled with its step number). Its first section is one ranked list of 109 GUI problems (4 that
-    block a task, 50 that slow or confuse, 55 polish): 90 from `ux-reviewer` and `accessibility-reviewer`, and 18 from the
-    owner's runbook answers alone; 10 the owner and the walkthrough both found, and each row's "Found by" tag says which (no
-    screen reader was run,
-    zoomed views were tested on a few pages only, and chapters 7 to 9 were not given a reviewer pass: their entries
-    are what the scripting agent met). The scripts that drove it are published beside the page under `scripts/` (see
-    "How the walkthrough was run" below); nothing was committed.
-  - **The owner's biggest finding, and the walkthrough's blind spot (2026-11-11).** At step 3.8 the owner reported
-    that bars did not move when linked or when the activity before them was lengthened, and asked which "planning
-    mode" they were in. There is none: this is ADR-0148. A bar drawn on the diagram is saved with a placement
-    (`visualStart`, `use-plan-workspace-model.ts` where a drop creates an activity) and stays there; logic only raises
-    the conflict count and the "later than its earliest start" text, and "Clear visual start" (one activity at a
-    time) is the only way to make a bar follow its links. Reproduced in a browser the same day with a three-activity
-    plan. The runbook had expected bars to move, because the walkthrough's later plans were seeded through the API
-    with no placement and so did follow their logic. Corrected in the runbook: chapter 3's introduction, steps 3.5,
-    3.8, 3.9, 3.12 and 4.8, plus two new steps, 3.18 (the "Feasible window" overlay) and 3.19 ("Clear visual start").
-    Nothing in the product explains this to a planner; it is the third "blocks a task" row on the list.
-  - **The Link tool could not pick a milestone; fixed in PR #1309 (2026-11-11), web patch.** The owner hit it at
-    step 3.11. A click in the two-click Link or level-of-effort tool read only a "body" hit, and a milestone's 14 px
-    shape, any bar under 16 px and the outer 8 px of every bar classify as end handles (`hit-test.ts`), so the pick
-    was dropped. `gesture-machine.ts` now treats an unarmed end handle as the activity; closed register number 578.
-    The walkthrough had met the same fault and its caption wrongly said the link was made; the caption is corrected
-    and the fault is on the ranked list (109 problems, 4 that block a task).
-  - **Approved and not yet built: "Follow logic" (`docs/specs/placed-bar-follows-link/`).** The owner asked for a
-    message when linking a hand-placed bar; the spec widens it to any edit that leaves a placed bar newly too early,
-    offers "Follow logic" / "Keep it here" in the dock, adds a whole-plan offer for plans already in that state, and
-    renames "Clear visual start". Approved 2026-11-11 with all five defaults. Four milestones, one PR each: M0
-    measure and verify (nothing user-facing), M1 the rename, M2 the message (files ADR-0216), M3 the whole-plan
-    message. No schema or API change. All four shipped (below).
-  - **"Follow logic" is finished and released (2026-11-12).** The spec and plan are marked shipped and
-    [ADR-0216](adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md) records the decisions. Four web releases carried it:
-    - **1.1.2** (PR #1313): "Clear visual start" renamed "Follow logic".
-    - **1.1.3** (PR #1315): the dock's existing messages no longer push their buttons off screen at 1024 px with
-      long names (`NoticeStrip` gained `min-w-0`).
-    - **1.2.0** (PR #1319): the edit offer. When an edit leaves a placed bar before its logic, the dock offers
-      "Follow logic" / "Keep it here"; one batch write, one undo step; "Moving…", a confirmation with Undo, and a
-      visible failure with "Try again". A bar with an actual start is never offered. `NoticeStrip` gained
-      `messageFit="wrap"`, and the foot row's plan facts and Expand toggle became one trailing group (closed #581).
-    - **1.2.1** (PR #1321): the four older dock messages wrap instead of truncating (closed #580). The Select tool's
-      hint stays beside the plan facts and wraps there, which makes the foot row about 14 px taller at 1024 px while
-      Select is armed.
-    - **1.3.0** (PR #1323): the whole-plan offer, "N bars stay where they were placed, before their logic allows."
-      with "Follow logic" / "Dismiss". Dismissal is per bar and per session. **It is not shown on a window 704 px
-      high or less**: on its own dock row it left the diagram 312 px against the 350 px floor at 1024 × 600, and a
-      compact form was worse (304). It ranks above the Arrange offer.
-  - **How the design got there.** Three measuring passes after M0 (M0b, M0c, M0d) and three amendments, all in
-    `docs/specs/placed-bar-follows-link/` and all folded into the spec and plan. The shipped shape is amendment 3's
-    "A double-prime": a 36 rem floor on the dock outlet when it holds a `data-dock-row` strip, the sentence wrapping,
-    the buttons dropping under it. The probes are `apps/web/measure-toolbar/follow-logic-m0*.spec.ts`.
-  - **Three choices left for the owner**, none of them a defect: whether "Dismiss" should be remembered across a
-    reload (it is not; ADR-0216 records the trade-off); whether the whole-plan offer should have some form on a short
-    window; and whether the Select hint should be shortened so it fits one line at 1024 px.
-  - **Two lessons that cost a CI round each.** (1) A journey that asserts exact pixel figures passes locally and
-    fails on GitHub's runner, where text is a few pixels wider and flips a wrap (PR #1319, first head): assert
-    invariants measured on the same runner (nothing truncated, every button pressable, no sideways scroll, a strip
-    costing at most its own height) and keep the figures in the measurement record. Poll for announcer text, which
-    is written on the next animation frame. (2) A change to the dock is not proved by `web:workspace-chrome` alone:
-    the whole-plan strip passed there and broke `web:workspace-fit`'s 350 px floor and `web:arrange`. Run
-    workspace-fit, gantt-editing, narrow-shell, multi-select, undo, arrange, authoring-flow, authoring and swimlanes
-    too, one at a time.
-  - **Two CI oddities, neither caused by a change here.** On PR #1315 two web e2e shards hung past the 30-minute
-    limit and the run (`43091973035`) then refused both a cancel (409) and a re-run (403); a new commit on the branch
-    got a clean run. And `e2e-activity-editor/activity-editor.spec.ts:538` ("Escape, Escape, Escape on a dirty
-    editor") failed once and passed on retry on PR #1319; it is registered as `docs/TECH_DEBT.md` #582.
-  - **GitHub's runners could not reach Ubuntu's mirrors for about three hours on 2026-11-11** (roughly 14:00 to
-    17:15 UTC): "Install Playwright browsers" failed with `Temporary failure resolving 'archive.ubuntu.com'` in all
-    four web e2e shards, three times, on PR #1312. No test ran in any of them. It cleared without a change here. If
-    it recurs, read the step's log before anything else; the job log downloads from the URL `get_job_logs` returns.
-  - **What it found that a reader of the code would not guess** (each seen in a real browser on 2026-11-10, web 1.1.0,
-    API 1.1.1): a Contributor's progress save is refused with "An actual date cannot be after the plan's data date",
-    and only a Planner can move that date, so journey 2 of the brief cannot be done in the brief's order; the data
-    date has no control of its own, it is "Planned start" in "Edit plan details"; at 1024 × 600 that refusal is off
-    the screen, so the save seems to do nothing; at 1024 × 600 selecting a bar opens an actions block of three or
-    four rows that takes a quarter to a third of the screen and scrolls the diagram; Ctrl+Z does nothing straight
-    after a mouse click or drag on the diagram, while the Undo button works (the click leaves focus on `<main>`,
-    which neither undo key listener covers); the plan's Calendar box does not open on a click on its text, only on
-    its small arrow, typing or the down-arrow; and the brief's "draw a logic line from its finish to a blank spot"
-    does not exist (that drag resizes the bar). **None of these is fixed or registered in `docs/TECH_DEBT.md` yet**:
-    the owner picks from the ranked list first.
+Every change went through a pull request with the pre-push gate run first and every check read green on the head
+that merged. Five releases; the owner's host pulls each one automatically.
+
+- **web 1.4.0 and api 1.2.0 — progress before the data date, and the blank print** (PRs #1326 spec, #1327, #1330,
+  #1331, #1332, #1333; release #1328).
+  - A refused progress save now names the field and the data date (`details.fields`, `dataDate`, `latestActual` on
+    the API's refusal), is shown on that field in plain words, and every refused save in the product is shown beside
+    its Save button (`ScopeSaveBar`'s `error` slot, ADR-0217), so at 1024 × 600 it is on screen. Closed
+    `docs/TECH_DEBT.md` #583 and #584.
+  - The plan's date is called **Data date** in "Edit plan details" and the footer refreshes when it is saved.
+  - "Print…" on the diagram waited for nothing and opened a blank page; it now waits for the image (#585 closed).
+  - The rule itself (no actual date after the data date) was **kept**, by the owner's choice. Open: #586, moving the
+    data date **backwards** is never checked against actuals already reported.
+- **web 1.5.0 — the diagram takes the keyboard** (PRs #1334 verification, #1335, #1337, #1338; release #1336).
+  A click or drag on the diagram now leaves the keyboard with it (ADR-0218), so Ctrl+Z, Ctrl+C / Ctrl+V, Escape and
+  the arrows work straight after a mouse press. Delete or Backspace deletes the selection after the same confirmation
+  as the button. Ctrl-click and Shift-click change the selection whether or not you are editing.
+- **web 1.6.0 — double-click and the plural bar** (PRs #1339, #1340 measurement, #1342, #1343; release #1341).
+  Double-clicking a bar opens its editor (General when you can edit, Progress when you can only report progress).
+  With several activities selected the bar reads "N selected" then the actions, Delete last. "Link in sequence…"
+  skips pairs already linked and says so quietly when nothing is left to link (it stays pressable on purpose).
+- **web 1.7.0 — the selection bar on a short window** (PR #1344; release #1345). On a window up to 44 rem high the
+  plan's facts and the quiet "Editing" badge are visually hidden while a selection bar is docked (ADR-0219, shape
+  "S-B", the owner's choice; no overflow menu). A "Locked" or lost-lock badge does **not** yield. A bar selected by a
+  click is no longer panned with a 60 px margin. Measured at 1024 × 600 (`m5-measurement.md`): the fullest bar
+  (15 controls) goes from 5 lines to 3 and the diagram from 200 to 266 px; a plain bar 246 to 286 px. **Still under
+  the 350 px floor** while something is selected.
+- **web 1.8.0 — the pen arrives on opening** (PRs #1346 test groundwork, #1347, #1349; one release, #1348, held
+  until all three steps were merged and reviewed).
+  - Opening a plan nobody is editing starts editing straight away for a Planner or Org Admin (one acquire,
+    `takeover: false`, once per opening, visible tab only). Stop editing is respected until the plan is reopened.
+  - A lease lost to nobody (your own other tab closed, a reload) is retaken once, silently.
+  - Whoever pressed Request control starts editing when the holder hands over or leaves.
+  - A tab **hidden** for 15 minutes stops renewing its hold; a colleague can take over within about two minutes
+    after that. Undo history survives a lost pen (ADR-0176 D4; two older documents that said otherwise now carry a
+    "superseded" note).
+  - **Why one release:** with the first step alone, anyone opening a plan just to look would have held it with no
+    limit (`ux-reviewer`, adopted).
+- **The two artifact pages.** The walkthrough's ranked list
+  (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`) was brought up to date from the owner's runbook answers
+  (94 answers, chapters 1 to 8) and now holds **142 problems**, each marked when fixed with the version that fixed
+  it; its top line says the pictures were taken on web 1.1.0. Both first-severity problems that were open are closed.
+  The runbook (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`) had its chapter 9 to 12 hints checked against
+  web 1.3.0 and corrected, without touching the answers. **Runbook hints for steps changed since** (3.3 double-click,
+  3.14 Delete key, 4.1 progress refusal, 7.14 and 8.4 to 8.6 selection and copy, anything saying "press Start
+  editing") **have not been re-checked against 1.8.0.**
+
+## Decisions the owner made this session
+
+- Keep the "no actual after the data date" rule; reword journey 2 of the brief; do not separate plan start from
+  data date now (a `docs/BACKLOG.md` item records the idea).
+- Selection bar on a short window: the bar takes the row, plan facts step aside, no "More" menu.
+- A planner who double-clicks without the pen opens Progress.
+- Firefox and Safari engines: not now.
+- The pen: take it on opening; Org Admins too; let go after 15 minutes hidden; no per-person switch.
+- **Standing approval, for the two plans above only,** to merge and release when every check on the current head is
+  green, reviewers have nothing blocking and the merge is pinned to a commit ID from GitHub. Both plans are finished,
+  so **the next session asks again** before merging anything that is not docs-only.
+
+## What is next
+
+**Questions waiting for the owner** (none blocks anything released):
+
+1. **"Cancel request".** Once you press Request control there is no way to withdraw it, and since 1.8.0 a forgotten
+   request means you start editing the next time you look at that tab. The waiting sentence now says so
+   ("Requested — you will start editing when {Name} hands over or leaves."). A real Cancel needs a server endpoint
+   and a button, so a short spec and approval first: `docs/TECH_DEBT.md` #588.
+2. **A tab left in front, unattended, holds the plan with no time limit.** The 15-minute rule covers hidden tabs
+   only (ADR-0220, Consequences). Does the owner want a limit for a visible idle tab?
+3. **"Your role cannot draw activities."** is what someone who cannot edit sees on an empty plan. A friendlier
+   "Ask a planner to add activities." needs the panel to know the role: a small spec (ADR-0105).
+4. **Three "Follow logic" choices**, unchanged from the last hand-off: remember "Dismiss" after a reload; give the
+   whole-plan offer some form on a short window; shorten the Select hint so it fits one line at 1024 px.
+5. **Which batch next.** The list has no open first-severity problem. The open second-severity ones should be
+   proposed grouped by screen (the list's `kind` and `step` fields give the grouping); nothing has been proposed yet.
+
+**Known and recorded, not started:**
+
+- `docs/TECH_DEBT.md` **#586** (data date moved backwards is unchecked), **#587** (an administrator's force-release
+  would be undone by the released editor's silent retake; no screen reaches force-release today) and **#588**
+  (above).
+- At 1024 × 600 the diagram with a selection is still 64 to 84 px under the 350 px floor.
+- User-facing strings that still say "edit lock": `use-plan-workspace-model.ts` (two refusal messages),
+  `lib/unsaved-work/report.ts`, and the `RolesPanel` copy. Not in any reviewed list; found while fixing others.
+- When the pen is lost to a colleague the sentence can be announced twice: first "Someone else is now editing…",
+  then with the name once the status read lands.
+- Two suggestions from `security-reviewer`, neither a defect: mark automatic acquires in the lock's log line (needs
+  an API field), and give `POST …/edit-lock` its own rate limit.
+
+**Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader, a real
+15-minute wait (the journey uses a fake clock). The accessibility reviews of the short-window bar (1.7.0) and of
+the hidden-tab step were code reads; the other pen steps and the keys work were run in Chromium.
+
+Other candidates, each needing the owner's say, are unchanged: making the Baseline criticality columns NOT NULL
+(a schema change, so `database-architect` first), and the optional dev-time audit overrides.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -156,67 +118,6 @@ folder `/apps/schedulepoint`, project `schedulepoint`, services `db` / `api` / `
 (not named volumes), web on 8080 behind a reverse proxy at `https://schedulepoint.huttonhomehub.co.uk`, and a
 terminal that is **root inside a container** (no `sudo`). Do not write down the values of `MAIL_ALERT_URL`,
 `HEARTBEAT_URL` or any secret; ask the owner if one matters.
-
-## What is next
-
-**The GUI review is part done: the pages exist, the owner is at step 3.11 of 150, and "Follow logic" (the first
-thing they asked to have fixed) is released.** The owner keeps the 2026-11-10/12 session for the runbook only and
-starts a new one for fixes. The runbook is https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma (chapter 3 was
-brought up to date for the releases above) and the walkthrough with its ranked list is
-https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo (109 problems: 4 of the first severity, 50 of the second).
-
-**The agreed focus of the next session is that list, highest severity first.** Of the four first-severity
-problems, two are done (a milestone could not be picked with the Link tool, fixed in web 1.1.1, PR #1309; bars
-never move and nothing says so, answered by the releases above). The two open ones belong together: a Contributor
-cannot report progress until a Planner has moved the data date, and at 1024 × 600 that refusal is off the screen so
-Save appears to do nothing. Check each against the code first, then `feature-analyst` and the owner's approval
-before building. In order after that:
-
-- **Read the owner's runbook answers again** (how is in "What shipped"); those up to step 3.8 are already on the
-  ranked list. Every later "Struggled" and every note is a finding: add it to the list with "Found by" set to
-  Runbook, or change an existing row to Both, and republish the walkthrough page. The list is `findings.json` in the
-  session scratchpad, which does not survive; the published page's own data (`FINDINGS` in its HTML, read with the
-  Artifact tool) is the copy to start from.
-- **If the owner reports a result the runbook did not predict, believe the owner first** and reproduce it in a
-  browser by drawing, not by seeding: seeded activities have no placement and behave differently (see the finding
-  above). Steps in chapters 4 to 12 were scripted on seeded plans, so more of their "what you should end up with"
-  lines may assume bars move; 4.8 was the only one found and corrected.
-- **Ask the owner which problems to fix.** No fix before they choose. A fix that adds a screen entry point, a
-  Playwright config, a shared gate or a schema change needs a spec and plan first (ADR-0105); most of the list is
-  smaller than that, and each chosen item wants a `docs/TECH_DEBT.md` row before work starts.
-- **The owner asked whether to fix the list before starting the runbook, and was advised not to** (2026-11-10): their
-  untouched first impression is the point, and fixing first would lose the "both found" signal. Nothing on the list
-  stops chapters 1 to 3. Step 4.1 is written so that the refused progress save is something the owner meets and
-  judges, with the way round it (step 4.5, move the data date) in the hint.
-- **What "covers every feature" rests on.** An inventory built from the code's own registries (routes, the toolbar
-  registry and manifest, the selection actions, the editor's tabs, the settings dialog) listed 95 features the first
-  66 steps did not reach; chapters 7 to 12 exercise all of them except the staff console, left out on purpose because
-  only the operator sees it. Every step was done by a script in a browser. The "before you start" notes of
-  chapters 7 to 12 are the exception: they tell the owner how to set up by hand what the scripts set up through the
-  API, and nobody has done them by hand. Three things a script cannot show are marked on the storyboard: emails (links
-  were read from the API log), the browser's own print window, and the downloads folder.
-- **Things the product cannot do that the runbook now says plainly**: create a second organisation (first sign-up
-  only); copy a heading at 1024 × 600; rename or reorder swimlanes that follow a code; type a start, finish or
-  duration in the Gantt from the keyboard alone; name the cause of a moved finish (Compare revisions says it
-  cannot).
-- **One finding is unconfirmed**: Ctrl-click did not add a second bar to the selection in the walkthrough, while
-  `TsldCanvas.tsx` appears to support it. The owner's step 7.14 will settle it.
-- **Keeping the walkthrough** as a permanent suite was not proposed and is not approved. It would add a Playwright
-  config, an ADR-0105 trigger, so it needs `feature-analyst` and the owner's approval. The session's own view: the
-  click-probing it uses to find bars is slow and tied to today's layout, so it is a poor regression test as it
-  stands; its value was the pictures.
-
-Other candidates, each needing the owner's say:
-
-1. **Whatever Version Packages PR the next changeset opens.** None is pending now (#1298 was the last). Its checks
-   read `action_required` or `failure` with no job body run, which is expected (`CLAUDE.md` §11); merging one
-   publishes the image and Watchtower pulls it on the owner's host, so it is the owner's call.
-2. **Whether to make the Baseline criticality columns NOT NULL.** #576 was the stated reason they stayed nullable and
-   it is closed; the remaining cause is a plan never recalculated. A schema change, so `database-architect` first, and
-   an owner decision.
-3. The remaining audit entries (`brace-expansion`, `browserslist`, `minimatch`, `baseline-browser-mapping`,
-   `mysql2`, `deepmerge-ts`) are dev-time or unused; overrides for them are optional tidiness.
-4. The **perf-probe** and **`providers.tsx`** notes in the watch list (neither is work until something changes).
 
 ## Watch list
 
@@ -272,7 +173,8 @@ Other candidates, each needing the owner's say:
   API from inside the page; everything photographed is real clicks and typing.
 - **Things the walkthrough had to learn about the diagram.** There is no test hook for where a bar is: the scripts
   click-probe the canvas and read the selection bar's name. Selecting a bar at 1024 × 600 shrinks and scrolls the
-  canvas, so clear the selection (click an empty part of the diagram; Esc never clears a selection, by design) and
+  canvas, so clear the selection (Escape, or click an empty part of the diagram; before web 1.5.0 Escape did
+  nothing after a mouse press, which was the focus defect ADR-0218 fixed) and
   press "Fit to plan" between probes. Rows are not on an exact 60 px pitch at 1024 × 600, so probe every 12 px.
 - **Two things the code reading got wrong and the browser corrected.** A new organisation already has a calendar
   called "Standard" and a new plan already uses it (the picker's "None (all days work)" is an option, not the
@@ -289,3 +191,37 @@ Other candidates, each needing the owner's say:
 - **Three `builder` agents scripted nine chapters in parallel against one running app** without colliding, because
   each script signs up its own user and organisation. `mapBars` in `h.js` probes rows on a 60 px pitch and clears any
   selection first; probing every 12 px made one chapter take an hour.
+- **One remote branch, and a worktree to push from** (2026-11-12/13). GitHub deletes the session's branch on each
+  squash-merge. What worked: builders commit on a local branch in the main tree; a second worktree, detached at
+  `origin/main`, cherry-picks those commits, runs `scripts/prepush.sh` and pushes `HEAD` to the session's branch.
+  Only one pull request can be open at a time, so stack the next change locally and replay it after the merge.
+- **`check:counts` fails whenever a change adds web source files or an ADR.** Fix the number on line 23 of
+  `CLAUDE.md` to the one the gate prints (it re-derives it), re-run `check:counts` and `check:format`, and commit.
+  Two changes built in parallel will both edit that line: take either side, then set the printed number.
+- **A change to the foot row or the dock must also run `web:minimap`.** The short-window bar (#1344) made a premise
+  of `e2e-minimap/viewport-cluster.spec.ts` false (it named 1024 × 500 as "no room"); CI caught it, the local list
+  of nine wider suites did not. That journey now shrinks the window until the column is withdrawn.
+- **The roster is 51 web suites; a builder's "whole estate" was 34.** CI runs them all, so read the shards.
+- **Tests seen to fail once and pass untouched**, each on a loaded machine: `e2e-workspace-chrome/dock.spec.ts`
+  ("the follow-logic offer at 200 % text") and `conflict-review.spec.ts` ("shows one reason at a time") on a slow
+  CI runner (PR #1343, green on one re-run); `ClientsTable.test.tsx` ("hands focus to the list…") during a local
+  pre-push. `e2e/throttle-visibility.spec.ts` prints two ✘ lines that the suite expects.
+- **The pen in journeys:** every journey takes it through `apps/web/e2e-support/pen.ts` (`holdThePen`,
+  `releaseThePen`, `expectPenFree`). Since 1.8.0 opening a plan as a Planner already holds it, so a journey that
+  needs it free must release first. On an SS link with a lag the lag handle is drawn over the attachment dot while
+  editing, by design; `e2e-netpoint-grammar/links.spec.ts` measures with the pen released for that reason.
+- **Playwright's fake clock:** use `page.clock.fastForward` for long spans (`runFor` fires every timer and times
+  out), and do not call `page.waitForTimeout` under it (it hangs).
+- **The container restarted twice in this session.** Commits and uncommitted edits survived; running processes,
+  background waits and agents did not. An interrupted agent can be resumed by sending it a message; the GitHub
+  tools and `SendMessage` have to be loaded again first.
+- **Do not call `list_triggers` to check a wake-up**: its output is enormous. Carry the state in the wake-up's own
+  message and keep one armed at a time.
+- **Brief builders to run whole unit folders and never to chain `git commit` after a test command.** A builder that
+  ran single files shipped a failing neighbour test into a pre-push run.
+- **A reviewer that runs the component finds what a code read does not.** Twice this session
+  `accessibility-reviewer`, run in Chromium, found a live region saying "Checking who’s editing…" in the middle of
+  a change that should have been silent; both are now pinned by a journey that records the region's text.
+- **Do not run a gate as `pnpm -s check:…`.** The silent flag reaches the pnpm calls inside
+  `scripts/prepush-push.test.mjs`'s fixtures, an exit code 2 comes back as 1, and `check:doc-register` fails on
+  "an advisory WARN still pushes" with nothing wrong in the tree (2026-11-13). `pnpm check:doc-register` passes.

@@ -1,7 +1,7 @@
 # Implementation Plan: The diagram answers the keyboard after a click, and the selection bars fit a short window
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved by the product owner, 2026-11-12, with all four defaults. M0 done 2026-11-12 (Chromium only; Firefox and
+- **Status:** Accepted — shipped (ADR-0218, ADR-0219). Approved by the product owner, 2026-11-12, with all four defaults. Released as web 1.5.0, 1.6.0 and 1.7.0 (2026-11-12 and 13). M0 done 2026-11-12 (Chromium only; Firefox and
   WebKit are not installed here and remain unverified, see `m0-verification.md`). M1, M2, M4 and M3 built 2026-11-12; M5 measured 2026-11-12 (`m5-measurement.md`); M7 built 2026-11-12 (the plural bar and Link in sequence over linked activities; as-built readings in `m5-measurement.md`); M6 built 2026-11-12 as shape S-B (ADR-0219: the selection bar takes the whole foot row on a short window, the facts step aside; the clicked bar no longer jumps; as-built readings in [`m5-measurement.md`](./m5-measurement.md)).
 - **Owner:** product owner; built by `builder` agents, one milestone per pull request.
 
