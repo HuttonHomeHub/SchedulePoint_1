@@ -10,7 +10,7 @@ const err = (status: number, code: string, message = 'x', details?: unknown) =>
 describe('swimlaneErrorText', () => {
   it('names the action for a lost pen', () => {
     expect(swimlaneErrorText('move Mechanical', err(423, 'LOCKED'))).toMatch(
-      /^Could not move Mechanical: you no longer hold the plan’s edit lock/,
+      /^Could not move Mechanical: you are no longer editing this plan\. Press Start editing/,
     );
   });
 

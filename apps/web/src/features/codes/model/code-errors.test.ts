@@ -47,7 +47,7 @@ describe('codeErrorText', () => {
 
   it('reads a lost pen, a stale write and a vanished row in plain words', () => {
     expect(codeErrorText('move Area', refusal(423))).toContain(
-      'no longer hold the plan’s edit lock',
+      'you are no longer editing this plan',
     );
     expect(codeErrorText('move Area', refusal(409, 'STALE_VERSION'))).toContain(
       'changed by someone else',

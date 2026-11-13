@@ -33,6 +33,7 @@ function makePen(overrides: Partial<PlanPen> = {}): PlanPen {
     status: undefined,
     holdsPen: false,
     isPending: false,
+    autoAcquiring: false,
     lostControl: null,
     dismissLost: vi.fn(),
     startEditing: vi.fn(),

@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -59,8 +61,7 @@ test('the app header row, measured for fit and pointer reachability', async ({ p
   // rows, so this harness had been dead since then while still reading as the authority on whether
   // the header fits.
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
 
   const report: Record<string, unknown> = {};
   for (const viewport of VIEWPORTS) {

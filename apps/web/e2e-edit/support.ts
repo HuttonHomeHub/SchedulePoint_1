@@ -1,4 +1,6 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 
 /**
  * Shared journey helpers for the flag-ON editing suite. These drive the plan
@@ -119,4 +121,133 @@ export async function awaitComputedSchedule(page: Page, orgSlug: string): Promis
       { message: 'the recalculation never produced computed dates', timeout: 20_000 },
     )
     .toBeGreaterThan(0);
+}
+
+/**
+ * Force the lock-status query to re-pull the peer's latest action WITHOUT unloading the page — a
+ * `reload()` would fire the holder's `pagehide` pen-release. Bringing the page to front + a
+ * `visibilitychange` triggers TanStack Query's focus refetch (the status query is always stale).
+ */
+export async function refetchLock(page: Page): Promise<void> {
+  await page.bringToFront();
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+}
+
+async function signUp(page: Page, name: string, email: string): Promise<void> {
+  await page.goto('/sign-up');
+  await page.getByLabel('Full name').fill(name);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('correct-horse-battery');
+  await page.getByRole('button', { name: /create an account/i }).click();
+  // 15 s, not 5 s: a cold chunk fetch sits inside this wait (docs/TECH_DEBT.md #182, #435).
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
+}
+
+/** A signed-in member of the organisation, beyond the two the fixture always creates. */
+export interface Member {
+  ctx: BrowserContext;
+  page: Page;
+}
+
+export interface TwoActors {
+  ctxA: BrowserContext;
+  a: Page;
+  ctxB: BrowserContext;
+  b: Page;
+  /** One entry per role asked for in `extraRoles`, in order. */
+  extras: Member[];
+  planUrl: string;
+  orgName: string;
+}
+
+/**
+ * Two real actors in one organisation, with a plan created and nobody holding the pen — plus one
+ * more member for each role in `extraRoles`.
+ *
+ * **Extracted at the `docs/TECH_DEBT.md` #286 slice, and the extraction is a MOVE.** Every
+ * assertion in the hand-off test is unchanged by it, so that test is the oracle for this
+ * function being correct — the ADR-0078 barrel-preserving argument applied to a fixture rather
+ * than to a module. Three transitions had no client coverage and each needs this same thirty-line
+ * setup; re-typing it three times is how two fixtures drift into describing different worlds.
+ * Moved again into this file for ADR-0220's journey, which needs the same world with a Viewer and
+ * a second Planner added.
+ *
+ * **A is the organisation's creator and therefore an Org Admin.** That is not incidental: it is
+ * what makes the override transition reachable at all, since `canTakeOverNow` returns true on
+ * `perms.override` before it looks at a request or a heartbeat. **B is a Planner** — it can
+ * request, and it can take over once grace has elapsed, and it can never override. The two roles
+ * are the two halves of ADR-0028's hand-off model, so one fixture serves every case.
+ *
+ * **"Nobody holds the pen" is made true on purpose.** A creates the plan by opening it, and since
+ * ADR-0220 opening a free plan takes the pen — so A would still be holding it when the fixture
+ * returned. A presses Stop editing before leaving, and that is also what makes the later reopening
+ * a fresh one: Stop is respected only until the plan is next opened.
+ */
+export async function setUpTwoActors(
+  browser: Browser,
+  extraRoles: readonly ('PLANNER' | 'VIEWER')[] = [],
+): Promise<TwoActors> {
+  const stamp = Date.now();
+  const orgName = `Handoff Co ${stamp}`;
+  const emails = {
+    peer: `peer-${stamp}@example.com`,
+    extras: extraRoles.map((_, i) => `extra${i}-${stamp}@example.com`),
+  };
+
+  // --- Holder A: create the org, invite the members, then create + open a plan -------------
+  const ctxA = await browser.newContext();
+  const a = await ctxA.newPage();
+  await signUp(a, 'Holder A', `holder-${stamp}@example.com`);
+  await a.getByLabel('Organisation name').fill(orgName);
+  await a.getByRole('button', { name: /create organisation/i }).click();
+  // The landing is the organisation overview (ADR-0098), so its `<h1>` is the organisation's own
+  // name — it was 'Welcome to SchedulePoint' until that screen was replaced. Asserting the name is
+  // the stronger claim anyway: it proves this actor landed in the organisation they just created.
+  await expect(a.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
+
+  const invite = async (email: string, role: 'PLANNER' | 'VIEWER'): Promise<string> => {
+    await a.getByRole('link', { name: 'Members' }).click();
+    await a.getByRole('button', { name: 'Invite member' }).click();
+    const dialog = a.getByRole('dialog');
+    await dialog.getByLabel('Email').fill(email);
+    await dialog.getByLabel('Role', { exact: true }).selectOption(role);
+    await dialog.getByRole('button', { name: /send invitation/i }).click();
+    const url = await a.getByLabel('Invitation link').inputValue();
+    await a.getByRole('dialog').getByRole('button', { name: 'Done' }).click();
+    return url;
+  };
+  const acceptUrl = await invite(emails.peer, 'PLANNER');
+  const extraUrls: string[] = [];
+  for (const [i, role] of extraRoles.entries()) {
+    extraUrls.push(await invite(emails.extras[i] ?? '', role));
+  }
+
+  await openNewPlan(a);
+  await setPlannedStart(a, '2026-01-01');
+  const planUrl = a.url();
+  // The plan was opened free, so A holds it now; let go so the fixture's promise is true. Settling
+  // on "held" first (which presses Start only if it is offered) keeps the fixture independent of
+  // the very behaviour the journeys built on it are testing.
+  await holdThePen(a);
+  await releaseThePen(a);
+
+  // --- Everybody else accepts the invitation, joining A's org --------------------------------
+  const join = async (name: string, email: string, url: string): Promise<Member> => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await signUp(page, name, email);
+    await page.goto(url);
+    await page.getByRole('button', { name: /accept and join/i }).click();
+    await expect(page).toHaveURL(/\/orgs\//);
+    return { ctx, page };
+  };
+  const { ctx: ctxB, page: b } = await join('Peer B', emails.peer, acceptUrl);
+  const extras: Member[] = [];
+  for (const [i, url] of extraUrls.entries()) {
+    extras.push(await join(`Extra ${i}`, emails.extras[i] ?? '', url));
+  }
+
+  return { ctxA, a, ctxB, b, extras, planUrl, orgName };
 }

@@ -31,6 +31,7 @@ function makePen(s: PlanEditLockStatus | undefined, extra: Partial<PlanPen> = {}
     status: s,
     holdsPen: s?.state === 'HELD_BY_ME',
     isPending: false,
+    autoAcquiring: false,
     lostControl: null,
     dismissLost: vi.fn(),
     startEditing: vi.fn(),

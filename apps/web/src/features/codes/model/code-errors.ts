@@ -19,7 +19,7 @@ export function codeErrorText(action: string, error: unknown, subject?: string):
   if (error instanceof ApiFetchError) {
     const reason = reasonOf(error);
     if (error.status === 423) {
-      return `Could not ${action}: you no longer hold the plan’s edit lock. Start editing, then try again.`;
+      return `Could not ${action}: you are no longer editing this plan. Press Start editing, then try again.`;
     }
     if (/CODE_TYPE_NAME_TAKEN/.test(reason)) {
       return `Could not ${action}: another code type already has that name (names are compared ignoring case).`;

@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -195,8 +197,7 @@ test('CQ-3 — the facts-row chip, measured against the committed condition', as
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
   const expand = page.getByRole('button', { name: 'Expand activities panel' });
   if (await expand.isVisible().catch(() => false)) await expand.click();
   for (const name of ['Excavate', 'Pour slab']) {

@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { type Page } from '@playwright/test';
 
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import {
@@ -127,10 +127,12 @@ test('a peer retypes the activity and the bar catches the focus it drops', async
   ]);
   // Without the recalculation the canvas has no bar to select and the probe would fail at its
   // fixture rather than at its subject.
-  // `recalculate` reloads, which fires the holder's `pagehide` pen release — and this journey
-  // WANTS the pen released, because the peer needs it to write an activity. The reader is only
-  // reading, which has never needed a pen (ADR-0063 M4b).
+  // `recalculate` reloads, which is a new opening, and an opening takes the pen on its own
+  // (ADR-0220). This journey WANTS the pen free, because the peer needs it to write an activity
+  // and the reader is only reading (ADR-0063 M4b), so settle on held and let it go.
   await recalculate(a, orgSlug);
+  await holdThePen(a);
+  await releaseThePen(a);
   const seededId = seeded[0]!.id;
 
   // --- B: a second Planner, who never opens the plan -------------------------------------------

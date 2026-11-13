@@ -309,6 +309,14 @@ Shared Playwright helpers live beside the suite they came from; the APG
 `selectOption()` does not apply to a combobox and a label match is ambiguous
 against its toggle button and listbox.
 
+**The pen.** A Planner or Org Admin who opens a plan nobody holds takes the pen on their own
+(ADR-0220), so a journey never presses **Start editing** unconditionally. `holdThePen`
+(`apps/web/e2e-support/pen.ts`) waits for the pen control to settle and presses Start only if it is
+offered, so it is correct whichever way the plan opened. A journey that means "nobody holds it"
+says `releaseThePen` first (reaching the free state by a reload or a plan switch is a new opening,
+which takes the pen again) and asserts it with `expectPenFree`. `e2e-edit/pen-auto.spec.ts` is the
+journey for the automatic take itself.
+
 ## Engine conformance
 
 The `@repo/engine-conformance` package vendors a P6-class CPM/PDM conformance fixture and an

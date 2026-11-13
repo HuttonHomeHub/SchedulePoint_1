@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { pickAddKind, planCommands } from '../e2e-support/toolbar';
 
@@ -590,9 +590,12 @@ test.describe('the 1024 × 600 floor', () => {
     page,
   }) => {
     await openSeededPlan(page, Date.now() + 9);
+    // The pen is NOT held: the lens's button then carries its reason line, which is the tallest it
+    // gets. The plan opened free and the opening took the pen (ADR-0220), so let it go first.
+    await holdThePen(page);
+    await releaseThePen(page);
     await page.setViewportSize({ width: 1024, height: 600 });
     await page.waitForTimeout(500);
-    // The pen is NOT held: the lens's button then carries its reason line, which is the tallest it gets.
     await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 
     // SC-13 (`assertViewPanelFitsTheFloor`): at most 420 px and no inner scroll in the default, folded

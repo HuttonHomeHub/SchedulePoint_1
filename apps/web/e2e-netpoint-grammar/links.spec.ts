@@ -10,7 +10,7 @@ import {
   seedDependency,
 } from '../e2e-arrange/support';
 import { pickZoomPreset } from '../e2e-search-nav/support';
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -233,6 +233,14 @@ test.describe('NetPoint grammar — links', () => {
     await seedLink(page, orgSlug, frame.id, clad.id, 'SS', 2);
     await recalculate(page, orgSlug);
     await expect(page.locator('canvas').first()).toBeAttached();
+    // The reload above is a new opening, which takes the pen on its own (ADR-0220), and this count
+    // must be read with the pen let go. With the pen held the lag handle is armed, and for an SS link
+    // with a lag it is centred on the very point the attachment dot marks on the predecessor
+    // (`route-frame.ts`: both come from `anchors.pred`). It is a 7 px disc over a 4 px dot, drawn
+    // after it by design (`paint.ts`, layer 3.2a: "draw over a dot when the drag is armed"), so no
+    // mark-shade pixel survives to be counted. The dot is not mispainted; the handle covers it.
+    await holdThePen(page);
+    await releaseThePen(page);
     await expect
       .poll(async () => (await countInk(page, [], mark, bars, ground)).dotsOnBars, {
         message: 'no attachment dot on Frame, two days in',

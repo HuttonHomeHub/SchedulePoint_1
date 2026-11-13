@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { holdThePen } from '../e2e-support/pen';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -138,8 +140,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
   await page.getByRole('link', { name: /Riverside Quarter — Phase 2/ }).click();
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Start editing' }).click();
-  await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await holdThePen(page);
   const expand = page.getByRole('button', { name: 'Expand activities panel' });
   if (await expand.isVisible().catch(() => false)) await expand.click();
   for (const name of ['Site setup', 'Excavate to formation', 'Pour ground slab']) {

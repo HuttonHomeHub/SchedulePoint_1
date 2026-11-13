@@ -1,6 +1,6 @@
 import { type Page } from '@playwright/test';
 
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
 import { createHierarchy, newPlan, onboard, recalculate, seedActivities } from './support';
@@ -54,9 +54,11 @@ async function calculatedPlan(
     'current',
   );
   if (keepPen) return;
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (await stop.isVisible().catch(() => false)) await stop.click();
-  await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
+  // `recalculate` reloads, which is a new opening, and an opening takes the pen on its own
+  // (ADR-0220): settle on held before letting go, rather than asking `isVisible()` while the
+  // acquire is still in the air and finding neither verb.
+  await holdThePen(page);
+  await releaseThePen(page);
 }
 
 /** Open a plan from the Project Explorer — a client-side navigation, not a reload. */
@@ -94,10 +96,26 @@ test.describe('Switching plans', () => {
     await calculatedPlan(page, orgSlug, 'Alpha');
     await calculatedPlan(page, orgSlug, 'Bravo');
 
+    // Opening a plan is a new opening, and a Planner's opening takes the pen (ADR-0220), so each
+    // switch lets it go again before reading the state — the pen-less read is what this is about.
+    // Counting recalculations is what keeps that honest: a count that was spurious and was
+    // recalculated away during the moment the pen was held would have sent one.
+    const recalcs: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().includes('/schedule/recalculate')) {
+        recalcs.push(request.url());
+      }
+    });
+
     await switchTo(page, 'Alpha');
+    await holdThePen(page);
+    await releaseThePen(page);
     await staysCurrent(page);
     await switchTo(page, 'Bravo');
+    await holdThePen(page);
+    await releaseThePen(page);
     await staysCurrent(page);
+    expect(recalcs).toEqual([]);
   });
 
   test('opening another plan with the pen held recalculates nothing', async ({ page }) => {

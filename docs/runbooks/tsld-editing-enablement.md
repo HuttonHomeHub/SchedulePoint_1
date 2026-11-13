@@ -60,7 +60,7 @@ switch, and rolling the bundle itself back means pinning an earlier image tag
 
 ## Verify after enabling
 
-- A Planner sees **Start editing**; taking it reveals the create/edit affordances.
+- A Planner opening a free plan is editing straight away; pressing **Stop editing** shows **Start editing**.
 - A second Planner (or the same user in another tab) sees the plan **read-only**
   with the holder named, and can **Request control**; the holder can **Hand over**.
 - A non-holder's structural write returns **423** and the UI drops to read-only

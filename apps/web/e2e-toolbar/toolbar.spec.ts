@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { holdRead } from '../e2e-support/hold-read';
-import { holdThePen } from '../e2e-support/pen';
+import { holdThePen, releaseThePen } from '../e2e-support/pen';
 import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
 import { recalculate, unfoldViewSections } from '../e2e-support/toolbar';
 
@@ -31,12 +31,19 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await openNewPlan(page);
 
   // The plan opens as the toolbar workspace: two command rows over the canvas — not the ADR-0030
-  // chrome bands, and not the legacy long-scrolling page. On a fresh plan, opened by a planner
-  // who has not taken the pen, the canvas shows its empty-state prompt naming the first gesture and
-  // why it is shaded (ADR-0064 T9), and the activities panel is collapsed to give the canvas the room (canvas-maximal).
+  // chrome bands, and not the legacy long-scrolling page. On a fresh plan the canvas shows its
+  // empty-state prompt, and the activities panel is collapsed to give the canvas the room
+  // (canvas-maximal). The planner holds the pen from the opening (ADR-0220), so the prompt states
+  // the fact alone; once the pen is let go it names the first gesture and why it is shaded
+  // (ADR-0064 T9), which is the half of the prompt that needs a planner without the pen.
   await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
-  await expect(page.getByTestId('canvas-empty-state')).toContainText(
-    'This plan has no activities yet. Start editing this plan to draw activities.',
+  const emptyState = page.getByTestId('canvas-empty-state');
+  await holdThePen(page);
+  await expect(emptyState).toContainText('This plan has no activities yet.');
+  await expect(emptyState).not.toContainText('Start editing');
+  await releaseThePen(page);
+  await expect(emptyState).toContainText(
+    'This plan has no activities yet. Start editing to draw activities.',
   );
   await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeHidden();
