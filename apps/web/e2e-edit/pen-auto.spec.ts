@@ -354,6 +354,14 @@ test('a Viewer who opens a free plan does not take the pen', async ({ browser })
     viewer.page.getByRole('button', { name: 'Start editing', disabled: false }),
   ).toHaveCount(0);
   expect(acquires()).toBe(0);
+  // The empty plan says who can help, not only what this reader cannot do (row 1), and that sentence
+  // is what the shaded first-activity button is described by.
+  await expect(viewer.page.getByTestId('canvas-empty-state')).toContainText(
+    'This plan has no activities yet. Ask a Planner to add activities.',
+  );
+  await expect(
+    viewer.page.getByRole('button', { name: 'Draw the first activity' }),
+  ).toHaveAccessibleDescription('Ask a Planner to add activities.');
   // Read from somebody who could take it: still free.
   expect(await lockState(a, planUrl)).toBe('FREE');
 

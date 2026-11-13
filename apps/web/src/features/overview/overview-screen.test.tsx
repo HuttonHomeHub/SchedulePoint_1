@@ -324,7 +324,7 @@ describe('OverviewScreen — needs your attention', () => {
     renderScreen({ role: 'PLANNER', payload: HELD });
 
     expect(await screen.findByRole('heading', { name: 'Needs your attention' })).toBeVisible();
-    expect(screen.getByText('You are holding the editing lock.')).toBeVisible();
+    expect(screen.getByText('You’re editing this plan.')).toBeVisible();
   });
 
   it('names the peer waiting for control', async () => {

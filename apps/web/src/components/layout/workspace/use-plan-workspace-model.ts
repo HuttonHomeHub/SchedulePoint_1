@@ -275,7 +275,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   });
   const penHolder = pen.status?.holder ?? null;
   const refuseSchedule = useCallback(
-    (action: string) => scheduleRefusal({ canEditSchedule, penReadOnly }, penHolder, action),
+    (action: string, form?: 'reason' | 'ask') =>
+      scheduleRefusal({ canEditSchedule, penReadOnly }, penHolder, action, form),
     [canEditSchedule, penReadOnly, penHolder],
   );
   const [editing, setEditing] = useState(false);
@@ -1092,11 +1093,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     () => ({
       gate: {
         writable: canEditSchedule,
-        reason: canEditSchedule
-          ? null
-          : penReadOnly
-            ? 'Take the edit lock to change this plan.'
-            : 'You don’t have permission to change this plan.',
+        reason: canEditSchedule ? null : refuseSchedule('change this plan'),
       },
       deleteMany: async (rows: readonly ActivitySummary[]): Promise<void> => {
         if (rows.length === 0) return;
@@ -1333,7 +1330,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     }),
     [
       canEditSchedule,
-      penReadOnly,
+      refuseSchedule,
       bulkDelete,
       restoreBatch,
       createLink,
@@ -2614,7 +2611,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         // inert under the top layer, so a sighted reader would see a Confirm that did nothing.
         // The dialog says it itself; an AT user may also hear the banner, accepted (M6 UX review).
         if (onPenWriteRejected(err).kind === 'lock') {
-          throw new Error('The edit lock was taken, so nothing was changed.');
+          throw new Error('You’re no longer editing this plan, so nothing was changed.');
         }
         if (err instanceof ApiFetchError && err.status === 409) {
           throw new Error(

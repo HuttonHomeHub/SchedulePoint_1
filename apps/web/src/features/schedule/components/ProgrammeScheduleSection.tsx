@@ -183,10 +183,9 @@ export function ProgrammeScheduleSection({
         >
           <p className="font-medium">Some plans are being edited</p>
           <p>
-            Nothing was recalculated. Another editor holds the edit-lock on{' '}
+            Nothing was recalculated. Someone else is editing{' '}
             {locked.blockedPlanIds.length === 1 ? 'a plan' : 'these plans'} in this programme. Ask
-            the current editor to hand over the pen, or an Org Admin can override it, then try
-            again.
+            whoever is editing to hand over, or ask an Org Admin to take over, then try again.
           </p>
           <ul className="flex flex-col gap-1">
             {locked.blockedPlanIds.map((blockedId) => (

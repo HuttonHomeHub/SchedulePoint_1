@@ -81,7 +81,7 @@ test('the landing shows what changed, who changed it, and what is waiting', asyn
   // -------------------------------------------------- 4. The pen held in the other tab is reported
   const attention = section(overviewPage, 'Needs your attention');
   await expect(attention).toBeVisible();
-  await expect(attention.getByText('You are holding the editing lock.')).toBeVisible();
+  await expect(attention.getByText('You’re editing this plan.')).toBeVisible();
 
   // -------------------------------------------------- 5. Exactly one h1, and no second landmark
   await expect(overviewPage.getByRole('heading', { level: 1 })).toHaveCount(1);

@@ -141,6 +141,11 @@ describe('ProgrammeScheduleSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Recalculate programme' }));
 
     expect(await screen.findByText('Some plans are being edited')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Nothing was recalculated\. Someone else is editing these plans in this programme\. Ask whoever is editing to hand over, or ask an Org Admin to take over, then try again\./,
+      ),
+    ).toBeInTheDocument();
     // Each link carries a distinguishing accessible name (WCAG 2.4.4) so AT can tell them apart.
     const links = screen.getAllByRole('link', { name: /^Open blocked plan / });
     expect(links).toHaveLength(2);

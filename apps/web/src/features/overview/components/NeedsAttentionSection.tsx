@@ -5,6 +5,7 @@ import { ActorName } from './ActorName';
 import { SectionCount } from './SectionCount';
 
 import { ListRow, ListRowSkeleton, SectionCard, rowLinkClass } from '@/components/ui/page';
+import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
 
 /**
  * "Needs your attention" — the things with somebody or something waiting behind them.
@@ -68,7 +69,7 @@ export function NeedsAttentionSection({
             </Link>
             <p className="text-muted-foreground text-sm">
               {lock.requestedBy === null ? (
-                'You are holding the editing lock.'
+                lockCopy.holding
               ) : (
                 <>
                   <ActorName actor={lock.requestedBy} /> has asked for control.

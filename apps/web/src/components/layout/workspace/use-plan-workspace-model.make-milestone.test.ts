@@ -259,7 +259,7 @@ describe('usePlanWorkspaceModel — Make milestone…', () => {
     act(() => result.current.onMakeMilestone(ZERO));
     await act(async () => {
       await expect(result.current.confirmMakeMilestone('START_MILESTONE')).rejects.toThrow(
-        'The edit lock was taken, so nothing was changed.',
+        'You’re no longer editing this plan, so nothing was changed.',
       );
     });
     expect(result.current.makeMilestoneOpen).toBe(true);

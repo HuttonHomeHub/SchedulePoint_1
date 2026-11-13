@@ -214,7 +214,7 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     // Hidden, a Viewer cannot tell "the plan is empty" from "I am not allowed" (ADR-0062 M6).
     expect(draw).toHaveAttribute('aria-disabled', 'true');
     const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
-    expect(reason).toHaveTextContent('Start editing to draw activities.');
+    expect(reason).toHaveTextContent('Start editing to add activities.');
     // Visible to a sighted pointer user too (#462): not hidden from sight, and not inside anything that is.
     expect(reason?.closest('.sr-only')).toBeNull();
     fireEvent.click(draw);
@@ -232,8 +232,25 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     );
     const draw = screen.getByRole('button', { name: 'Draw the first activity' });
     const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
-    expect(reason).toHaveTextContent('Your role cannot draw activities.');
+    expect(reason).toHaveTextContent('Your role cannot add activities.');
     expect(screen.getByTestId('canvas-empty-state')).not.toHaveTextContent('Start editing');
+  });
+
+  it('asks the host for the ask form, and the button is described by the sentence it returns', () => {
+    const scheduleRefusal = vi.fn((action: string, form?: 'reason' | 'ask') =>
+      form === 'ask' ? `Ask a Planner to ${action}.` : `Your role cannot ${action}.`,
+    );
+    render(
+      <Harness arm="select" activities={[]} canEdit={false} scheduleRefusal={scheduleRefusal} />,
+    );
+    expect(scheduleRefusal).toHaveBeenCalledWith('add activities', 'ask');
+    const draw = screen.getByRole('button', { name: 'Draw the first activity' });
+    const reason = document.getElementById(draw.getAttribute('aria-describedby') ?? '');
+    expect(reason).toHaveTextContent('Ask a Planner to add activities.');
+    expect(reason?.closest('.sr-only')).toBeNull();
+    expect(screen.getByTestId('canvas-empty-state')).toHaveTextContent(
+      'This plan has no activities yet. Ask a Planner to add activities.',
+    );
   });
 
   it('says nothing once the plan has any activity at all', () => {
