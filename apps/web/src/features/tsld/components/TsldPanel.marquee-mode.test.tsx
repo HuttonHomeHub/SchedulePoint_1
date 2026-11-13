@@ -80,15 +80,17 @@ describe('TsldPanel — the marquee tool mode', () => {
   it('announces arming and closing through the one polite region', () => {
     announceSpy.mockClear();
     render(<Harness canEdit={false} />);
-    expect(announceSpy).toHaveBeenCalledWith(expect.stringMatching(/^Marquee select · drag/));
+    expect(announceSpy).toHaveBeenCalledWith(expect.stringMatching(/^Select · drag across bars/));
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(announceSpy).toHaveBeenCalledWith('Tool closed. Select mode.');
   });
 
-  it('states the mode in the band, naming the add modifier', () => {
-    // Naming Ctrl/Cmd in the band is the only place a planner can learn that a sweep does not need
-    // the tool at all — an affordance that is otherwise reachable only by guessing.
+  it('states the mode in the band without the add modifier, which the shortcuts sheet carries', () => {
+    // The sentence is kept to one line at 1024 wide; "Ctrl to add" moved to the sheet and the
+    // Select tooltip (`PlanShortcutsHelp.test.tsx` asserts the row).
     render(<Harness canEdit={false} />);
-    expect(screen.getByTestId('canvas-mode-band').textContent).toMatch(/Ctrl to add/);
+    expect(screen.getByTestId('canvas-mode-band').textContent).toBe(
+      'Select · drag across bars · Esc to stop',
+    );
   });
 });

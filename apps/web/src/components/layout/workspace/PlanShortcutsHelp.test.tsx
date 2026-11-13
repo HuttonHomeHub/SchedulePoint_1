@@ -36,6 +36,14 @@ describe('the plan shortcuts sheet', () => {
     expect(screen.queryByText(/double-tap/i)).not.toBeInTheDocument();
   });
 
+  it('lists Cmd / Ctrl + drag under Select, where the armed Select band no longer says it', () => {
+    render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="tsld" />);
+    expect(screen.getByText('Cmd / Ctrl + drag on the diagram')).toBeInTheDocument();
+    expect(
+      screen.getByText('Draw a box that adds to the selection, without pressing Select'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the GANTT bindings, named for that view, when the chart is on screen', () => {
     render(<PlanShortcutsHelp open onClose={() => {}} editingEnabled view="gantt" />);
     // The title has to name the view: the two sheets share key NAMES and not meanings — Enter opens

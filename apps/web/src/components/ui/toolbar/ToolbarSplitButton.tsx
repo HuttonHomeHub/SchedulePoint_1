@@ -55,7 +55,8 @@ export interface ToolbarSplitButtonProps {
    * The primitive had a channel for a reason on a SHUT control and none for a hint on a live one,
    * which is the gap ADR-0094 M5 found in `MenuItem` and fixed there. It is added here because the
    * armed-tool statements the mode band used to paint (`docs/specs/foot-row/spec.md` D3) carried
-   * two shortcuts nothing else in the product documents — `or click for a day` and `Ctrl to add` —
+   * two shortcuts nothing else in the product documents — `or click for a day` and `Ctrl to add` (the
+   * latter is in the shortcuts sheet since 2026-11-13) —
    * and `CanvasModeBand.tsx:57-62` argues in as many words that cutting them re-hides a capability
    * rather than trimming a sentence. Withdrawing the statement had to give them somewhere to go.
    *

@@ -166,3 +166,4 @@ specified as the fallback and **not built**: M0d passed.
   stay up for as long as the tool is armed, so they wrap without `data-dock-row` and keep the compact density; a row
   of their own would cost the diagram a line for the whole time a tool is armed (ADR-0092). Only `linkPicking` and
   `linked` take the own row.
+  **Marquee sentence (2026-11-13):** it now reads "Select · drag across bars · Esc to stop" so it fits one line at 1024 wide; "Ctrl to add" moved to the shortcuts sheet and the Select button's tooltip.

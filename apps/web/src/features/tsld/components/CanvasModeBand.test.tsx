@@ -107,9 +107,7 @@ describe('CanvasModeBand', () => {
     // and the foot-row epic then withdrew that statement, leaving a union member, a switch case and
     // this assertion with nothing behind them. All three are gone; the case now uses `marquee`,
     // which the band paints and the panel announces through this exact function.
-    expect(modeStatementText({ kind: 'marquee' })).toBe(
-      'Marquee select · drag to select, Ctrl to add · Esc to stop',
-    );
+    expect(modeStatementText({ kind: 'marquee' })).toBe('Select · drag across bars · Esc to stop');
   });
 
   // #580: a statement that names activities is shown whole, so the band wraps on its own row and

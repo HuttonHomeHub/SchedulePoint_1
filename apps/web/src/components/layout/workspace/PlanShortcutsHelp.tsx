@@ -25,6 +25,9 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
  * Multi-select bindings (`docs/specs/canvas-multi-select/` M3-T1) — **Space is rebound**, so its
  * old entry is removed above rather than duplicated. A sheet that lists Space twice, doing two
  * different things, is worse than one that lists neither.
+ *
+ * The Cmd / Ctrl + drag row is where "Ctrl to add" went when the armed Select band's sentence was
+ * shortened to fit one line (`CanvasModeBand.tsx`, 2026-11-13); the Select button's tooltip says it too.
  */
 const MULTI_SELECT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Space', action: 'Add / remove the focused activity from the selection' },
@@ -32,6 +35,10 @@ const MULTI_SELECT_SHORTCUTS: readonly Shortcut[] = [
   { keys: 'Shift + ↑ / ↓', action: 'Extend the selection to the previous / next activity' },
   { keys: 'Cmd / Ctrl + A', action: 'Select every activity' },
   { keys: 'Esc', action: 'Clear the selection (after closing any armed tool)' },
+  {
+    keys: 'Cmd / Ctrl + drag on the diagram',
+    action: 'Draw a box that adds to the selection, without pressing Select',
+  },
 ];
 
 const EDIT_SHORTCUTS: readonly Shortcut[] = [

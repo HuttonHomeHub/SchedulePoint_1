@@ -236,7 +236,7 @@ test('CQ-3 — the facts-row chip, measured against the committed condition', as
       .getByRole('toolbar', { name: 'Plan commands' })
       .getByRole('button', { name: 'Select', exact: true })
       .click();
-    await expect(page.getByText(/^Marquee select/).first()).toBeVisible();
+    await expect(page.getByText(/^Select · drag across bars/).first()).toBeVisible();
     await page.waitForTimeout(250);
     const selAbsent = await measure(page, 0);
     const selRow1 = await measure(page, 1);
