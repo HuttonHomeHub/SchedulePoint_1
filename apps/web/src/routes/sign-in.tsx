@@ -6,6 +6,7 @@ import { textLinkVariants } from '@/components/ui/text-link';
 import { SignInForm } from '@/features/auth';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
+import { sameOriginRedirect } from '@/lib/router/search-string';
 
 /**
  * Public sign-in screen. Returns to the `redirect` target (or home) on success.
@@ -23,7 +24,9 @@ export function SignInScreen(): React.ReactElement {
           You have been signed out.
         </Alert>
       ) : null}
-      <SignInForm onSuccess={() => router.history.push(search.redirect ?? '/')} />
+      <SignInForm
+        onSuccess={() => router.history.push(sameOriginRedirect(search.redirect) ?? '/')}
+      />
       <p className="text-muted-foreground text-sm">
         <Link to="/forgot-password" className={textLinkVariants()}>
           Forgot your password?

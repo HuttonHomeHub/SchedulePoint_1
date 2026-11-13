@@ -37,8 +37,18 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ navigate: vi.fn() }),
   useNavigate: () => navigate.fn,
   useSearch: () => search.value,
-  Link: ({ children, ...rest }: { children: React.ReactNode; to?: string }) => (
-    <a href={typeof rest.to === 'string' ? rest.to : '/'}>{children}</a>
+  Link: ({
+    children,
+    to,
+    search: linkSearch,
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    search?: { redirect?: string };
+  }) => (
+    <a href={`${to ?? '/'}${linkSearch?.redirect ? `?redirect=${linkSearch.redirect}` : ''}`}>
+      {children}
+    </a>
   ),
 }));
 
@@ -195,6 +205,20 @@ describe('accept-invite — the states that explain themselves', () => {
     expect(await screen.findByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Create an account' })).toBeInTheDocument();
     expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+  });
+
+  it('row 32: both ways in carry the invitation, so a new account is not stranded at onboarding', async () => {
+    renderScreen({ session: null });
+
+    const redirect = `/accept-invite?token=tok`;
+    expect(await screen.findByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      `/sign-in?redirect=${redirect}`,
+    );
+    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute(
+      'href',
+      `/sign-up?redirect=${redirect}`,
+    );
   });
 
   it('row 33: unverified and the server enforces it — offers the resend', async () => {

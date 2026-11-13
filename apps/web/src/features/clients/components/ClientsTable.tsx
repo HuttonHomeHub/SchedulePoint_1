@@ -1,7 +1,7 @@
 import type { ClientSummary } from '@repo/types';
 import { Link } from '@tanstack/react-router';
 import { X } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import { useClients, useDeleteClient } from '../api/use-clients';
@@ -54,6 +54,19 @@ export function ClientsTable({
   const announce = useAnnounce();
   const regionRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  // Whether the dialog closed because a client was created: only then has the control that opened it
+  // (the empty-state button) been unmounted by the rows arriving.
+  const createdRef = useRef(false);
+  // The empty state, and the button that opened the dialog, go with the first row, so focus would
+  // fall to `<body>`; the list is the destination (ADR-0135). Done in an effect so it runs after the
+  // dialog has actually closed: focus moved while the modal is open lands on an inert element.
+  useEffect(() => {
+    if (!creating && createdRef.current) {
+      createdRef.current = false;
+      regionRef.current?.focus();
+    }
+  }, [creating]);
   const [deleting, setDeleting] = useState<ClientSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -230,7 +243,16 @@ export function ClientsTable({
      * approximated.
      */
     <SectionCard title="All clients" count={clients.data?.length} flush>
-      <div ref={regionRef} tabIndex={-1} className="flex flex-col gap-3 outline-none">
+      {/* A named group, so the element focus is handed to (after a clear, a delete, or the first
+          create) says where it is. Not a `region`: the table inside already is one named "Clients"
+          and the section is "All clients", and a third landmark would only repeat them. */}
+      <div
+        ref={regionRef}
+        role="group"
+        aria-label="Client list"
+        tabIndex={-1}
+        className="flex flex-col gap-3 outline-none"
+      >
         {onFiltersChange === undefined ? null : (
           <div className="flex flex-wrap items-end gap-3">
             <SearchField
@@ -288,13 +310,40 @@ export function ClientsTable({
                 </Button>
               </>
             ) : (
-              <>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>
+              <>
+                <p className="text-muted-foreground text-sm">No clients yet.</p>
+                {/* **The first client is one press from here.** The empty state used to say "Create
+                    your first client" and leave the reader to find the header button; it now holds
+                    the action itself, opening the same dialog. Named for its purpose because the
+                    header's "New client" is on screen too, and two buttons with one name cannot be
+                    told apart by a reader who hears them (the sibling Clear filters button's rule).
+                    Outline, as the other empty-state actions are, so the header's button stays the
+                    one primary. */}
+                {canWrite ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setCreating(true)}
+                  >
+                    Create your first client
+                  </Button>
+                ) : null}
+              </>
             )
           }
         />
 
         {canWrite ? (
           <>
+            <ClientFormDialog
+              orgSlug={orgSlug}
+              open={creating}
+              onCreated={() => {
+                createdRef.current = true;
+              }}
+              onClose={() => setCreating(false)}
+            />
             <ClientFormDialog
               orgSlug={orgSlug}
               open={editing !== undefined}

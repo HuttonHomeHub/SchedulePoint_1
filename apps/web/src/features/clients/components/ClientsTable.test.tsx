@@ -168,6 +168,26 @@ describe('ClientsTable', () => {
     expect(screen.getByText(/No clients yet/)).toBeInTheDocument();
   });
 
+  it('puts the New client dialog one press from an empty list, for writers only', () => {
+    // The empty state used to name the action and leave the reader to find the header button.
+    renderTable(true, []);
+    fireEvent.click(screen.getByRole('button', { name: 'Create your first client' }));
+    expect(screen.getByRole('dialog', { name: 'New client' })).toBeInTheDocument();
+  });
+
+  it('names the element focus is handed to, without repeating a landmark name', () => {
+    renderTable(true);
+    // Not a region: the table is already one named "Clients" and the section is "All clients".
+    expect(screen.getByRole('group', { name: 'Client list' })).toHaveAttribute('tabindex', '-1');
+    expect(screen.getAllByRole('region', { name: 'Clients' })).toHaveLength(1);
+  });
+
+  it('offers no create button in the empty state to a non-writer', () => {
+    renderTable(false, []);
+    expect(screen.getByText(/No clients yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create your first client' })).toBeNull();
+  });
+
   it('confirms before deleting (no immediate destructive action)', async () => {
     renderTable(true);
     await clickRowAction('Northgate', 'Delete', 'Clients');

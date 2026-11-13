@@ -32,7 +32,9 @@ vi.mock('@/hooks/use-org-role', () => ({
 }));
 
 vi.mock('@/features/members', () => ({
-  MembersTable: () => <div>ROSTER</div>,
+  MembersTable: ({ canAdminister }: { canAdminister: boolean }) => (
+    <div>{canAdminister ? 'ROSTER (admin)' : 'ROSTER'}</div>
+  ),
   InvitationsSection: () => <div>INVITATIONS</div>,
   InviteMemberDialog: () => <button type="button">Invite member</button>,
   RolesPanel: () => <div>ROLES</div>,
@@ -42,7 +44,8 @@ describe('MembersScreen — what the screen composes', () => {
   it('shows the roster, the invitations and the roles panel to an Org Admin', () => {
     role.current = 'ORG_ADMIN';
     render(<MembersScreen />);
-    expect(screen.getByText('ROSTER')).toBeInTheDocument();
+    expect(screen.getByText('ROSTER (admin)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite member' })).toBeInTheDocument();
     expect(screen.getByText('INVITATIONS')).toBeInTheDocument();
     expect(screen.getByText('ROLES')).toBeInTheDocument();
   });
@@ -57,4 +60,16 @@ describe('MembersScreen — what the screen composes', () => {
     expect(screen.getByText('ROSTER')).toBeInTheDocument();
     expect(screen.getByText('ROLES')).toBeInTheDocument();
   });
+
+  it.each(['PLANNER', 'CONTRIBUTOR', 'VIEWER'])(
+    'offers a %s no Invite button and an unprivileged roster',
+    (r) => {
+      // The API grants invite, role change and remove to the Org Admin alone, so the controls are
+      // omitted rather than left to be refused after the form is filled in.
+      role.current = r;
+      render(<MembersScreen />);
+      expect(screen.queryByRole('button', { name: 'Invite member' })).toBeNull();
+      expect(screen.getByText('ROSTER')).toBeInTheDocument();
+    },
+  );
 });

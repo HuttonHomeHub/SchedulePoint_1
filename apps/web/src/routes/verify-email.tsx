@@ -14,6 +14,7 @@ import {
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
+import { sameOriginRedirect } from '@/lib/router/search-string';
 
 /**
  * The address-verification landing screen (ADR-0074 M2-T3).
@@ -85,13 +86,24 @@ const EXPIRED_COPY =
   'Confirmation links work for an hour. Send yourself a new one — it replaces any earlier link.';
 
 /** The way on from a link that cannot be used: a fresh one, or the sign-in page if it already worked. */
-function FreshLinkActions({ email }: { email?: string | undefined }): React.ReactElement {
+function FreshLinkActions({
+  email,
+  redirect,
+}: {
+  email?: string | undefined;
+  /** Where sign-up was heading (an invitation), so signing in after confirming goes on to it. */
+  redirect?: string | undefined;
+}): React.ReactElement {
   return (
     <>
       <ResendVerificationButton email={email} />
       <p className="text-muted-foreground text-sm">
         Already confirmed?{' '}
-        <Link to="/sign-in" className={textLinkVariants()}>
+        <Link
+          to="/sign-in"
+          {...(redirect ? { search: { redirect } } : {})}
+          className={textLinkVariants()}
+        >
           Sign in
         </Link>
       </p>
@@ -214,6 +226,12 @@ export function VerifyEmailScreen(): React.ReactElement {
   const email = 'email' in search && typeof search.email === 'string' ? search.email : undefined;
   const verified = 'verified' in search && search.verified === '1';
   const failed = 'error' in search && typeof search.error === 'string';
+  // Captured once and validated here (a non-strict `useSearch` merges the raw query in, so the
+  // route's own validator is not enough), then stripped from the URL below: it is usually an
+  // invitation link, whose token should not sit in the address bar and history (TECH_DEBT #102).
+  const [redirect] = useState(() =>
+    sameOriginRedirect('redirect' in search ? search.redirect : undefined),
+  );
 
   // Captured on the first render, before the effect below removes it from the URL (see
   // `/reset-password`, whose reasoning this repeats): an effect would run after a render in which the
@@ -238,6 +256,15 @@ export function VerifyEmailScreen(): React.ReactElement {
     void navigate({ to: '/verify-email', search: {}, replace: true });
   }, [token, navigate]);
 
+  useEffect(() => {
+    if (redirect === undefined || token !== '') return;
+    void navigate({
+      to: '/verify-email',
+      search: email === undefined ? {} : { email },
+      replace: true,
+    });
+  }, [redirect, token, email, navigate]);
+
   // Keyed so a second link replaces the first outright, including a failure it left behind.
   if (token !== '') return <ConfirmEmailScreen key={token} token={token} />;
 
@@ -256,7 +283,7 @@ export function VerifyEmailScreen(): React.ReactElement {
       title={failed ? 'That link did not work' : 'Verify your email'}
       description={failed ? FAILED_COPY : pendingDescription(email)}
     >
-      <FreshLinkActions email={email} />
+      <FreshLinkActions email={email} redirect={redirect} />
     </AuthShell>
   );
 }

@@ -37,6 +37,11 @@ import {
 test.describe.configure({ mode: 'serial' });
 
 test('the landing shows what changed, who changed it, and what is waiting', async ({ page }) => {
+  // **A long journey by design, not a slow product.** It builds a client, project and plan, edits
+  // it, then sweeps the overview's wrap probes at several widths. Measured 23.2 s and 38.6 s on
+  // 2026-11-13 on a loaded machine against the 30 s default, and it failed twice locally on the
+  // timeout alone with every assertion before it passing.
+  test.setTimeout(60_000);
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);
 

@@ -1,9 +1,10 @@
 import type { OrganisationOverview, OrganizationRole } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { rememberPlan } from './model/recent-plans';
 import { OverviewScreen } from './OverviewScreen';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
@@ -515,12 +516,8 @@ describe('OverviewScreen — announcements', () => {
       }),
     });
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
-      ).toBeVisible();
-    });
-    expect(screen.getByText(/Finishing as planned/)).toBeVisible();
+    // The frame is drawn while loading (ADR-0202), so wait for the settled row, not the heading.
+    expect(await screen.findByText(/Finishing as planned/)).toBeVisible();
     expect(screen.queryByText('No programmes to report on yet.')).toBeNull();
   });
 
@@ -556,11 +553,9 @@ describe('OverviewScreen — announcements', () => {
       }),
     });
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { level: 2, name: 'Where the work stands' }),
-      ).toBeVisible();
-    });
+    // The frames are drawn while loading (ADR-0202), so wait for settled content.
+    await screen.findByText('Northgate — Phase 1');
+    await screen.findByText('Tower B');
 
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual([
       'Jump back in',
@@ -568,5 +563,114 @@ describe('OverviewScreen — announcements', () => {
       'Where the work stands',
       'Recently changed',
     ]);
+  });
+});
+
+describe('OverviewScreen — the grid lays out the cells that render', () => {
+  /**
+   * A Contributor gets three cells, not four: Needs your attention is not theirs. In a two-column
+   * grid an odd count left the last cell alone beside an empty half-row — a hole where the hidden
+   * box would have been. The last cell spans the row instead, which needs a browser to see but is
+   * visible here as the `wide` span on its wrapper.
+   */
+  const cell = (name: string): HTMLElement | null =>
+    screen.getByRole('heading', { level: 2, name }).closest('.grid > div');
+
+  const RECENT = [
+    { planId: 'p1', planName: 'Tower B', projectName: 'Riverside', clientName: 'RD' },
+  ];
+
+  it('omits the Jump back in cell when it has nothing to show, rather than leaving it empty', async () => {
+    renderScreen({
+      role: 'CONTRIBUTOR',
+      payload: overview({ recentlyChanged: [plan()], planStanding: [] }),
+    });
+
+    await screen.findByRole('heading', { level: 2, name: 'Where the work stands' });
+    expect(document.querySelectorAll('.grid > div')).toHaveLength(2);
+    expect(cell('Recently changed')).not.toHaveClass('col-span-full');
+  });
+
+  it('lets the last cell span the row when a Contributor sees three cells', async () => {
+    renderScreen({
+      role: 'CONTRIBUTOR',
+      payload: overview({ recentlyChanged: [plan()], planStanding: [], recentPlans: RECENT }),
+    });
+
+    await screen.findByText('Northgate — Phase 1');
+    expect(cell('Recently changed')).toHaveClass('col-span-full');
+    expect(cell('Where the work stands')).not.toHaveClass('col-span-full');
+  });
+
+  it('keeps every cell one column wide when a Planner sees four', async () => {
+    renderScreen({
+      role: 'PLANNER',
+      payload: overview({ recentlyChanged: [plan()], planStanding: [], recentPlans: RECENT }),
+    });
+
+    await screen.findByRole('heading', { level: 2, name: 'Needs your attention' });
+    await screen.findByRole('heading', { level: 2, name: 'Where the work stands' });
+    expect(cell('Recently changed')).not.toHaveClass('col-span-full');
+  });
+});
+
+describe('OverviewScreen — the grid is the same shape before and after the data arrives', () => {
+  /**
+   * ADR-0202: a loading state is the settled shape. Cell presence used to be computed from data that
+   * is undefined while pending, so the grid had fewer cells and a different last-cell span until the
+   * response landed, and the whole screen shifted when it did. The layout is read as the headings in
+   * order plus whether each cell spans the row, which is what a reader sees and what the grid does.
+   */
+  const RECENT = [
+    { planId: 'p1', planName: 'Tower B', projectName: 'Riverside', clientName: 'RD' },
+  ];
+
+  const layout = (): Array<[string | null, boolean]> =>
+    [...document.querySelectorAll('.grid > div')].map((cellEl) => [
+      cellEl.querySelector('h2')?.textContent?.trim() ?? null,
+      cellEl.classList.contains('col-span-full'),
+    ]);
+
+  const settle = (): Promise<void> =>
+    act(() => new Promise<void>((resolve) => setTimeout(resolve, 60)));
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it.each([
+    { role: 'ORG_ADMIN', remembered: true },
+    { role: 'ORG_ADMIN', remembered: false },
+    { role: 'PLANNER', remembered: true },
+    { role: 'PLANNER', remembered: false },
+    { role: 'CONTRIBUTOR', remembered: true },
+    { role: 'CONTRIBUTOR', remembered: false },
+    { role: 'VIEWER', remembered: true },
+    { role: 'VIEWER', remembered: false },
+  ] as const)('$role, remembered plans: $remembered', async ({ role, remembered }) => {
+    if (remembered) {
+      rememberPlan(window.localStorage, { userId: 'u1', orgSlug: ORG_SLUG, planId: 'p1', at: 1 });
+    }
+
+    renderScreen({ role, pending: true });
+    await screen.findByRole('heading', { level: 2, name: 'Recently changed' });
+    await settle();
+    const pending = layout();
+
+    cleanup();
+    vi.resetAllMocks();
+    renderScreen({
+      role,
+      payload: overview({
+        recentlyChanged: [plan()],
+        planStanding: [],
+        ...(remembered ? { recentPlans: RECENT } : {}),
+      }),
+    });
+    await screen.findByText('Northgate — Phase 1');
+    await settle();
+
+    expect(pending.length).toBeGreaterThanOrEqual(2);
+    expect(pending).toEqual(layout());
   });
 });

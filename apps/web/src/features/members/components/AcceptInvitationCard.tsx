@@ -138,12 +138,18 @@ export function AcceptInvitationCard({ token }: { token: string }): React.ReactE
         <CardContent className="flex flex-col gap-2">
           <Link
             to="/sign-in"
-            search={{ redirect: `/accept-invite?token=${token}` }}
+            search={{ redirect: `/accept-invite?token=${encodeURIComponent(token)}` }}
             className={buttonVariants()}
           >
             Sign in
           </Link>
-          <Link to="/sign-up" className={buttonVariants({ variant: 'outline' })}>
+          {/* The same destination as Sign in: without it a new account lands on "Create your
+              organisation" and the invitation is lost. */}
+          <Link
+            to="/sign-up"
+            search={{ redirect: `/accept-invite?token=${encodeURIComponent(token)}` }}
+            className={buttonVariants({ variant: 'outline' })}
+          >
             Create an account
           </Link>
         </CardContent>

@@ -1,6 +1,16 @@
-import { ROLE_LABELS, ROLE_OPTIONS } from '../schemas/invite-schemas';
+import { ROLE_LABELS, ROLE_OPTIONS, ROLE_SUMMARIES } from '../schemas/invite-schemas';
 
 import { SectionCard } from '@/components/ui/page';
+
+/**
+ * Most-capable first, which is the reverse of `ROLE_OPTIONS`.
+ *
+ * That ordering is deliberate rather than incidental: a reader arrives at this panel to find out
+ * what they are about to grant, and the question is nearly always "is this too much?". Reading down
+ * from the most capable answers it in the first line. `ROLE_OPTIONS` is left alone — it is the
+ * picker's order, and a picker sensibly offers its least-privileged option first.
+ */
+const MOST_CAPABLE_FIRST = [...ROLE_OPTIONS].reverse();
 
 /**
  * What each role can do, on the one screen where somebody chooses one.
@@ -21,24 +31,6 @@ import { SectionCard } from '@/components/ui/page';
  * times its height. A panel that is there to fill space would be decoration; this one answers a
  * question the screen raises and cannot otherwise answer.
  */
-const ROLE_SUMMARIES: Record<(typeof ROLE_OPTIONS)[number], string> = {
-  VIEWER: 'Read-only access to shared plans in this organisation.',
-  CONTRIBUTOR: 'Updates progress and adds notes on assigned plans. Cannot change logic or dates.',
-  PLANNER:
-    'Full access to clients, projects, plans and activities, and can change a plan’s logic and dates.',
-  ORG_ADMIN: 'Everything a Planner can do, plus members, settings and the shared libraries.',
-};
-
-/**
- * Most-capable first, which is the reverse of `ROLE_OPTIONS`.
- *
- * That ordering is deliberate rather than incidental: a reader arrives at this panel to find out
- * what they are about to grant, and the question is nearly always "is this too much?". Reading down
- * from the most capable answers it in the first line. `ROLE_OPTIONS` is left alone — it is the
- * picker's order, and a picker sensibly offers its least-privileged option first.
- */
-const MOST_CAPABLE_FIRST = [...ROLE_OPTIONS].reverse();
-
 export function RolesPanel(): React.ReactElement {
   return (
     <SectionCard title="What each role can do">

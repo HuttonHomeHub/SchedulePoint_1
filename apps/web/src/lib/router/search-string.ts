@@ -43,3 +43,33 @@ export function searchString(value: unknown): string | undefined {
   if (Array.isArray(value) && value.length > 0) return searchString(value[0]);
   return undefined;
 }
+
+/**
+ * A `?redirect=` that is safe to push, or `undefined`.
+ *
+ * **Same-origin by shape** (`docs/TECH_DEBT.md` #102(1)). The value is spent as
+ * `router.history.push(search.redirect ?? '/')`, and until this check it was whatever the URL said.
+ * It has never been exploitable through the History API alone, because `pushState` throws on a
+ * cross-origin URL, but that is a property of the browser and not of this code.
+ *
+ * The rule is one leading slash and not two: `/plans/1` is ours, `//evil.test` is a
+ * protocol-relative URL the browser resolves to another origin (as is `/\evil.test`, which browsers
+ * normalise to `//evil.test`, hence the backslash is refused in second place too), and
+ * `https://evil.test` is not a path at all. **Whitespace and control characters are refused
+ * anywhere in the value**, because URL parsing strips tab and newline: `/\t/evil.test` reads as a
+ * path here and as `//evil.test` to the browser. A malformed value is DROPPED rather than repaired,
+ * and the fallback is `/`.
+ *
+ * **Every reader applies it, not only the route's `validateSearch`.** The router merges the raw
+ * query into a non-strict `useSearch`, so a key the validator drops can still reach a component that
+ * reads `useSearch({ strict: false })`; found on `/sign-up` in the browser, where `?redirect=//evil.test`
+ * was spent unvalidated.
+ */
+export function sameOriginRedirect(value: unknown): string | undefined {
+  const requested = searchString(value);
+  if (requested === undefined) return undefined;
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
+  return /^\/(?![/\\])/.test(requested) && !/[\u0000-\u0020\u007f]/.test(requested)
+    ? requested
+    : undefined;
+}

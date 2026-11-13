@@ -102,6 +102,7 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
   const { data: organisations } = useOrganizations();
   const organisation = organisations?.find((candidate) => candidate.slug === orgSlug);
   const isWriter = canManageHierarchy(organisation?.role);
+  const showAttention = isWriter && !isError;
 
   const title = organisation?.name ?? data?.organisationName ?? 'Overview';
   useDocumentTitle(title);
@@ -112,6 +113,20 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
   const now = new Date(dataUpdatedAt);
 
   const resolvedRecent = data?.recentPlans ?? [];
+
+  // **The grid lays out the cells that render, and lays them out in their settled shape while the
+  // query is still pending** (ADR-0202): data that has not arrived must not decide how many cells
+  // there are, or the whole grid shifts when it does. While pending, Jump back in counts if this
+  // browser remembers a plan (known locally before the load), Where the work stands counts because
+  // every real role holds `schedule:read`, and Needs your attention counts for the roles that get it.
+  // Settled, each follows its data. An odd count would leave the last cell alone in a two-column row
+  // beside nothing, so it spans the row — the existing `wide` span chosen by count, with no new grid
+  // prop and no re-ordering (ADR-0182: DOM order stays the reading order). An empty wrapper for a
+  // section that renders nothing was the hole itself.
+  const showJumpBackIn = isPending ? recentPlanIds.length > 0 : resolvedRecent.length > 0;
+  const showStanding = isPending || data?.planStanding !== undefined;
+  const cellCount = 1 + (showJumpBackIn ? 1 : 0) + (showAttention ? 1 : 0) + (showStanding ? 1 : 0);
+  const lastSpan = cellCount % 2 === 1 ? 'wide' : 'narrow';
 
   // Prune on settle: an id the server did not hand back is gone, out of reach, or was never real —
   // three states this deliberately cannot tell apart. Dropping it stops it costing a lookup on
@@ -247,10 +262,17 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               the programme's HEALTH above the fold rather than the activity feed — which is the
               content this epic exists to add.
             */}
-            <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
-              <JumpBackInSection plans={resolvedRecent} orgSlug={orgSlug} fill />
-            </PageGridItem>
-            {isWriter && !isError ? (
+            {showJumpBackIn ? (
+              <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
+                <JumpBackInSection
+                  plans={resolvedRecent}
+                  orgSlug={orgSlug}
+                  pending={isPending}
+                  fill
+                />
+              </PageGridItem>
+            ) : null}
+            {showAttention ? (
               <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
                 <NeedsAttentionSection
                   attention={data?.attention}
@@ -261,27 +283,29 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
               </PageGridItem>
             ) : null}
             {/*
-              **Rendered only when the server sent the field.** `planStanding` is OMITTED for a
-              caller who may not read schedules, rather than sent as `[]` — so `=== undefined` is
-              "you may not see this" and `[]` is "there is nothing to see", and the two get
-              different treatment: no frame at all, versus a frame with an empty state
-              (ADR-0098; ADR-0082's first omit clause at section granularity).
+              **Rendered when the server sent the field, and held in place while it is loading.**
+              `planStanding` is OMITTED for a caller who may not read schedules, rather than sent as
+              `[]` — so `=== undefined` is "you may not see this" and `[]` is "there is nothing to
+              see", and the two get different treatment: no frame at all, versus a frame with an
+              empty state (ADR-0098; ADR-0082's first omit clause at section granularity).
 
-              It is deliberately NOT `(data?.planStanding ?? [])`, which would collapse the two
-              and render a permanently empty frame for a reader with no right to the answer — and
-              would ALSO render one during the pending window, since `data` is undefined then.
-
-              There is therefore **no skeleton for this section, on purpose**: it cannot be drawn
-              without first assuming this reader is entitled to the answer, which would flash a
-              frame at a Viewer who never gets one. The screen's single query means its single
-              loading and failure states are already reported once, by "Recently changed".
+              It is deliberately NOT `(data?.planStanding ?? [])` once settled, which would collapse
+              the two and render a permanently empty frame for a reader with no right to the answer.
+              The `?? []` above is for the pending window only, where the frame is a skeleton: every
+              mintable role holds `schedule:read`, so it is the settled shape for all of them, and
+              drawing it keeps the grid from shifting on arrival (ADR-0202).
             */}
-            {data?.planStanding !== undefined ? (
+            {showStanding ? (
               <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
-                <WhereWorkStandsSection standing={data.planStanding} orgSlug={orgSlug} fill />
+                <WhereWorkStandsSection
+                  standing={data?.planStanding ?? []}
+                  orgSlug={orgSlug}
+                  pending={isPending}
+                  fill
+                />
               </PageGridItem>
             ) : null}
-            <PageGridItem span="narrow" className={GRID_ITEM_CLASS}>
+            <PageGridItem span={lastSpan} className={GRID_ITEM_CLASS}>
               <RecentlyChangedSection
                 plans={data?.recentlyChanged ?? []}
                 orgSlug={orgSlug}

@@ -1,15 +1,18 @@
 import type { OrgMemberSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { memberKeys } from '../api/use-members';
 
 import { MembersTable } from './MembersTable';
 
-import { apiFetch } from '@/lib/api/client';
+import { sessionKeys } from '@/features/auth';
+import { apiFetch, apiFetchAllPages } from '@/lib/api/client';
 
-vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn() }));
+// `apiFetchAllPages` is the refetch a saved change triggers; it must answer, or the mutation's
+// own `onSuccess` waits on retries and the confirmation never appears inside the test.
+vi.mock('@/lib/api/client', () => ({ apiFetch: vi.fn(), apiFetchAllPages: vi.fn() }));
 
 const MEMBERS: OrgMemberSummary[] = [
   {
@@ -28,12 +31,16 @@ const MEMBERS: OrgMemberSummary[] = [
   },
 ];
 
-function renderTable() {
+function renderTable(canAdminister = true) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(memberKeys.list('acme'), MEMBERS);
+  queryClient.setQueryData(sessionKeys.session, {
+    user: { id: 'u1', name: 'Ada Admin', email: 'ada@example.com' },
+    memberships: [],
+  });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MembersTable orgSlug="acme" />
+      <MembersTable orgSlug="acme" canAdminister={canAdminister} />
     </QueryClientProvider>,
   );
 }
@@ -41,6 +48,7 @@ function renderTable() {
 describe('MembersTable', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetchAllPages).mockReset().mockResolvedValue(MEMBERS);
   });
 
   /**
@@ -110,5 +118,93 @@ describe('MembersTable', () => {
       .find((el) => el.tagName === 'SECTION');
     expect(card).toBeDefined();
     expect(within(card!).getByText('2')).toBeInTheDocument();
+  });
+
+  it('declares the Actions column fit so the Remove button is never the thing that shrinks', () => {
+    // "Remove" was clipped to "Rem" at 1024 px because the column declared no width; the clip itself
+    // needs a browser (e2e-overview/members.spec.ts), so this pins the declaration that prevents it.
+    renderTable();
+
+    const cell = screen.getByRole('button', { name: 'Remove Ada Admin' }).closest('td');
+    expect(cell).toHaveAttribute('data-col-width', 'fit');
+  });
+
+  it('says so on screen and aloud when a role change has been saved', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(undefined);
+    renderTable();
+
+    fireEvent.change(screen.getByLabelText('Role for Val Viewer'), {
+      target: { value: 'PLANNER' },
+    });
+    expect(
+      await screen.findByText(
+        'Val Viewer is now a Planner. They may need to reload the page to see the change.',
+      ),
+    ).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Role for Val Viewer'), {
+      target: { value: 'ORG_ADMIN' },
+    });
+    expect(
+      await screen.findByText(
+        'Val Viewer is now an Org Admin. They may need to reload the page to see the change.',
+      ),
+    ).toBeVisible();
+  });
+
+  it('shows no confirmation when the change is refused', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new Error('Not allowed'));
+    renderTable();
+
+    fireEvent.change(screen.getByLabelText('Role for Val Viewer'), {
+      target: { value: 'PLANNER' },
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
+    expect(screen.queryByText(/is now a/)).toBeNull();
+  });
+
+  it('offers no role select and no Remove to anyone but an Org Admin', () => {
+    // A Contributor or Viewer used to reach the select and the Remove confirmation before the
+    // server refused. They read the roster, with each role as plain text.
+    renderTable(false);
+
+    expect(screen.getByText('Val Viewer')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Role for Val Viewer')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Actions' })).toBeNull();
+    const row = screen.getByText('val@example.com').closest('tr');
+    expect(within(row!).getByText('Viewer')).toBeInTheDocument();
+  });
+
+  it('speaks to the signed-in person directly when their own role changes', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(undefined);
+    renderTable();
+
+    fireEvent.change(screen.getByLabelText('Role for Ada Admin'), { target: { value: 'PLANNER' } });
+    expect(
+      await screen.findByText('You are now a Planner. Reload the page to see what changed.'),
+    ).toBeVisible();
+  });
+
+  it('clears the visible line after a few seconds, without announcing again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.mocked(apiFetch).mockResolvedValue(undefined);
+      renderTable();
+
+      fireEvent.change(screen.getByLabelText('Role for Val Viewer'), {
+        target: { value: 'PLANNER' },
+      });
+      const line =
+        'Val Viewer is now a Planner. They may need to reload the page to see the change.';
+      expect(await screen.findByText(line)).toBeVisible();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(8100);
+      });
+      expect(screen.queryByText(line)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

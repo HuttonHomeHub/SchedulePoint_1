@@ -26,11 +26,18 @@ import { canAdministerInvitations, useOrgRole } from '@/hooks/use-org-role';
 export function MembersScreen(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
-  const role = useOrgRole(orgSlug);
+  // Inviting, changing a role and removing are one Org-Admin-only bundle on the API (`member:invite`,
+  // `member:update_role`, `member:remove`), so the screen offers them to nobody else rather than
+  // letting a Contributor fill in a form the server then refuses. Omitted, as the Calendars screen
+  // omits its write actions (ADR-0082's omit clause), because for these roles it never applies.
+  const canAdminister = canAdministerInvitations(useOrgRole(orgSlug));
 
   return (
     <PageContainer>
-      <PageHeader title="Members" actions={<InviteMemberDialog orgSlug={orgSlug} />} />
+      <PageHeader
+        title="Members"
+        actions={canAdminister ? <InviteMemberDialog orgSlug={orgSlug} /> : null}
+      />
       {/*
         **Two columns, spans by content demand** (product-owner decision 3: both the landing's
         layout AND richer sections). The roster is a five-column table and takes the full width;
@@ -48,9 +55,9 @@ export function MembersScreen(): React.ReactElement {
               count has to come from the query, and only the component holds it. See that file's
               docblock for why calling `useMembers` here instead would have been the wrong three
               lines. */}
-          <MembersTable orgSlug={orgSlug} />
+          <MembersTable orgSlug={orgSlug} canAdminister={canAdminister} />
         </PageGridItem>
-        {canAdministerInvitations(role) ? (
+        {canAdminister ? (
           <PageGridItem span="narrow">
             <InvitationsSection orgSlug={orgSlug} />
           </PageGridItem>

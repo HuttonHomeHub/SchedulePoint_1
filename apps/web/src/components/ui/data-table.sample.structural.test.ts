@@ -42,7 +42,7 @@ const DECLARED: Record<string, Declared> = {
   // The eight SC-3 tables (Clients, Projects, Plans, Calendars, Resources, Members, Audit log,
   // Recently deleted).
   'features/clients/components/ClientsTable.tsx': { fit: 1, sampled: 1 },
-  'features/members/components/MembersTable.tsx': { fit: 1, sampled: 1 },
+  'features/members/components/MembersTable.tsx': { fit: 2, sampled: 2 },
   'features/audit/components/AuditEventList.tsx': { fit: 1, sampled: 1 },
   'features/plans/components/PlansTable.tsx': { fit: 1, sampled: 1 },
   'features/calendars/components/CalendarsTable.tsx': { fit: 1, sampled: 1 },
