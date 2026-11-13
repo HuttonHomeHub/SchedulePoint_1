@@ -403,12 +403,12 @@ describe('GanttPanel — baseline variance (ADR-0025)', () => {
 
   it('adds the variance column only when a baseline is active', () => {
     render(<GanttPanel activities={TWO} />);
-    expect(screen.queryByText('vs baseline')).not.toBeInTheDocument();
+    expect(screen.queryByText('Start vs baseline')).not.toBeInTheDocument();
   });
 
   it('shows the column when variance rows are supplied', () => {
     withVariance([varianceRow()]);
-    expect(screen.getByText('vs baseline')).toBeInTheDocument();
+    expect(screen.getByText('Start vs baseline')).toBeInTheDocument();
   });
 
   // Direction must be carried by the WORD, not by colour alone (WCAG 1.4.1) — and it has to

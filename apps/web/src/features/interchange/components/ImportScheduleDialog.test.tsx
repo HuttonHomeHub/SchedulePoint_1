@@ -77,6 +77,13 @@ describe('ImportScheduleDialog', () => {
     globalThis.fetch = vi.fn();
   });
 
+  it('says up front that an import always makes a new plan and never changes an existing one', () => {
+    renderDialog();
+    expect(screen.getByText(/Importing always creates a new plan in/)).toHaveTextContent(
+      'It never changes a plan you already have.',
+    );
+  });
+
   it('starts idle: a file picker and a shaded Confirm', () => {
     renderDialog();
     expect(screen.getByLabelText('Schedule file (.xer or .xml)')).toBeInTheDocument();

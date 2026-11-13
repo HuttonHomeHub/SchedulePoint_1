@@ -278,7 +278,8 @@ function ManageBody({
       ) : swimlanes.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           No swimlanes yet. Add one below; every activity stays under “No swimlane” until you place
-          it.
+          it. If the swimlanes used to come from the WBS or a code, they have not been deleted:
+          choose that source again and they come back.
         </p>
       ) : (
         // Tailwind's Preflight strips the list marker, and VoiceOver then drops the list role; the

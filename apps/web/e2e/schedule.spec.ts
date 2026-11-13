@@ -207,6 +207,21 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   // assertion serves — and it proves an engine-computed field reached the table.
   await expect(page.getByRole('cell', { name: 'Critical', exact: true }).first()).toBeVisible();
 
+  // The calendar picker's hint says to close the box and press Recalculate in the bar at the bottom.
+  // That is only true if changing the calendar really leaves the schedule behind and the bar offers
+  // the button, so drive it on a plan whose schedule is current.
+  await (await revealToolbarCommand(page, 'calendar')).click();
+  await chooseComboboxOption(page, 'Calendar', 'None (all days work)');
+  const savedDialog = page.getByRole('dialog', { name: 'Schedule settings' });
+  await expect(
+    savedDialog.getByText(/^Saved\. Close this box, then press Recalculate in the bottom bar/),
+  ).toBeVisible();
+  await savedDialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(savedDialog).toBeHidden();
+  const statusBar = page.locator('[data-schedule-state]');
+  await expect(statusBar).toHaveAttribute('data-schedule-state', 'stale');
+  await expect(statusBar.getByRole('button', { name: 'Recalculate' })).toBeVisible();
+
   // The plan view with the calendar picker is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,

@@ -166,7 +166,9 @@ async function truncation(page: Page): Promise<unknown> {
         srOnly: el.classList.contains('sr-only'),
       }))
       // The Timeline header's text includes its ruler labels ("TimelineFeb 2026…"): match by prefix.
-      .filter((h) => !h.srOnly && !h.label.startsWith('Timeline') && h.label !== 'vs baseline');
+      .filter(
+        (h) => !h.srOnly && !h.label.startsWith('Timeline') && h.label !== 'Start vs baseline',
+      );
     const rows = [...grid.querySelectorAll('[role="row"]')].filter(
       (r) => Number(r.getAttribute('aria-rowindex')) >= 2,
     );

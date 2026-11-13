@@ -15,7 +15,7 @@ import { GANTT_COLUMNS, type GanttColumn } from './grid-columns';
  *
  * ```text
  * w[k]    = clamp(stored[k] ?? DEFAULT[k], 48, 400)    each visible non-name column
- * FIXED   = Σ w[k] + NAME_MIN + extraPinned            (extraPinned = the `vs baseline` column)
+ * FIXED   = Σ w[k] + NAME_MIN + extraPinned            (extraPinned = the `Start vs baseline` column)
  * ceiling = max(GANTT_GRID_MAX_WIDTH, FIXED)           the floor always wins
  * name    = pane − (FIXED − NAME_MIN)                  the one elastic column
  * ```
@@ -189,7 +189,7 @@ export function ganttFixedWidth(
   columns: readonly GanttColumn[],
   widths: ColumnWidths,
   /**
-   * Width of pinned content that is NOT one of {@link columns} — today only the `vs baseline`
+   * Width of pinned content that is NOT one of {@link columns} — today only the `Start vs baseline`
    * column, which renders inside the pinned block when a baseline is active and is deliberately
    * not a `GanttColumn` (it is not sortable, hideable or part of the column vocabulary).
    *

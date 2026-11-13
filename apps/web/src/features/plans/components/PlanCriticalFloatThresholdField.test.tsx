@@ -240,7 +240,9 @@ describe('PlanCriticalFloatThresholdField', () => {
 
   it('names the plan calendar’s day in the hint, because the threshold is plan-level', () => {
     renderField();
-    expect(screen.getByText(/A day is 8 working hours on the PLAN calendar/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/A day is 8 working hours on this plan’s calendar/),
+    ).toBeInTheDocument();
   });
 
   it('renders read-only for a non-editor, showing the value', () => {

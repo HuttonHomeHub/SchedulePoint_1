@@ -29,7 +29,7 @@ export const ACTIONS_COLUMN_WIDTH = 28;
 export const GRID_END_GUTTER = 20;
 
 /**
- * The width of pinned content that is not a `GanttColumn`: the `vs baseline` column (present only
+ * The width of pinned content that is not a `GanttColumn`: the `Start vs baseline` column (present only
  * while a baseline is active), the row-menu column (present wherever the host supplies row menus)
  * and the trailing gutter. One derivation, because three sites used to spell it and the ADR-0095
  * incident was two answers to "how wide is the grid".

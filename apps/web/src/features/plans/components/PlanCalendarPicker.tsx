@@ -134,6 +134,17 @@ export function PlanCalendarPicker({
     );
   };
 
+  // Each state says only what is true in it. The save is otherwise silent on screen (the
+  // announcement above is for screen readers), and Recalculate is not in this dialog: it lives in
+  // the status bar at the bottom of the workspace, so the hint says where to find it.
+  const hintText = busy
+    ? 'Saving…'
+    : setCalendar.isError
+      ? 'Not saved, so the plan keeps its old calendar.'
+      : setCalendar.isSuccess
+        ? 'Saved. Close this box, then press Recalculate in the bottom bar to apply it to the dates.'
+        : 'After you change it, close this box and press Recalculate in the bottom bar to apply it to the dates.';
+
   const describedBy = setCalendar.isError ? `${hintId} ${errorId}` : hintId;
 
   return (
@@ -158,7 +169,7 @@ export function PlanCalendarPicker({
         emptyMessage="No calendars match your search."
       />
       <p id={hintId} className="text-muted-foreground text-sm">
-        {busy ? 'Saving…' : 'Recalculate to apply the calendar to the schedule’s dates.'}
+        {hintText}
       </p>
       {setCalendar.isError ? (
         <p id={errorId} role="alert" className="text-destructive-text text-sm">

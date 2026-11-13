@@ -292,15 +292,10 @@ jobs:
   e2e-api:
     name: End-to-end tests (API)
     runs-on: ubuntu-latest
-    # A runaway guard, not a bar — and still 30, now that five shards bring the slowest to ~1,205 s.
-    #
-    # It was 60 for exactly one milestone, because the unsharded web job needed ~30 min and 30 had
-    # CANCELLED it at 30 m 08 s. It cancelled a SHARDED job again on PR #1357 (2026-11-13) because the
-    # four-shard pack had been derived from durations that no longer held; the answer was the fifth
-    # shard and re-derived figures, not a longer guard. 30 is ~1.5x the ~1,205 s projection, thinner
-    # than the 2.9-3.4x it shipped with and the same as before, and still a guard against a hang.
-    # Raising it would only move the point at which a drifting pack is noticed. The guard is per JOB
-    # and above that job's duration; the epic-wide constant was the bug.
+    # A runaway guard, not a bar. This job (the Supertest suite, not the web shards) took 1,099 s on
+    # PR #1357's head a2a6686 (check run started 16:49:31Z, completed 17:07:50Z, 2026-11-13), so 30
+    # is ~1.6x its own duration. It was 643 s when this guard was last measured, so the API suite
+    # has grown too; the guard is per JOB and above that job's duration.
     timeout-minutes: 30
     # A disposable PostgreSQL for API end-to-end tests (Supertest).
     services:
@@ -436,7 +431,8 @@ jobs:
     # (job wall less its suite steps): 87-105 s on those four jobs and 88-100 s on the four of PR
     # #1357, so ~97 s is added, and the projected wall time is ~1,205 s a
     # shard (20 minutes). Four shards could not hold: the same suites sum to 5,392 s, so a PERFECT
-    # four-way pack is ~1,348 s of suite time and ~1,445 s of wall time, and on PR #1357 web shard 2
+    # four-way pack is ~1,348 s of suite time and ~1,445 s of wall time (ADR-0138 quotes ~1,380 s and
+    # ~1,480 s because it counts the +130 s planned for `edit`: 5,522 s / 4), and on PR #1357 web shard 2
     # was CANCELLED by the 30-minute timeout at 16:26:06Z (suite steps 1,725 s done with six suites
     # still to run) while shard 1 of the same run took 1,539 s and shard 1 of #1355 took 1,657 s.
     # The recorded figures of 2026-10-13 (3,950 s) had fallen to 73 % of what CI measures
@@ -460,10 +456,14 @@ jobs:
     # A runaway guard, not a bar — and back to 30 now that this job's own duration justifies it.
     #
     # It was 60 for exactly one milestone, because the unsharded web job needed ~30 min and 30 had
-    # CANCELLED it at 30 m 08 s. Sharded, the slowest shard measured 1,157 s on run 38317448630 (the
-    # pack above is ~1,050 s), so 30 is 1.5-1.7x its own duration: thinner than the 2.9-3.4x it was
-    # when it shipped, and still a guard against a hang rather than a bar. The guard is per JOB and
-    # above that job's duration; the epic-wide constant was the bug.
+    # CANCELLED it at 30 m 08 s. It cancelled a SHARDED job again on PR #1357 (2026-11-13) because the
+    # four-shard pack had been derived from durations that no longer held; the answer was the fifth
+    # shard and re-derived figures, not a longer guard. The five shards then measured 1,073-1,200 s
+    # on that pull request's head a2a6686 (check runs 16:49:31Z to 17:07:24Z-17:09:31Z), against the
+    # ~1,205 s projected, so 30 is ~1.5x the slowest: thinner than the 2.9-3.4x it shipped with, and
+    # still a guard against a hang rather than a bar. Raising it would only move the point at which
+    # a drifting pack is noticed. The guard is per JOB and above that job's duration; the epic-wide
+    # constant was the bug.
     timeout-minutes: 30
     # A disposable PostgreSQL. The web job needs one too: Playwright starts the API itself from
     # its `webServer` block, so this job runs the full stack and the API needs a database. Nothing
@@ -977,8 +977,8 @@ jobs:
       # because every swimlane write is pen-gated and a mocked fetch accepts a stale version from
       # anybody. What only a browser can prove is here: the order focus lands in after each dialog
       # closes or a swimlane is deleted, the grouped listbox, the lens round-trip against the stored
-      # lanes, and the View panel's height at the 1024 x 600 floor. Shard 1, tied lightest with shard 2
-      # (`scripts/e2e-durations.json`).
+      # lanes, and the View panel's height at the 1024 x 600 floor. Its shard is derived from
+      # `scripts/e2e-durations.json`.
       - name: Web end-to-end tests (swimlanes)
         if: ${{ matrix.shard == 5 }}
         run: pnpm --filter @repo/web test:e2e:swimlanes

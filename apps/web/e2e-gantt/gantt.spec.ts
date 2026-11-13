@@ -134,7 +134,7 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   await chartMeetsGrid(page, 'one step above the floor');
 
   /**
-   * And with a **baseline active**, which adds a `vs baseline` column to the pinned block.
+   * And with a **baseline active**, which adds a `Start vs baseline` column to the pinned block.
    *
    * This is the state the arithmetic is least likely to hold in, and it was not in #151's brief:
    * the variance column is rendered inside the pinned block with its own width, and it is NOT one
@@ -168,10 +168,40 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
   // The pinned positive: without it the two assertions below would pass equally on a Gantt that
   // never rendered the column, which is the state they exist to test.
   await expect(
-    ganttGrid(page).getByRole('columnheader', { name: 'vs baseline' }),
+    ganttGrid(page).getByRole('columnheader', { name: 'Start vs baseline' }),
     'no variance column — the baseline did not reach the grid, so nothing below is being tested',
   ).toBeVisible();
   await chartMeetsGrid(page, 'with a baseline, at the seeded width');
+
+  // The header is longer than the 72 px column's one-line width, so it wraps. It must still sit
+  // wholly inside its cell and no taller than the ruler row at both ends of the supported window range,
+  // rather than being cut off by the row's fixed height (a two-line header is the case that clips).
+  const varianceHeader = ganttGrid(page).getByRole('columnheader', { name: 'Start vs baseline' });
+  const original = page.viewportSize();
+  for (const viewport of [
+    { width: 1024, height: 600 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const fit = await varianceHeader.evaluate((el) => {
+      const own = el.getBoundingClientRect();
+      const row = el.closest('[role="row"]')?.getBoundingClientRect();
+      return {
+        widthFits: el.scrollWidth <= el.clientWidth,
+        heightFits: el.scrollHeight <= el.clientHeight,
+        // Height, not position: the sticky pinned block sits a pixel off the row's own box.
+        fitsRow: row !== undefined && own.height <= row.height + 0.5,
+      };
+    });
+    expect(fit, `"Start vs baseline" is clipped at ${viewport.width} x ${viewport.height}`).toEqual(
+      {
+        widthFits: true,
+        heightFits: true,
+        fitsRow: true,
+      },
+    );
+  }
+  if (original) await page.setViewportSize(original);
 
   await page.getByRole('separator', { name: 'Grid width' }).focus();
   await page.keyboard.press('Home');

@@ -89,6 +89,15 @@ describe('CalendarExceptionsEditor', () => {
     ).toBeInTheDocument();
   });
 
+  it('says exceptions save on their own and what Save changes is for', () => {
+    renderEditor();
+    expect(
+      screen.getByText(/Exceptions save as soon as you press Add or remove one/),
+    ).toHaveTextContent(
+      '“Save changes” above is only for the calendar’s name, hours per day and working week.',
+    );
+  });
+
   it('shows an empty state when there are no exceptions', () => {
     renderEditor({ ...DETAIL, exceptions: [] });
     expect(screen.getByText('No exceptions yet.')).toBeInTheDocument();

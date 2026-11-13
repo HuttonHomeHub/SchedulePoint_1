@@ -32,7 +32,7 @@ export interface PrintCodeFit<T> {
 /**
  * @param pageWidth the document's width.
  * @param standardWidth the standard columns that will print, summed.
- * @param varianceWidth the `vs baseline` column's width, or 0 when it is not printed — it sits after the
+ * @param varianceWidth the `Start vs baseline` column's width, or 0 when it is not printed — it sits after the
  *   code columns but takes its room first, because the screen gives it a fixed place and a baseline is
  *   a statement the programme exists to make.
  * @param codeColumns the switched-on code columns in on-screen order.

@@ -168,8 +168,8 @@ function hintFor(hoursPerDay: number | undefined, busy: boolean): string {
   }
   const hours = Number.isInteger(hoursPerDay) ? String(hoursPerDay) : hoursPerDay.toFixed(1);
   return (
-    `Days, hours or minutes — for example 5d, 4h or 90m. A day is ${hours} working hours on the ` +
-    `PLAN calendar; an activity on its own calendar is still compared against this figure. ` +
+    `Days, hours or minutes, for example 5d, 4h or 90m. A day is ${hours} working hours on ` +
+    `this plan’s calendar; an activity on its own calendar is still compared against this figure. ` +
     `An activity is critical when its total float is at or below it.`
   );
 }

@@ -183,7 +183,7 @@ export function GanttPrintSurface({
   const span = rowsDateSpan(rows, barDateSource);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
-  // Names which dates the ghost bar and the "vs baseline" column compare
+  // Names which dates the ghost bar and the "Start vs baseline" column compare
   // (`placement-baseline-variance`, US-2) — only worth stating when variance is actually
   // printed, and only when the caller knows the answer (an absent `basis`, an older API
   // image mid rolling-update, ADR-0047, says nothing rather than guessing).
@@ -251,7 +251,7 @@ export function GanttPrintSurface({
                     className="gantt-print-right"
                     style={{ width: PRINT_VARIANCE_WIDTH }}
                   >
-                    vs baseline
+                    Start vs baseline
                   </th>
                 ) : null}
                 <th scope="col" style={{ width: chartPx }}>

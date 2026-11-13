@@ -10,7 +10,7 @@ import {
 /**
  * The arithmetic of `m3-spec.md` §1a, on the 980 px page. The standard columns the printed programme
  * carries by default are Code 60 + Activity 180 + Duration 72 + Start 72 + Finish 72 + Float 44 = 500;
- * Predecessors adds 132; a baseline adds the 66 px `vs baseline` column.
+ * Predecessors adds 132; a baseline adds the 66 px `Start vs baseline` column.
  */
 const PAGE = 980;
 const STANDARD = 500;

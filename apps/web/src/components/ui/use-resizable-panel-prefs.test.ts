@@ -62,7 +62,7 @@ describe('useResizablePanelPrefs', () => {
    * The case above clamps in the `useState` initialiser, which runs once — so before this, a
    * `min` that rose later never reached a size already held. That is not hypothetical: the Gantt's
    * grid floor is derived from what its pinned block needs, and capturing a baseline adds a
-   * `vs baseline` column to it. A planner who had dragged the divider narrow was left below a floor
+   * `Start vs baseline` column to it. A planner who had dragged the divider narrow was left below a floor
    * the component believed it was enforcing, and the column painted over the chart
    * (`docs/TECH_DEBT.md` #151, found in a browser, not by any unit gate).
    */

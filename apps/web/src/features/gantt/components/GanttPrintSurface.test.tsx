@@ -175,7 +175,7 @@ describe('GanttPrintSurface', () => {
         activities={[anActivity()]}
       />,
     );
-    expect(withoutBaseline.container.textContent).not.toContain('vs baseline');
+    expect(withoutBaseline.container.textContent).not.toContain('Start vs baseline');
 
     const withBaseline = render(
       <GanttPrintSurface
@@ -188,7 +188,7 @@ describe('GanttPrintSurface', () => {
         varianceByActivityId={new Map([['a1', varianceRow()]])}
       />,
     );
-    expect(withBaseline.container.textContent).toContain('vs baseline');
+    expect(withBaseline.container.textContent).toContain('Start vs baseline');
     expect(withBaseline.container.textContent).toContain('+5d late');
   });
 

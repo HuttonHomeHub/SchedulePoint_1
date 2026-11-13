@@ -539,10 +539,10 @@ function GanttPanelBody({
   /**
    * What the pinned block needs — the floor a resizable pane may not go below.
    *
-   * **`vs baseline` is part of it**, and leaving it out was a live defect until 2026-09-01: that
+   * **`Start vs baseline` is part of it**, and leaving it out was a live defect until 2026-09-01: that
    * column renders inside the pinned block with its own width but is not a `GanttColumn`, so
    * `name` absorbed against a floor 72 px short and the block summed to `pane + 72` at EVERY
-   * width, not merely at the floor. Measured in a browser: `vs baseline` spanned 817–889 with the
+   * width, not merely at the floor. Measured in a browser: `Start vs baseline` spanned 817–889 with the
    * chart starting at 817 — ADR-0095's Float incident, reproduced by a column added afterwards.
    */
   const FIXED_WIDTH = useMemo(
@@ -1415,10 +1415,10 @@ function GanttPanelBody({
                   role="columnheader"
                   aria-colindex={COLUMNS.length + codeCount + actionColumns + 1}
                   aria-sort="none"
-                  className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
+                  className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs leading-tight font-medium"
                   style={{ width: VARIANCE_COLUMN_WIDTH }}
                 >
-                  vs baseline
+                  Start vs baseline
                 </div>
               ) : null}
             </div>

@@ -114,7 +114,7 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
    * `readPrefs` clamps once, inside the `useState` initialiser, so a `min`/`max` that changes
    * later never reaches a size already in state — and a bound CAN change while a panel is mounted.
    * The Gantt's grid floor is derived from what the pinned block currently needs, so capturing a
-   * baseline raises it by the width of the `vs baseline` column; a planner who had dragged the
+   * baseline raises it by the width of the `Start vs baseline` column; a planner who had dragged the
    * divider narrow was then left below a floor the component believed it was enforcing, and the
    * column painted on top of the chart (`docs/TECH_DEBT.md` #151, found in a browser). The other
    * two consumers pass constant bounds, so for them this is a no-op.

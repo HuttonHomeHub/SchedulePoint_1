@@ -63,6 +63,14 @@ describe('PlanLevellingSettings', () => {
       .mockResolvedValue({ ...PLAN, levelResources: true, version: 5 });
   });
 
+  it('tells the planner what happens after switching levelling on', () => {
+    renderSettings({ plan: { ...PLAN, levelResources: true } });
+    // The three real controls, named as they are labelled, so the hint cannot drift from the toolbar.
+    expect(screen.getByText(/Nothing moves yet\./)).toHaveTextContent(
+      'switch on “Levelled placement” (on the toolbar, or under View on a narrower window) to see the dashed outlines, then choose “Apply levelled dates…” to move the bars.',
+    );
+  });
+
   it('PATCHes the plan turning resource levelling on, with the version', async () => {
     renderSettings();
     fireEvent.change(screen.getByLabelText('Level resources'), { target: { value: 'on' } });
