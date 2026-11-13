@@ -1,5 +1,23 @@
 # @repo/web
 
+## 1.9.2
+
+### Patch Changes
+
+- [#1359](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1359) [`816a004`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/816a004cb921b8318563039e0a03eb9a5329301b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fixes for the home page, Members and invitations:
+  
+  - The Remove button on Members is no longer cut short on narrow windows.
+  - Changing a person's role says it has been saved and that the person may need to reload.
+  - Only an Org Admin is shown Invite member, the role selector and Remove.
+  - After you send an invitation, focus moves to the link and you are told it is shown only once.
+  - The role you choose in the invite dialog is explained.
+  - The home page no longer shifts or leaves a gap when a section is not shown to you.
+  - An empty Clients list has a button to create your first client.
+  - Creating an account from an invitation brings you back to the invitation, and a link that points off this site is ignored.
+
+- [#1361](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1361) [`b64b27f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b64b27fdfeebd9f50289fb1b0331a7a98f58bfd9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Select tool's hint is shorter and fits one line; Ctrl-drag to add is listed under keyboard
+  shortcuts.
+
 ## 1.9.1
 
 ### Patch Changes
