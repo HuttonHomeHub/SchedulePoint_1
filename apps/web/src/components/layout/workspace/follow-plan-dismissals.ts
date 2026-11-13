@@ -8,7 +8,7 @@
  * **Per person on a device, per plan.** One key per signed-in user holds every plan's answers, so the
  * bound lives in one place and a second account on the same machine is asked for itself. Another
  * device, another browser or cleared site data is asked again. Only **activity ids** are stored,
- * never a name, so there is nothing to clear at sign-out.
+ * no names; they stay in this browser until site data is cleared.
  *
  * **Bounded.** At most 20 plans (the least recently written dropped) and 1,000 ids per plan (the most
  * recent kept; the rest are asked about again after a reload, which is what happened to every bar
@@ -107,7 +107,9 @@ export function rememberDismissed(
   if (ids.length === 0) return;
   const key = keyFor(userId);
   const stored = read(storage, key);
-  const merged = [...new Set([...(stored.plans[planId]?.ids ?? []), ...ids])];
+  // A re-answered id moves to the end, so the cap below keeps the most recently answered.
+  const fresh = new Set(ids);
+  const merged = [...(stored.plans[planId]?.ids ?? []).filter((id) => !fresh.has(id)), ...fresh];
   stored.plans[planId] = { at, ids: merged.slice(-DISMISSED_IDS_CAP) };
   const planIds = Object.keys(stored.plans);
   if (planIds.length > DISMISSED_PLANS_CAP) {

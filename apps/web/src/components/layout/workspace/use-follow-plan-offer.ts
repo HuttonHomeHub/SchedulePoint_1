@@ -102,9 +102,9 @@ function storageFor(injected: Storage | undefined): Storage | null {
  * offer adds only the bars that offer named; undoing this offer's own step adds the bars it moved. The
  * offer therefore returns only when a bar nobody has put away becomes eligible. Each answer is also
  * written to the device store; **the store is read once per plan opening**, after the first activities
- * list and with no edit pending, intersected with the bars that are early now and merged into what the
- * planner has already answered in this opening (never replacing it). That same read prunes the store.
- * Never pruned mid-session: a recalculation in flight can briefly change the flags. Without a signed-in
+ * list and with no edit pending, and merged into what the planner has already answered in this opening
+ * (never replacing it). **It is pruned once, after a recalculation has landed since that read**, never
+ * on the first list: a recalculation in flight can briefly change the flags. Without a signed-in
  * person, or with storage blocked, it is today's session-only memory.
  *
  * The write is the workspace's one Follow logic write (`followLogicRowsWrite`), so this holds only
@@ -174,26 +174,40 @@ export function useFollowPlanOffer(params: {
     }
   }, []);
 
-  // Seed once per plan opening, from the first settled list: stored answers that still apply.
-  const seededRef = useRef<string | null>(null);
-  const settledList = activities !== undefined && pendingEdits === 0;
+  // Seed once per plan opening, from the first list: every stored answer is applied as it stands (the
+  // strip and `select` already ignore a bar that is not early, so a stale id costs nothing).
+  const seededRef = useRef<{ opening: string; settled: number } | null>(null);
+  const prunedRef = useRef<string | null>(null);
+  const listed = activities !== undefined && pendingEdits === 0;
   useEffect(() => {
-    if (userId === undefined || !settledList) return;
+    if (userId === undefined || !listed) return;
     const opening = `${userId}:${planId}`;
-    if (seededRef.current === opening) return;
-    seededRef.current = opening;
+    if (seededRef.current?.opening === opening) return;
+    seededRef.current = { opening, settled: paramsRef.current.settled };
     const storage = storageFor(paramsRef.current.storage);
     if (storage === null) return;
-    const eligible = new Set(placedBeforeLogicIn(activities).map((row) => row.id));
     const stored = readDismissed(storage, { userId, planId });
-    const applying = stored.filter((id) => eligible.has(id));
-    pruneDismissed(storage, { userId, planId, keep: new Set(applying) });
-    if (applying.length === 0) return;
+    if (stored.length === 0) return;
     const next = new Map(dismissedRef.current);
-    next.set(planId, new Set([...(next.get(planId) ?? NONE), ...applying]));
+    next.set(planId, new Set([...(next.get(planId) ?? NONE), ...stored]));
     dismissedRef.current = next;
     setDismissedByPlan(next);
-  }, [userId, planId, settledList, activities]);
+  }, [userId, planId, listed, activities]);
+
+  // Prune once, and only after a recalculation has landed since the seed: a recalculation in flight at
+  // opening can leave the early flags briefly wrong, and pruning then would forget valid answers for
+  // good. If none ever lands the store is simply not tidied this time.
+  useEffect(() => {
+    const seeded = seededRef.current;
+    if (userId === undefined || !listed || seeded === null) return;
+    if (seeded.opening !== `${userId}:${planId}` || prunedRef.current === seeded.opening) return;
+    if (settled <= seeded.settled) return;
+    prunedRef.current = seeded.opening;
+    const storage = storageFor(paramsRef.current.storage);
+    if (storage === null) return;
+    const early = new Set(placedBeforeLogicIn(activities).map((row) => row.id));
+    pruneDismissed(storage, { userId, planId, keep: early });
+  }, [userId, planId, listed, settled, activities]);
 
   const targets = useMemo(
     () => placedBeforeLogicIn(activities ?? []).filter((row) => !dismissedHere.has(row.id)),

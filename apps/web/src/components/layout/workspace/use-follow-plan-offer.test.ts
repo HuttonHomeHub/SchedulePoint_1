@@ -1,5 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useFollowPlanOffer } from './use-follow-plan-offer';
@@ -364,11 +365,85 @@ describe('useFollowPlanOffer', () => {
       expect(reopened.view.result.current.plan.offer?.count).toBe(1);
     });
 
-    it('prunes a stored bar that is no longer early, once, and writes the rest back', () => {
+    it('prunes a stored bar that is no longer early only once a recalculation has landed, and once', () => {
+      // **Verified red** by pruning on the first list: a flag flipped by a recalculation in flight at
+      // opening then drops a valid remembered id for good.
       const storage = memoryStorage();
       storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'GONE'] } } }));
-      setup({ userId: 'u1', storage });
+      const { view, rerender } = setup({ userId: 'u1', storage });
+      expect(stored(storage), 'activities present, nothing settled yet').toMatchObject({
+        plans: { p1: { ids: ['B', 'GONE'] } },
+      });
+      expect(view.result.current.plan.offer?.count, 'the remembered answer already applies').toBe(
+        1,
+      );
+      rerender({ settled: 1 });
       expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B'] } } });
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'LATER'] } } }));
+      rerender({ settled: 2 });
+      expect(stored(storage), 'pruned once per opening').toMatchObject({
+        plans: { p1: { ids: ['B', 'LATER'] } },
+      });
+    });
+
+    it('keeps a remembered id whose flag was off while a recalculation was in flight', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'C'] } } }));
+      const { view, rerender } = setup({
+        userId: 'u1',
+        storage,
+        rows: [bar('A'), bar('B', early), bar('C')],
+      });
+      rerender({ rows: [bar('A'), bar('B', early), bar('C', early)], settled: 1 });
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B', 'C'] } } });
+      expect(view.result.current.plan.offer).toBeNull();
+    });
+
+    it('applies the answers when the person arrives after the activities list', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'C'] } } }));
+      const { view, rerender } = setup({ storage });
+      expect(view.result.current.plan.offer?.count).toBe(2);
+      rerender({ userId: 'u1' });
+      expect(view.result.current.plan.offer).toBeNull();
+    });
+
+    it('is today’s behaviour when reaching window.localStorage throws', () => {
+      const spy = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError');
+      });
+      try {
+        const { view } = setup({ userId: 'u1' });
+        expect(view.result.current.plan.offer?.count).toBe(2);
+        act(() => view.result.current.plan.dismiss());
+        expect(view.result.current.plan.offer).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('applies the seed once under StrictMode’s double mount', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B'] } } }));
+      const reads = vi.spyOn(storage, 'getItem');
+      renderHook(
+        () => {
+          const history = usePlanEditHistory('p1');
+          return useFollowPlanOffer({
+            enabled: true,
+            planId: 'p1',
+            activities: [bar('B', early), bar('C', early)],
+            settled: 0,
+            pendingEdits: 0,
+            history,
+            announce: vi.fn(),
+            userId: 'u1',
+            storage,
+          });
+        },
+        { wrapper: StrictMode },
+      );
+      expect(reads).toHaveBeenCalledTimes(1);
     });
 
     it('does not prune during a session: a flag that blips off mid-recalculation keeps its answer', () => {
