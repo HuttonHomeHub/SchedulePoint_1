@@ -1,7 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { pruneDismissed, readDismissed, rememberDismissed } from './follow-plan-dismissals';
 import {
   FOLLOW_PLAN_LIMIT,
   MOVING_CEILING_MS,
@@ -10,6 +9,7 @@ import {
   followPlanSentence,
   placedBeforeLogicIn,
 } from './follow-logic-offer';
+import { pruneDismissed, readDismissed, rememberDismissed } from './follow-plan-dismissals';
 import type { FollowLogicPhase } from './use-follow-logic-offer';
 
 import type { Command } from '@/features/undo-redo';
