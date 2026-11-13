@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { shouldAutoAcquire, shouldRetakeAfterLoss } from '../lib/auto-acquire';
+import { shouldAutoAcquire, shouldRetakeAfterLoss, shouldTakeOnFree } from '../lib/auto-acquire';
 import { classifyLockError } from '../lib/lock-error';
 
 import { API_BASE_URL } from '@/config/env';
@@ -308,7 +308,21 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   );
   const dismissLost = useCallback(() => setLostControl(null), []);
 
+  // The holder this tab asked for control (Request control), until the pen is free to take, this tab
+  // holds it, or a different holder shows up (ADR-0220 D4: the request was to that person, not to
+  // whoever comes next).
+  const [requestedOf, setRequestedOf] = useState<string | null>(null);
+  const seenOther = status?.state === 'HELD_BY_OTHER' ? (status.holder?.id ?? null) : null;
+  if (requestedOf !== null && (holdsPen || (seenOther !== null && seenOther !== requestedOf))) {
+    setRequestedOf(null);
+  }
+  // The freed-pen acquire is in flight. Its own mutation, so it never shares an observer with the
+  // opening acquire or the silent retake.
+  const [takingFreed, setTakingFreed] = useState(false);
+  const freedFiredRef = useRef(false); // effect-side guard, so a strict-mode replay cannot send twice
+
   const acquire = useAcquireLock(orgSlug, planId);
+  const freedAcquire = useAcquireLock(orgSlug, planId);
   const autoAcquire = useAcquireLock(orgSlug, planId);
   const release = useReleaseLock(orgSlug, planId);
   const request = useRequestControl(orgSlug, planId);
@@ -329,7 +343,19 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   if (opening === 'waiting' && openingStatus && visible) {
     setOpening(wantsAuto ? 'taking' : 'done');
   }
-  const autoAcquiring = wantsAuto || opening === 'taking';
+  const wantsFreed = shouldTakeOnFree({ status, visible, iRequested: requestedOf !== null });
+  const autoAcquiring = wantsAuto || opening === 'taking' || wantsFreed || takingFreed;
+
+  const { mutate: mutateFreed } = freedAcquire;
+  useEffect(() => {
+    if (!wantsFreed || freedFiredRef.current) return;
+    freedFiredRef.current = true;
+    setTakingFreed(true);
+    setRequestedOf(null);
+    // Never `takeover: true`: if a colleague got there first, the refusal is silent and the refetch
+    // shows who holds it.
+    mutateFreed({ takeover: false }, { onSuccess: resume, onSettled: () => setTakingFreed(false) });
+  }, [wantsFreed, mutateFreed, resume]);
 
   const { mutate: mutateAuto, mutateAsync: mutateAutoAsync } = autoAcquire;
   // This acquire and the retake in `handleLost` share ONE mutation observer (`autoAcquire`), so they
@@ -414,7 +440,14 @@ export function usePlanPen(orgSlug: string, planId: string): PlanPen {
   }, [release, decline]);
 
   const requestControl = useCallback(() => {
-    request.mutate();
+    request.mutate(undefined, {
+      onSuccess: (data) => {
+        const holderId = data.holder?.id ?? null;
+        if (data.state !== 'HELD_BY_OTHER' || holderId === null) return;
+        freedFiredRef.current = false;
+        setRequestedOf(holderId);
+      },
+    });
   }, [request]);
 
   const handoff = useCallback(() => {

@@ -229,6 +229,36 @@ test('closing a second tab does not tell the first it was taken over', async ({ 
   await ctxB.close();
 });
 
+test('a planner who asked for control gets the pen when the holder leaves, pressing nothing', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { ctxA, ctxB, a, b, planUrl } = await setUpTwoActors(browser);
+
+  await a.goto(planUrl);
+  await holdThePen(a);
+  await b.goto(planUrl);
+  await b.getByRole('button', { name: 'Request control' }).click();
+  // The request is on the server, so the pen is no longer simply "held": B's last press is behind us.
+  await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('HELD_BY_OTHER');
+
+  const acquires = countAcquires(b);
+  // A leaves the plan; leaving releases the lease (the unmount / pagehide release).
+  await a.goto('about:blank');
+  await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toBe('FREE');
+
+  // B pressed nothing after Request: the next read it makes finds the plan free and takes it.
+  await refetchLock(b);
+  await expect(b.getByRole('button', { name: 'Stop editing' })).toBeVisible(CROSS_ACTOR);
+  await expect(b.getByText(HOLDING, { exact: true })).toBeVisible();
+  await expect(b.getByRole('alert')).toHaveCount(0);
+  expect(acquires()).toBe(1);
+  expect(await lockState(b, planUrl)).toBe('HELD_BY_ME');
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
 test('a Viewer who opens a free plan does not take the pen', async ({ browser }) => {
   test.setTimeout(150_000);
   const { ctxA, ctxB, a, extras, planUrl } = await setUpTwoActors(browser, ['VIEWER']);

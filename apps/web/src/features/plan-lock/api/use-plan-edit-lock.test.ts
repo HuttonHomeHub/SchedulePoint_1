@@ -625,3 +625,85 @@ describe('usePlanPen — a loss nobody caused', () => {
     expect(result.current.lostControl).toBeNull();
   });
 });
+
+describe('usePlanPen — a requester takes the freed pen', () => {
+  const HELD_BY_OTHER_2: PlanEditLockStatus = {
+    ...HELD_BY_OTHER,
+    holder: { id: 'u3', name: 'Holder B', email: 'b@x.com' },
+  };
+  const client = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    setVisibility('visible');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mount(reads: PlanEditLockStatus[]) {
+    // The request answers with the held status; the acquire answers with the pen.
+    serve(reads, (path) => (path.endsWith('/request') ? HELD_BY_OTHER : HELD_BY_ME));
+    const qc = client();
+    const Wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: qc }, children);
+    const hook = renderHook(() => usePlanPen('acme', 'p1'), { wrapper: Wrapper });
+    return { ...hook, qc };
+  }
+
+  it('request, then the holder leaves → exactly one acquire, never a take-over', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+    expect(JSON.parse((posts()[0]![1] as RequestInit).body as string)).toEqual({ takeover: false });
+  });
+
+  it('no request → a freed pen is not taken', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, FREE]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('request, then a different holder, then free → zero acquires', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, HELD_BY_OTHER_2, FREE]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.holder?.id).toBe('u3'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('request in a hidden tab → waits until shown, then one acquire', async () => {
+    const { result, qc } = mount([HELD_BY_OTHER, HELD_BY_OTHER, FREE, HELD_BY_ME]);
+    await waitFor(() => expect(result.current.status?.state).toBe('HELD_BY_OTHER'));
+    act(() => result.current.requestControl());
+    await waitFor(() => expect(posts('/request')).toHaveLength(1));
+    act(() => setVisibility('hidden'));
+    await act(async () => {
+      await qc.invalidateQueries();
+    });
+    await waitFor(() => expect(result.current.status?.state).toBe('FREE'));
+    expect(posts()).toHaveLength(0);
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.holdsPen).toBe(true));
+    expect(posts()).toHaveLength(1);
+  });
+});

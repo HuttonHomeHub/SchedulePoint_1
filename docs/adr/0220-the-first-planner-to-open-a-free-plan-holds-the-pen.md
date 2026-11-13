@@ -57,8 +57,15 @@ Stop was pressed is not answered with a retake. Undo is unchanged: a lost pen cl
 **D6 — No flag, no API, schema or environment change.** ADR-0088 D1: a `VITE_` flag cannot be switched on a published
 image, and the rollback is pinning `WEB_IMAGE_TAG`. `apps/api` is untouched.
 
-D4 (a requester takes a pen that is freed) and D5 (a tab hidden for 15 minutes stops heartbeating) are decided in the
-spec and arrive in the epic's later milestones; this ADR is amended there rather than re-filed.
+**D4 — A requester takes the pen that is freed.** A tab that pressed Request control remembers the holder it asked
+(the id in the response). When a later status read shows `FREE` or `EXPIRED` and `canAcquire`, in a visible tab, it
+sends one acquire, `{ takeover: false }`, and pressing nothing. The memory is dropped when this tab holds the pen or a
+different holder is seen, because the request was to that person and not to whoever comes next; the server deletes its
+own record of the request with the lease row on release, so only the client can remember it. A colleague who wins the
+race is silent, as in D1. Unlike D1 it may act on a poll, because the person asked for exactly this.
+
+D5 (a tab hidden for 15 minutes stops heartbeating) is decided in the spec and arrives in a later milestone of the
+epic; this ADR is amended there rather than re-filed.
 
 ## Alternatives considered
 

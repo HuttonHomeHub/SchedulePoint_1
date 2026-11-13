@@ -51,3 +51,22 @@ export function shouldRetakeAfterLoss({ status, retakenForThisLoss }: RetakeInpu
   if (!isFree(status) || !status.canAcquire) return false;
   return !retakenForThisLoss;
 }
+
+export interface TakeOnFreeInput {
+  /** The latest status read. */
+  status: PlanEditLockStatus | undefined;
+  /** The tab is in the foreground — a hidden tab waits until it is shown, as the opening does. */
+  visible: boolean;
+  /** This tab pressed Request control and has not since seen a different holder. */
+  iRequested: boolean;
+}
+
+/**
+ * Take the pen when the holder this tab asked for it lets go. Unlike the opening decision this one
+ * may read a poll, because the person asked for exactly this; the request itself is what the client
+ * remembers (the server deletes it with the lease row on release).
+ */
+export function shouldTakeOnFree({ status, visible, iRequested }: TakeOnFreeInput): boolean {
+  if (!isFree(status) || !status.canAcquire) return false;
+  return iRequested && visible;
+}
