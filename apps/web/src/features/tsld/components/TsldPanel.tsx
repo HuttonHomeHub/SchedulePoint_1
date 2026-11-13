@@ -306,8 +306,10 @@ export interface TsldPanelProps {
    * is open. Supplied by the host because only the plan model can tell a role refusal from a pen
    * held elsewhere; `canEdit` above has already fused the two (`docs/TECH_DEBT.md` #114.1).
    * Defaults to a fixed sentence so a host that has not been wired yet is no worse than today.
+   * The optional second argument is a sentence **shape** (`'ask'` names who can help), never a
+   * policy: the host still decides whether, and why, the action is refused.
    */
-  scheduleRefusal?: (action: string) => string | null;
+  scheduleRefusal?: (action: string, form?: 'reason' | 'ask') => string | null;
   /** Route-composed create handler (owns the mutation + recalc, ADR-0026 §8). Its presence +
    * `canEdit` enable on-canvas editing. Resolves once the activity persists (see
    * {@link TsldCreateOutcome}); rejects only when the create itself failed. */
@@ -3587,7 +3589,9 @@ export function TsldPanel({
                       This plan has no activities yet.{' '}
                       {/* The host's sentence, not a fixed one: this is shown mostly to people for whom
                           "Start editing" is wrong — a colleague is editing, or the role cannot. */}
-                      <span id={emptyStateReasonId}>{scheduleRefusal('draw activities')}</span>
+                      <span id={emptyStateReasonId}>
+                        {scheduleRefusal('add activities', 'ask')}
+                      </span>
                     </>
                   ),
                 })}

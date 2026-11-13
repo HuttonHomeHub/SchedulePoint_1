@@ -117,4 +117,49 @@ describe('scheduleRefusal — the two refusals are never conflated', () => {
       scheduleRefusal({ canEditSchedule: false, penReadOnly: false }, null, 'recalculate'),
     ).toBe('Your role cannot recalculate.');
   });
+
+  describe("the 'ask' form", () => {
+    it('names who can help when the role is what is missing', () => {
+      expect(
+        scheduleRefusal(
+          { canEditSchedule: false, penReadOnly: false },
+          null,
+          'add activities',
+          'ask',
+        ),
+      ).toBe('Ask a Planner to add activities.');
+    });
+
+    it('never replaces Start editing or Request control, so a Planner is not told to ask a Planner', () => {
+      expect(
+        scheduleRefusal(
+          { canEditSchedule: false, penReadOnly: true },
+          null,
+          'add activities',
+          'ask',
+        ),
+      ).toBe('Start editing to add activities.');
+      expect(
+        scheduleRefusal(
+          { canEditSchedule: false, penReadOnly: true },
+          holder,
+          'add activities',
+          'ask',
+        ),
+      ).toBe(
+        scheduleRefusal({ canEditSchedule: false, penReadOnly: true }, holder, 'add activities'),
+      );
+    });
+
+    it('is still silent when the action is open', () => {
+      expect(
+        scheduleRefusal(
+          { canEditSchedule: true, penReadOnly: false },
+          null,
+          'add activities',
+          'ask',
+        ),
+      ).toBeNull();
+    });
+  });
 });

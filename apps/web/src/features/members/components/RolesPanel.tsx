@@ -25,7 +25,7 @@ const ROLE_SUMMARIES: Record<(typeof ROLE_OPTIONS)[number], string> = {
   VIEWER: 'Read-only access to shared plans in this organisation.',
   CONTRIBUTOR: 'Updates progress and adds notes on assigned plans. Cannot change logic or dates.',
   PLANNER:
-    'Full access to clients, projects, plans and activities, and can hold a plan’s edit lock.',
+    'Full access to clients, projects, plans and activities, and can change a plan’s logic and dates.',
   ORG_ADMIN: 'Everything a Planner can do, plus members, settings and the shared libraries.',
 };
 

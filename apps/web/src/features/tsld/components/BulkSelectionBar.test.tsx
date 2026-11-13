@@ -124,11 +124,11 @@ describe('one line, no overflow', () => {
   it('shows exactly one sentence, the refusal, when something is refused', () => {
     renderBar({
       canMove: true,
-      link: shut('Take the edit lock to change this plan.'),
-      remove: shut('Take the edit lock to change this plan.'),
+      link: shut('Start editing to change this plan.'),
+      remove: shut('Start editing to change this plan.'),
     });
     expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Take the edit lock to change this plan.');
+    expect(screen.getByRole('status')).toHaveTextContent('Start editing to change this plan.');
     expect(screen.getByTestId('bulk-selection-bar').querySelectorAll('p')).toHaveLength(2);
   });
 });
@@ -144,8 +144,8 @@ describe('the four gate states', () => {
 
   it('no pen: both are shaded with the reason, and the reason is LINKED to the control', () => {
     renderBar({
-      link: shut('Take the edit lock to change this plan.'),
-      remove: shut('Take the edit lock to change this plan.'),
+      link: shut('Start editing to change this plan.'),
+      remove: shut('Start editing to change this plan.'),
     });
     const button = deleteButton();
     expect(button).toHaveAttribute('aria-disabled', 'true');
@@ -153,7 +153,7 @@ describe('the four gate states', () => {
     // accessibility tree (the ADR-0073 C2.5 finding, in a fix written for exactly this).
     const describedBy = button.getAttribute('aria-describedby');
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)).toHaveTextContent(/take the edit lock/i);
+    expect(document.getElementById(describedBy!)).toHaveTextContent(/start editing/i);
   });
 
   it('nothing to do: the chain is shut with its own reason while Delete stays live', () => {
@@ -202,8 +202,8 @@ describe('the reason is reachable from every control it explains', () => {
    */
   it('points BOTH shut actions at the one rendered status line', () => {
     renderBar({
-      link: shut('Take the edit lock to change this plan.'),
-      remove: shut('Take the edit lock to change this plan.'),
+      link: shut('Start editing to change this plan.'),
+      remove: shut('Start editing to change this plan.'),
     });
     for (const name of [/link in sequence/i, /^delete$/i]) {
       const id = screen.getByRole('button', { name }).getAttribute('aria-describedby');
@@ -225,9 +225,9 @@ describe('the reason is reachable from every control it explains', () => {
 
 describe('the status line', () => {
   it('states the reason that STOPS an action, and states it once', () => {
-    renderBar({ remove: shut('Take the edit lock to change this plan.') });
+    renderBar({ remove: shut('Start editing to change this plan.') });
     const bar = screen.getByTestId('bulk-selection-bar');
-    expect(bar).toHaveTextContent(/take the edit lock/i);
+    expect(bar).toHaveTextContent(/start editing/i);
   });
 
   /**

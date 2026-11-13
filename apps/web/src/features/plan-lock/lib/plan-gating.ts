@@ -59,11 +59,15 @@ export function derivePlanGating(input: PlanGatingInput): PlanGating {
  * fused boolean and therefore could only ever guess.
  *
  * @param action a verb phrase completing "…to {action}" — "add activities", "recalculate".
+ * @param form the sentence's **shape**, never a policy: `'ask'` is for a place where the refusal is
+ *   the only thing on screen, so it names who can help. Only the role branch reads it — the two pen
+ *   branches keep their Start editing / Request control sentences, so asking can never replace them.
  */
 export function scheduleRefusal(
   gating: Pick<PlanGating, 'canEditSchedule' | 'penReadOnly'>,
   holder: PlanEditLockActor | null,
   action: string,
+  form: 'reason' | 'ask' = 'reason',
 ): string | null {
   if (gating.canEditSchedule) return null;
   // The role permits it and the pen is what is missing, so `penReason` picks the right frame —
@@ -71,5 +75,5 @@ export function scheduleRefusal(
   if (gating.penReadOnly) return penReason(action, holder);
   // The role itself does not permit it. Taking the pen would not help, so offering it would be a
   // dead end dressed as a next step.
-  return `Your role cannot ${action}.`;
+  return form === 'ask' ? `Ask a Planner to ${action}.` : `Your role cannot ${action}.`;
 }

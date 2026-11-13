@@ -146,8 +146,8 @@ export function describeUnsavedWork(reports: readonly UnsavedWorkReport[]): stri
   if (unsavable.length === 0) return subject;
   // Every dirty scope is unsavable: say so plainly rather than implying a Save they cannot reach.
   if (unsavable.length === labels.length) {
-    return `${subject} They can no longer be saved, because you no longer hold the edit lock.`;
+    return `${subject} They can no longer be saved, because you’re no longer editing this plan.`;
   }
   const names = joinWithAnd(unsavable.map((s) => s.label));
-  return `${subject} ${names} can no longer be saved, because you no longer hold the edit lock.`;
+  return `${subject} ${names} can no longer be saved, because you’re no longer editing this plan.`;
 }

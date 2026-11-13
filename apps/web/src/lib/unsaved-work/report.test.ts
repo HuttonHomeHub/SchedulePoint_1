@@ -95,7 +95,7 @@ describe('unsaved-work report', () => {
     ];
     expect(unsavableScopes(report)).toHaveLength(2);
     expect(describeUnsavedWork(report)).toBe(
-      'General and Scheduling have unsaved changes. They can no longer be saved, because you no longer hold the edit lock.',
+      'General and Scheduling have unsaved changes. They can no longer be saved, because you’re no longer editing this plan.',
     );
   });
 
@@ -106,7 +106,7 @@ describe('unsaved-work report', () => {
       editor(scope('general', 'General', false), scope('progress', 'Progress', true)),
     ];
     expect(describeUnsavedWork(report)).toBe(
-      'General and Progress have unsaved changes. General can no longer be saved, because you no longer hold the edit lock.',
+      'General and Progress have unsaved changes. General can no longer be saved, because you’re no longer editing this plan.',
     );
   });
 
