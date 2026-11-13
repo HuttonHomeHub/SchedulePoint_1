@@ -1,5 +1,6 @@
 import type { ActivitySummary } from '@repo/types';
 import { act, renderHook } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useFollowPlanOffer } from './use-follow-plan-offer';
@@ -42,6 +43,38 @@ interface Harness {
   settled: number;
   pendingEdits: number;
   planId: string;
+  userId?: string;
+  storage?: Storage;
+}
+
+function memoryStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (key) => map.get(key) ?? null,
+    key: (index) => [...map.keys()][index] ?? null,
+    removeItem: (key) => void map.delete(key),
+    setItem: (key, value) => void map.set(key, value),
+  };
+}
+
+function blockedStorage(): Storage {
+  const throwing = (): never => {
+    throw new DOMException('denied');
+  };
+  return {
+    get length(): number {
+      return throwing();
+    },
+    clear: throwing,
+    getItem: throwing,
+    key: throwing,
+    removeItem: throwing,
+    setItem: throwing,
+  };
 }
 
 function setup(initial: Partial<Harness> = {}) {
@@ -65,6 +98,8 @@ function setup(initial: Partial<Harness> = {}) {
         pendingEdits: props.pendingEdits,
         history,
         announce,
+        userId: props.userId,
+        storage: props.storage,
       });
       return { history, plan };
     },
@@ -299,5 +334,186 @@ describe('useFollowPlanOffer', () => {
     act(() => view.result.current.plan.noteReplay());
     rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
     expect(view.result.current.plan.offer?.count).toBe(2);
+  });
+
+  describe('remembered on this device (ADR-0216 D6)', () => {
+    const KEY = 'schedulepoint:follow-plan-dismissed:u1';
+    const stored = (storage: Storage): unknown => JSON.parse(storage.getItem(KEY) ?? 'null');
+
+    it('Dismiss is written, and a reopening with that store is not asked again', () => {
+      const storage = memoryStorage();
+      const first = setup({ userId: 'u1', storage });
+      act(() => first.view.result.current.plan.dismiss());
+      expect(stored(storage)).toMatchObject({ v: 1, plans: { p1: { ids: ['B', 'C'] } } });
+      first.view.unmount();
+      // **Verified red** by not seeding: the reopened plan counts 2 again.
+      const reopened = setup({ userId: 'u1', storage });
+      expect(reopened.view.result.current.plan.offer).toBeNull();
+      expect(
+        reopened.view.result.current.plan.select(reopened.state.rows),
+        'select agrees with the strip',
+      ).toEqual([]);
+    });
+
+    it('a bar that becomes early after the reopening brings the offer back, counting 1', () => {
+      const storage = memoryStorage();
+      const first = setup({ userId: 'u1', storage });
+      act(() => first.view.result.current.plan.dismiss());
+      first.view.unmount();
+      const reopened = setup({ userId: 'u1', storage });
+      reopened.rerender({ rows: [bar('A', early), bar('B', early), bar('C', early)] });
+      expect(reopened.view.result.current.plan.offer?.count).toBe(1);
+    });
+
+    it('prunes a stored bar that is no longer early only once a recalculation has landed, and once', () => {
+      // **Verified red** by pruning on the first list: a flag flipped by a recalculation in flight at
+      // opening then drops a valid remembered id for good.
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'GONE'] } } }));
+      const { view, rerender } = setup({ userId: 'u1', storage });
+      expect(stored(storage), 'activities present, nothing settled yet').toMatchObject({
+        plans: { p1: { ids: ['B', 'GONE'] } },
+      });
+      expect(view.result.current.plan.offer?.count, 'the remembered answer already applies').toBe(
+        1,
+      );
+      rerender({ settled: 1 });
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B'] } } });
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'LATER'] } } }));
+      rerender({ settled: 2 });
+      expect(stored(storage), 'pruned once per opening').toMatchObject({
+        plans: { p1: { ids: ['B', 'LATER'] } },
+      });
+    });
+
+    it('keeps a remembered id whose flag was off while a recalculation was in flight', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'C'] } } }));
+      const { view, rerender } = setup({
+        userId: 'u1',
+        storage,
+        rows: [bar('A'), bar('B', early), bar('C')],
+      });
+      rerender({ rows: [bar('A'), bar('B', early), bar('C', early)], settled: 1 });
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B', 'C'] } } });
+      expect(view.result.current.plan.offer).toBeNull();
+    });
+
+    it('applies the answers when the person arrives after the activities list', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B', 'C'] } } }));
+      const { view, rerender } = setup({ storage });
+      expect(view.result.current.plan.offer?.count).toBe(2);
+      rerender({ userId: 'u1' });
+      expect(view.result.current.plan.offer).toBeNull();
+    });
+
+    it('is today’s behaviour when reaching window.localStorage throws', () => {
+      const spy = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError');
+      });
+      try {
+        const { view } = setup({ userId: 'u1' });
+        expect(view.result.current.plan.offer?.count).toBe(2);
+        act(() => view.result.current.plan.dismiss());
+        expect(view.result.current.plan.offer).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('applies the seed once under StrictMode’s double mount', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B'] } } }));
+      const reads = vi.spyOn(storage, 'getItem');
+      renderHook(
+        () => {
+          const history = usePlanEditHistory('p1');
+          return useFollowPlanOffer({
+            enabled: true,
+            planId: 'p1',
+            activities: [bar('B', early), bar('C', early)],
+            settled: 0,
+            pendingEdits: 0,
+            history,
+            announce: vi.fn(),
+            userId: 'u1',
+            storage,
+          });
+        },
+        { wrapper: StrictMode },
+      );
+      expect(reads).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not prune during a session: a flag that blips off mid-recalculation keeps its answer', () => {
+      const storage = memoryStorage();
+      const { view, rerender } = setup({ userId: 'u1', storage });
+      act(() => view.result.current.plan.dismiss());
+      rerender({ rows: [bar('A'), bar('B'), bar('C')] });
+      rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B', 'C'] } } });
+    });
+
+    it('waits for the first settled list: nothing is read while an edit is pending', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B'] } } }));
+      const { view, rerender } = setup({ userId: 'u1', storage, pendingEdits: 1 });
+      expect(view.result.current.plan.offer?.count).toBe(2);
+      rerender({ pendingEdits: 0 });
+      expect(view.result.current.plan.offer?.count).toBe(1);
+    });
+
+    it('merges the stored answers into what was answered before the seed, never replacing it', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p1: { at: 1, ids: ['B'] } } }));
+      const { view, rerender } = setup({ userId: 'u1', storage, pendingEdits: 1 });
+      act(() => view.result.current.plan.dismissBars(['C']));
+      expect(view.result.current.plan.offer?.count, 'B is not yet seeded').toBe(1);
+      rerender({ pendingEdits: 0 });
+      expect(view.result.current.plan.offer, 'C kept, B added').toBeNull();
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B', 'C'] } } });
+    });
+
+    it('Keep it here is written', () => {
+      const storage = memoryStorage();
+      const { view } = setup({ userId: 'u1', storage });
+      act(() => view.result.current.plan.dismissBars(['B']));
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B'] } } });
+    });
+
+    it('undoing the offer’s own step is written', () => {
+      const storage = memoryStorage();
+      const { view, rerender } = setup({ userId: 'u1', storage });
+      pressAndLand(view);
+      rerender({ rows: [bar('A'), bar('B'), bar('C')], settled: 1 });
+      act(() => view.result.current.plan.noteReplay());
+      expect(stored(storage)).toMatchObject({ plans: { p1: { ids: ['B', 'C'] } } });
+    });
+
+    it('switching plans reads the second plan’s own entry and copies nothing across', () => {
+      const storage = memoryStorage();
+      storage.setItem(KEY, JSON.stringify({ v: 1, plans: { p2: { at: 1, ids: ['B', 'C'] } } }));
+      const { view, rerender } = setup({ userId: 'u1', storage });
+      expect(view.result.current.plan.offer?.count, 'p1 has no answers').toBe(2);
+      rerender({ planId: 'p2' });
+      expect(view.result.current.plan.offer).toBeNull();
+      expect(stored(storage)).toMatchObject({ plans: { p2: { ids: ['B', 'C'] } } });
+      expect((stored(storage) as { plans: Record<string, unknown> }).plans.p1).toBeUndefined();
+    });
+
+    it('reads and writes nothing without a signed-in person', () => {
+      const storage = memoryStorage();
+      const { view } = setup({ storage });
+      act(() => view.result.current.plan.dismiss());
+      expect(storage.length).toBe(0);
+    });
+
+    it('is today’s session-only behaviour when storage is blocked', () => {
+      const { view } = setup({ userId: 'u1', storage: blockedStorage() });
+      expect(view.result.current.plan.offer?.count).toBe(2);
+      act(() => view.result.current.plan.dismiss());
+      expect(view.result.current.plan.offer).toBeNull();
+    });
   });
 });

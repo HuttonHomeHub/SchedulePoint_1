@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 28 API modules
-> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1911 web
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1913 web
 > source files with 48 Playwright suites beside the base journey, and
 > 220 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -537,7 +537,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0135** _(Accepted)_ — A container hands focus back when somebody else removes the control you were on → [`0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md`](docs/adr/0135-a-container-hands-focus-back-when-somebody-else-removes-the-control-you-were-on.md)
 - **ADR-0136** _(Accepted)_ — A rule is enforced where the artefact lands, and the roster is derived → [`0136-a-rule-is-enforced-where-the-artefact-lands.md`](docs/adr/0136-a-rule-is-enforced-where-the-artefact-lands.md)
 - **ADR-0137** _(Accepted)_ — A notification is a record, and the build waits for somebody to notify → [`0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md`](docs/adr/0137-notifications-are-a-record-and-the-build-waits-for-a-second-person.md)
-- **ADR-0138** _(Accepted; amended 2026-10-12 by #491 and 2026-10-13 by the re-pack)_ — A shard count is set by where the constraint changes hands → [`0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md`](docs/adr/0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)
+- **ADR-0138** _(Accepted; amended 2026-10-12 by #491, 2026-10-13 by the re-pack and 2026-11-13 by the fifth shard)_ — A shard count is set by where the constraint changes hands → [`0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md`](docs/adr/0138-a-shard-count-is-set-by-where-the-constraint-changes-hands.md)
 - **ADR-0139** _(Accepted)_ — A sentinel is not a calendar → [`0139-a-sentinel-is-not-a-calendar.md`](docs/adr/0139-a-sentinel-is-not-a-calendar.md)
 - **ADR-0140** _(Accepted; amended 2026-10-11 by #456)_ — A diagnostic takes no input, so it cannot ask about anybody → [`0140-a-diagnostic-takes-no-input.md`](docs/adr/0140-a-diagnostic-takes-no-input.md)
 - **ADR-0141** _(Accepted)_ — A thumbnail's legibility is a pitch, not a zoom → [`0141-a-thumbnails-legibility-is-a-pitch-not-a-zoom.md`](docs/adr/0141-a-thumbnails-legibility-is-a-pitch-not-a-zoom.md)
@@ -618,7 +618,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0213** _(Accepted; amends ADR-0185 D5)_ — The shell asks its own frame whether it is short, in the text the reader has → [`0213-the-shell-asks-its-own-frame-whether-it-is-short.md`](docs/adr/0213-the-shell-asks-its-own-frame-whether-it-is-short.md)
 - **ADR-0214** _(Accepted; amends ADR-0068 §5 and ADR-0194; amended by ADR-0215)_ — A frozen float carries its minutes → [`0214-a-frozen-float-carries-its-minutes.md`](docs/adr/0214-a-frozen-float-carries-its-minutes.md)
 - **ADR-0215** _(Accepted; amends ADR-0018, ADR-0192, ADR-0194, ADR-0107 D2, ADR-0025, ADR-0212 D4 and ADR-0214; records a one-time exception to ADR-0190)_ — A fresh start is a new database, and the image refuses the old one → [`0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md`](docs/adr/0215-a-fresh-start-is-a-new-database-and-the-image-refuses-the-old-one.md)
-- **ADR-0216** _(Accepted; extends ADR-0148, ADR-0153 and ADR-0094; amends ADR-0187 D3, ADR-0092 D2, ADR-0114 D1 and D2)_ — A bar you placed stays put, and an edit that leaves it behind offers to let it follow → [`0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md`](docs/adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
+- **ADR-0216** _(Accepted; extends ADR-0148, ADR-0153 and ADR-0094; amends ADR-0187 D3, ADR-0092 D2, ADR-0114 D1 and D2; D6 amended 2026-11-13)_ — A bar you placed stays put, and an edit that leaves it behind offers to let it follow → [`0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md`](docs/adr/0216-a-bar-you-placed-stays-put-and-an-edit-that-leaves-it-behind-offers-to-let-it-follow.md)
 - **ADR-0217** _(Accepted; extends ADR-0060 §6)_ — A refusal is shown where it was asked for, and on the field it is about → [`0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md`](docs/adr/0217-a-refusal-is-shown-where-it-was-asked-for-and-on-the-field-it-is-about.md)
 - **ADR-0218** _(Accepted; amends ADR-0048 M5, extends ADR-0026 §7; D3–D5 added by M2–M4)_ — A click on the diagram gives it the keyboard → [`0218-a-click-on-the-diagram-gives-it-the-keyboard.md`](docs/adr/0218-a-click-on-the-diagram-gives-it-the-keyboard.md)
 - **ADR-0219** _(Accepted; amends ADR-0092, extends ADR-0216 D9 and ADR-0026)_ — A selected activity's bar takes the whole foot row on a short window, and the facts wait → [`0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md`](docs/adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)
@@ -904,27 +904,27 @@ When operating in this repo, Claude Code should:
    survivor is `completed` with `conclusion: success`.
 
    **The roster is a property of the pull request, not of the repository, so never
-   count it.** Ten checks come from workflows here — `ci.yml`'s four jobs, one of
-   which fans out to four `e2e-web` shards (`quality`, `e2e-api`, four shards and
+   count it.** Eleven checks come from workflows here — `ci.yml`'s four jobs, one of
+   which fans out to five `e2e-web` shards (`quality`, `e2e-api`, five shards and
    `image`), the PR-title check, and CodeQL's two entries; before ADR-0138 it was
-   six, `ci.yml` having declared three jobs rather than seven. **Others are
+   six, `ci.yml` having declared three jobs rather than eight. **Others are
    conditional on what the pull request touches and are declared in no workflow at
-   all.** #595 (2026-09-14) carried an eleventh — a `.github/dependabot.yml`
+   all.** #595 (2026-09-14) carried an eleventh, when the fixed roster was ten — a `.github/dependabot.yml`
    validation check served by Dependabot's own API — because it edited that file,
    so its `total_count: 11` was eleven distinct names with nothing stale in the
    list.
 
    **That is also why this stays prose rather than becoming a gate**, against
-   ADR-0058's usual preference: the fixed ten could be derived from
+   ADR-0058's usual preference: the fixed eleven could be derived from
    `.github/workflows/` easily enough, and deriving them would keep a number
    accurate while leaving the advice wrong. The number was never the thing worth
    protecting.
 
-   So reading the list before merge is slightly longer and no less necessary: four
-   of the ten are shards of what used to be one check, and `fail-fast` is off
+   So reading the list before merge is slightly longer and no less necessary: five
+   of the eleven are shards of what used to be one check, and `fail-fast` is off
    precisely so a second red shard is visible rather than cancelled. **"The
    end-to-end check is green" is no longer a single fact** — and neither is "there
-   should be ten of them". The test is that every survivor of the dedupe is
+   should be eleven of them". The test is that every survivor of the dedupe is
    `completed` with `conclusion: success`, whatever the length.
 
    **The dedupe clause is not tidiness.** One SHA can carry two runs of the same

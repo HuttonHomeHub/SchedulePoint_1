@@ -98,27 +98,28 @@ anyone followed it, and nothing connected the deletion to the instruction.
 
 - **Require a pull request before merging** (no direct pushes to `main`).
 - **Require status checks to pass.** The check runs a real pull-request head carried on
-  **2026-09-12** were these **ten** — read off `get_check_runs`, not off the workflow files,
+  **2026-09-12** were these **ten** (eleven since the fifth web shard, 2026-11-13) — read off `get_check_runs`, not off the workflow files,
   because that is what GitHub would be asked to match:
   - `Format, lint, typecheck & unit tests`
   - `End-to-end tests (API)`
-  - `End-to-end tests (web shard 1)`, `(web shard 2)`, `(web shard 3)`, `(web shard 4)`
+  - `End-to-end tests (web shard 1)`, `(web shard 2)`, `(web shard 3)`, `(web shard 4)`, `(web shard 5)`
   - `Build & smoke-boot images`
   - `Check the PR title is a Conventional Commit`
   - `Analyze (javascript-typescript)` and `CodeQL` (two runs, both reported)
 
   **This list changed within one day of being written, which is the argument for not
   trusting it.** It said `End-to-end tests` — one name — until 2026-09-12, and ADR-0138
-  sharded that job into an API job and four web shards **the same week the list was
+  sharded that job into an API job and four web shards (five from 2026-11-13) **the same week the list was
   repaired for naming a job ADR-0057 had deleted**. Nothing connected the shard split to
   this paragraph either; `docs/TECH_DEBT.md` #300 is the record and now carries this as its
   second instance.
 
   Two consequences a reader would not guess. **A matrix job contributes one required check
-  per matrix value**, so the four shards are four names and not one — add a fifth shard and
-  the list is silently short again. And **`fail-fast` is off** on that matrix deliberately,
+  per matrix value**, so the shards are five names and not one — the fifth shard (2026-11-13) is the instance
+  of this paragraph's own prediction that adding one leaves the list silently short, and it
+  is why `(web shard 5)` is listed above. And **`fail-fast` is off** on that matrix deliberately,
   so a second red shard stays visible rather than being cancelled; requiring only one of
-  them would pass a pull request whose other three shards never ran.
+  them would pass a pull request whose other shards never ran.
 
 - **Require branches to be up to date before merging** (so checks run against
   the post-merge tree).

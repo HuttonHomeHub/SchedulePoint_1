@@ -51,10 +51,10 @@ const NAME = 'check:e2e-roster';
  *
  * A reference figure from 2026-10-12, kept as it was: the API job less a web shard's fixed cost
  * (setup + browser install), 857 − ~105 ≈ 752 s on run 38290423490. **Printed, never asserted** — see
- * the summary below. It no longer drives any decision: a four-way pack is now ~940 s a shard, above
- * it, and that gap is expected. The five-shard alternative in `docs/specs/e2e-fifth-shard/` is
- * triggered by ADR-0138's amendment of 2026-10-13 (the slowest web shard's median over three
- * consecutive runs above 1,250 s, or any shard cancelled by its 30-minute timeout), not by this figure.
+ * the summary below. It no longer drives any decision: the web suites now measure 5,522 s in total
+ * (2026-11-13), so even the five-way pack is ~1,100 s a shard, above it, and that gap is expected. The
+ * fifth shard in `docs/specs/e2e-fifth-shard/` was built on 2026-11-13, when a shard was cancelled by
+ * its 30-minute timeout (ADR-0138's amendment of 2026-10-13 named that as the trigger).
  */
 const SHARD_BUDGET_SECONDS = 752;
 

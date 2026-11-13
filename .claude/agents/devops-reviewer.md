@@ -48,22 +48,24 @@ not edit code.
   block**. Do not review as though a red check stops a merge — it does not. What stands
   in is `CLAUDE.md` §19.9, a human or agent reading the check runs.
 - **CI shape (ADR-0138, sharded 2026-09-12 — this bullet described the PRE-shard CI until the
-  2026-09-16 reconciliation pass).** Seven jobs: one `quality` (format/lint/typecheck/unit/build,
-  the root `check:*` gates, then the web bundle budget), one `e2e-api`, **four `e2e-web` shards**
+  2026-09-16 reconciliation pass).** Eight jobs: one `quality` (format/lint/typecheck/unit/build,
+  the root `check:*` gates, then the web bundle budget), one `e2e-api`, **five `e2e-web` shards** (four until 2026-11-13)
   and one `image`. Each end-to-end job runs **its own Postgres service container** and applies
   migrations itself, so the shards are genuinely parallel; suites _within_ a shard are still
   sequential, because those share that job's database and ports. `fail-fast: false` is deliberate —
-  a red shard must not cancel the other three.
+  a red shard must not cancel the others.
 - **A new journey suite adds a step AND a shard condition.** Every suite step carries
   `if: ${{ matrix.shard == N }}`, and `check:e2e-roster` fails if a step declares no shard
   condition (E4) or names a shard the matrix does not declare (E5). The assignment is
   longest-processing-time-first from `scripts/e2e-durations.json`, so a new suite goes on the
-  shard that keeps the four totals level — not on shard 1 by default. **Do not restate the suite
+  shard that keeps the five totals level — not on shard 1 by default. **Do not restate the suite
   count here**: `pnpm check:counts` owns it, and a second copy is a number with nothing watching it.
 - **The round trip is no longer the expensive part, and the constraint has moved.** Measured:
-  40–47 min unsharded → **12.2–12.3 min** at four shards, with the slowest end-to-end job now
-  _below_ `quality` in the same run. So `quality` is the critical path; adding shards past four
-  buys about sixteen seconds of whole-CI wall clock and is not worth doing.
+  40–47 min unsharded → **12.2–12.3 min** at four shards in September, when the slowest end-to-end
+  job was _below_ `quality`. That did not hold: the suites grew to 5,392 s by 2026-11-13, a four-shard
+  pack could not fit under the 30-minute timeout (a shard was cancelled on PR #1357), and the fifth
+  shard was added (ADR-0138's amendment of that date). Re-derive from `scripts/e2e-durations.json`,
+  not from this paragraph.
 - **The gate roster is asserted, not remembered** (ADR-0136): `check:ci-roster` fails if a
   root `check:*` script runs in no CI step, or a step names a script that does not exist.
   Adding a gate means adding both, in one commit. Also live: `check:licenses` (an SPDX

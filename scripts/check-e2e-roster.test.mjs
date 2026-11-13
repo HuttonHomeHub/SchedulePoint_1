@@ -49,7 +49,7 @@ const pkg = (...scripts) =>
 
 const workflow = (body) => `name: CI\njobs:\n  e2e:\n    steps:\n${body}`;
 
-/** A workflow with one unsharded job and one four-way sharded job. */
+/** A workflow with one unsharded job and one sharded job. */
 const sharded = (webBody, shards = '[1, 2, 3, 4]') =>
   `name: CI\njobs:\n  e2e-api:\n    steps:\n` +
   step('@repo/api', 'test:e2e') +
@@ -265,7 +265,7 @@ it('the sharded positive case — every suite conditioned on a declared shard PA
 });
 
 it('E4 — a suite step in a sharded job with NO condition FAILS', () => {
-  // Nothing else would notice. The run is green; the suite simply runs on all four shards, and the
+  // Nothing else would notice. The run is green; the suite simply runs on every shard, and the
   // wall clock the shards exist to cut gets paid anyway.
   check(
     {
