@@ -67,7 +67,7 @@ export function PlanLevellingSettings({
         options={ON_OFF_OPTIONS}
         hint={(value) =>
           value === 'on'
-            ? 'A recalculation works out where over-allocated activities would have to move to respect each resource’s capacity. Nothing moves yet. After you recalculate, tick View > “Levelled placement” to see the dashed outlines, then choose “Apply levelled dates…” on the toolbar to move the bars.'
+            ? 'A recalculation works out where over-allocated activities would have to move to respect each resource’s capacity. Nothing moves yet. After you recalculate, switch on “Levelled placement” (on the toolbar, or under View on a narrower window) to see the dashed outlines, then choose “Apply levelled dates…” to move the bars.'
             : 'Off — a recalculation computes only the critical path; resource over-allocation is not resolved.'
         }
         buildPatch={(value) => ({ levelResources: value === 'on' })}

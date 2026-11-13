@@ -142,8 +142,8 @@ export function PlanCalendarPicker({
     : setCalendar.isError
       ? 'Not saved, so the plan keeps its old calendar.'
       : setCalendar.isSuccess
-        ? 'Saved. Close this box, then press Recalculate in the bar at the bottom to apply it to the dates.'
-        : 'After you change it, close this box and press Recalculate in the bar at the bottom to apply it to the dates.';
+        ? 'Saved. Close this box, then press Recalculate in the bottom bar to apply it to the dates.'
+        : 'After you change it, close this box and press Recalculate in the bottom bar to apply it to the dates.';
 
   const describedBy = setCalendar.isError ? `${hintId} ${errorId}` : hintId;
 

@@ -56,9 +56,9 @@ export const LAG_CALENDAR_DISPLAY_ORDER: readonly LagCalendarSource[] = [
  * what the field means (mirrors why `formatLag`/`typeAndLagSchema` are centralised).
  */
 export const LAG_CALENDAR_HINT =
-  'Choose 24-hour (elapsed) for waits that run around the clock — a concrete cure of ' +
-  '7 days is 7 calendar days, not 7 working days. Predecessor and Successor count the wait on that activity’s own working ' +
-  'calendar, or on the plan’s calendar if it has none of its own.';
+  'Choose “24-hour (elapsed)” for waits that run around the clock, such as concrete curing: ' +
+  '7 days is 7 calendar days, not 7 working days. “Predecessor calendar” and “Successor ' +
+  'calendar” count the wait on that activity’s own working calendar, or on the plan’s calendar if it has none.';
 
 /**
  * Format a signed lag for display: `0d`, `+3d` (lag), `−2d` (lead, with a real minus sign).

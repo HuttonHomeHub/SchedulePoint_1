@@ -67,7 +67,7 @@ describe('PlanLevellingSettings', () => {
     renderSettings({ plan: { ...PLAN, levelResources: true } });
     // The three real controls, named as they are labelled, so the hint cannot drift from the toolbar.
     expect(screen.getByText(/Nothing moves yet\./)).toHaveTextContent(
-      'tick View > “Levelled placement” to see the dashed outlines, then choose “Apply levelled dates…” on the toolbar',
+      'switch on “Levelled placement” (on the toolbar, or under View on a narrower window) to see the dashed outlines, then choose “Apply levelled dates…” to move the bars.',
     );
   });
 

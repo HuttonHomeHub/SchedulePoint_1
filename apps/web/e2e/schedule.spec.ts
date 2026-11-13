@@ -214,9 +214,7 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await chooseComboboxOption(page, 'Calendar', 'None (all days work)');
   const savedDialog = page.getByRole('dialog', { name: 'Schedule settings' });
   await expect(
-    savedDialog.getByText(
-      /^Saved\. Close this box, then press Recalculate in the bar at the bottom/,
-    ),
+    savedDialog.getByText(/^Saved\. Close this box, then press Recalculate in the bottom bar/),
   ).toBeVisible();
   await savedDialog.getByRole('button', { name: 'Close dialog' }).click();
   await expect(savedDialog).toBeHidden();

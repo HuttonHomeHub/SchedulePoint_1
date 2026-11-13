@@ -12,8 +12,13 @@ describe('the lag-calendar hints', () => {
     ['link form', LAG_CALENDAR_HINT],
     ['cross-plan form', CROSS_PLAN_LAG_CALENDAR_HINT],
   ])('say what Predecessor and Successor use today (%s)', (_name, hint) => {
-    expect(hint).toContain('count the wait on that activity’s own working calendar');
-    expect(hint).toContain('or on the plan’s calendar if it has none of its own');
+    // The option labels as they appear in the select, so the hint cannot name a control that is not there.
+    expect(hint).toContain('“24-hour (elapsed)”');
+    expect(hint).toContain(
+      '“Predecessor calendar” and “Successor calendar” count the wait on that',
+    );
+    expect(hint).toContain('activity’s own working calendar, or on ');
+    expect(hint).not.toContain('—');
     expect(hint).not.toContain('arrive');
   });
 });

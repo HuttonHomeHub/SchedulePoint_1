@@ -9388,3 +9388,13 @@ While a request waits out the grace window the foot row shows **Take over now** 
 The four-shard pack of 2026-10-13 was derived from those figures and looked balanced at 936-953 s a shard, while real shards were already 1,016-1,643 s of suite time. The first sign was PR #1357's shard 2 cancelled by the 30-minute timeout. `workspace-chrome` alone grew from 510 to 745-823 s, `edit` from 124 to 527-604 s and base `test:e2e` from 389 to 510-660 s. The file's own docblock says to re-harvest rather than trust it, which is the vigilance ADR-0058 says to replace with a check. The fifth shard (ADR-0138's amendment of 2026-11-13) re-harvested the file from one run.
 
 **Next:** add a check or a scheduled refresh: for instance a CI step that prints each shard's measured suite sum beside its projection and flags a shard more than ~25 % off, or a periodic job that rewrites the durations from the last green run on `main`. **Trigger:** the next web shard whose job wall exceeds 1,350 s.
+
+**Next:** a "Cancel request" control backed by a withdrawal endpoint on the API, which clears the web's memory of the request too. That adds a user-facing entry point and an API route, so it needs a spec (ADR-0105). **Trigger:** owner approval of that spec.
+
+### 591. The Gantt's "Start vs baseline" column reads "On plan" for an activity that started on time but overran
+
+**Status:** open · **Verified:** 2026-11-13, by reading `apps/web/src/features/gantt/layout/grid-columns.ts` (`varianceText` reads only `startVarianceDays`, and `0` gives "On plan") and `apps/web/src/features/gantt/components/GanttPanel.tsx` (the header and the 72 px `VARIANCE_COLUMN_WIDTH`; the cell is `truncate`).
+
+The column compares each activity's start with the baseline and nothing else, so an activity that started when planned but finished late still reads "On plan". The header was renamed "Start vs baseline" so it says what it measures, but the cell text still reads as a verdict on the whole activity. "Start on plan" would say it properly and does not fit the column: the cell truncates at the current width.
+
+**Next:** decide the zero text (a wider column, or a shorter phrase) or show the finish variance as well. The second adds a column or changes the column's contract, so it needs a spec (ADR-0105). **Trigger:** Batch E (Gantt), or the owner asks.

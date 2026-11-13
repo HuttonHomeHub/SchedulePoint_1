@@ -144,7 +144,7 @@ describe('PlanCalendarPicker', () => {
     renderPicker();
     expect(
       screen.getByText(
-        /After you change it, close this box and press Recalculate in the bar at the bottom/,
+        /After you change it, close this box and press Recalculate in the bottom bar/,
       ),
     ).toBeInTheDocument();
   });
@@ -162,9 +162,7 @@ describe('PlanCalendarPicker', () => {
     rerender(ui({ ...PLAN, calendarId: 'cal-7', version: 5 }));
 
     expect(
-      await screen.findByText(
-        /^Saved\. Close this box, then press Recalculate in the bar at the bottom/,
-      ),
+      await screen.findByText(/^Saved\. Close this box, then press Recalculate in the bottom bar/),
     ).toBeInTheDocument();
   });
 
