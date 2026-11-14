@@ -20,6 +20,9 @@ import { firstUrlIn, SmtpSink } from './smtp-sink';
  * it (see `playwright.account-verify.config.ts`), because the sibling suite's whole point is the
  * switch being off.
  *
+ * An invitation sent to a confirmed address is offered on the first screen after sign-in, in any
+ * browser (ADR-0221), so the invitee no longer has to reopen the link after confirming.
+ *
  * Chromium only (TECH_DEBT #25a), serial.
  */
 
@@ -185,16 +188,85 @@ test('an unverified invitee is told what to do, not handed an Accept that will f
     timeout: 15_000,
   });
 
-  // Now verified, the accept works — which is the other half of the assertion: the refusal state
-  // must not be reachable once the condition it names is satisfied.
-  await invitee.goto(acceptUrl);
-  await expect(invitee.getByRole('button', { name: /accept and join/i })).toBeVisible();
+  // Now verified, the invitation is waiting on the first screen (ADR-0221): no second visit to the
+  // link, which is what used to be required here. The refusal state must not be reachable once the
+  // condition it names is satisfied, so the link's own card is still checked, below.
+  await expect(invitee.getByRole('heading', { name: `Join ${orgName}` })).toBeVisible();
   await expect(invitee.getByText('Confirm your email address first')).toHaveCount(0);
-  await invitee.getByRole('button', { name: /accept and join/i }).click();
+  await expectNoAxeViolations(invitee);
+  // The emailed link's own card still works alongside the offer (checked before the offer is used,
+  // while the invitation is pending).
+  const linkContext = await browser.newContext();
+  const linkPage = await linkContext.newPage();
+  await linkPage.goto(acceptUrl);
+  await expect(linkPage.getByRole('heading', { name: `Join ${orgName}` })).toBeVisible();
+  await linkContext.close();
+
+  await invitee.getByRole('button', { name: `Accept and join ${orgName}` }).click();
   await expect(invitee).toHaveURL(/\/orgs\//);
 
   await adminContext.close();
   await inviteeContext.close();
+});
+
+test('an invitation is waiting after confirming on one device and signing in on another', async ({
+  browser,
+}) => {
+  const stamp = Date.now();
+  const adminEmail = `inviter-dev-${stamp}@example.com`;
+  const inviteeEmail = `invitee-dev-${stamp}@example.com`;
+  const orgName = `Device Co ${stamp}`;
+  sink.clear();
+
+  const adminContext = await browser.newContext();
+  const admin = await adminContext.newPage();
+  await signUp(admin, adminEmail, 'Device Inviter');
+  const adminMail = await sink.waitFor(adminEmail, /\/verify-email#/);
+  await followAndConfirm(admin, firstUrlIn(adminMail.body));
+  await admin.getByRole('link', { name: 'Sign in' }).click();
+  await admin.getByLabel('Email', { exact: true }).fill(adminEmail);
+  await admin.getByLabel('Password').fill(PASSWORD);
+  await admin.getByRole('button', { name: 'Sign in' }).click();
+  await expect(admin.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
+  await admin.getByLabel('Organisation name').fill(orgName);
+  await admin.getByRole('button', { name: /create organisation/i }).click();
+  await expect(admin).toHaveURL(/\/orgs\//);
+  await admin
+    .getByRole('navigation', { name: 'Organisation' })
+    .getByRole('link', { name: 'Members', exact: true })
+    .click();
+  await admin.getByRole('button', { name: 'Invite member' }).click();
+  const invite = admin.getByRole('dialog');
+  await invite.getByLabel('Email', { exact: true }).fill(inviteeEmail);
+  await invite.getByRole('button', { name: /send invitation/i }).click();
+  await expect(admin.getByLabel('Invitation link')).toBeVisible();
+
+  // Device one signs up; device two (a fresh context, no shared storage) opens the mailed link and
+  // confirms; device three signs in. Nothing but the confirmed address connects them.
+  const signUpContext = await browser.newContext();
+  await signUp(await signUpContext.newPage(), inviteeEmail, 'Device Invitee');
+  const mail = await sink.waitFor(inviteeEmail, /\/verify-email#/);
+  const confirmContext = await browser.newContext();
+  await followAndConfirm(await confirmContext.newPage(), firstUrlIn(mail.body));
+
+  const signInContext = await browser.newContext();
+  const phone = await signInContext.newPage();
+  await phone.goto('/sign-in');
+  await phone.getByLabel('Email', { exact: true }).fill(inviteeEmail);
+  await phone.getByLabel('Password').fill(PASSWORD);
+  await phone.getByRole('button', { name: 'Sign in' }).click();
+  await expect(phone.getByRole('heading', { name: `Join ${orgName}` })).toBeVisible({
+    timeout: 15_000,
+  });
+  await phone.getByRole('button', { name: `Accept and join ${orgName}` }).click();
+  await expect(phone).toHaveURL(/\/orgs\//);
+
+  await adminContext.close();
+  await signUpContext.close();
+  await confirmContext.close();
+  await signInContext.close();
 });
 
 test('fetching the emailed link, or the old API link, verifies nothing; only the press does', async ({
