@@ -1,5 +1,13 @@
 # @repo/web
 
+## 1.10.2
+
+### Patch Changes
+
+- [#1366](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1366) [`ab2bb37`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab2bb374ed3614549528461bd696fbda26f6d4ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Closing Compare revisions now clears the comparison it was showing, so nothing stale stays drawn on the diagram and the Baseline switch works as expected.
+
+- [#1366](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1366) [`ab2bb37`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab2bb374ed3614549528461bd696fbda26f6d4ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In the activities table, the baseline variance columns now sit beside the dates they compare instead of past the right edge.
+
 ## 1.10.1
 
 ### Patch Changes
