@@ -285,6 +285,11 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('PlanDetailScreen — pen gating', () => {
+  it('names the browser tab for the plan', () => {
+    renderScreen();
+    expect(document.title).toBe('Tower · SchedulePoint');
+  });
+
   it('a Planner WITHOUT the pen loses every schedule affordance but keeps progress', () => {
     h.pen = pen({ holdsPen: false });
     renderScreen();

@@ -77,7 +77,8 @@ test('a cascade is one deletion, and a cross-batch block is two presses', async 
   // required field — fixed in the same commit rather than worked around here.
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
-  await expect(page.getByRole('link', { name: 'Programme A', exact: true })).toBeVisible();
+  // Creating a plan opens it.
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 
   // ------------------------------------------------------------------ Delete the client
   await navLink(page, 'Clients').click();

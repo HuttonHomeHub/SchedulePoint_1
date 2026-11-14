@@ -91,6 +91,22 @@ test('a shift calendar round-trips its hours, survives a rename, and an empty we
 
   // ------------------------------------------------------ 4. A dated exception with real hours
   await openCalendar(page, 'Turnaround');
+
+  // The add row wraps on a narrow window rather than being cut off at the right: the Add button
+  // sits inside the dialog and the dialog does not scroll sideways (ADR-0114).
+  const wide = page.viewportSize();
+  await page.setViewportSize({ width: 720, height: wide?.height ?? 800 });
+  const dialogBox = await dialog.boundingBox();
+  const addBox = await dialog.getByRole('button', { name: 'Add exception' }).boundingBox();
+  expect(dialogBox).not.toBeNull();
+  expect(addBox).not.toBeNull();
+  expect(addBox!.x + addBox!.width).toBeLessThanOrEqual(dialogBox!.x + dialogBox!.width);
+  expect(
+    await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    'the calendar dialog scrolls sideways',
+  ).toBe(true);
+  if (wide) await page.setViewportSize(wide);
+
   await dialog.getByLabel('From').fill('2026-12-24');
   await dialog.getByLabel('Type').selectOption('hours');
   const addHours = dialog.getByRole('group', { name: 'Exception hours' });

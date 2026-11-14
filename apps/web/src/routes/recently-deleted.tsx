@@ -2,6 +2,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { PageContainer, PageHeader } from '@/components/ui/page';
 import { DEFAULT_SHOW, RecentlyDeletedTable, SHOW_FILTERS } from '@/features/recently-deleted';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { pickParam, useUrlFilterState } from '@/hooks/use-url-filter-state';
 
@@ -23,6 +24,7 @@ function parseShow(raw: Record<string, unknown>): { show: (typeof SHOW_FILTERS)[
  * calendars (ADR-0195).
  */
 export function RecentlyDeletedScreen(): React.ReactElement {
+  useDocumentTitle('Recently deleted');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));

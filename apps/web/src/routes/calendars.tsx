@@ -9,6 +9,7 @@ import {
   DEFAULT_CALENDAR_LIBRARY_FILTERS,
   type CalendarLibraryFilters,
 } from '@/features/calendars';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canManageHierarchy, canManageOrgCalendars, useOrgRole } from '@/hooks/use-org-role';
 import { pickParam, pickText, useUrlFilterState } from '@/hooks/use-url-filter-state';
 
@@ -40,6 +41,7 @@ function parseCalendarFilters(raw: Record<string, unknown>): CalendarLibraryFilt
  * props so it stays renderable outside a router.
  */
 export function CalendarsScreen(): React.ReactElement {
+  useDocumentTitle('Calendars');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const role = useOrgRole(orgSlug);

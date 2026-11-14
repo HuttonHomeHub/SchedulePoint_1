@@ -53,6 +53,11 @@ function fillPasswords({
 afterEach(() => vi.clearAllMocks());
 
 describe('AccountScreen — email section', () => {
+  it('names the browser tab', () => {
+    renderScreen(me(true));
+    expect(document.title).toBe('Your account · SchedulePoint');
+  });
+
   it('shows the address as verified with nothing to do', async () => {
     renderScreen(me(true));
     expect(await screen.findByText('ada@example.com')).toBeInTheDocument();

@@ -82,6 +82,12 @@ describe('CalendarExceptionsEditor — date ranges', () => {
     ).toBeInTheDocument();
   });
 
+  it('lets the add row wrap, so a narrow dialog cuts nothing off', () => {
+    renderEditor();
+    // jsdom has no layout: the contract is the class that lets the row drop controls to a new line.
+    expect(screen.getByLabelText('From').closest('.sm\\:flex-wrap')).not.toBeNull();
+  });
+
   it('still shows a single-day exception as one date', () => {
     renderEditor({
       ...DETAIL,

@@ -9,6 +9,7 @@ import {
   parseAuditFilter,
   toAuditQuery,
 } from '@/features/audit/model/audit-filter';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useUrlFilterState } from '@/hooks/use-url-filter-state';
 
 /** Ties the "what a Not signed in row means" note to the table it qualifies (`aria-describedby`). */
@@ -26,6 +27,7 @@ const COVERAGE_ID = 'my-activity-coverage';
  * history without asking an Org Admin for it.
  */
 export function MyActivityScreen(): React.ReactElement {
+  useDocumentTitle('My activity');
   // Same bar, same URL-backed state as the organisation log — one component, so the two screens
   // cannot drift about what a category means. The surface differs, and that is a prop: only this
   // one may offer Sign-ins, because only this one can return them.

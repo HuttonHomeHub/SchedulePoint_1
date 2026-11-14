@@ -4,6 +4,7 @@ import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
 import { WorkspaceSkeleton } from '@/components/layout/workspace/workspace-skeleton';
 import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { EntityLoadFailure } from '@/routes/entity-not-found';
 
 /**
@@ -44,6 +45,8 @@ export function PlanDetailScreen(): React.ReactElement {
 function PlanDetail({ orgSlug, planId }: { orgSlug: string; planId: string }): React.ReactElement {
   const model = usePlanWorkspaceModel(orgSlug, planId);
   const planQuery = model.plan;
+  // `null` until the plan loads: the title keeps the app's own name rather than saying "undefined".
+  useDocumentTitle(planQuery.data?.name ?? null);
 
   useRememberPlan({ orgSlug, planId, resolved: planQuery.isSuccess });
 

@@ -293,6 +293,9 @@ Behaviours worth knowing before reaching for it:
   top layer.
 - Escape is handled on a capture-phase document listener, so it dismisses the popup
   **without** closing a surrounding `Dialog`.
+- **A click in the box opens the list** (2026-11-13), as the chevron does, with no option
+  active. It never closes an open list (a second click places the caret in the search text),
+  and a read-only box ignores it, as it does the chevron. No key binding changed.
 
 Scope is intentionally minimal: single-select, list autocomplete (typing filters; it
 never rewrites the input), no multi-select and no free-text entry. A consumer needing

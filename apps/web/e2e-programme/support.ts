@@ -42,7 +42,7 @@ export async function createAndOpenPlan(page: Page, name: string): Promise<void>
   await page.getByRole('dialog').getByLabel('Name').fill(name);
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
-  await page.getByRole('link', { name, exact: true }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 

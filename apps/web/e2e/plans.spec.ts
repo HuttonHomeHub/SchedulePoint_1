@@ -60,12 +60,12 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
   await dialog.getByLabel('Start date').fill('2026-05-01');
   await dialog.getByRole('button', { name: 'Create plan' }).click();
 
-  // It appears in the table with the formatted date, then opens to its detail.
-  await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
-  await expect(page.getByText('01 May 2026')).toBeVisible();
-  await page.getByRole('link', { name: 'Baseline' }).click();
+  // Creating the plan opens it (as the Explorer's create does) ...
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 
   await expect(page.getByRole('heading', { name: 'Baseline', exact: true })).toBeVisible();
+  // The tab is named for the plan, so several open tabs can be told apart.
+  await expect(page).toHaveTitle('Baseline · SchedulePoint');
   await expect(page.getByText('Active', { exact: true })).toBeVisible();
   // The legacy page printed a "Time-Scaled Logic Diagram" section label above the canvas. The
   // workspace makes the diagram its primary surface, named as a region rather than announced by a
@@ -76,4 +76,10 @@ test('a user can create a plan and open its detail (accessible)', async ({ page 
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
+
+  // ... and the project page it came from lists it, with the formatted date and a current count.
+  await page.goBack();
+  await expect(page.getByRole('link', { name: 'Baseline' })).toBeVisible();
+  await expect(page.getByText('01 May 2026')).toBeVisible();
+  await expect(page.getByText(/1 plan\b/)).toBeVisible();
 });

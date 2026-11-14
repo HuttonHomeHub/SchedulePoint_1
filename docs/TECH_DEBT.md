@@ -9398,3 +9398,12 @@ The four-shard pack of 2026-10-13 was derived from those figures and looked bala
 The column compares each activity's start with the baseline and nothing else, so an activity that started when planned but finished late still reads "On plan". The header was renamed "Start vs baseline" so it says what it measures, but the cell text still reads as a verdict on the whole activity. "Start on plan" would say it properly and does not fit the column: the cell truncates at the current width.
 
 **Next:** decide the zero text (a wider column, or a shorter phrase) or show the finish variance as well. The second adds a column or changes the column's contract, so it needs a spec (ADR-0105). **Trigger:** Batch E (Gantt), or the owner asks.
+
+### 592. The calendar editor dialog scrolls sideways at phone widths
+
+**Status:** open · **Verified:** 2026-11-14, by an accessibility review run in Chromium on branch `fix/plan-setup`: at 400 px and 320 px viewports the calendar editor dialog's content is 518 px wide inside a 366 px or 286 px box, and the weekly-hours rows' "Copy Monday to…" and "Remove … hours" controls are clipped.
+**Raised:** 2026-11-14 (Batch C review) · **Size:** S · **Owner:** web
+
+Calendar editing is designed from 1024 px up (ADR-0179), so this is below the design floor, but WCAG 2.2 SC 1.4.10 (reflow) still applies there. The weekly-hours rows are one flex row that does not wrap. Pre-existing; not caused by Batch C, whose holiday add-row change wraps correctly at every width.
+
+**Next:** let each weekly-hours row wrap below the small breakpoint, as the holiday add-row now does (ADR-0114), with a journey check at 320 px that nothing is cut off and nothing scrolls sideways. **Trigger:** the next change to the calendar editor, or the owner asks.

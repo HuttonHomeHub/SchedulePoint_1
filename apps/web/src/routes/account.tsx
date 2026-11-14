@@ -1,6 +1,7 @@
 import { FormSection } from '@/components/ui/form-layout';
 import { LoadingShape, PageHeader, Skeleton } from '@/components/ui/page';
 import { ChangePasswordForm, ResendVerificationButton, useSession } from '@/features/auth';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 
 /**
  * The account screen (`/account`, ADR-0074 M3).
@@ -15,6 +16,7 @@ import { ChangePasswordForm, ResendVerificationButton, useSession } from '@/feat
  * is about the reader's own account, and the endpoints behind it accept no user id.
  */
 export function AccountScreen(): React.ReactElement {
+  useDocumentTitle('Your account');
   const session = useSession();
   const user = session.data?.user;
 

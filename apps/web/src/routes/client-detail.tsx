@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/page';
 import { useClient } from '@/features/clients';
 import { CreateProjectButton, ProjectsTable, useProjects } from '@/features/projects';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { EntityLoadFailure } from '@/routes/entity-not-found';
 
@@ -36,6 +37,7 @@ export function ClientDetailScreen(): React.ReactElement {
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));
   const client = useClient(orgSlug, clientId);
   const projects = useProjects(orgSlug, clientId);
+  useDocumentTitle(client.data?.name ?? null);
 
   if (client.isError) {
     return (
