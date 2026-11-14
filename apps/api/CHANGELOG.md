@@ -1,5 +1,11 @@
 # @repo/api
 
+## 1.3.1
+
+### Patch Changes
+
+- [#1366](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1366) [`ab2bb37`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ab2bb374ed3614549528461bd696fbda26f6d4ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compare revisions and the health check now show durations, leads and lags in working days and hours (for example "2d 4h" or "lag of 1d") instead of minutes.
+
 ## 1.3.0
 
 ### Minor Changes
