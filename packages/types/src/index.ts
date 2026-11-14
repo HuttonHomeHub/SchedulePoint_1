@@ -2002,6 +2002,19 @@ export interface PlanVarianceSummary {
    * reading it as `undefined` shows no basis wording rather than guessing one.
    */
   basis: VarianceBasis | null;
+  /**
+   * The plan's own finish against the baseline's (`baseline-slip-and-pinned-names`), as opposed to
+   * `worstFinishSlipDays`, which is the largest single activity's slip. `baselineProjectFinish` is
+   * the latest frozen placed finish and `currentProjectFinish` the latest live placed finish (the
+   * value the schedule summary's `projectFinish` states), both `YYYY-MM-DD`;
+   * `projectFinishVarianceDays` is their difference in working days on the plan calendar and the
+   * baseline's frozen day length, positive = later. All three are `null` with no active baseline,
+   * and the days are `null` when either side is. An older API image (a rolling update, ADR-0047)
+   * omits them — a client reading `undefined` shows no slip rather than guessing one.
+   */
+  baselineProjectFinish: string | null;
+  currentProjectFinish: string | null;
+  projectFinishVarianceDays: number | null;
 }
 
 /**

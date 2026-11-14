@@ -37,7 +37,7 @@ import {
 } from './baseline.repository';
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
 import type { CreateBaselineDto } from './dto/create-baseline.dto';
-import { computeVariance } from './variance';
+import { computeProjectFinishVariance, computeVariance } from './variance';
 
 /** A calendar-day (or null) as a `YYYY-MM-DD` string, for the pure variance helper. */
 function day(value: Date | null): string | null {
@@ -455,6 +455,9 @@ export class BaselinesService {
           addedCount: 0,
           removedCount: 0,
           basis: null,
+          baselineProjectFinish: null,
+          currentProjectFinish: null,
+          projectFinishVarianceDays: null,
         },
       };
     }
@@ -494,6 +497,17 @@ export class BaselinesService {
       active.hoursPerDayMinutes,
     );
 
+    // The plan's finish, not any activity's. Both sides use the placed finish with the early finish as
+    // its fallback, so they are on one basis: the live side is `COALESCE(visualEffectiveFinish,
+    // earlyFinish)` over the same population as the schedule summary's `projectFinish`
+    // (`placedFinishSql`), so the slip never disagrees with the Finish fact beside it.
+    const finish = computeProjectFinishVariance(
+      snapshot.map((s) => day(s.placedFinish ?? s.baselineFinish)),
+      liveRows.map((l) => day(l.visualEffectiveFinish ?? l.earlyFinish)),
+      calendar,
+      active.hoursPerDayMinutes,
+    );
+
     return {
       rows,
       summary: {
@@ -502,6 +516,7 @@ export class BaselinesService {
         capturedAt: active.capturedAt.toISOString(),
         ...rollup,
         basis,
+        ...finish,
       },
     };
   }

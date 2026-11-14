@@ -109,4 +109,38 @@ export class PlanVarianceSummaryResponseDto implements PlanVarianceSummary {
       'start/finish variances are on this basis.',
   })
   basis!: VarianceBasis | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'The latest frozen placed finish across every row of the active baseline, on `basis`, ' +
+      'falling back to the row’s frozen early finish where it has no placed one (as the live side ' +
+      'falls back to `earlyFinish`). Null when there is no active baseline or no row carries a placed finish.',
+  })
+  baselineProjectFinish!: string | null;
+
+  @ApiProperty({
+    format: 'date',
+    nullable: true,
+    type: String,
+    description:
+      'The latest live placed finish — `COALESCE(visualEffectiveFinish, earlyFinish)` over the ' +
+      'plan’s live activities, the same value the schedule summary’s `projectFinish` states. Null ' +
+      'when there is no active baseline or the plan was never calculated.',
+  })
+  currentProjectFinish!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: Number,
+    description:
+      'How far the plan’s finish has moved against the baseline, in working days on the plan ' +
+      'calendar and the baseline’s frozen day length (positive = later). A slip under half a ' +
+      'working day rounds to 0. Null when either finish is null. Unlike `worstFinishSlipDays` ' +
+      '(the largest single activity), this is the plan’s finish, so it also counts activities ' +
+      'added or removed since capture.',
+  })
+  projectFinishVarianceDays!: number | null;
 }

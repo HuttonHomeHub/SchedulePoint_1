@@ -978,6 +978,58 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     expect(res.body.meta).toMatchObject({ worstFinishSlipDays: 3, behindCount: 1, addedCount: 1 });
   });
 
+  // `baseline-slip-and-pinned-names` M1: the slip shown beside the Finish fact must be the same finish
+  // the Finish fact states, so the live side is asserted against `GET …/schedule/summary`, not
+  // against a figure this spec computed itself.
+  it('states the plan finish against the baseline: later by the extension, equal to the Finish fact', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId, activityId } = await calculatedPlan(actor); // A(3): finishes 2026-01-03
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/activities/${activityId}`)
+      .send({ durationDays: 6, version: 1 })
+      .expect(200);
+    await recalc(actor, planId);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    const summary = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/schedule/summary`)
+      .expect(200);
+    expect(res.body.meta).toMatchObject({
+      baselineProjectFinish: '2026-01-03',
+      currentProjectFinish: '2026-01-06',
+      projectFinishVarianceDays: 3,
+    });
+    expect(res.body.meta.currentProjectFinish).toBe(summary.body.data.projectFinish);
+  });
+
+  it('counts an activity added after capture that extends the plan finish', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor); // A(3): finishes 2026-01-03
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+
+    await makeActivity(actor, planId, 'B', 6); // finishes 2026-01-06, matched to no baseline row
+    await recalc(actor, planId);
+
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    expect(res.body.meta).toMatchObject({
+      worstFinishSlipDays: null,
+      projectFinishVarianceDays: 3,
+    });
+  });
+
+  it('reports no plan finish comparison without an active baseline', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+    const res = await actor.agent.get(varianceUrl(planId)).expect(200);
+    expect(res.body.meta).toMatchObject({
+      baselineProjectFinish: null,
+      currentProjectFinish: null,
+      projectFinishVarianceDays: null,
+    });
+  });
+
   it('reports a baselined activity deleted since capture as a removed row', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
@@ -1106,7 +1158,9 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     await prisma.orgMember.create({
       data: { organizationId: orgId, userId: viewer.userId, role: 'VIEWER' },
     });
-    await viewer.agent.get(varianceUrl(planId)).expect(200);
+    await actor.agent.post(baselinesUrl(planId)).send({ name: 'Contract' }).expect(201);
+    const seen = await viewer.agent.get(varianceUrl(planId)).expect(200);
+    expect(seen.body.meta.projectFinishVarianceDays).toBe(0);
     const outsider = await signUp('outsider@example.com');
     await outsider.agent.get(varianceUrl(planId)).expect(404);
   });

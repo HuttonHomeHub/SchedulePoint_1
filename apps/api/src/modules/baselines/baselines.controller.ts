@@ -114,7 +114,10 @@ export class BaselinesController {
       'positive = current later than baseline (behind). meta.basis names which dates were ' +
       "compared (placement-baseline-variance, amending ADR-0025): 'PLACED' — the frozen and " +
       'live bars as drawn (ADR-0148), the only value since 1.1.0. Every row’s dated fields ' +
-      'and start/finish variances are on this basis.',
+      'and start/finish variances are on this basis. meta.baselineProjectFinish, ' +
+      'meta.currentProjectFinish and meta.projectFinishVarianceDays compare the PLAN’s finish ' +
+      '(latest placed finish, falling back to the early finish where a row has no placed one, on both sides) with the baseline’s, in working days; all three are null with no ' +
+      'active baseline.',
   })
   @ApiOkResponse({ type: BaselineVarianceRowResponseDto, isArray: true })
   @ApiUnprocessableEntityResponse({

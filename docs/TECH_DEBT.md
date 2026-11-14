@@ -9407,3 +9407,11 @@ The column compares each activity's start with the baseline and nothing else, so
 Calendar editing is designed from 1024 px up (ADR-0179), so this is below the design floor, but WCAG 2.2 SC 1.4.10 (reflow) still applies there. The weekly-hours rows are one flex row that does not wrap. Pre-existing; not caused by Batch C, whose holiday add-row change wraps correctly at every width.
 
 **Next:** let each weekly-hours row wrap below the small breakpoint, as the holiday add-row now does (ADR-0114), with a journey check at 320 px that nothing is cut off and nothing scrolls sideways. **Trigger:** the next change to the calendar editor, or the owner asks.
+
+### 593. A baseline's `capturedProjectFinish` is the network finish while its variance is placed
+
+**Status:** open · **Verified:** 2026-11-13, by reading `apps/api/src/modules/baselines/baselines.service.ts` (`latestFinish`, line 588, takes `MAX(earlyFinish)` and is stored as `capturedProjectFinish`, line 260) against `computeVariance`'s inputs in the same file (the frozen `placedFinish` and the live `visualEffectiveFinish`, ADR-0148) and `apps/api/src/modules/schedule/placed-finish.ts` (`placedFinishSql`, what the Finish fact reads) · **Raised:** 2026-11-13 (found by `docs/specs/baseline-slip-and-pinned-names/feature-spec.md` section 1)
+
+`BaselineSummary.capturedProjectFinish` is the latest **early** finish at capture, the network date, while the variance read and the Finish fact both state the **placed** finish. A plan with a hand-placed last bar therefore has a baseline whose stated finish is earlier than the finish its own variance compares against. Nothing reads it for a comparison: the plan finish variance (`meta.projectFinishVarianceDays`, ADR-0025 Amendment 5) takes the frozen `placedFinish` of every snapshot row instead, so the two never meet. It is an observation, not fixed here, because changing what it holds is a change to a promised field.
+
+**Next:** decide whether `capturedProjectFinish` should be the placed finish (a `latestFinish` over `placedFinish`, with a reading of what it would change for a baseline that has none) or be retired in favour of `baselineProjectFinish`. **Trigger:** a surface needs to state a baseline's own finish, or the next change to capture.

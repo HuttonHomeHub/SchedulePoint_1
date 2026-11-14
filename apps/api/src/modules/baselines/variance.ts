@@ -44,6 +44,13 @@ export interface VarianceRollup {
   removedCount: number;
 }
 
+/** The plan-level finish comparison: where the last bar ends now against where it ended at capture. */
+export interface ProjectFinishVariance {
+  baselineProjectFinish: string | null;
+  currentProjectFinish: string | null;
+  projectFinishVarianceDays: number | null;
+}
+
 export interface VarianceResult {
   rows: BaselineVarianceRow[];
   rollup: VarianceRollup;
@@ -54,7 +61,7 @@ export interface VarianceResult {
  * (positive = current later than baseline, i.e. behind). Null when either date is
  * absent — a not-yet-computed live date or an unbaselined activity is not comparable.
  */
-function workingDiff(
+export function workingDiff(
   calendar: WorkingTimeCalendar,
   baseline: string | null,
   current: string | null,
@@ -174,5 +181,40 @@ export function computeVariance(
   return {
     rows,
     rollup: { worstFinishSlipDays, behindCount, addedCount, removedCount },
+  };
+}
+
+/** The latest of a set of `YYYY-MM-DD` days (they order lexically), ignoring nulls; null when none. */
+function latestDay(days: Iterable<string | null>): string | null {
+  let latest: string | null = null;
+  for (const d of days) {
+    if (d !== null && (latest === null || d > latest)) latest = d;
+  }
+  return latest;
+}
+
+/**
+ * The plan's finish against the baseline's (`baseline-slip-and-pinned-names` §4.2): the latest frozen
+ * placed finish over EVERY snapshot row, the latest live placed finish over every live row, and their
+ * working-day difference through {@link workingDiff} — the arithmetic every row's variance uses, on
+ * the baseline's frozen day length. Deliberately not the activities' own roll-up: an activity added
+ * after capture, or the baselined last activity removed, moves the plan's finish while no matched row
+ * does. A sub-day slip rounds to 0 (the same rounding as a row's); null when either side is null.
+ */
+export function computeProjectFinishVariance(
+  baselineFinishes: Iterable<string | null>,
+  liveFinishes: Iterable<string | null>,
+  calendar: WorkingTimeCalendar,
+  dayFactorMinutes: number = MINUTES_PER_DAY,
+): ProjectFinishVariance {
+  const baselineProjectFinish = latestDay(baselineFinishes);
+  const currentProjectFinish = latestDay(liveFinishes);
+  const days = workingDiff(calendar, baselineProjectFinish, currentProjectFinish, dayFactorMinutes);
+  return {
+    baselineProjectFinish,
+    currentProjectFinish,
+    // `|| 0` only for a number: a sub-day slip earlier than baseline rounds to -0, which is not the
+    // 0 a reader (or `Object.is`) compares against; null must stay null, never become "On baseline".
+    projectFinishVarianceDays: days === null ? null : days || 0,
   };
 }

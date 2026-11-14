@@ -399,6 +399,15 @@ The two float columns are one fact (`total_float` and `total_float_minutes` are 
 `activities` and on `baseline_activities`), so a float with days and no minutes does not exist. The minutes
 are never rescaled: they cannot be recovered from a rounded day.
 
+**The plan's finish against the baseline's** (ADR-0025 Amendment 5). `meta.baselineProjectFinish` is the
+latest frozen `placedFinish` (falling back to the row's frozen early `baselineFinish` where it has none) over every row of the active baseline; `meta.currentProjectFinish` is the latest
+`COALESCE(visualEffectiveFinish, earlyFinish)` over the plan's live activities (the same fallback, so both sides are on one basis), the same value the schedule
+summary's `projectFinish` states; `meta.projectFinishVarianceDays` is their difference in **working days** on the
+plan calendar and the baseline's frozen `hoursPerDayMinutes`, positive = later. It is the plan's finish, not
+`meta.worstFinishSlipDays` (the largest single activity's), so an activity added or removed since capture moves it.
+A slip under half a working day reads `0`. All three are `null` with no active baseline, and the days are `null`
+when either finish is. An older API image omits all three, which a client reads as `undefined` (no slip).
+
 `GET …/baselines` and `GET …/baselines/:baselineId` expose the discriminator directly:
 `BaselineSummary.placementSnapshotLevel` is `FULL` (the only value since 1.1.0), and each snapshot row's
 `placedStart`/`placedFinish`/`visualStart` are null only for an activity nothing had calculated at capture.
