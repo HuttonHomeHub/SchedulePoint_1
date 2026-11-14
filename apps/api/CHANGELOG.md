@@ -1,5 +1,16 @@
 # @repo/api
 
+## 1.4.0
+
+### Minor Changes
+
+- [#1368](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1368) [`755d4c5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/755d4c52348840961ce0bc5134c03ec430d0969f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The baseline variance read reports how far the plan's finish has moved, in working days.
+
+### Patch Changes
+
+- Updated dependencies [[`755d4c5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/755d4c52348840961ce0bc5134c03ec430d0969f)]:
+  - @repo/types@0.45.0
+
 ## 1.3.1
 
 ### Patch Changes
