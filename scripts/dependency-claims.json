@@ -1731,6 +1731,55 @@
         "docs/adr/0107-a-migration-a-pristine-database-cannot-test.md",
         "docs/specs/fresh-start-1-1/schema-design.md"
       ]
+    },
+    {
+      "ref": "email-verification.mjs:14",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "14",
+      "anchor": "expiresIn = 3600",
+      "citedBy": ["docs/specs/invitation-survives-email-confirmation/feature-spec.md"]
+    },
+    {
+      "ref": "email-verification.mjs:30-31",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "30-31",
+      "anchor": "encodeURIComponent(ctx.body.callbackURL)",
+      "citedBy": [
+        "docs/specs/invitation-survives-email-confirmation/feature-spec.md",
+        "docs/specs/invitation-survives-email-confirmation/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "origin-check.mjs:43-66",
+      "package": "better-auth",
+      "path": "dist/api/middlewares/origin-check.mjs",
+      "lines": "43-66",
+      "anchor": "const originCheckMiddleware = createAuthMiddleware",
+      "citedBy": [
+        "docs/specs/invitation-survives-email-confirmation/feature-spec.md",
+        "docs/specs/invitation-survives-email-confirmation/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "sign-up.mjs:158",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "158",
+      "anchor": "email.toLowerCase()",
+      "citedBy": ["docs/specs/invitation-survives-email-confirmation/feature-spec.md"]
+    },
+    {
+      "ref": "sign-up.mjs:243-244",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "243-244",
+      "anchor": "encodeURIComponent(body.callbackURL)",
+      "citedBy": [
+        "docs/specs/invitation-survives-email-confirmation/feature-spec.md",
+        "docs/specs/invitation-survives-email-confirmation/implementation-plan.md"
+      ]
     }
   ]
 }

@@ -60,6 +60,8 @@ describe('InvitationsService', () => {
     findActiveByTokenHash: ReturnType<typeof vi.fn>;
     findActiveByIdInOrg: ReturnType<typeof vi.fn>;
     findManyPendingByOrg: ReturnType<typeof vi.fn>;
+    findManyLiveForEmail: ReturnType<typeof vi.fn>;
+    findActiveByIdForEmail: ReturnType<typeof vi.fn>;
     setStatus: ReturnType<typeof vi.fn>;
   };
   let members: {
@@ -73,6 +75,7 @@ describe('InvitationsService', () => {
   let mail: { sendInvitation: ReturnType<typeof vi.fn> };
   let config: { appUrl: string; requireEmailVerification: boolean };
   let audit: { record: ReturnType<typeof vi.fn> };
+  let logger: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn> };
   let service: InvitationsService;
 
   beforeEach(() => {
@@ -84,6 +87,8 @@ describe('InvitationsService', () => {
       findActiveByTokenHash: vi.fn(),
       findActiveByIdInOrg: vi.fn(),
       findManyPendingByOrg: vi.fn(),
+      findManyLiveForEmail: vi.fn(),
+      findActiveByIdForEmail: vi.fn(),
       setStatus: vi.fn().mockResolvedValue(undefined),
     };
     members = { findActiveByOrgAndUser: vi.fn(), create: vi.fn() };
@@ -94,7 +99,7 @@ describe('InvitationsService', () => {
     mail = { sendInvitation: vi.fn().mockResolvedValue(undefined) };
     config = { appUrl: 'https://app.example', requireEmailVerification: false };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
-    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    logger = { info: vi.fn(), warn: vi.fn() };
     service = new InvitationsService(
       organizations as unknown as OrganizationsService,
       invitations as unknown as InvitationRepository,
@@ -103,7 +108,7 @@ describe('InvitationsService', () => {
       mail as unknown as MailService,
       config as unknown as AppConfigService,
       audit as unknown as AuditService,
-      logger,
+      logger as unknown as PinoLogger,
     );
   });
 
@@ -262,6 +267,14 @@ describe('InvitationsService', () => {
       await expect(service.accept(invitee, token)).rejects.toBeInstanceOf(ConflictError);
     });
 
+    it('maps a lost race on the one-membership constraint to 409', async () => {
+      invitations.findActiveByTokenHash.mockResolvedValue(invitation());
+      prisma.user.findUnique.mockResolvedValue({ id: USER_ID, email: 'invitee@example.com' });
+      members.findActiveByOrgAndUser.mockResolvedValue(null);
+      prisma.$transaction.mockRejectedValue(uniqueViolation());
+      await expect(service.accept(invitee, token)).rejects.toBeInstanceOf(ConflictError);
+    });
+
     it('403s when email verification is required but the account is unverified', async () => {
       config.requireEmailVerification = true;
       invitations.findActiveByTokenHash.mockResolvedValue(invitation());
@@ -288,6 +301,176 @@ describe('InvitationsService', () => {
 
       expect(result.organization.id).toBe(ORG_ID);
       expect(members.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('the verified-address door (ADR-0221)', () => {
+    const invitee = principalWith([]);
+    const verified = { id: USER_ID, email: 'Invitee@Example.com', emailVerified: true };
+
+    beforeEach(() => {
+      config.requireEmailVerification = true;
+      prisma.user.findUnique.mockResolvedValue(verified);
+      members.findActiveByOrgAndUser.mockResolvedValue(null);
+    });
+
+    describe('list', () => {
+      it('is empty, and reads nothing, where the host does not enforce verification', async () => {
+        config.requireEmailVerification = false;
+        const page = await service.listForVerifiedUser(invitee, { limit: 20 });
+        expect(page).toEqual({ items: [], meta: { nextCursor: null, hasMore: false } });
+        expect(invitations.findManyLiveForEmail).not.toHaveBeenCalled();
+      });
+
+      it('is empty, and reads nothing, for an unverified account', async () => {
+        prisma.user.findUnique.mockResolvedValue({ ...verified, emailVerified: false });
+        const page = await service.listForVerifiedUser(invitee, { limit: 20 });
+        expect(page.items).toEqual([]);
+        expect(invitations.findManyLiveForEmail).not.toHaveBeenCalled();
+      });
+
+      it("asks for the session user's own lower-cased address and nobody else's", async () => {
+        invitations.findManyLiveForEmail.mockResolvedValue([invitation()]);
+        const page = await service.listForVerifiedUser(invitee, { limit: 20 });
+        expect(page.items).toHaveLength(1);
+        expect(invitations.findManyLiveForEmail).toHaveBeenCalledWith(
+          expect.objectContaining({ email: 'invitee@example.com', userId: USER_ID, take: 21 }),
+        );
+      });
+
+      it('pages: one more than asked for decides hasMore and the cursor', async () => {
+        invitations.findManyLiveForEmail.mockResolvedValue([
+          invitation({ id: 'a' }),
+          invitation({ id: 'b' }),
+        ]);
+        const page = await service.listForVerifiedUser(invitee, { limit: 1 });
+        expect(page.items.map((i) => i.id)).toEqual(['a']);
+        expect(page.meta).toEqual({ nextCursor: 'a', hasMore: true });
+      });
+    });
+
+    describe('accept', () => {
+      it('404s, and reads no invitation, where the host does not enforce verification', async () => {
+        config.requireEmailVerification = false;
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          NotFoundError,
+        );
+        expect(invitations.findActiveByIdForEmail).not.toHaveBeenCalled();
+      });
+
+      it('404s for an unverified account, not 403', async () => {
+        prisma.user.findUnique.mockResolvedValue({ ...verified, emailVerified: false });
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          NotFoundError,
+        );
+        expect(members.create).not.toHaveBeenCalled();
+      });
+
+      it("404s for somebody else's invitation: the lookup is by the caller's own address", async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(null);
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-9')).rejects.toBeInstanceOf(
+          NotFoundError,
+        );
+        expect(invitations.findActiveByIdForEmail).toHaveBeenCalledWith(
+          'inv-9',
+          'invitee@example.com',
+        );
+        expect(members.create).not.toHaveBeenCalled();
+      });
+
+      it('410s for an expired invitation', async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(
+          invitation({ expiresAt: new Date(Date.now() - 1000) }),
+        );
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          GoneError,
+        );
+      });
+
+      it('410s at the exact millisecond of expiry, where the list has already hidden it', async () => {
+        vi.useFakeTimers();
+        try {
+          const now = new Date('2026-11-13T12:00:00.000Z');
+          vi.setSystemTime(now);
+          invitations.findActiveByIdForEmail.mockResolvedValue(invitation({ expiresAt: now }));
+          await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+            GoneError,
+          );
+          expect(members.create).not.toHaveBeenCalled();
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it('maps a lost race on the one-membership constraint to 409, through the shared routine', async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(invitation());
+        prisma.$transaction.mockRejectedValue(uniqueViolation());
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          ConflictError,
+        );
+      });
+
+      it.each(['REVOKED', 'ACCEPTED'] as const)('410s for a %s invitation', async (status) => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(invitation({ status }));
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          GoneError,
+        );
+        expect(audit.record).not.toHaveBeenCalled();
+      });
+
+      it('409s for an existing member', async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(invitation());
+        members.findActiveByOrgAndUser.mockResolvedValue({ id: 'member-1' });
+        await expect(service.acceptForVerifiedUser(invitee, 'inv-1')).rejects.toBeInstanceOf(
+          ConflictError,
+        );
+      });
+
+      it('writes the same membership, status and two audit rows as the link door, plus acceptedVia', async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(invitation());
+
+        const result = await service.acceptForVerifiedUser(invitee, 'inv-1');
+
+        expect(result.organization.id).toBe(ORG_ID);
+        expect(members.create).toHaveBeenCalledWith(
+          expect.objectContaining({ organizationId: ORG_ID, userId: USER_ID, role: 'PLANNER' }),
+          expect.anything(),
+        );
+        expect(invitations.setStatus).toHaveBeenCalledWith(
+          'inv-1',
+          expect.objectContaining({ status: 'ACCEPTED', acceptedByUserId: USER_ID }),
+          expect.anything(),
+        );
+        const rows = audit.record.mock.calls.map(
+          (call) => call[0] as { action: string; after: Record<string, unknown> },
+        );
+        expect(rows.map((r) => r.action)).toEqual(['invitation.accepted', 'member.joined']);
+        for (const row of rows)
+          expect(row.after).toMatchObject({ acceptedVia: 'verified-address' });
+      });
+
+      it('leaves acceptedVia off the link door, so the two are told apart by that one field', async () => {
+        config.requireEmailVerification = false;
+        invitations.findActiveByTokenHash.mockResolvedValue(invitation());
+        prisma.user.findUnique.mockResolvedValue({ id: USER_ID, email: 'invitee@example.com' });
+        await service.accept(invitee, 'the-token');
+        for (const call of audit.record.mock.calls) {
+          expect((call[0] as { after: object }).after).not.toHaveProperty('acceptedVia');
+        }
+      });
+
+      it('logs ids only, and no secret, in the log or the audit rows', async () => {
+        invitations.findActiveByIdForEmail.mockResolvedValue(
+          invitation({ tokenHash: 'a-token-hash-value' }),
+        );
+        await service.acceptForVerifiedUser(invitee, 'inv-1');
+
+        const logged = JSON.stringify(logger.info.mock.calls);
+        expect(logged).toContain('inv-1');
+        expect(logged).not.toMatch(/token/i);
+        expect(logged).not.toContain('a-token-hash-value');
+        expect(JSON.stringify(audit.record.mock.calls)).not.toMatch(/token|a-token-hash-value/i);
+      });
     });
   });
 

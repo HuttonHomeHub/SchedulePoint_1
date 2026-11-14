@@ -9415,3 +9415,12 @@ Calendar editing is designed from 1024 px up (ADR-0179), so this is below the de
 `BaselineSummary.capturedProjectFinish` is the latest **early** finish at capture, the network date, while the variance read and the Finish fact both state the **placed** finish. A plan with a hand-placed last bar therefore has a baseline whose stated finish is earlier than the finish its own variance compares against. Nothing reads it for a comparison: the plan finish variance (`meta.projectFinishVarianceDays`, ADR-0025 Amendment 5) takes the frozen `placedFinish` of every snapshot row instead, so the two never meet. It is an observation, not fixed here, because changing what it holds is a change to a promised field.
 
 **Next:** decide whether `capturedProjectFinish` should be the placed finish (a `latestFinish` over `placedFinish`, with a reading of what it would change for a baseline that has none) or be retired in favour of `baselineProjectFinish`. **Trigger:** a surface needs to state a baseline's own finish, or the next change to capture.
+
+### 594. The invitations read by address scans the table, and an index is a decision nobody has taken
+
+**Status:** open · **Verified:** 2026-11-13, by reading `apps/api/prisma/migrations/20261109000000_baseline_1_1/migration.sql` (the `invitations` indexes are `token_hash` unique, `(organization_id, status)` and the partial unique `(organization_id, email)`; none leads with `email`) and `apps/api/src/modules/invitations/invitation.repository.ts` (`findManyLiveForEmail`, `findActiveByIdForEmail` filter by `email`).
+**Raised:** 2026-11-13 (ADR-0221, M1 review) · **Size:** S · **Owner:** api/db
+
+`GET /me/invitations` and its accept look up invitations by the caller's address, so each is a sequential scan of a table that holds a few rows per organisation. That is accepted while the read is made once per onboarding view (ADR-0221 D6). The remedy is a partial index on `invitations(email)` for pending, non-deleted rows; it is a schema change, so it is designed by the database-architect agent and not added by hand (CLAUDE.md section 19.3).
+
+**Next:** database-architect designs the index and its migration. **Trigger:** the list becoming a per-login call that shows up in timings, or the table passing about a million rows.

@@ -58,6 +58,50 @@ export class InvitationRepository {
   }
 
   /**
+   * A page of the invitations addressed to one verified address (ADR-0221): live, undeleted, of an
+   * undeleted organisation the user does not already belong to. `email` is compared as stored, which
+   * is lower-case on both sides (`CreateInvitationDto` lower-cases it; so does sign-up); the caller
+   * lower-cases the user's address anyway so the match never depends on that. One instant `now`
+   * is passed in, as `liveInvitationWhere` requires, so the page cannot disagree with itself.
+   */
+  findManyLiveForEmail(params: {
+    email: string;
+    userId: string;
+    now: Date;
+    take: number;
+    cursor?: string;
+  }): Promise<InvitationWithOrg[]> {
+    return this.prisma.invitation.findMany({
+      where: {
+        email: params.email,
+        status: 'PENDING',
+        deletedAt: null,
+        expiresAt: { gt: params.now },
+        organization: {
+          deletedAt: null,
+          members: { none: { userId: params.userId, deletedAt: null } },
+        },
+      },
+      include: { organization: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: params.take,
+      ...(params.cursor ? { cursor: { id: params.cursor }, skip: 1 } : {}),
+    });
+  }
+
+  /**
+   * One invitation by id, only if it is addressed to this email (anti-IDOR: a foreign id is
+   * indistinguishable from an unknown one) and its organisation is not deleted. Any status, so
+   * the caller can answer 410 for a revoked or accepted one.
+   */
+  findActiveByIdForEmail(id: string, email: string): Promise<InvitationWithOrg | null> {
+    return this.prisma.invitation.findFirst({
+      where: { id, email, deletedAt: null, organization: { deletedAt: null } },
+      include: { organization: true },
+    });
+  }
+
+  /**
    * soft-delete: any-state — nothing in the application writes `invitations.deleted_at`, so no
    * deleted row can match this id; adding `deletedAt: null` would turn a future deleted match
    * into a thrown P2025, which is a behaviour choice rather than a gate chore.
