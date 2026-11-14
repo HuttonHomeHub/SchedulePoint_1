@@ -1,6 +1,6 @@
 {
   "name": "@repo/web",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "private": true,
   "description": "SchedulePoint web client — React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
   "license": "MIT",
