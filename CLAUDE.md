@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 28 API modules
 > (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1919 web
 > source files with 48 Playwright suites beside the base journey, and
-> 220 ADRs.
+> 221 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -418,7 +418,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0013** _(Accepted)_ — Observability with OpenTelemetry + Pino → [`0013-observability-otel-pino.md`](docs/adr/0013-observability-otel-pino.md)
 - **ADR-0014** _(Superseded by ADR-0057)_ — Reference feature as a non-shipping template → [`0014-reference-feature-as-non-shipping-template.md`](docs/adr/0014-reference-feature-as-non-shipping-template.md)
 - **ADR-0015** _(Superseded by ADR-0057)_ — Template-driven feature development → [`0015-template-driven-feature-development.md`](docs/adr/0015-template-driven-feature-development.md)
-- **ADR-0016** _(Accepted)_ — Core identity & tenancy model + organisation role set → [`0016-core-identity-tenancy-role-model.md`](docs/adr/0016-core-identity-tenancy-role-model.md)
+- **ADR-0016** _(Accepted; §5 amended by ADR-0221)_ — Core identity & tenancy model + organisation role set → [`0016-core-identity-tenancy-role-model.md`](docs/adr/0016-core-identity-tenancy-role-model.md)
 - **ADR-0017** _(Accepted; single-aggregate-tag scheme superseded by ADR-0027)_ — Release tagging & image publishing via GitHub Actions → [`0017-release-tagging-and-image-publishing.md`](docs/adr/0017-release-tagging-and-image-publishing.md)
 - **ADR-0018** _(Accepted; amended by ADR-0192 and ADR-0215)_ — Self-migrating container image → [`0018-self-migrating-container-image.md`](docs/adr/0018-self-migrating-container-image.md)
 - **ADR-0019** _(Accepted)_ — Shared workspace packages ship compiled output → [`0019-shared-package-build-contract.md`](docs/adr/0019-shared-package-build-contract.md)
@@ -623,6 +623,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0218** _(Accepted; amends ADR-0048 M5, extends ADR-0026 §7; D3–D5 added by M2–M4)_ — A click on the diagram gives it the keyboard → [`0218-a-click-on-the-diagram-gives-it-the-keyboard.md`](docs/adr/0218-a-click-on-the-diagram-gives-it-the-keyboard.md)
 - **ADR-0219** _(Accepted; amends ADR-0092, extends ADR-0216 D9 and ADR-0026)_ — A selected activity's bar takes the whole foot row on a short window, and the facts wait → [`0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md`](docs/adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)
 - **ADR-0220** _(Accepted; amends ADR-0028; D7 added for #588)_ — The first planner to open a free plan holds the pen → [`0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md`](docs/adr/0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md)
+- **ADR-0221** _(Accepted; amends ADR-0016 §5)_ — An invitation waits for the address it was sent to → [`0221-an-invitation-waits-for-the-address-it-was-sent-to.md`](docs/adr/0221-an-invitation-waits-for-the-address-it-was-sent-to.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
