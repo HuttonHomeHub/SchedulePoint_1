@@ -30,7 +30,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { CheckboxField } from '@/components/ui/form';
 import { Menu, MenuItem } from '@/components/ui/menu';
-import { useTooltip } from '@/components/ui/tooltip';
 import { NoteCountBadge } from '@/features/notes';
 import {
   MAKE_MILESTONE_LABEL,
@@ -270,11 +269,8 @@ function RowActionsButton({
     store.subscribe,
     () => store.getState().menu?.activity.id === activity.id,
   );
-  // Icon-only, so it states its name to a pointer and a finger as well as a screen reader (ADR-0117).
-  const tip = useTooltip({ content: `Actions for ${activity.name}`, purpose: 'name-echo' });
   return (
     <Button
-      {...tip.triggerProps}
       variant="ghost"
       size="icon-row"
       aria-label={`Actions for ${activity.name}`}
@@ -287,7 +283,6 @@ function RowActionsButton({
       }}
     >
       <MoreHorizontal aria-hidden="true" className="size-4" />
-      {tip.tooltip}
     </Button>
   );
 }

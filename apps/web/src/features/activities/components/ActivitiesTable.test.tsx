@@ -384,12 +384,14 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(at('Total float variance')).toBeLessThan(at('Critical path'));
   });
 
-  it("shows the name of a row's icon-only actions button as a tooltip on focus (ADR-0117)", () => {
+  it("does not cover the next row's actions button with a tooltip (it is named by its label)", () => {
+    // A name-echo tip below one row's button sat over the next row's button and swallowed its
+    // click (CI, PR #1366). Like every other row menu in the product, it is named by aria-label.
     renderWithVariance(varianceRow());
-    fireEvent.focus(screen.getAllByRole('button', { name: /^Actions for / })[0]!);
-    expect(
-      screen.getByText(/^Actions for /, { selector: '[aria-hidden="true"]' }),
-    ).toBeInTheDocument();
+    const button = screen.getAllByRole('button', { name: /^Actions for / })[0]!;
+    fireEvent.focus(button);
+    fireEvent.pointerEnter(button);
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
   });
 
   it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {
