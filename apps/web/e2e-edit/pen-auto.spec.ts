@@ -3,7 +3,7 @@ import { type Page } from '@playwright/test';
 import { expectPenFree, holdThePen, releaseThePen } from '../e2e-support/pen';
 import { expect, test } from '../e2e-support/test';
 
-import { refetchLock, setUpTwoActors } from './support';
+import { addActivity, refetchLock, setUpTwoActors } from './support';
 
 /**
  * The pen on opening (ADR-0220). A Planner or Org Admin who opens a plan nobody is editing holds the
@@ -21,6 +21,8 @@ import { refetchLock, setUpTwoActors } from './support';
 const CROSS_ACTOR = { timeout: 20_000 };
 
 const HOLDING = 'You’re editing this plan.';
+
+const AWAY_NOTICE = 'You were away, so that change was not saved. Try it again.';
 
 /**
  * Record what the pen's surfaces say from now on: every distinct text a `role="status"` region
@@ -333,6 +335,158 @@ test('a tab hidden for fifteen minutes stops heartbeating, and carries on when s
   const seen = await penSurface();
   expect(seen.status).toEqual([HOLDING]);
   expect(seen.pen).toEqual(['Stop editing']);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('a tab left in front for thirty minutes stops heartbeating, and carries on at the next touch', async ({
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const { ctxA, ctxB, a, planUrl } = await setUpTwoActors(browser);
+  const MINUTE = 60_000;
+
+  // As the hidden-tab journey: the clock is installed before load so the heartbeat interval is made
+  // on it, and what is asserted is a network count. Only the page's clock moves, so the server's
+  // lease never really expires here; the expired branches are proven by the hook tests.
+  await a.clock.install();
+  let beats = 0;
+  a.on('request', (req) => {
+    if (req.method() === 'POST' && /\/edit-lock\/heartbeat$/.test(new URL(req.url()).pathname)) {
+      beats += 1;
+    }
+  });
+  await a.goto(planUrl);
+  await holdThePen(a);
+
+  // Positive control: a tab that is touched keeps beating, so the later silence is the threshold and
+  // not a clock that never ran.
+  await a.mouse.move(40, 40);
+  await a.clock.runFor(2 * MINUTE);
+  await expect.poll(() => beats, CROSS_ACTOR).toBeGreaterThan(0);
+
+  // Thirty-one minutes with no input in a tab that stays visible. Nothing may leave.
+  await a.clock.fastForward(31 * MINUTE);
+  await a.clock.runFor(2 * MINUTE);
+  await realPause(500); // let a request that was due leave the page
+  const atRest = beats;
+  await a.clock.runFor(2 * MINUTE);
+  await realPause(500);
+  expect(beats).toBe(atRest);
+
+  // The next touch beats once, at once; the plan is still theirs, and nothing was said or changed.
+  const penSurface = await recordPenSurface(a);
+  await a.mouse.move(200, 200);
+  await expect.poll(() => beats, CROSS_ACTOR).toBe(atRest + 1);
+  await a.mouse.move(220, 210);
+  await realPause(500);
+  expect(beats).toBe(atRest + 1);
+  await expectHeldWithoutPressing(a);
+  await expect(a.getByRole('alert')).toHaveCount(0);
+  const seen = await penSurface();
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test('a resting tab whose hold really lapsed takes the plan back, and says once that a change was lost', async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const { ctxA, ctxB, a, b, planUrl } = await setUpTwoActors(browser);
+  const MINUTE = 60_000;
+
+  await a.clock.install();
+  let beats = 0;
+  a.on('request', (req) => {
+    if (req.method() === 'POST' && /\/edit-lock\/heartbeat$/.test(new URL(req.url()).pathname)) {
+      beats += 1;
+    }
+  });
+  // The first heartbeats must reach the server, so the lease is live before the tab goes quiet. After
+  // the lease has lapsed the wake beat is held back, so the person's first write reaches the server
+  // before it and is refused: the very first input is itself an edit (ADR-0220 D8, E4).
+  let mode: 'pass' | 'block' | 'delay' = 'pass';
+  await a.route('**/edit-lock/heartbeat', async (route) => {
+    if (mode === 'block') return route.abort();
+    if (mode === 'delay') await realPause(8_000);
+    return route.continue();
+  });
+  await a.goto(planUrl);
+  await holdThePen(a);
+  await addActivity(a, 'Nudge me');
+  // Select it from the keyboard and leave focus on the diagram: the nudge after the lapse is then the
+  // first input, a write and a wake at once.
+  const diagram = a.getByRole('listbox').first();
+  await diagram.focus();
+  await a.keyboard.press('ArrowDown');
+  await a.mouse.move(40, 40);
+  await a.clock.runFor(2 * MINUTE);
+  await expect.poll(() => beats, CROSS_ACTOR).toBeGreaterThan(0);
+
+  // Thirty-one minutes untouched on the page's clock, then the tab is resting. From here every
+  // heartbeat is refused at the network, so nothing renews the lease whatever the tab does.
+  await a.clock.fastForward(31 * MINUTE);
+  await a.clock.runFor(2 * MINUTE);
+  mode = 'block';
+  const penSurface = await recordPenSurface(a);
+
+  // The server's lease is 120 s of real time: wait it out on the test's own clock, and let the tab
+  // re-render meanwhile (its one-second tick runs on the page clock).
+  await a.clock.runFor(MINUTE);
+  await realPause(130_000);
+  await expect.poll(() => lockState(b, planUrl), CROSS_ACTOR).toMatch(/^(FREE|EXPIRED)$/);
+
+  // Resting means resting: nothing was said and the pen still reads as held.
+  await expect(a.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  await expect(a.getByText(HOLDING, { exact: true })).toBeVisible();
+  let seen = await penSurface();
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
+
+  // The first input is a nudge. Its write is refused (the lease is gone), the pen is taken back
+  // silently, and the person is told once that the change did not apply.
+  mode = 'delay';
+  await a.keyboard.press('Shift+ArrowRight');
+  await a.clock.runFor(5_000);
+  const notice = a.getByRole('status').filter({ hasText: AWAY_NOTICE });
+  await expect(notice).toBeVisible(CROSS_ACTOR);
+  mode = 'pass';
+  await expect.poll(() => lockState(a, planUrl), CROSS_ACTOR).toBe('HELD_BY_ME');
+  expect(await lockState(b, planUrl)).toBe('HELD_BY_OTHER');
+  await expect(a.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  // No lost-control banner (the open activities panel carries an empty alert region, hence the text
+  // filter), and the sentence is in exactly one live region.
+  await expect(a.getByRole('alert').filter({ hasText: /\S/ })).toHaveCount(0);
+  const carriers = await a.evaluate(
+    (text) =>
+      [...document.querySelectorAll('[role="alert"], [role="status"], [aria-live]')].filter((el) =>
+        (el.textContent ?? '').includes(text),
+      ).length,
+    AWAY_NOTICE,
+  );
+  expect(carriers).toBe(1);
+  seen = await penSurface();
+  expect(seen.status).toEqual([HOLDING]);
+  expect(seen.pen).toEqual(['Stop editing']);
+
+  // Dismiss from the keyboard: the banner goes, and focus is somewhere real rather than <body>.
+  let reached = false;
+  for (let i = 0; i < 60 && !reached; i += 1) {
+    await a.keyboard.press('Tab');
+    reached = await a.evaluate(() =>
+      Boolean(
+        document.activeElement?.closest('[role="status"]')?.textContent?.includes('You were away'),
+      ),
+    );
+  }
+  expect(reached, 'Tab reaches the notice').toBe(true);
+  await a.keyboard.press('Enter');
+  await expect(notice).toHaveCount(0);
+  expect(await a.evaluate(() => document.activeElement === document.body)).toBe(false);
 
   await ctxA.close();
   await ctxB.close();

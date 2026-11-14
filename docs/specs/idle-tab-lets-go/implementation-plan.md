@@ -1,7 +1,7 @@
 # Implementation Plan: A plan left in front and unattended lets go after 30 minutes
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Approved (2026-11-13). Not yet built.
+- **Status:** Approved (2026-11-13). Built on `feat/idle-tab`; the journey is written and awaits its first browser run.
 - **Owner:** product owner; built by the builder agent
 
 ## Breakdown

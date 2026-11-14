@@ -1289,6 +1289,22 @@
       ]
     },
     {
+      "ref": "queryObserver.js:460-462",
+      "package": "@tanstack/query-core",
+      "path": "build/modern/queryObserver.js",
+      "lines": "460-462",
+      "anchor": "if (this.hasListeners()) this.#updateTimers();",
+      "citedBy": ["apps/web/src/features/plan-lock/api/use-plan-edit-lock.ts"]
+    },
+    {
+      "ref": "queryObserver.js:286-288",
+      "package": "@tanstack/query-core",
+      "path": "build/modern/queryObserver.js",
+      "lines": "286-288",
+      "anchor": "return resolveQueryValue(this.options.refetchInterval, this.#currentQuery) ?? false;",
+      "citedBy": ["apps/web/src/features/plan-lock/api/use-plan-edit-lock.ts"]
+    },
+    {
       "ref": "lint-result-cache.js:56",
       "package": "eslint",
       "path": "lib/cli-engine/lint-result-cache.js",

@@ -55,6 +55,8 @@ function pen(over: Partial<PlanPen> = {}): PlanPen {
     requestControl: vi.fn(),
     cancelRequest: vi.fn(),
     cancelFailed: false,
+    awayWrite: false,
+    dismissAwayWrite: vi.fn(),
     handoff: vi.fn(),
     takeOver: vi.fn(),
     onWriteRejected: vi.fn(),

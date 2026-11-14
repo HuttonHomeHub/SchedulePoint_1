@@ -98,7 +98,7 @@ import { clearVisualPlacementGate } from '@/features/plan-actions/conflict-remed
 import { defaultMilestoneType } from '@/features/plan-actions/make-milestone-gate';
 import { MakeMilestoneDialog } from '@/features/plan-actions/MakeMilestoneDialog';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
-import { HANDOFF_ACTIONS, PenStatusCluster, usePenLockView } from '@/features/plan-lock';
+import { HANDOFF_ACTIONS, lockCopy, PenStatusCluster, usePenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, plansQueryOptions } from '@/features/plans';
 import {
   LIVE_REVISION,
@@ -2707,6 +2707,25 @@ export function ToolbarPlanWorkspace({
                 viewportSlot,
               )
             : null}
+
+          {/* A change refused because the tab had been away while its hold lapsed (ADR-0220 D8, E4): the
+          pen took itself back, the change did not apply, and nothing was re-sent. Same banner as a refused
+          export, at `info` (polite) because it reports something after the fact; it is the only thing that
+          announces it. */}
+          {model.pen.awayWrite ? (
+            <div className="px-4 pt-2">
+              <EditConflictBanner
+                message={lockCopy.awayWrite}
+                severity="info"
+                onDismiss={() => {
+                  // Focus first: the Dismiss button is about to leave, and focus would fall to <body>
+                  // (WCAG 2.4.3), which also disables the workspace's keyboard accelerators.
+                  focusPlanSurface();
+                  model.pen.dismissAwayWrite();
+                }}
+              />
+            </div>
+          ) : null}
 
           {ctx.exportError ? (
             <div className="px-4 pt-2">

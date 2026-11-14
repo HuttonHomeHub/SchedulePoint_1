@@ -7,7 +7,8 @@
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:** [ADR-0028](0028-plan-edit-lock.md) (the acquire model: an explicit Start editing was a default nobody
   was asked about, `docs/features/plan-edit-lock/feature-spec.md:149-150`). **D7 added 2026-11-13 for `docs/TECH_DEBT.md`
-  #588**: a request can be withdrawn, and the tab's memory of one follows the server.
+  #588**: a request can be withdrawn, and the tab's memory of one follows the server. **D8 added 2026-11-13 for the
+  idle tab**: a visible tab nobody touches for 30 minutes lets go too.
 - **Spec:** [`docs/specs/first-planner-gets-the-pen/`](../specs/first-planner-gets-the-pen/feature-spec.md) §4.7 ·
   **Plan:** [`implementation-plan.md`](../specs/first-planner-gets-the-pen/implementation-plan.md) (M1 builds D1–D3
   and D6, M2 D4, M3 D5)
@@ -118,6 +119,59 @@ with Q1 answered yes. Spec: [`docs/specs/cancel-request-control/`](../specs/canc
   pen. Closing it needs cross-tab messaging, which is not worth building until someone reports it.
 - **Versions.** api minor (an additive route), web minor. No flag (D6 stands), no schema change.
 
+**D8 — A visible tab nobody touches for 30 minutes stops heartbeating, and wakes on the next input.** Approved
+2026-11-13 as written, including R4. Spec: [`docs/specs/idle-tab-lets-go/`](../specs/idle-tab-lets-go/feature-spec.md).
+D5's mechanism applied to a second trigger, with nothing announced.
+
+- **What counts as input.** `pointerdown`, `pointermove`, `keydown`, `wheel` and `focus` (a capture listener on `window` hears every element's focus too), heard once on
+  `window` in the capture phase (so a canvas or dialog that stops propagation cannot hide it) and passive. Each only
+  writes the time into a ref: no state, no render. `scroll` is not counted (the app scrolls itself). The clock starts when
+  the plan opens and restarts whenever the tab is shown.
+- **The threshold.** `IDLE_LET_GO_MS`, 30 minutes, measured from the last input by the clock, never by counting ticks. The
+  first 30 s tick at or past it skips the beat, so the plan is free at most about 32 minutes after the last touch (the
+  server calls the holder inactive 90 s after the last beat and expires the lease at 120 s). Like D5 it never sends a
+  release: a second tab of the same person keeps the lease with its own beats.
+- **Unsaved typed work keeps the pen.** While this tab's unsaved-work registry holds any report, the idle rule does not
+  apply. The alternative, letting the existing "no longer hold the edit lock" report stand, loses the work if a colleague
+  took the plan, which is the case this decision makes more likely. D5 is unchanged: a hidden tab lets go whatever is
+  unsaved, because nobody can be typing into it.
+- **A resting tab stops checking the status.** From its first skipped beat for idleness the tab is _resting_ and its 15 s
+  status poll pauses, as it already does in a hidden tab. Without that, once the lease expired a poll would read EXPIRED,
+  the tab would stop counting itself as holding, the pen sentence would become the person's own name "was editing
+  (inactive)" and be announced, and the heartbeat hook, which only runs while holding, would no longer be listening for
+  the input that resumes it. TanStack Query reads a `refetchInterval` function again when the query updates, not on every
+  tick, so the poll stops after the read already in flight and restarts with the fetch the wake asks for.
+- **Waking.** The first input in a resting tab ends resting, beats at once and asks for a fresh status. The beat either
+  renews the lease (a sibling tab kept it alive, or it is within the 120 s) or meets the 423 that D3 already answers: a
+  silent retake when the plan is free, the lost-control sentence when a colleague holds it.
+- **No flash on waking (R7), and the hidden-tab return too** (_changed in review, 2026-11-13_). From waking until the beat
+  has settled **and** the retake's read has finished, the view keeps the last held lease whatever the status says. The first
+  draft masked only FREE and EXPIRED, and in a browser a colleague's take showed three sentences about 70 ms apart ("{Name} is
+  editing…", "You're editing…", then the lost sentence); now it goes straight from held to the lost sentence, or stays held.
+  The same guard covers a hidden tab coming back, where the refetch on return could land before the beat's 423.
+- **A write sent with the wake (E4)** (_changed in review, 2026-11-13_; the first draft dropped the change without a
+  word). A write refused while waking, **or while the beat's retake is in the air**, goes through D3's look-first path; one
+  refused after the retake finished, before any beat has been accepted, is checked against a fresh read and, if the pen is
+  ours, reported rather than declined. The change did not apply and is **not re-sent**, so the person is told once:
+  "You were away, so that change was not saved. Try it again." The banner is the workspace's refused-write banner at `info`
+  (polite), the **only** thing that speaks it. Dismiss hands focus to the plan surface first (WCAG 2.4.3). The notice
+  clears on Dismiss, on Stop editing, when it is replaced, and when the next write made through a mutation is accepted
+  (writes made any other way leave it until Dismiss). While shown it pushes the diagram down by its own height, about a sixth
+  at 1024 × 600, as the export-error banner does. A write refused while a colleague holds the plan gets the lost-control
+  sentence instead, and no notice.
+- **The view is deliberately not refreshed while resting.** The screen keeps reading "Editing" until the next input, even if
+  a colleague has taken the plan in the meantime: refreshing it would flip the pen and announce it to someone who is away.
+  The first input re-reads and corrects it.
+- **Resting survives a re-render** (_found in review, 2026-11-13_). The flag lives in a ref shared with the status query and
+  is cleared only by an input, by the tab ceasing to hold, or by a hidden tab returning, never by an effect re-running:
+  the first build cleared it in the input listeners' cleanup, which ran on every render of the host, so a timer elsewhere
+  woke a resting tab without input.
+- **The one-silent-retake cap is unchanged** (`retakenRef`, reset only by an accepted beat): resetting it on a successful
+  retake would let a lease the server keeps refusing be retaken for ever, which is what the cap exists to stop. The cost is a
+  window of up to one beat (30 s) in which a second real loss reads as a loss, which it is.
+- **Nothing is announced.** No new sentence, control or request. Rollback is pinning `WEB_IMAGE_TAG`; no flag (D6), no
+  API or schema change. Web minor.
+
 ## Alternatives considered
 
 - **Acquire on the first editing gesture.** Reading would never take the pen, but every pen-gated entry point (the
@@ -137,9 +191,10 @@ with Q1 answered yes. Spec: [`docs/specs/cancel-request-control/`](../specs/canc
 
 - A Planner who opens a plan only to look holds the pen while that tab stays open, so a colleague who arrives later has
   to ask for it (Request control, then up to the 45-second grace). A tab left **hidden** lets go after 15 minutes (D5): a peer may take over 90 s after
-  that and the plan is free 120 s after that. A **visible** idle tab still holds the pen with **no time limit**: the
-  heartbeat every 30 seconds renews a 120-second lease whether or not anyone is at the screen, because a tab in the
-  foreground is not hidden. That is a known cost of taking the pen on opening, not an oversight.
+  that and the plan is free 120 s after that. A **visible** tab nobody touches lets go after 30 minutes (D8), with the same 90 s and 120 s
+  after that; the one exception is a tab whose editor holds **unsaved typed changes**, which keeps the pen for as long
+  as they are there, as it did before D8. Someone who types into an editor and walks away therefore still holds the
+  plan. That is deliberate: no typed work is put at risk, and it is revisited only if it is reported.
 - A heartbeat refused while the plan reads free is retaken silently, once, and nothing the client can read says why the
   plan is free. An Org Admin's force-release (`force_released`, `plan-lock.service.ts` `release`) also leaves the plan
   free, so the released editor's tab would take it back within about 30 seconds and undo that admin act. The web has no
