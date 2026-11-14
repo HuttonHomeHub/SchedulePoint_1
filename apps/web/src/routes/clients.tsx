@@ -2,6 +2,7 @@ import { useParams } from '@tanstack/react-router';
 
 import { PageContainer, PageHeader } from '@/components/ui/page';
 import { ClientsTable, CreateClientButton } from '@/features/clients';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { pickText, useUrlFilterState } from '@/hooks/use-url-filter-state';
 
@@ -25,6 +26,7 @@ const NO_CLIENT_FILTERS = { q: '' };
  * but the URL belongs to the screen.
  */
 export function ClientsScreen(): React.ReactElement {
+  useDocumentTitle('Clients');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));

@@ -15,6 +15,7 @@ import { useClient } from '@/features/clients';
 import { ImportScheduleButton } from '@/features/interchange';
 import { CreatePlanButton, PlansTable, usePlans } from '@/features/plans';
 import { useProject } from '@/features/projects';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import {
   canImportSchedule,
   canManageHierarchy,
@@ -50,6 +51,7 @@ export function ProjectDetailScreen(): React.ReactElement {
   const plans = usePlans(orgSlug, projectId);
   // The parent client (for the breadcrumb trail); resolved once the project loads.
   const client = useClient(orgSlug, project.data?.clientId ?? '');
+  useDocumentTitle(project.data?.name ?? null);
 
   if (project.isError) {
     return (

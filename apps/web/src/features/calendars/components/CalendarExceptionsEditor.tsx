@@ -535,7 +535,10 @@ export function CalendarExceptionsEditor({
                 : addException.error.message}
             </p>
           ) : null}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          {/* Wraps: five controls with native date boxes are wider than a narrow dialog, and a
+              row that cannot shrink must wrap rather than be cut off (ADR-0114). The label's minimum
+              width is what lets it drop to the next line instead of squeezing to nothing. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
             <TextField
               label="From"
               type="date"
@@ -559,7 +562,7 @@ export function CalendarExceptionsEditor({
               label="Label (optional)"
               autoComplete="off"
               error={errors.label?.message}
-              className="sm:flex-1"
+              className="sm:min-w-48 sm:flex-1"
               {...register('label')}
             />
             <Button

@@ -555,6 +555,15 @@ export function Combobox({
             setOpen(true);
             setActiveIndex(-1);
           }}
+          // A press in the box opens the list, as the chevron does: the box looks like the thing
+          // to press, and only the chevron answering it left a mouse user with a field that
+          // seemed dead. It never CLOSES an open list — a second click is a caret placement in
+          // the search text, not a request to dismiss (APG: the popup closes on Escape, a
+          // selection or focus leaving). Same read-only refusal as the chevron.
+          onClick={() => {
+            if (readOnly || open) return;
+            openList(-1);
+          }}
           onKeyDown={readOnly ? undefined : onKeyDown}
           onBlur={() => setOpen(false)}
           className={cn(

@@ -14,6 +14,7 @@ import {
   toAuditQuery,
 } from '@/features/audit/model/audit-filter';
 import { useOrganizations } from '@/features/organizations';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useOrgRole } from '@/hooks/use-org-role';
 import { useUrlFilterState } from '@/hooks/use-url-filter-state';
 import { canReadAuditLog } from '@/lib/rbac';
@@ -35,6 +36,7 @@ import { canReadAuditLog } from '@/lib/rbac';
 const COVERAGE_ID = 'audit-log-coverage';
 
 export function AuditLogScreen(): React.ReactElement {
+  useDocumentTitle('Audit log');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   // The role comes from the organisations query, which starts undefined. Asking `canReadAuditLog`

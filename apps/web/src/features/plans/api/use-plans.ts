@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type { PlanFormValues } from '../schemas/plan-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { deletedItemKeys, planKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
+import { deletedItemKeys, planKeys, projectKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
 import { planQueryOptions, plansQueryOptions } from '@/lib/query/hierarchy-queries';
 
 // The read-queries live in `lib` (shared) so the navigator rail can consume them
@@ -56,8 +56,12 @@ export function useCreatePlan(orgSlug: string, projectId: string) {
         method: 'POST',
         body: JSON.stringify(createBody(input)),
       }),
+    // The project's own read carries `planCount`, which the project page's header prints.
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) }),
+        queryClient.invalidateQueries({ queryKey: projectKeys.detail(orgSlug, projectId) }),
+      ]),
   });
 }
 

@@ -85,8 +85,9 @@ describe('PlanFormDialog', () => {
   it('names the date for what it is: "Start date" for a new plan, "Data date" when editing', () => {
     const { unmount } = renderDialog();
     expect(screen.getByLabelText('Start date')).toHaveAccessibleDescription(
-      'This is also the plan’s data date.',
+      'Required. This is also the plan’s data date.',
     );
+    expect(screen.getByLabelText('Start date')).toBeRequired();
     expect(screen.queryByLabelText('Data date')).not.toBeInTheDocument();
     unmount();
 

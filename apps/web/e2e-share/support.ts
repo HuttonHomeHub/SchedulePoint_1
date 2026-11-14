@@ -44,7 +44,7 @@ export async function openNewPlan(page: Page): Promise<void> {
   await page.getByRole('dialog').getByLabel('Name').fill('Guest Plan');
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
-  await page.getByRole('link', { name: 'Guest Plan' }).click();
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
 }
 
 /** The interactive base canvas of the TSLD diagram region (aria-hidden, so located by element). */

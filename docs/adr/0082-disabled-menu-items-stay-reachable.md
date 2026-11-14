@@ -195,6 +195,7 @@ for the same APG citation.
   journey (ADR-0081 §1).
 - **The `Menu` outside-press defect was not part of this amendment** and stayed open in #229 until the 2026-10-17 line below.
 - **2026-10-17 — the `Menu` half of #229 is closed**, by a later change: `Menu` takes a required `openerRef`, so a press on the control that opened a menu closes it and returns focus where Escape does, rather than closing and reopening it. Recorded in [`docs/specs/menu-opener-press/spec.md`](../specs/menu-opener-press/spec.md); it implements the APG Menu Button contract the primitive already claimed, so it needed no ADR of its own.
+- **2026-11-13 — a click in the `Combobox` input opens the list** (only the chevron did). It opens with no option active, never closes an open list, and a read-only box ignores it like the chevron; no key binding changed. See `docs/COMPONENT_LIBRARY.md`.
 
 ## Alternatives rejected
 

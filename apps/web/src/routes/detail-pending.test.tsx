@@ -218,3 +218,25 @@ describe('ProjectDetailScreen while the project read is pending', () => {
     expect(screen.getByText('calendars')).toBeInTheDocument();
   });
 });
+
+describe('the tab title', () => {
+  it('names the client once its read settles, and leaves the app title while pending', () => {
+    document.title = 'SchedulePoint';
+    const { rerender } = render(<ClientDetailScreen />);
+    expect(document.title).toBe('SchedulePoint');
+    h.client = { isPending: false, isError: false, data: { name: 'Northgate' } };
+    rerender(<ClientDetailScreen />);
+    expect(document.title).toBe('Northgate · SchedulePoint');
+  });
+
+  it('names the project once its read settles', () => {
+    document.title = 'SchedulePoint';
+    h.project = {
+      isPending: false,
+      isError: false,
+      data: { clientId: 'c1', name: 'Riverside', description: null, planCount: 1 },
+    };
+    render(<ProjectDetailScreen />);
+    expect(document.title).toBe('Riverside · SchedulePoint');
+  });
+});

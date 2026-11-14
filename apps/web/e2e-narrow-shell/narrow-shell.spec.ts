@@ -89,6 +89,8 @@ async function seedOrganisation(page: Page): Promise<string> {
   await page.getByRole('dialog').getByLabel('Name').fill('Baseline');
   await page.getByRole('dialog').getByLabel('Start date').fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
+  // Creating a plan opens it; wait for that so the navigation cannot land mid-narrowing.
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   return orgSlug;
 }
 
@@ -255,7 +257,6 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
 }) => {
   test.setTimeout(300_000);
   const orgSlug = await seedOrganisation(page);
-  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   await seedActivity(page, orgSlug, 'Dig footings');
   const planUrl = page.url();
@@ -417,7 +418,6 @@ test('a live narrowing gets a banner: focus, typed text and the editor survive',
 }) => {
   test.setTimeout(300_000);
   const orgSlug = await seedOrganisation(page);
-  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   await seedActivity(page, orgSlug, 'Dig footings');
 
@@ -825,7 +825,6 @@ async function tabStopsInBody(
 /** A plan with twelve activities, opened at 700 x 900 with the pen held and the first one selected. */
 async function seedWorkspace(page: Page): Promise<{ orgSlug: string; planUrl: string }> {
   const orgSlug = await seedOrganisation(page);
-  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   for (let i = 1; i <= 12; i += 1) await seedActivity(page, orgSlug, `Task ${String(i)}`);
   return { orgSlug, planUrl: page.url() };
@@ -1847,7 +1846,6 @@ test('a fully shaded activities row menu fits 1024 x 600 and keeps every action 
 }) => {
   test.setTimeout(300_000);
   const orgSlug = await seedOrganisation(page);
-  await page.getByRole('link', { name: 'Baseline', exact: true }).click();
   await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
   await seedActivity(page, orgSlug, 'Dig footings');
 

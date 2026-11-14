@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useExportOrganization } from '@/features/organization-export/api/use-export-organization';
 import { ExportAction } from '@/features/organization-export/components/ExportAction';
 import { useOrganizations } from '@/features/organizations';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useOrgRole } from '@/hooks/use-org-role';
 import { canExportOrganization } from '@/lib/rbac';
 
@@ -58,6 +59,7 @@ const NOT_INCLUDED = [
  * request takes (the ADR-0060 defect). Loading is its own branch, not a default.
  */
 export function OrganizationExportScreen(): React.ReactElement {
+  useDocumentTitle('Export organisation data');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const { isPending, isError, data, refetch } = useOrganizations();

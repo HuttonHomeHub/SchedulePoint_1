@@ -11,6 +11,7 @@ import {
   type ResourceKindFilter,
   type ResourceLibraryFilters,
 } from '@/features/resources';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 import { pickParam, pickText, useUrlFilterState } from '@/hooks/use-url-filter-state';
 
@@ -40,6 +41,7 @@ function parseResourceFilters(raw: Record<string, unknown>): ResourceLibraryFilt
  * resources feature stays dependency-free of the calendars feature.
  */
 export function ResourcesScreen(): React.ReactElement {
+  useDocumentTitle('Resources');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   const canWrite = canManageHierarchy(useOrgRole(orgSlug));

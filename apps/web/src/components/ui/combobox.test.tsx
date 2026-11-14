@@ -127,6 +127,44 @@ describe('Combobox', () => {
     });
   });
 
+  describe('pointer press in the box', () => {
+    it('opens the list, with no option active', () => {
+      render(<Harness />);
+      fireEvent.click(input());
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+      expect(input()).not.toHaveAttribute('aria-activedescendant');
+      expect(screen.getAllByRole('option')).toHaveLength(3);
+    });
+
+    it('does not close a list that is already open (a second press places the caret)', () => {
+      render(<Harness />);
+      openWithKeyboard();
+      fireEvent.click(input());
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('does not open a disabled box', () => {
+      render(<Harness disabled />);
+      fireEvent.click(input());
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('opens again on a click after an option was chosen', () => {
+      render(<Harness />);
+      openWithKeyboard();
+      fireEvent.pointerDown(screen.getByRole('option', { name: 'Bravo' }));
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(input());
+      expect(input()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('does not open a read-only box, as the chevron does not', () => {
+      render(<Harness readOnly />);
+      fireEvent.click(input());
+      expect(input()).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
   describe('keyboard operation', () => {
     it('ArrowDown opens the list and makes the first option active', () => {
       render(<Harness />);

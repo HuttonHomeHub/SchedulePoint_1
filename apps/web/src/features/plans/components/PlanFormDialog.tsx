@@ -153,9 +153,10 @@ function PlanForm({
         hint={
           isEdit
             ? 'Activities are scheduled from this date. Progress can be reported up to it.'
-            : 'This is also the plan’s data date.'
+            : 'Required. This is also the plan’s data date.'
         }
         type="date"
+        aria-required="true"
         error={errors.plannedStart?.message}
         {...register('plannedStart')}
       />

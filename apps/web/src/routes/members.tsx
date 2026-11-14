@@ -7,6 +7,7 @@ import {
   MembersTable,
   RolesPanel,
 } from '@/features/members';
+import { useDocumentTitle } from '@/hooks/use-document-title';
 import { canAdministerInvitations, useOrgRole } from '@/hooks/use-org-role';
 
 /**
@@ -24,6 +25,7 @@ import { canAdministerInvitations, useOrgRole } from '@/hooks/use-org-role';
  * asserting there is an answer they may not have.
  */
 export function MembersScreen(): React.ReactElement {
+  useDocumentTitle('Members');
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : '';
   // Inviting, changing a role and removing are one Org-Admin-only bundle on the API (`member:invite`,
