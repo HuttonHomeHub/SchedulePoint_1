@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.15.0
+
+### Minor Changes
+
+- [#1380](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1380) [`b83bbef`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b83bbef60f47c0798765e1e05994f9d2067c2616) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activities table keeps each activity's name in view when you scroll it sideways. On a window 1024 pixels wide or more, the Name column stays at the left edge while the dates and other columns move past it, and Tab still brings a control into view beside it rather than under it.
+
 ## 1.14.0
 
 ### Minor Changes
