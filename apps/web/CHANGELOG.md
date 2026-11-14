@@ -1,5 +1,19 @@
 # @repo/web
 
+## 1.10.1
+
+### Patch Changes
+
+- [#1364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1364) [`e77d703`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e77d703c9b0bddc9f95cefdb8a7fcaf0bf983367) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dropdown boxes such as the plan's Calendar box now open their list when you click in the box, not only on the arrow at its right edge.
+
+- [#1364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1364) [`e77d703`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e77d703c9b0bddc9f95cefdb8a7fcaf0bf983367) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Creating a plan from the project page now opens the new plan, as creating one from the Explorer does, and the project's plan count updates straight away.
+
+- [#1364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1364) [`e77d703`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e77d703c9b0bddc9f95cefdb8a7fcaf0bf983367) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The calendar's holiday and exception form wraps onto a second line on a narrow window instead of being cut off at the right.
+
+- [#1364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1364) [`e77d703`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e77d703c9b0bddc9f95cefdb8a7fcaf0bf983367) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The New plan dialog now says the Start date is required, and screen readers announce it as required.
+
+- [#1364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1364) [`e77d703`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/e77d703c9b0bddc9f95cefdb8a7fcaf0bf983367) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The browser tab now names the screen you are on: the plan, project or client name, or Clients, Members, Calendars, Resources, Audit log and the other main pages, so several open tabs can be told apart.
+
 ## 1.10.0
 
 ### Minor Changes
