@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnnouncerProvider, useAnnounce } from './announcer';
@@ -98,6 +98,113 @@ describe('the polite region', () => {
       vi.advanceTimersByTime(40);
     });
     expect(screen.getByTestId('announcer')).toHaveTextContent('Outcome. Hand-off.');
+  });
+
+  it('never joins what two separate key presses asked for, however quick', () => {
+    function Two(): React.ReactElement {
+      const announce = useAnnounce();
+      return (
+        <>
+          <button type="button" onClick={() => announce('Excavate.')}>
+            one
+          </button>
+          <button type="button" onClick={() => announce('0 predecessors, 0 successors')}>
+            two
+          </button>
+        </>
+      );
+    }
+    render(
+      <AnnouncerProvider>
+        <Two />
+      </AnnouncerProvider>,
+    );
+    fireEvent.keyDown(document.body, { key: 'Home' });
+    act(() => screen.getByRole('button', { name: 'one' }).click());
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    // Inside the frame that wrote "Excavate.", a second press: it starts a new announcement.
+    fireEvent.keyDown(document.body, { key: 'i' });
+    act(() => screen.getByRole('button', { name: 'two' }).click());
+    act(() => {
+      vi.advanceTimersByTime(40);
+    });
+    expect(screen.getByTestId('announcer')).toHaveTextContent(/^0 predecessors, 0 successors$/);
+  });
+
+  it('drops what was waiting when a new press asks before the write', () => {
+    function Two(): React.ReactElement {
+      const announce = useAnnounce();
+      return (
+        <>
+          <button type="button" onClick={() => announce('No successors.')}>
+            one
+          </button>
+          <button type="button" onClick={() => announce('No predecessors.')}>
+            two
+          </button>
+        </>
+      );
+    }
+    render(
+      <AnnouncerProvider>
+        <Two />
+      </AnnouncerProvider>,
+    );
+    fireEvent.keyDown(document.body, { key: ']' });
+    act(() => screen.getByRole('button', { name: 'one' }).click());
+    fireEvent.keyDown(document.body, { key: '[' });
+    act(() => screen.getByRole('button', { name: 'two' }).click());
+    act(() => {
+      vi.advanceTimersByTime(40);
+    });
+    expect(screen.getByTestId('announcer')).toHaveTextContent(/^No predecessors\.$/);
+  });
+
+  it('treats a pointer press as a new press too', () => {
+    function Two(): React.ReactElement {
+      const announce = useAnnounce();
+      return (
+        <>
+          <button type="button" onClick={() => announce('First.')}>
+            one
+          </button>
+          <button type="button" onClick={() => announce('Second.')}>
+            two
+          </button>
+        </>
+      );
+    }
+    render(
+      <AnnouncerProvider>
+        <Two />
+      </AnnouncerProvider>,
+    );
+    act(() => screen.getByRole('button', { name: 'one' }).click());
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'two' }));
+    act(() => screen.getByRole('button', { name: 'two' }).click());
+    act(() => {
+      vi.advanceTimersByTime(40);
+    });
+    expect(screen.getByTestId('announcer')).toHaveTextContent(/^Second\.$/);
+  });
+
+  it('still joins two messages one press caused', () => {
+    render(
+      <AnnouncerProvider>
+        <Caller messages={['Outcome.', 'Hand-off.']} />
+      </AnnouncerProvider>,
+    );
+    fireEvent.pointerDown(screen.getByRole('button'));
+    act(() => screen.getByRole('button').click());
+    act(() => {
+      vi.advanceTimersByTime(40);
+    });
+    expect(screen.getByTestId('announcer')).toHaveTextContent(/^Outcome\. Hand-off\.$/);
   });
 
   it('replaces the previous text when the next announcement is a later frame', () => {

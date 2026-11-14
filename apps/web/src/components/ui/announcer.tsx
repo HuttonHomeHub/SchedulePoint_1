@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 /**
  * A single polite `aria-live` region for the app. Feature code calls
@@ -36,10 +44,33 @@ export function AnnouncerProvider({ children }: { children: React.ReactNode }): 
   // replaces the text, as before.
   // The same sentence asked for twice in one join is spoken once: a double-fired handler must not be
   // heard twice (found by the accessibility review of this change, 2026-11-14).
+  // **A join never spans two presses.** A key press or pointer press starts a new announcement, so
+  // two keys pressed in quick succession (Home, then `i`) are each heard on their own rather than
+  // read together; only what one press caused is joined (found by `e2e/tsld.spec.ts`, 2026-11-14).
   const pending = useRef<Entry[]>([]);
   const settling = useRef<Entry[]>([]);
+  const scheduled = useRef(false);
+  const inputSeq = useRef(0);
+  const batchSeq = useRef(0);
+  useEffect(() => {
+    const bump = (): void => {
+      inputSeq.current += 1;
+    };
+    document.addEventListener('keydown', bump, true);
+    document.addEventListener('pointerdown', bump, true);
+    return () => {
+      document.removeEventListener('keydown', bump, true);
+      document.removeEventListener('pointerdown', bump, true);
+    };
+  }, []);
   const announce = useCallback<Announce>((next, options) => {
     const entry: Entry = { text: next, transient: options?.transient === true };
+    if (batchSeq.current !== inputSeq.current) {
+      // A new press: what was asked for before it is replaced, never prefixed.
+      batchSeq.current = inputSeq.current;
+      settling.current = [];
+      pending.current = [];
+    }
     const spoken = settling.current;
     if (spoken.length > 0) {
       if (spoken.some((e) => e.text === next)) return;
@@ -54,17 +85,20 @@ export function AnnouncerProvider({ children }: { children: React.ReactNode }): 
     // Clear first so re-announcing the same text still fires the live region.
     setMessage('');
     pending.current.push(entry);
-    if (pending.current.length > 1) return;
+    if (scheduled.current) return;
+    scheduled.current = true;
     requestAnimationFrame(() => {
+      scheduled.current = false;
       const all = pending.current;
       pending.current = [];
+      if (all.length === 0) return;
       const mattering = all.filter((e) => !e.transient);
       const kept = mattering.length > 0 ? mattering : all;
       settling.current = kept;
       setMessage(kept.map((e) => e.text).join(' '));
       // The frame after the write closes the join: anything later is a new announcement.
       requestAnimationFrame(() => {
-        settling.current = [];
+        if (settling.current === kept) settling.current = [];
       });
     });
   }, []);
