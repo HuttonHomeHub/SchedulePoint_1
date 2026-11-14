@@ -31,6 +31,13 @@ export interface FollowPlanOfferState {
   /** More bars qualify than the batch route takes in one write: Follow logic is shaded, never chunked. */
   overLimit: boolean;
   /**
+   * The ids a press would move, from the rows as last listed: eligible and not dismissed. Read at render
+   * (the selection bar asks whether the selected bar is one of them), so it is a stable set that changes
+   * only when the answer does; **independent of the pen**, unlike `offer`, which is withdrawn without it.
+   * Its size is the offer's count.
+   */
+  targetIds: ReadonlySet<string>;
+  /**
    * The bars a press would move, from `rows` read NOW: eligible and not dismissed. The host reads the
    * rows at press time (the freshest versions the cache holds), so the offer itself depends only on the
    * count and does not change identity on every refetch.
@@ -214,6 +221,13 @@ export function useFollowPlanOffer(params: {
     [activities, dismissedHere],
   );
   const count = targets.length;
+  // Keyed on the ids themselves, not on `targets`: a refetch hands back a new array for the same bars,
+  // and the selection bar's context is rebuilt whenever this set changes identity.
+  const targetKey = targets.map((row) => row.id).join('\u0000');
+  const targetIds = useMemo(
+    (): ReadonlySet<string> => new Set(targetKey === '' ? [] : targetKey.split('\u0000')),
+    [targetKey],
+  );
   const targetIdsRef = useRef<readonly string[]>([]);
   useEffect(() => {
     targetIdsRef.current = targets.map((row) => row.id);
@@ -343,6 +357,7 @@ export function useFollowPlanOffer(params: {
     () => ({
       offer,
       overLimit: count > FOLLOW_PLAN_LIMIT,
+      targetIds,
       select,
       start,
       succeed,
@@ -356,6 +371,7 @@ export function useFollowPlanOffer(params: {
     [
       offer,
       count,
+      targetIds,
       select,
       start,
       succeed,

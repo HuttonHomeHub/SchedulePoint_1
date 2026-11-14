@@ -878,7 +878,6 @@ function GoToTodayControl({
         itemProps={api.itemProps}
         primaryRef={primaryRef}
         caretRef={caretRef}
-        pressed={false}
         open={open}
         primaryDisabled={primaryDisabled}
         caretDisabled={caretDisabled}

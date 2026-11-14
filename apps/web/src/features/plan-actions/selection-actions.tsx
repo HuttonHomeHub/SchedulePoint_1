@@ -39,7 +39,9 @@ import {
   toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
+import { ToolbarButton } from '@/components/ui/toolbar/ToolbarButton';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
+import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { useTooltip } from '@/components/ui/tooltip';
 import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 import type { BulkActionGate } from '@/features/tsld/components/BulkSelectionBar';
@@ -69,6 +71,16 @@ export type SetCodePanel = (
   gate: SetCodeGate,
   initialFocus: React.RefObject<HTMLSelectElement | null>,
 ) => React.ReactNode;
+
+/** What the arrow on **Follow logic** offers: the count the menu item names, and the write behind it. */
+export interface FollowAllChoice {
+  /** The bars a press would move: the same number a tall window's strip prints. */
+  count: number;
+  /** Why the menu item is shaded (too many, a press already moving, the Late-start overlay), or `null` when open. */
+  reason: string | null;
+  /** The workspace's whole-plan Follow logic: one write, one undo step. */
+  onFollowAll: () => void;
+}
 
 /**
  * The context for the **floating selection-actions** bar (ADR-0031, Fork-2 default): the commands
@@ -128,6 +140,13 @@ export interface SelectionActionContext {
   clearPlacement: BulkActionGate;
   /** Withdraw the selected activity's hand-placed `visualStart`. */
   onClearVisualPlacement: () => void;
+  /**
+   * The arrow beside **Follow logic**: let every bar the whole-plan offer counts follow its logic in
+   * one write (ADR-0216 D6). `null` or absent when it is not offered here: the host sets it only on a
+   * short window, where the standing offer is omitted, and only for a selected bar that offer counts,
+   * when two or more bars are counted. Optional so a host that has no whole-plan offer says nothing.
+   */
+  followAll?: FollowAllChoice | null;
   /** Open the activity editor where a conflict actually lives. Opaque on purpose: `features/tsld`
    * must not import `ActivityEditorPurpose` from `features/activities` (§5/§12), so the composition
    * root maps this the way it already maps the bar's other editor callbacks. */
@@ -695,6 +714,128 @@ function ConflictRemedyControl({
   );
 }
 
+const FOLLOW_LOGIC_LABEL = 'Follow logic';
+
+/**
+ * **A `TriangleAlert` when Follow logic IS the conflict's remedy, an `Eraser` otherwise.** Asked of the
+ * remedy map, not of a key literal (one-planning-surface M-D): this read `conflictKey ===
+ * 'visualConflict'` until the placement conflict split in two, and a second hard-coded key beside a
+ * total `Record` is the drift that record exists to prevent. `visualLaterThanBound`'s remedy is a
+ * ROUTE, rendered as its own button, so Follow logic stays an ordinary `Eraser` there: two
+ * alert-flavoured controls would make neither of them the answer.
+ */
+function followLogicIcon(ctx: SelectionActionContext): React.ReactElement {
+  const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+  return remedy?.kind === 'barAction' && remedy.itemId === 'clear-visual-placement' ? (
+    <TriangleAlert className="size-4" />
+  ) : (
+    <Eraser className="size-4" />
+  );
+}
+
+/**
+ * When Follow logic IS the conflict's remedy it carries the reason as its description, so a Viewer
+ * reaching the shaded button hears why it is there. Asked of the remedy map, like the icon;
+ * `visualLaterThanBound`'s route carries its own.
+ */
+function followLogicDescription(ctx: SelectionActionContext): string | undefined {
+  const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
+  return remedy?.kind === 'barAction' &&
+    remedy.itemId === 'clear-visual-placement' &&
+    ctx.conflictKey !== null
+    ? conflictReasonLabel(ctx.conflictKey)
+    : undefined;
+}
+
+/** The count in the menu item's name, so the reader sees how far it reaches before pressing. */
+export function followAllLabel(count: number): string {
+  return `Let all ${String(count)} bars follow their logic`;
+}
+
+/**
+ * **Follow logic, and on a short window its arrow** (ADR-0216 D6). Today's plain button unless the
+ * host offers {@link FollowAllChoice}; then the toolbar's own split button (Add and Link are the
+ * precedent): the primary half is unchanged (this bar only), the arrow opens one item that lets every
+ * counted bar follow in one write.
+ *
+ * **Shaded the way the plain button is, to every input** (ADR-0204): without the pen, or under the
+ * Late-start overlay, both halves carry the shared gate's reason. The menu item has its own reason on
+ * top of that (over the write's limit, a press already moving) and stays focusable (ADR-0082). The
+ * menu returns focus to the primary, never the arrow, which is not a roving stop (WCAG 2.4.3).
+ */
+function FollowLogicControl({
+  ctx,
+  api,
+}: {
+  ctx: SelectionActionContext;
+  api: ToolbarItemRenderApi;
+}): React.ReactElement {
+  const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const icon = followLogicIcon(ctx);
+  const description = followLogicDescription(ctx);
+  const choice = ctx.followAll ?? null;
+  if (choice === null) {
+    return (
+      <ToolbarButton
+        itemId={api.itemProps['data-toolbar-item']}
+        label={FOLLOW_LOGIC_LABEL}
+        icon={icon}
+        labelState={api.labelState}
+        activeKind={api.activeKind}
+        disabled={api.disabled}
+        disabledReason={api.disabledReason}
+        srDescription={description}
+        tabIndex={api.itemProps.tabIndex}
+        onActivate={ctx.onClearVisualPlacement}
+        {...(api.itemProps.onFocus ? { onFocus: api.itemProps.onFocus } : {})}
+      />
+    );
+  }
+  return (
+    <>
+      <ToolbarSplitButton
+        activeKind={api.activeKind}
+        itemProps={api.itemProps}
+        primaryRef={primaryRef}
+        caretRef={triggerRef}
+        open={open}
+        disabled={api.disabled}
+        {...(api.disabledReason
+          ? {
+              primaryDisabledReason: api.disabledReason,
+              caretDisabledReason: api.disabledReason,
+            }
+          : {})}
+        {...(description ? { primaryDescription: description } : {})}
+        labelState={api.labelState}
+        title={FOLLOW_LOGIC_LABEL}
+        icon={icon}
+        label={FOLLOW_LOGIC_LABEL}
+        caretLabel="More Follow logic choices"
+        onPrimary={ctx.onClearVisualPlacement}
+        onOpenMenu={toggle}
+      />
+      <Menu
+        open={open}
+        onClose={close}
+        anchor={anchor}
+        label="Follow logic choices"
+        openerRef={triggerRef}
+        restoreFocusRef={primaryRef}
+      >
+        <MenuItem
+          onSelect={choice.onFollowAll}
+          disabled={choice.reason !== null}
+          {...(choice.reason === null ? {} : { disabledReason: choice.reason })}
+        >
+          {followAllLabel(choice.count)}
+        </MenuItem>
+      </Menu>
+    </>
+  );
+}
+
 /**
  * The bar's groups, left to right: the activity's own actions, then the viewing controls (ADR-0187).
  * `Toolbar`'s canonical order puts `find` first, which put the conflict remedy behind three viewing
@@ -1135,42 +1276,20 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
        * planner's cursor, which is exactly what kept the count off the `next-conflict` label.
        * `icon` already takes a ctx form for precisely this kind of state.
        */
-      icon: (ctx: SelectionActionContext) => {
-        // **Asked of the remedy map, not of a key literal** (one-planning-surface M-D). This
-        // read `conflictKey === 'visualConflict'` until the placement conflict split in two,
-        // and a second hard-coded key beside a total `Record` is the drift that record exists
-        // to prevent: the alert belongs on whichever control the map NAMES as the remedy, so
-        // asking the map makes that true by construction rather than by two places agreeing.
-        //
-        // The consequence is the one worth having. `visualLaterThanBound`'s remedy is a ROUTE,
-        // rendered as its own button, so this item stays an ordinary `Eraser` — clearing the
-        // placement is still available to that planner, but two alert-flavoured controls would
-        // make neither of them the answer.
-        const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
-        return remedy?.kind === 'barAction' && remedy.itemId === 'clear-visual-placement' ? (
-          <TriangleAlert className="size-4" />
-        ) : (
-          <Eraser className="size-4" />
-        );
-      },
-      // When this IS the conflict's remedy it carries the reason as its description, so a
-      // Viewer reaching the shaded button hears why it is there. Asked of the remedy map, not
-      // a key literal, like the icon above; `visualLaterThanBound`'s route carries its own.
-      srDescription: (ctx: SelectionActionContext) => {
-        const remedy = ctx.conflictKey === null ? null : CONFLICT_REMEDIES[ctx.conflictKey];
-        return remedy?.kind === 'barAction' &&
-          remedy.itemId === 'clear-visual-placement' &&
-          ctx.conflictKey !== null
-          ? conflictReasonLabel(ctx.conflictKey)
-          : undefined;
-      },
+      // The same two functions the render below calls, so the plain button and the split one cannot
+      // disagree about the glyph or the description (the registry still declares them: the
+      // structural tests and the overflow of any future surface read the item, not the control).
+      icon: followLogicIcon,
+      srDescription: followLogicDescription,
       penGated: true,
       // The shared `clearVisualPlacementGate`'s verdict, computed once by the host and passed
       // in — never re-derived here. Two independent copies of a four-condition ladder is how
       // the count and the filter came to disagree about the word "conflict" in the first place.
       isEnabled: (ctx: SelectionActionContext) => ctx.clearPlacement.enabled,
       disabledReason: (ctx: SelectionActionContext) => ctx.clearPlacement.reason ?? undefined,
-      onActivate: (ctx: SelectionActionContext) => ctx.onClearVisualPlacement(),
+      render: (ctx: SelectionActionContext, api: ToolbarItemRenderApi) => (
+        <FollowLogicControl ctx={ctx} api={api} />
+      ),
     },
     // ---------------------------------------------------------------- canvas commands (M2-T1)
     //

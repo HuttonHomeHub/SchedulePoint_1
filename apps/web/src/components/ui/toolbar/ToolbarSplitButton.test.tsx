@@ -299,4 +299,27 @@ describe('ToolbarSplitButton — a description on a live primary', () => {
     // primitive only sets the attribute when there is something to point at.
     expect(primary).not.toHaveAttribute('aria-describedby');
   });
+
+  it('renders no aria-pressed when `pressed` is omitted: a command is not a toggle', () => {
+    render(
+      <ToolbarSplitButton
+        itemProps={{}}
+        primaryRef={createRef<HTMLButtonElement>()}
+        caretRef={createRef<HTMLButtonElement>()}
+        open={false}
+        title="Follow logic"
+        icon={null}
+        label="Command"
+        caretLabel="More choices"
+        onPrimary={vi.fn()}
+        onOpenMenu={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Command' })).not.toHaveAttribute('aria-pressed');
+  });
+
+  it('still renders aria-pressed for a tool', () => {
+    const { primary } = renderSplit({ pressed: true });
+    expect(primary).toHaveAttribute('aria-pressed', 'true');
+  });
 });

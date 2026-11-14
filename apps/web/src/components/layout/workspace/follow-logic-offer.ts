@@ -106,6 +106,9 @@ export function followPlanSentence(count: number): string {
     : `${String(count)} bars stay where they were placed, before their logic allows.`;
 }
 
+/** Why the arrow's menu item is shaded while a whole-plan press is being answered (printed, ADR-0204). */
+export const FOLLOW_PLAN_BUSY_REASON = 'Already moving these bars; wait for it to finish.';
+
 /** Why Follow logic is shaded when more bars qualify than one write may carry (printed, ADR-0204). */
 export function followPlanOverLimitReason(count: number): string {
   return `Too many to follow at once (${count.toLocaleString()}; the limit is ${FOLLOW_PLAN_LIMIT.toLocaleString()}). Follow logic still works on each bar.`;

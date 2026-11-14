@@ -825,8 +825,10 @@ test.describe('The edit offer', () => {
       'focus did not fall to <body> when the strip left',
     ).toBe(false);
     expect(
+      // `includes`, not `startsWith`: a sentence asked for in the same frame as another is spoken
+      // after it in one utterance (the announcer keeps both), so it need not open the text.
       (await announced(page)).some((text) =>
-        text.startsWith('Kept “Pour slab” where you placed it; it stays flagged'),
+        text.includes('Kept “Pour slab” where you placed it; it stays flagged'),
       ),
       'Keep it here does not end in silence',
     ).toBe(true);

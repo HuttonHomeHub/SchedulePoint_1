@@ -444,6 +444,10 @@ A toolbar run or cluster is keyed by a stable identity (the item's id, the clust
 DO then LOOK below it, in the DOM, so the Tab and arrow order is the order on screen. That reordering is a
 deliberate change to `Deck`'s roving order at the 1024 line; React restores the focused item across it.
 
+`ToolbarSplitButton`'s `pressed` is optional (2026-11-14): omit it for a command (Go to today, Follow logic) and the primary carries no `aria-pressed`, so it is not announced as a toggle; a tool (Add, Link) still passes a boolean.
+
+**The polite region joins a frame's announcements (2026-11-14).** `announce(message)` writes once per frame, so two messages asked for in one frame, or in the frame that writes, are spoken in order in one utterance rather than the first being lost (Follow logic's outcome and the focus hand-off). `announce(message, { transient: true })` marks a standing count (a combobox's "N results available", a table's "N found"): it is dropped when a non-transient message shares its frame and never prefixes one. A message in a later frame replaces the text as before.
+
 **Two optional pieces of the visual brief, no key or focus-rule change** (toolbar-redesign M6; the group box,
 the row mark and the closing ring it also shipped were deleted by toolbar-grid M1).
 `toolbarControlVariants` gains a quieter `disabled` (`text-muted-foreground bg-transparent shadow-none` and

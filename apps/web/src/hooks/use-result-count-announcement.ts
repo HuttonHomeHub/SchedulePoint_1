@@ -53,6 +53,6 @@ export function useResultCountAnnouncement({
         : `${count} ${noun}${count === 1 ? '' : 's'} found.`;
     if (message === lastMessage.current) return;
     lastMessage.current = message;
-    announce(message);
+    announce(message, { transient: true });
   }, [pending, count, filterKey, noun, emptyMessage, announce]);
 }

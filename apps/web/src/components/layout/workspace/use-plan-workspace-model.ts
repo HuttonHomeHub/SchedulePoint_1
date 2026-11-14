@@ -3351,6 +3351,11 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
      */
     followPlan: followPlan.offer,
     followPlanOverLimit: followPlan.overLimit,
+    /**
+     * The ids "let all follow" would move, whatever the pen: the selection bar's arrow reads whether
+     * the selected bar is one of them and how many there are (ADR-0216 D6, the short-window route).
+     */
+    followPlanTargetIds: followPlan.targetIds,
     acceptFollowPlan,
     dismissFollowPlan,
     closeFollowPlanConfirmation: followPlan.closeConfirmation,

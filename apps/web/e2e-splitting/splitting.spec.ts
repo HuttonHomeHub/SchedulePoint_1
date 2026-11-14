@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 import AxeBuilder from '@axe-core/playwright';
@@ -73,12 +73,49 @@ interface JsTiming {
 
 /**
  * Every script resource the page has fetched so far, from the browser's own timeline — **except the
- * idle-time onboarding warm-up**. P3 and P4 are about the critical path to the screen the visitor
+ * idle-time onboarding warm-up** ({@link warmUpChunks}: the chunk and what it imports). P3 and P4 are about the critical path to the screen the visitor
  * asked for; an idle preload starts whenever the browser goes quiet (so it lands as a third wave on a
  * slow runner, as it did on `chromium-coarse`) and is by design off that path, exactly as
  * `warmHierarchyScreens` is for the signed-in routes. Excluding it by name keeps the bar honest
  * without raising `MAX_WAVES`; the warm-up itself is pinned by the router's S2 structural test.
  */
+/** The chunks a built file imports statically (`from"./x.js"`), read from `dist/assets/`. */
+function staticImports(file: string): string[] {
+  const code = readFileSync(join(DIST_ASSETS, file), 'utf8');
+  return [...code.matchAll(/from"\.\/([^"]+\.js)"/g)].map((m) => m[1] ?? '').filter(Boolean);
+}
+
+/** Every chunk reachable from `roots` by static import, roots included. */
+function closure(roots: readonly string[]): Set<string> {
+  const seen = new Set<string>();
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const file = queue.pop() ?? '';
+    if (seen.has(file) || !existsSync(join(DIST_ASSETS, file))) continue;
+    seen.add(file);
+    queue.push(...staticImports(file));
+  }
+  return seen;
+}
+
+/**
+ * **The warm-up is the onboarding chunk and everything it pulls in that the entry does not.** It
+ * was excluded by the onboarding chunk's name alone, but that chunk imports others (`members`, and
+ * through it `overview`, `ui-shared` and two copy modules), and the preload helper fetches them with
+ * it — so on a runner where the idle callback fires after the screen's chunk has landed they made a
+ * third "wave" that is the warm-up itself, not the path to the screen (PR #1382, where it failed six
+ * runs in a row on CI and none locally). Derived from the build, so a new import cannot reopen it,
+ * and a chunk the entry also needs stays counted.
+ */
+function warmUpChunks(): Set<string> {
+  const assets = readdirSync(DIST_ASSETS);
+  const onboarding = assets.filter((f) => /^onboarding-.+\.js$/.test(f));
+  const html = readFileSync(join(DIST_ASSETS, '..', 'index.html'), 'utf8');
+  const entry = [...html.matchAll(/(?:src|href)="\/assets\/([^"]+\.js)"/g)].map((m) => m[1] ?? '');
+  const critical = closure(entry);
+  return new Set([...closure(onboarding)].filter((f) => !critical.has(f)));
+}
+
 async function jsTiming(page: Page): Promise<JsTiming> {
   const rows = await page.evaluate(() =>
     (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
@@ -90,7 +127,10 @@ async function jsTiming(page: Page): Promise<JsTiming> {
         transferSize: e.transferSize,
       })),
   );
-  const critical = rows.filter((r) => !ONBOARDING_CHUNK.test(r.name));
+  const warmUp = warmUpChunks();
+  // Non-vacuity: the onboarding chunk itself is always part of the warm-up.
+  expect([...warmUp].some((f) => ONBOARDING_CHUNK.test(`/assets/${f}`))).toBe(true);
+  const critical = rows.filter((r) => !warmUp.has(r.name.replace(/^\/assets\//, '')));
   return {
     requests: critical,
     transferBytes: critical.reduce((sum, r) => sum + r.transferSize, 0),

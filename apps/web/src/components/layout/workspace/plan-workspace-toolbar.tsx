@@ -11,7 +11,7 @@ import {
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { focusOutsideInert, planSurfaceTarget } from './focus-reachable';
-import { followPlanOverLimitReason } from './follow-logic-offer';
+import { FOLLOW_PLAN_BUSY_REASON, followPlanOverLimitReason } from './follow-logic-offer';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
@@ -1385,6 +1385,35 @@ export function ToolbarPlanWorkspace({
     undoFollowEdit,
   ]);
   /**
+   * **The arrow on the selection bar's Follow logic** (ADR-0216 D6, the short-window route): the one place
+   * a planner on a short window can ask for the whole-plan offer the dock omits. The reason leads with the
+   * shared gate's (the Late-start overlay), then a press already in flight, then the write's limit, so the
+   * item says the thing the planner can act on first. The bars are the offer's own, so the number matches a
+   * tall window's strip. `shown` is only the window: which bar and how many is the builder's per-bar call.
+   */
+  const followPlanTargetIds = model.followPlanTargetIds;
+  const followPlanBusy =
+    followPlan !== null && (followPlan.phase === 'busy' || followPlan.phase === 'moving');
+  const followAll = useMemo(
+    () => ({
+      ids: followPlanTargetIds,
+      shown: shortFrame,
+      reason:
+        followEditShutReason ??
+        (followPlanBusy ? FOLLOW_PLAN_BUSY_REASON : null) ??
+        (followPlanOverLimit ? followPlanOverLimitReason(followPlanTargetIds.size) : null),
+      onFollowAll: () => void acceptFollowPlan(),
+    }),
+    [
+      followPlanTargetIds,
+      shortFrame,
+      followEditShutReason,
+      followPlanBusy,
+      followPlanOverLimit,
+      acceptFollowPlan,
+    ],
+  );
+  /**
    * **Undo and redo are live only when the planner can author right now** — pen
    * and role fused, minus the read-only Late-start overlay. One value for the accelerators, the
    * strip's follow-up button and the refusal below, so they cannot disagree about it.
@@ -1774,6 +1803,7 @@ export function ToolbarPlanWorkspace({
         scheduleRefusal: model.scheduleRefusal,
       })}
       onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
+      followAll={followAll}
       onOpenEditorAt={model.onOpenActivityEditorAt}
       // The editor's own `general` gate, by identity (ADR-0162 decision 4): Make milestone… on the
       // bar and on the table's row menu shade from ONE object, so they cannot give two reasons.
@@ -1952,6 +1982,7 @@ export function ToolbarPlanWorkspace({
     onProgress: model.onProgressActivity,
     onNotes: model.revealActivityNotes,
     onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
+    followAll,
     onOpenEditorAt: model.onOpenActivityEditorAt,
     // The same object the canvas bar receives above, by identity (ADR-0162 decision 4).
     definitionGate: model.activityEditorGating.general,
