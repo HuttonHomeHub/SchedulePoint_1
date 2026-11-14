@@ -543,6 +543,145 @@ describe('DataTable — Column.width', () => {
 });
 
 /**
+ * `pinnedColumn` (`docs/specs/baseline-slip-and-pinned-names/`, M4): one column stays in view from
+ * `lg:` up. jsdom has no layout and no media queries, so this asserts what the component writes (the
+ * classes, the region variable, the dev refusal); that the cell really stays in view, and that focus
+ * is not left under it, is the journey's and the browser review's.
+ */
+describe('DataTable — pinnedColumn', () => {
+  const wide: Column<Row>[] = [
+    { header: 'Code', cell: (row) => row.id },
+    { header: 'Name', cell: (row) => row.name },
+    { header: 'Type', cell: () => 'Task' },
+  ];
+  const rows = [
+    { id: '1', name: 'Alpha' },
+    { id: '2', name: 'Beta' },
+  ];
+  const props = { ...common, columns: wide };
+
+  it.each(['page', 'contained'] as const)(
+    'puts the pin classes on the pinned header and every pinned cell, and on no other (%s)',
+    (scroll) => {
+      render(
+        <DataTable {...props} query={query({ data: rows })} scroll={scroll} pinnedColumn="Name" />,
+      );
+      const pinned = (el: HTMLElement) =>
+        el.className.includes('lg:sticky') || el.className.includes('lg:left-0');
+      const heads = screen.getAllByRole('columnheader');
+      expect(heads.map(pinned)).toEqual([false, true, false]);
+      expect(heads[1]!.className).toContain('lg:left-0');
+      expect(heads[1]!.className).toContain('lg:border-r');
+      const cells = screen.getAllByRole('cell');
+      expect(cells.map(pinned)).toEqual([false, true, false, false, true, false]);
+      expect(cells[1]!.className).toContain('lg:bg-(--page-background)');
+      expect(cells[1]!.className).toContain('lg:border-r');
+      expect(cells[1]!.className).toContain('lg:z-10');
+    },
+  );
+
+  it('puts the pinned header above the other sticky headers when the region scrolls both ways', () => {
+    render(
+      <DataTable {...props} query={query({ data: rows })} scroll="contained" pinnedColumn="Name" />,
+    );
+    const heads = screen.getAllByRole('columnheader');
+    expect(heads[0]!.className).toContain('z-20');
+    expect(heads[1]!.className).toContain('lg:z-30');
+  });
+
+  it('gives the region scroll padding from the variable, only when a column is pinned', () => {
+    const pinned = render(
+      <DataTable {...props} query={query({ data: rows })} scroll="contained" pinnedColumn="Name" />,
+    );
+    expect(pinned.container.querySelector('[role="region"]')!.className).toContain(
+      'lg:scroll-ps-(--dt-pin-start)',
+    );
+    pinned.unmount();
+    const plain = render(<DataTable {...props} query={query({ data: rows })} scroll="contained" />);
+    expect(plain.container.querySelector('[role="region"]')!.className).not.toContain('scroll-ps');
+  });
+
+  it('keeps the region variable at the pinned header width as it resizes', () => {
+    const callbacks: ResizeObserverCallback[] = [];
+    let width = 180;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const rect = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(() => ({ width }) as DOMRect);
+    try {
+      const { container } = render(
+        <DataTable
+          {...props}
+          query={query({ data: rows })}
+          scroll="contained"
+          pinnedColumn="Name"
+        />,
+      );
+      const region = container.querySelector<HTMLElement>('[role="region"]')!;
+      expect(region.style.getPropertyValue('--dt-pin-start')).toBe('180px');
+      width = 240;
+      callbacks.forEach((callback) => callback([], {} as ResizeObserver));
+      expect(region.style.getPropertyValue('--dt-pin-start')).toBe('240px');
+    } finally {
+      rect.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('refuses, in development, a name that matches no column', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        render(<DataTable {...props} query={query({ data: rows })} pinnedColumn="Nmae" />),
+      ).toThrow(/pinnedColumn "Nmae" matches no column header/);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('refuses an unmatched name while the table is still loading, with no rows to show it', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() =>
+        render(<DataTable {...props} query={query({ isPending: true })} pinnedColumn="Nmae" />),
+      ).toThrow(/matches no column header/);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it.each(['page', 'contained'] as const)(
+    'leaves a %s table that does not pass it exactly as it was',
+    (scroll) => {
+      const { container } = render(
+        <DataTable {...props} query={query({ data: rows })} scroll={scroll} />,
+      );
+      const html = container.innerHTML;
+      expect(html).not.toContain('lg:sticky');
+      expect(html).not.toContain('lg:left-0');
+      expect(html).not.toContain('lg:z-');
+      expect(html).not.toContain('lg:border-r');
+      expect(html).not.toContain('dt-pin-start');
+      expect(container.querySelector<HTMLElement>('[role="region"]')!.style.cssText).toBe('');
+      const cell = screen.getAllByRole('cell')[1]!;
+      expect(cell.className).toBe(
+        scroll === 'contained' ? 'py-2 pr-4 border-border border-b' : 'py-2 pr-4',
+      );
+    },
+  );
+});
+
+/**
  * **Row memoisation** (`docs/TECH_DEBT.md` #334, M2-F2). Rows skip a parent render only when both the
  * row object and the `columns` array are unchanged; every other call site declares `columns` inline
  * and must keep rendering exactly as before.

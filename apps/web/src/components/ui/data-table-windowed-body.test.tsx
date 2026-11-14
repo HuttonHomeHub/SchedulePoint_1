@@ -311,3 +311,29 @@ describe('windowed DataTable — column widths are frozen (ADR-0165 D1)', () => 
     expect(within(screen.getByRole('table')).getAllByRole('cell').length).toBeGreaterThan(0);
   });
 });
+
+describe('windowed DataTable — pinnedColumn (the activities table)', () => {
+  it('pins the named column on the header and on every rendered row of the window', () => {
+    render(
+      <DataTable
+        caption="Rows"
+        columns={columns}
+        query={query(rowsOf(30))}
+        getRowKey={(row) => row.id}
+        loadingLabel="Loading…"
+        empty={<div>None</div>}
+        scroll="contained"
+        windowed
+        pinnedColumn="Name"
+      />,
+    );
+    const pinned = (el: Element) =>
+      el.className.includes('lg:sticky') || el.className.includes('lg:left-0');
+    expect(screen.getAllByRole('columnheader').map(pinned)).toEqual([false, true]);
+    const rows = dataRows();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(Array.from(row.children).map(pinned)).toEqual([false, true]);
+    }
+  });
+});

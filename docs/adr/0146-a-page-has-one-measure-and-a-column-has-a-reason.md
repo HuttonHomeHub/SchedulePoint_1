@@ -61,6 +61,11 @@ vacuous unless somebody writes the exception down.
 
 Measured: **11 wrapping columns → 0** at 1646.
 
+> **Note, 2026-11-14 (`docs/specs/baseline-slip-and-pinned-names/`, M4).** A column's reason may be that it is the
+> row's subject, and then it may stay in view: `DataTable`'s `pinnedColumn` names one column that sticks to the
+> left edge from 1024 px up while the table scrolls sideways. The activities table passes `Name` and nothing else
+> does; the other tables, and every width below 1024, are unchanged.
+
 ### D3b — A detail read carries child counts; a list read is structurally barred from them
 
 Client and Project detail state their children. The product owner's answer to this question was
