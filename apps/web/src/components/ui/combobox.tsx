@@ -320,7 +320,7 @@ export function Combobox({
             }.`;
     if (message === lastAnnounced.current) return;
     lastAnnounced.current = message;
-    announce(message);
+    announce(message, { transient: true });
   }, [
     open,
     loading,

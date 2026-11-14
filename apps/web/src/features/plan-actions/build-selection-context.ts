@@ -61,6 +61,19 @@ export interface SelectionContextInput {
   onNotes?: ((activity: ActivitySummary) => void) | undefined;
   onClearVisualPlacement?: ((activity: ActivitySummary) => void) | undefined;
   /**
+   * The arrow beside Follow logic (ADR-0216 D6). `ids` are the bars the whole-plan offer counts and
+   * `shown` is whether this window offers the arrow at all (a short one). The builder decides per
+   * activity: only a counted bar, and only when two or more are counted, gets it. Absent ⇒ none.
+   */
+  followAll?:
+    | {
+        ids: ReadonlySet<string>;
+        shown: boolean;
+        reason: string | null;
+        onFollowAll: () => void;
+      }
+    | undefined;
+  /**
    * The workspace's `activityEditorGating.general`, **passed through untouched** (ADR-0162
    * decision 4, spec D6). Make milestone… shades from this object, by identity, exactly as the
    * activities table's row menu does; `make-milestone-gate-identity.test.tsx` pins both hosts.
@@ -150,6 +163,16 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
       reason: 'Clearing a placement is unavailable here',
     },
     onClearVisualPlacement: () => input.onClearVisualPlacement?.(activity),
+    followAll:
+      input.followAll?.shown &&
+      input.followAll.ids.size >= 2 &&
+      input.followAll.ids.has(activity.id)
+        ? {
+            count: input.followAll.ids.size,
+            reason: input.followAll.reason,
+            onFollowAll: input.followAll.onFollowAll,
+          }
+        : null,
     onOpenEditorAt: (at) => input.onOpenEditorAt?.(activity, at),
     definitionGate: input.definitionGate ?? null,
     // Omitted unless the host both gates and handles it: a gate with no handler would be a lit

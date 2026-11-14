@@ -132,7 +132,10 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Disclosure } from '@/components/ui/disclosure';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
-import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
+import {
+  buildSelectionBarContext,
+  type SelectionContextInput,
+} from '@/features/plan-actions/build-selection-context';
 import {
   SelectionActionsBar,
   deleteRefusal,
@@ -557,6 +560,12 @@ export interface TsldPanelProps {
   clearPlacement?: { enabled: boolean; reason: string | null };
   /** Withdraw the selected activity's hand-placed `visualStart` (ADR-0094 M4). */
   onClearVisualPlacement?: (activity: ActivitySummary) => void;
+  /**
+   * The arrow beside the selection bar's Follow logic (ADR-0216 D6): the bars the whole-plan offer counts,
+   * whether this window offers the arrow, and the write behind it. Supplied by the workspace, which owns
+   * the offer. Absent ⇒ plain Follow logic.
+   */
+  followAll?: SelectionContextInput['followAll'];
   /** Open the activity editor where a conflict lives — `constraint` → Scheduling, `resources` →
    * Resources. Opaque so `features/tsld` need not import `ActivityEditorPurpose` (§5/§12). */
   onOpenEditorAt?: (activity: ActivitySummary, at: 'constraint' | 'resources') => void;
@@ -742,6 +751,7 @@ export function TsldPanel({
   barDateSource = 'early',
   clearPlacement,
   onClearVisualPlacement,
+  followAll,
   onOpenEditorAt,
   definitionGate,
   onMakeMilestone,
@@ -1999,6 +2009,7 @@ export function TsldPanel({
         onResources,
         onProgress,
         onClearVisualPlacement,
+        followAll,
         onOpenEditorAt,
         definitionGate,
         onMakeMilestone,
@@ -2027,6 +2038,7 @@ export function TsldPanel({
       onResources,
       onProgress,
       onClearVisualPlacement,
+      followAll,
       onOpenEditorAt,
       definitionGate,
       onMakeMilestone,

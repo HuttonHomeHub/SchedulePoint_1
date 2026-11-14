@@ -521,6 +521,74 @@ for (const { pointer, touch } of [
   });
 }
 
+test.describe('The arrow on Follow logic, on a short window', () => {
+  test('lets every early bar follow from the selected one, by keyboard, as one undo step; tall windows have the strip instead', async ({
+    page,
+  }) => {
+    test.setTimeout(420_000);
+    const orgSlug = await onboard(page, STAMP + 13);
+    await createHierarchy(page);
+    await newPlan(page, 'Follow arrow');
+    await holdThePen(page);
+    await seedChain(page, orgSlug);
+    await placeEarly(page, orgSlug);
+    await recordAnnouncements(page);
+
+    const bar = page.getByRole('toolbar', { name: 'Actions for Pour slab' });
+    const arrow = bar.getByRole('button', { name: 'More Follow logic choices' });
+
+    // A tall window has the standing strip, so the bar's Follow logic is the plain button.
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await selectInList(page, orgSlug, 'Pour slab');
+    await expect(bar.getByRole('button', { name: 'Follow logic', exact: true })).toBeVisible();
+    await expect(arrow, 'no arrow where the strip is offered').toHaveCount(0);
+
+    // A short window omits the strip; the arrow is its route, from a bar the offer counts.
+    await page.setViewportSize({ width: 1024, height: 600 });
+    await selectInList(page, orgSlug, 'Pour slab');
+    await expect(planOffer(page)).toHaveCount(0);
+    await expect(arrow).toBeVisible();
+    expect(await selfHit(arrow), 'the arrow is pressable').toBe(true);
+    await expect(arrow).toHaveAttribute('aria-haspopup', 'menu');
+
+    // Keyboard only: the arrows open the menu from Follow logic, and Enter presses the item.
+    await bar.getByRole('button', { name: 'Follow logic', exact: true }).focus();
+    await page.keyboard.press('ArrowDown');
+    const item = page.getByRole('menuitem', { name: 'Let all 2 bars follow their logic' });
+    await expect(item).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).length, {
+        message: 'the arrow’s item left a flagged bar behind',
+        timeout: 30_000,
+      })
+      .toBe(0);
+    const done = page.getByTestId('canvas-history-result');
+    await expect(done).toContainText('now follow their logic');
+    await expect
+      .poll(
+        async () =>
+          (await announced(page)).filter((text) => /now follow their logic/.test(text)).length,
+        { message: 'the outcome is announced exactly once', timeout: 5000 },
+      )
+      .toBe(1);
+    expect(
+      (await announced(page)).filter((text) => /Follow logic is no longer available/.test(text)),
+      'the focus hand-off sentence is heard too, not replaced by the outcome',
+    ).toHaveLength(1);
+
+    // One Undo puts both back.
+    await done.getByRole('button', { name: 'Undo' }).click();
+    await expect
+      .poll(async () => (await flaggedNames(page, orgSlug)).join(','), {
+        message: 'one Undo did not restore both placements',
+        timeout: 30_000,
+      })
+      .toBe('Pour slab,Steel beam');
+  });
+});
+
 test.describe('The whole-plan offer at 200 % text', () => {
   test('every button can be reached by scrolling, and nothing scrolls sideways', async ({
     page,

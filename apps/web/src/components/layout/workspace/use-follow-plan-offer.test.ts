@@ -193,6 +193,22 @@ describe('useFollowPlanOffer', () => {
     expect(view.result.current.plan.offer).toBeNull();
   });
 
+  it('names the bars a press would move, with the pen or without it, and not the dismissed ones', () => {
+    const { view, rerender } = setup({ enabled: false });
+    expect(view.result.current.plan.offer, 'the strip is withdrawn without the pen').toBeNull();
+    expect([...view.result.current.plan.targetIds].sort()).toEqual(['B', 'C']);
+    rerender({ enabled: true });
+    act(() => view.result.current.plan.dismissBars(['C']));
+    expect([...view.result.current.plan.targetIds]).toEqual(['B']);
+  });
+
+  it('keeps the same target set across a refetch that changes nothing', () => {
+    const { view, rerender } = setup();
+    const before = view.result.current.plan.targetIds;
+    rerender({ rows: [bar('A'), bar('B', early), bar('C', early)] });
+    expect(view.result.current.plan.targetIds).toBe(before);
+  });
+
   it('Dismiss puts a FAILED offer away: the strip goes and nothing is written', () => {
     // **Verified red** by returning the held branch regardless: the strip stayed up after Dismiss (B1).
     const { view } = setup();

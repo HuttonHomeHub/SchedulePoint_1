@@ -27,8 +27,12 @@ export interface ToolbarSplitButtonProps {
   primaryRef: React.RefObject<HTMLButtonElement | null>;
   /** The caret's own ref, used as the menu's anchor. */
   caretRef: React.RefObject<HTMLButtonElement | null>;
-  /** Whether the tool this control arms is currently armed — the primary's `aria-pressed`. */
-  pressed: boolean;
+  /**
+   * Whether the tool this control arms is currently armed — the primary's `aria-pressed`. **Omit it for a
+   * command** (Go to today, Follow logic): `aria-pressed` makes a button a toggle, and a command read as
+   * "toggle button, not pressed" misleads a screen-reader user.
+   */
+  pressed?: boolean;
   /** Whether the type menu is open. Widens the control's active wash and sets `aria-expanded`. */
   open: boolean;
   /**
