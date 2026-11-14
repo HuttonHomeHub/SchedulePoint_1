@@ -67,6 +67,24 @@ describe('PlanActivitiesFootRow', () => {
     expect(row?.className).not.toMatch(/(^|\s)h-\d/);
   });
 
+  it('lets the baseline slip step aside when the dock holds something or the schedule is not current', () => {
+    const { container } = render(<PlanActivitiesFootRow />);
+    const row = container.querySelector('[data-activities-bar]');
+    // The rule is CSS the row declares (jsdom has no layout, so the classes are the checkable half;
+    // the M0 measurement and the dock journey read the rest). Both triggers yield to `sr-only`, never
+    // to `hidden`, so the sentence stays in the accessibility tree.
+    const classes = row?.className ?? '';
+    expect(classes).toContain(
+      'has-[[data-dock-outlet]:not(:empty)]:[&_[data-baseline-slip]]:sr-only',
+    );
+    expect(classes).toContain(
+      'has-[[data-schedule-state]:not([data-schedule-state=current])]:[&_[data-baseline-slip]]:sr-only',
+    );
+    // Below `sm` the dates row would be cut off at 320 px (WCAG 1.4.10), so it yields there too.
+    expect(classes).toContain('max-sm:[&_[data-baseline-slip]]:sr-only');
+    expect(classes).not.toMatch(/\[data-baseline-slip\]\]:hidden/);
+  });
+
   it('packs the facts and the toggle as ONE trailing item, in the unchanged DOM order', () => {
     const { container } = render(
       <PlanActivitiesFootRow toggle={<button type="button">Collapse</button>} />,

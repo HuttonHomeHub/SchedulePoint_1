@@ -254,6 +254,12 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
   await holdThePen(page);
   await showActivities(page);
   await expect(page.getByRole('cell', { name: '5 d behind' })).toHaveCount(2); // Start + Finish
+  // The bottom bar says how far the PLAN's finish moved, beside Finish: the only activity was placed
+  // 5 days later on an every-day calendar, so the plan finishes 5 working days after its baseline
+  // (`baseline-slip-and-pinned-names` M2). The words carry the direction.
+  await expect(page.locator('[data-baseline-slip]')).toHaveText(
+    'Finish: 5 working days later than baseline',
+  );
 
   // Add a new activity after capture and recalculate → it reads as "Added" variance.
   await addActivity(page, 'Pour slab');
@@ -335,6 +341,8 @@ test('a planner deletes a baseline from the row menu', async ({ page }) => {
   await baselines.getByRole('button', { name: 'Capture baseline' }).last().click();
   // Unscoped, as the variance journey reads it: the capture form is a second dialog.
   await expect(page.getByRole('cell', { name: 'Contract Baseline' }).first()).toBeVisible();
+  // Just captured, so the plan finishes where its baseline did; the fact says so in words.
+  await expect(page.locator('[data-baseline-slip]')).toHaveText('Finish: On baseline');
 
   await baselines.getByRole('button', { name: 'Actions for Contract Baseline' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
@@ -344,6 +352,8 @@ test('a planner deletes a baseline from the row menu', async ({ page }) => {
     .click();
   await expect(page.getByRole('cell', { name: 'Contract Baseline' })).toHaveCount(0);
   await expect(baselines.locator(':focus')).toHaveCount(1);
+  // No active baseline, nothing to compare against: the fact is gone rather than reading zero.
+  await expect(page.locator('[data-baseline-slip]')).toHaveCount(0);
 });
 
 /**

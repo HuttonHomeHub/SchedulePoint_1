@@ -25,6 +25,11 @@ export function PlanStatusBar(props: {
   criticalCount: number | undefined;
   dataDate: string | null | undefined;
   projectFinish: string | null | undefined;
+  /**
+   * Working days the finish has moved against the active baseline (positive = later). `undefined`
+   * shows nothing: no active baseline, or an older API that does not report it.
+   */
+  baselineSlip?: number | undefined;
   /** What the schedule owes the reader — see {@link ScheduleState}. */
   scheduleState: ScheduleState;
   /** Run a recalculation now. Called only from the `stale` state with no refusal. */

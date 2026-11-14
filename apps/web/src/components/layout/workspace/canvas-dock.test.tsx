@@ -32,6 +32,15 @@ describe('CanvasDockOutlet', () => {
     // zero basis lets the facts take the line and the selection bar paints over them at 700 px.
     expect(container.firstElementChild).toHaveClass('not-empty:min-w-[min(18rem,100%)]', 'flex-1');
   });
+
+  it("carries the hook the foot row's baseline-slip rule reads", () => {
+    const { container } = render(
+      <CanvasDockProvider>
+        <CanvasDockOutlet />
+      </CanvasDockProvider>,
+    );
+    expect(container.firstElementChild).toHaveAttribute('data-dock-outlet');
+  });
 });
 
 describe('CanvasDock', () => {

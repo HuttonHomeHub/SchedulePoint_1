@@ -61,6 +61,7 @@ import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import { useBaselines, useBaselineVariance } from '@/features/baselines/api/use-baselines';
+import { baselineSlipDays } from '@/features/baselines/model/baseline-slip';
 import {
   CodeAssignButton,
   CodeAssignControl,
@@ -3132,6 +3133,7 @@ export function ToolbarPlanWorkspace({
               criticalCount={scheduleSummary.data?.criticalCount}
               dataDate={scheduleSummary.data?.dataDate}
               projectFinish={scheduleSummary.data?.projectFinish}
+              baselineSlip={baselineSlipDays(model.variance)}
               scheduleState={scheduleState}
               onRecalculate={() => ctx.recalculate()}
               pending={scheduleSummary.isPending}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { flagSentences, movementSentence, movementTone } from './standing-copy';
+import { flagSentences, movementSentence, movementTone, slipSentence } from './standing-copy';
 
 /**
  * **One case per state, because the failure this section exists to prevent is a state with no
@@ -130,5 +130,26 @@ describe('flagSentences', () => {
     expect(flagSentences({ constraintViolated: 0, visualConflict: 2 })).toEqual([
       '2 hand-placed activities in conflict',
     ]);
+  });
+});
+
+describe('slipSentence', () => {
+  it('says later in words, in working days', () => {
+    expect(slipSentence(3)).toBe('3 working days later than baseline');
+  });
+
+  it('says earlier in words and never prints the sign', () => {
+    const text = slipSentence(-2);
+    expect(text).toBe('2 working days earlier than baseline');
+    expect(text).not.toContain('-');
+  });
+
+  it('is singular for one day either way', () => {
+    expect(slipSentence(1)).toBe('1 working day later than baseline');
+    expect(slipSentence(-1)).toBe('1 working day earlier than baseline');
+  });
+
+  it('says "On baseline" for none rather than zero days', () => {
+    expect(slipSentence(0)).toBe('On baseline');
   });
 });
