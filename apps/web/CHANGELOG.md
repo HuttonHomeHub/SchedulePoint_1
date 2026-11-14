@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.10.0
+
+### Minor Changes
+
+- [#1362](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1362) [`c2dccd4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c2dccd407651f00bb9bf9562fc3f85712421f978) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A plan left open and untouched for 30 minutes now becomes free for colleagues to edit. Nothing pops up when it does: move the mouse or press a key and you carry on, unless a colleague started editing in the meantime, in which case you are told who. If a change you made at the very moment you came back could not be saved, you are told and can simply do it again. A form with changes you have typed but not saved keeps the plan reserved for you until you save or close it.
+
 ## 1.9.2
 
 ### Patch Changes
