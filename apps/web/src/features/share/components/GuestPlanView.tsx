@@ -14,6 +14,7 @@ import {
   toWorkingDayCalendar,
   type GuestActivity,
 } from '../guest-api';
+import { todayIso } from '../schemas/share-schemas';
 
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
@@ -282,7 +283,13 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
                 dataDate={plan.dataDate}
                 calendar={calendar}
                 canEdit={false}
+                // The guest page owns no shortcuts sheet and draws no constraint, baseline or
+                // resource mark, so its chrome offers no dead button and a key of what is drawn.
+                guestChrome
                 showConstraintKey={false}
+                // The Today line is the same read-only marker the workspace draws; without a day it
+                // drew nothing while the Today checkbox and the key both promised it.
+                todayIso={todayIso()}
                 fill
                 // The guest surface has no Late overlay (`TsldViewControls.tsx` offers grid, data
                 // date, today, non-working and labels only) — `barDateSourceFor(false)` therefore

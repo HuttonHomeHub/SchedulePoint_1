@@ -112,9 +112,10 @@ import { BulkSelectionBar } from './BulkSelectionBar';
 import { CanvasModeBand, modeStatementText, type CanvasModeStatement } from './CanvasModeBand';
 import { CreateActivityPopover } from './CreateActivityPopover';
 import { EditConflictBanner } from './EditConflictBanner';
+import { GuestSelectionFacts } from './GuestSelectionFacts';
 import { LinkChainDialog } from './LinkChainDialog';
 import { sceneOrigin, TsldCanvas, type PendingGhost, type SelectModifier } from './TsldCanvas';
-import { TsldLegend } from './TsldLegend';
+import { legendDrawnFor, TsldLegend } from './TsldLegend';
 import { TsldToolbar } from './TsldToolbar';
 import { TsldViewControls } from './TsldViewControls';
 import {
@@ -128,6 +129,7 @@ import { CanvasDock } from '@/components/layout/workspace/canvas-dock';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Disclosure } from '@/components/ui/disclosure';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Surface } from '@/components/ui/surface';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
@@ -518,6 +520,18 @@ export interface TsldPanelProps {
    * popover, conflict banner, auto-arrange + help dialogs). The canvas-first toolbar hosts those
    * controls instead. Default (unset) keeps the self-contained chrome for the flag-off / legacy path. */
   chromeless?: boolean;
+  /**
+   * **The guest share view's chrome** (ADR-0051, ADR-0127): no shortcuts button, and a legend that
+   * keys only the marks this diagram is drawing, folded away until asked for. The shortcuts sheet
+   * mounts at the workspace (`plan-workspace-toolbar.tsx`), which a guest never reaches, so the
+   * button would open nothing; and a guest's diagram has no constraints, baseline, resources or
+   * overlays, so the full key describes marks that cannot appear. Ignored when chromeless.
+   *
+   * It also swaps the hint row's instruction for the selected activity's facts while one is selected
+   * (`GuestSelectionFacts`, `docs/specs/guest-activity-details/`). That branch sits inside the
+   * non-chromeless row, so a host that passes `guestChrome` while chromeless renders no facts line.
+   */
+  guestChrome?: boolean;
   /** Externally-owned canvas UI state (mode/toggles/zoom/fit/help), so the workspace toolbar and the
    * canvas share one source of truth (ADR-0031). Absent → the panel owns it (unchanged behaviour). */
   canvasUi?: TsldCanvasUiState;
@@ -722,6 +736,7 @@ export function TsldPanel({
   todayFraction = null,
   fill = false,
   chromeless = false,
+  guestChrome = false,
   showConstraintKey = true,
   canvasUi,
   barDateSource = 'early',
@@ -1178,6 +1193,23 @@ export function TsldPanel({
   const selectedActivities = useMemo(
     () => activities.filter((a) => selection.ids.includes(a.id)),
     [activities, selection.ids],
+  );
+
+  // The one selected activity a share-link guest reads the facts of (`GuestSelectionFacts`), derived
+  // at read like the plural set above. Null for no selection, a plural one, or an id that has gone.
+  // `guestChrome` is only read inside the non-chromeless row (the facts line, the shortcuts button),
+  // so a host passing both gets neither and nothing says why; say it while developing.
+  useEffect(() => {
+    if (import.meta.env.DEV && guestChrome && chromeless) {
+      console.warn(
+        'TsldPanel: guestChrome has no effect while chromeless; the guest facts line and legend are not drawn.',
+      );
+    }
+  }, [guestChrome, chromeless]);
+
+  const guestSelected = useMemo(
+    () => (guestChrome && selection.ids.length === 1 ? (selectedActivities[0] ?? null) : null),
+    [guestChrome, selection.ids.length, selectedActivities],
   );
 
   /**
@@ -2022,6 +2054,35 @@ export function TsldPanel({
   const todayOffset = useMemo(
     () => (dataDate && todayIso ? daysBetween(dataDate, todayIso) : null),
     [dataDate, todayIso],
+  );
+  // What this diagram draws, for the guest key (`guestChrome`). Read from the panel's own scene
+  // activities and the toggles the painter reads, so the key cannot describe a mark that is not there.
+  const legendDrawn = useMemo(
+    () =>
+      guestChrome
+        ? legendDrawnFor({
+            activities: renderActivities,
+            dependencies,
+            nonWorking: viewToggles.nonWorking && workingDayPredicate !== null,
+            dataDate: (viewToggles.dataDate ?? true) && dataDate !== null,
+            today: viewToggles.today && todayOffset !== null,
+            window: viewToggles.floatTails === true,
+            overAllocation: overAllocationHighlight,
+          })
+        : undefined,
+    [
+      guestChrome,
+      renderActivities,
+      dependencies,
+      viewToggles.nonWorking,
+      viewToggles.dataDate,
+      viewToggles.today,
+      viewToggles.floatTails,
+      workingDayPredicate,
+      dataDate,
+      todayOffset,
+      overAllocationHighlight,
+    ],
   );
   // The same per-tie slack the canvas draws as an `Nd` chip on the selected activity's links
   // (ADR-0054 §5), built from the one shared builder so the drawn number and the spoken one are the
@@ -3338,13 +3399,25 @@ export function TsldPanel({
     >
       {chromeless ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-muted-foreground text-sm">
-            {!isCalculated
-              ? 'Recalculate the schedule to plot the activities on the timeline.'
-              : editingEnabled && mode === 'add-activity'
-                ? 'Drag on the timeline to add an activity. Esc cancels.'
-                : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
-          </p>
+          {guestChrome && guestSelected ? (
+            <GuestSelectionFacts
+              activity={guestSelected}
+              barDateSource={barDateSource}
+              withCodes={viewToggles.activityCodes ?? false}
+            />
+          ) : guestChrome && selection.ids.length > 1 ? (
+            <p className="text-muted-foreground min-h-5 text-sm">
+              {`${String(selection.ids.length)} activities selected.`}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {!isCalculated
+                ? 'Recalculate the schedule to plot the activities on the timeline.'
+                : editingEnabled && mode === 'add-activity'
+                  ? 'Drag on the timeline to add an activity. Esc cancels.'
+                  : 'Drag to pan, scroll to zoom. The critical path is highlighted.'}
+            </p>
+          )}
           {editingEnabled ? (
             <TsldToolbar
               mode={mode}
@@ -3353,7 +3426,7 @@ export function TsldPanel({
               addActivityRef={addActivityRef}
             />
           ) : null}
-          {showDiagram ? (
+          {showDiagram && !guestChrome ? (
             <Button
               variant="ghost"
               size="sm"
@@ -3393,10 +3466,20 @@ export function TsldPanel({
           nobody asked for. */}
       {!chromeless && showDiagram ? (
         <Surface tone="canvas" className="contents">
-          <TsldLegend
-            withoutConstraint={!showConstraintKey}
-            swimlaneBoundary={swimlaneScene !== null}
-          />
+          {guestChrome ? (
+            <Disclosure label="Legend" collapsed="hidden">
+              <TsldLegend
+                withoutConstraint={!showConstraintKey}
+                swimlaneBoundary={swimlaneScene !== null}
+                drawn={legendDrawn}
+              />
+            </Disclosure>
+          ) : (
+            <TsldLegend
+              withoutConstraint={!showConstraintKey}
+              swimlaneBoundary={swimlaneScene !== null}
+            />
+          )}
         </Surface>
       ) : null}
 

@@ -165,6 +165,12 @@ identity, and any user identity are stripped from guest DTOs.
 model change. **A guest never writes** — there is no guest write path, the guest
 never acquires a pen (ADR-0028), and the recalc parity gate is untouched.
 
+> **Note, 2026-11-14 (`docs/specs/guest-activity-details/`).** The shared page now shows a selected
+> activity's facts (name, drawn Start and Finish, Total float with Critical or Near-critical beside it,
+> Progress, Status) in the row that carries the instruction. The scope above is unchanged: every one of
+> those is a field the guest payload already carries, `remainingFloat` ("float left") is still not sent,
+> and the page makes no new request.
+
 ### 5. Revocation, expiry & the deleted-plan interaction
 
 `ShareTokenGuard` resolves a token only when **all** hold: `token_hash` matches;
