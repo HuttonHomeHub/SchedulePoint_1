@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Children, Fragment, isValidElement, memo } from 'react';
+import { Children, Fragment, isValidElement, memo, useCallback } from 'react';
 
 import { DataTableWindowedBody } from './data-table-windowed-body';
 
@@ -151,6 +151,30 @@ const HEAD_DEFAULT = 'py-2 pr-4 font-medium';
 const CELL_DEFAULT = 'py-2 pr-4';
 
 /**
+ * What the pinned column adds (`DataTableBaseProps.pinnedColumn`). Every class is `lg:`-prefixed, so
+ * below 1024 px the table reflows exactly as an unpinned one does (ADR-0179). `border-r` and not a
+ * shadow, because forced colours drop shadows and keep borders (ADR-0191).
+ *
+ * **Opaque, and the page's own ground rather than `bg-background`.** A sticky cell with a
+ * transparent background shows the columns scrolling underneath it, so it must paint. But the rows
+ * of this table are transparent over the page's gradient (`body`, `--page-backdrop`, fixed), and a
+ * flat `bg-background` cell beside them read as a lighter column (seen in the journey's screenshot,
+ * 2026-11-14). The cell therefore paints the SAME two tokens `body` does, `--page-background` under
+ * `--page-backdrop`, with `bg-fixed` so the gradient is anchored to the viewport exactly as `body`'s
+ * is and the cell is seamless wherever it sits. No colour literal and no new token. Forced colours
+ * drop the image and force the colour to Canvas, which is opaque, so the cell still hides what
+ * scrolls under it. Cost to measure: a fixed background repaints on scroll (performance review).
+ * **A future selected-row or hover tint must reach the pinned cell too**: it is opaque, so a tint
+ * set on the `<tr>` would leave one untinted cell at the left edge.
+ */
+const PIN_CELL =
+  'lg:sticky lg:left-0 lg:z-10 lg:bg-(--page-background) lg:bg-(image:--page-backdrop) lg:bg-fixed lg:border-r lg:border-input';
+/** The scroll region's padding, so focus lands beside the pin and not under it (WCAG 2.4.11). */
+const PIN_REGION = ' lg:scroll-ps-(--dt-pin-start)';
+/** The pinned header cell sits above the other header cells (`z-20`) and above every body cell. */
+const PIN_HEAD_CONTAINED = 'lg:left-0 lg:z-30 lg:border-r lg:border-input';
+
+/**
  * A column's head classes: the default, the caller's, then the declared width.
  *
  * **The width preset is composed LAST, so it wins a same-modifier collision.**
@@ -291,6 +315,7 @@ const DataTableRow = memo(function DataTableRow<T>({
   detail,
   virtualIndex,
   measureRef,
+  pinnedColumn,
 }: {
   row: T;
   columns: Column<T>[];
@@ -298,6 +323,7 @@ const DataTableRow = memo(function DataTableRow<T>({
   detail: React.ReactNode;
   virtualIndex?: number | undefined;
   measureRef?: ((node: HTMLTableRowElement | null) => void) | undefined;
+  pinnedColumn?: string | undefined;
 }): React.ReactElement {
   return (
     <>
@@ -314,11 +340,11 @@ const DataTableRow = memo(function DataTableRow<T>({
         {columns.map((column) => (
           <td
             key={column.header}
-            className={
-              contained
-                ? cn(cellClassesOf(column), 'border-border border-b')
-                : cellClassesOf(column)
-            }
+            className={cn(
+              cellClassesOf(column),
+              contained && 'border-border border-b',
+              column.header === pinnedColumn && PIN_CELL,
+            )}
             data-col-width={column.width ?? 'undeclared'}
           >
             {column.cell(row)}
@@ -358,6 +384,7 @@ const DataTableRow = memo(function DataTableRow<T>({
   detail: React.ReactNode;
   virtualIndex?: number | undefined;
   measureRef?: ((node: HTMLTableRowElement | null) => void) | undefined;
+  pinnedColumn?: string | undefined;
 }) => React.ReactElement;
 
 /** What every {@link DataTable} takes, however it scrolls. */
@@ -429,6 +456,35 @@ interface DataTableBaseProps<T> {
    * caller's `headClassName`/`cellClassName` the way `width` already composes.
    */
   scroll?: 'page' | 'contained';
+  /**
+   * The {@link Column.header} of ONE column that stays in view while the table scrolls sideways, from
+   * 1024 px wide up. Absent, the table is what it always was. Today only `ActivitiesTable` passes it,
+   * for its `Name` column, so a row's subject stays beside the dates a planner scrolls to
+   * (`docs/specs/baseline-slip-and-pinned-names/`, ADR-0146 D3: the subject column is the one that
+   * has a reason).
+   *
+   * - **The match is on the header TEXT**, so a renamed or translated header must update the opt-in
+   *   (a `Column.id` waits for the first translation). In development an unmatched name throws.
+   * - **One column, named by its header, and not a flag on `Column`.** Two pinned columns would both
+   *   stick at `left: 0` and overlap, and a per-column flag cannot say "at most one" in the type. A
+   *   header is already a column's key here. It sits in its natural place until the columns before it
+   *   have scrolled under the edge, so there are no left offsets to add up, which is why this works
+   *   alike for the plain and the windowed table (whose widths are frozen, ADR-0165 D1). A name that
+   *   matches no column throws in development: a pin that silently pins nothing would pass every
+   *   unit test and change nothing a planner sees.
+   * - **`lg:` and up only.** Below it the table reflows as before (WCAG 1.4.10, ADR-0179); a pinned
+   *   column that cannot leave room for the rest would be a reflow failure.
+   * - **A border and not a shadow** marks its edge, because forced colours drop shadows and keep
+   *   borders (ADR-0191). Its cells take the page background, or the columns scrolling past would show
+   *   through. With `scroll="page"` the table is `border-collapse`, where a border on a sticky cell
+   *   is engine-dependent; the activities table is `'contained'` (`border-separate`), which is the
+   *   mode this was checked in.
+   * - **Focus is never left under the pin** (WCAG 2.4.11). The region takes `scroll-padding-inline-
+   *   start` equal to the pinned header's width, read by a `ResizeObserver` into `--dt-pin-start`, so
+   *   a control Tab brings into view scrolls in beside the pinned column, as `scroll-pt-12` already
+   *   does for the header.
+   */
+  pinnedColumn?: string;
 }
 
 /**
@@ -547,7 +603,38 @@ export function DataTable<T>({
   describedById,
   scroll = 'page',
   windowed = false,
+  pinnedColumn,
 }: DataTableProps<T>): React.ReactElement {
+  // Keeps `--dt-pin-start` on the scroll region equal to the pinned header's width, so the region's
+  // `scroll-padding-inline-start` follows the column when its width changes. A ref callback (React
+  // 19 cleans it up) rather than state: nothing renders from the width, only CSS reads it, so a
+  // resize costs no re-render. A hook, so it sits above the early returns.
+  const pinRef = useCallback((th: HTMLTableCellElement | null) => {
+    const region = th?.closest<HTMLElement>('[role="region"]');
+    if (!th || !region) return;
+    let last = -1;
+    const write = () => {
+      const width = th.getBoundingClientRect().width;
+      if (width === last) return;
+      last = width;
+      region.style.setProperty('--dt-pin-start', `${width}px`);
+    };
+    write();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(write);
+    observer.observe(th);
+    return () => observer.disconnect();
+  }, []);
+
+  // Before the early returns, so a typo is caught while loading or empty and not on the first row.
+  if (
+    pinnedColumn !== undefined &&
+    import.meta.env.DEV &&
+    !columns.some((column) => column.header === pinnedColumn)
+  ) {
+    throw new Error(`DataTable: pinnedColumn "${pinnedColumn}" matches no column header`);
+  }
+
   // `scroll` shapes only the populated table below. The loading, error and empty branches return
   // before it is read, and need no scroller of their own: each is a bounded, short block (a
   // three-row skeleton or a sentence) that fits inside the smallest open panel.
@@ -626,18 +713,24 @@ export function DataTable<T>({
         {columns.map((column) => (
           <th
             key={column.header}
+            ref={column.header === pinnedColumn ? pinRef : undefined}
             scope="col"
             className={
               contained
                 ? cn(
                     headClassesOf(column),
                     'bg-background border-border sticky top-0 z-20 border-b',
+                    column.header === pinnedColumn && PIN_HEAD_CONTAINED,
                   )
                 : // `relative` for a screen-reader-only header: an `sr-only` span is `position: absolute`,
                   // and with no positioned ancestor its containing block is the viewport, so it
                   // escapes the table's own scroll region and, in a wide table, sat past the right
                   // edge and widened the whole page at 320 px (WCAG 1.4.10).
-                  cn(headClassesOf(column), column.srHeader && 'relative')
+                  cn(
+                    headClassesOf(column),
+                    column.srHeader && 'relative',
+                    column.header === pinnedColumn && PIN_CELL,
+                  )
             }
             data-col-width={column.width ?? 'undeclared'}
           >
@@ -674,7 +767,11 @@ export function DataTable<T>({
     // 640 x 480, where the shell chrome leaves almost nothing) shows no rows with or without it, and
     // the floor only moves the scroll from this region to the panel body.
     <div
-      className={contained ? 'min-h-32 flex-1 scroll-pt-12 overflow-auto' : 'overflow-x-auto'}
+      className={
+        contained
+          ? `min-h-32 flex-1 scroll-pt-12 overflow-auto${pinnedColumn === undefined ? '' : PIN_REGION}`
+          : `overflow-x-auto${pinnedColumn === undefined ? '' : PIN_REGION}`
+      }
       role="region"
       aria-label={caption}
       {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}
@@ -698,6 +795,7 @@ export function DataTable<T>({
               detail={undefined}
               virtualIndex={virtualIndex}
               measureRef={measureRef}
+              pinnedColumn={pinnedColumn}
             />
           )}
         />
@@ -713,6 +811,7 @@ export function DataTable<T>({
                 columns={columns}
                 contained={contained}
                 detail={renderDetail?.(row)}
+                pinnedColumn={pinnedColumn}
               />
             ))}
           </tbody>

@@ -960,6 +960,16 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
   behaviour is judged by `scripts/row-subject-probe.mjs`, which the `e2e-overview` journey also runs.
 - **Do not** add a `title` to a clipped name: wrap it instead. `ListRowSkeleton` is unchanged.
 
+## `DataTable`: one pinned column (2026-11-14)
+
+`pinnedColumn="Name"` names a column by its
+`header`; from 1024 px up it sticks to the left edge while the table scrolls sideways, on the header and
+every body cell, plain and windowed alike. Below 1024 px nothing changes (reflow). One column, so two cannot
+overlap; its cells take the page background and a right border marks the edge, because forced colours keep
+borders and drop shadows; and the region takes `scroll-padding-inline-start` from the pinned header's width, so
+a focused control scrolls in beside the pin, never under it (WCAG 2.4.11). An unmatched name throws in
+development. Only `ActivitiesTable` uses it (ADR-0146 D3).
+
 ## Primitives: `EmptyState` and `NoticeStrip` — and where the boundary is
 
 `EmptyState` (`components/ui/page/empty-state.tsx`) says a screen or a section holds nothing.

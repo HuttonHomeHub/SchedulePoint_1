@@ -1246,7 +1246,11 @@ export function ActivitiesTable({
 
           `windowed`: only the rows in view are in the DOM (ADR-0165, #334 M3), so opening a long plan
           costs the window and not the plan. Find-in-page cannot find a row that is not in view; the
-          diagram's listbox lists every activity. */}
+          diagram's listbox lists every activity.
+
+          `pinnedColumn="Name"`: the activity's name stays in view when the table scrolls sideways, from
+          1024 px up (`docs/specs/baseline-slip-and-pinned-names/`, M4; the owner chose Name alone over
+          Code and Name). */}
       <DataTable
         caption="Activities"
         columns={columns}
@@ -1259,6 +1263,7 @@ export function ActivitiesTable({
         }
         scroll="contained"
         windowed
+        pinnedColumn="Name"
       />
 
       {!hostOwnsResources ? (
