@@ -1,5 +1,19 @@
 # @repo/web
 
+## 1.11.0
+
+### Minor Changes
+
+- [#1372](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1372) [`42c586f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/42c586fdcc4ccbdc67e49db050019c07df4cbcf6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a narrow screen a Gantt view where you haven't chosen columns starts without the Code and Finish columns, so the timeline has room, and the Activity column also starts at its narrowest (drag it wider if you like). Switch them back on in View, Columns. Views where you already chose columns are unchanged. The divider between the table and the timeline starts afresh once on this update: if you had moved it, move it again. The same reset also clears a collapsed Gantt table once.
+
+### Patch Changes
+
+- [#1372](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1372) [`42c586f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/42c586fdcc4ccbdc67e49db050019c07df4cbcf6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dragging a bar on the Gantt now scrolls the timeline when you hold the pointer near its left or
+  right edge, so a bar can be taken beyond what the screen shows.
+
+- [#1372](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1372) [`42c586f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/42c586fdcc4ccbdc67e49db050019c07df4cbcf6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt's "Start vs baseline" column now reads `0d` for an activity that started when planned,
+  instead of "On plan", which sounded like a verdict on an activity that had overrun.
+
 ## 1.10.4
 
 ### Patch Changes
