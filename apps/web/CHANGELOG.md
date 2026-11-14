@@ -1,5 +1,12 @@
 # @repo/web
 
+## 1.10.4
+
+### Patch Changes
+
+- Updated dependencies [[`74cf99c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/74cf99c796f0e13d1579221e655c6a7a36b01b2b)]:
+  - @repo/types@0.46.0
+
 ## 1.10.3
 
 ### Patch Changes

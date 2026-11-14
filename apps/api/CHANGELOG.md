@@ -1,5 +1,16 @@
 # @repo/api
 
+## 1.5.0
+
+### Minor Changes
+
+- [#1370](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1370) [`74cf99c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/74cf99c796f0e13d1579221e655c6a7a36b01b2b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add endpoints that let a person with a confirmed address see and accept invitations sent to it.
+
+### Patch Changes
+
+- Updated dependencies [[`74cf99c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/74cf99c796f0e13d1579221e655c6a7a36b01b2b)]:
+  - @repo/types@0.46.0
+
 ## 1.4.0
 
 ### Minor Changes
