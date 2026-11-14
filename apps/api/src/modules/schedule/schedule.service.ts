@@ -1035,6 +1035,7 @@ export class ScheduleService {
         name: plan.name,
         dataDate: formatCalendarDate(plan.plannedStart),
         computedAt: plan.scheduleComputedAt?.toISOString() ?? null,
+        dayFactorMinutes: planFactor,
       },
       activities,
       dependencies: edges.map((e) => ({

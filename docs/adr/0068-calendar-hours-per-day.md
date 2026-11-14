@@ -181,3 +181,14 @@ planner responsible for arithmetic the tool is refusing to do. It was recommende
 choice and rejected by the product owner in favour of building it right.
 
 **Derive on read from the weekly pattern.** §1.
+
+## Amendment 2026-11-13 — the words the API composes use the product's duration text
+
+The revision comparison printed durations and lags as `480 min (8 h)` and the health check as
+`lag of 480 min`. Both now use the product's own text (`1d`, `2d 4h`, `4h`; a lag is `+1d`, `−2h`) on
+a stated working day: the comparison's frame (the earlier revision's day, the one its float label
+already uses) and, for health, the plan calendar's day. A comparison figure with a day part keeps
+its exact hours beside it (`2d 4h (20 h)`). Only the words changed: the comparison still decides
+"changed" on minutes, so a calendar edit is never listed as a duration change, and a health lag is
+still judged on minutes. `apps/api/src/common/duration-text.ts` is the server twin of the web's
+`formatDurationText`.

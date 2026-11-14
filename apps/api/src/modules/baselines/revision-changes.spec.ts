@@ -107,6 +107,29 @@ describe('the revision change classifier', () => {
     expect(found?.notAssessableReason).toBeNull();
   });
 
+  describe("REDURATIONED reads in the product's duration text on the frame", () => {
+    const redurationed = (from: number, to: number, frame: number) =>
+      classOf(
+        classifyRevisionChanges(
+          side([row({ activityId: 'a', durationMinutes: from })]),
+          side([row({ activityId: 'a', durationMinutes: to })]),
+          opts({ dayFactorMinutes: frame }),
+        ),
+        'REDURATIONED',
+      )?.rows[0];
+
+    it('states working days with the exact hours beside them, never raw minutes', () => {
+      const r = redurationed(480, 1200, 480);
+      expect(r?.from).toBe('1d (8 h)');
+      expect(r?.to).toBe('2d 4h (20 h)');
+    });
+
+    it('states a sub-day duration in hours alone', () => {
+      expect(redurationed(480, 120, 1440)?.from).toBe('8h');
+      expect(redurationed(480, 120, 1440)?.to).toBe('2h');
+    });
+  });
+
   describe('CRITICALITY compares float in minutes as whole days on the frame (#318, ADR-0214)', () => {
     const criticality = (from: Partial<RevisionRow>, to: Partial<RevisionRow>, frame = 480) =>
       classOf(
@@ -364,7 +387,7 @@ describe('the revision change classifier', () => {
       expect(rows.map((r) => r.subjectId).sort()).toEqual(['gone', 'kept', 'new']);
       expect(rows.find((r) => r.subjectId === 'new')?.from).toBeNull();
       expect(rows.find((r) => r.subjectId === 'gone')?.to).toBeNull();
-      expect(rows.find((r) => r.subjectId === 'kept')?.to).toBe('FS +480 min (PROJECT_DEFAULT)');
+      expect(rows.find((r) => r.subjectId === 'kept')?.to).toBe('FS +8h (PROJECT_DEFAULT)');
     });
 
     it('reports an edge re-typed AND re-lagged as ONE row naming both sides', () => {
@@ -380,7 +403,7 @@ describe('the revision change classifier', () => {
       const rows = classOf(report, 'RELOGICKED')?.rows ?? [];
       expect(rows).toHaveLength(1);
       expect(rows[0]?.from).toBe('FS');
-      expect(rows[0]?.to).toBe('SS −120 min (PROJECT_DEFAULT)');
+      expect(rows[0]?.to).toBe('SS −2h (PROJECT_DEFAULT)');
     });
 
     it('reports an edge whose endpoints were BOTH removed exactly once', () => {

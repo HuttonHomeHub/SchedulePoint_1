@@ -742,6 +742,33 @@ export function ActivitiesTable({
    * rendered by the self-subscribing leaves above, so nothing volatile is left in here.
    */
   const columns = useMemo(() => {
+    // Variance vs the active baseline — only when the route supplies the map (M7). The text
+    // carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces. Each column
+    // sits beside the date pair it compares — the walkthrough found them stranded past the right
+    // edge, far from the dates they describe. Finish variance is the headline (always shown);
+    // start/float variance hide first on narrow screens, mirroring the late date columns. Nothing
+    // persists column order or widths for this table, so moving them disturbs no stored state.
+    const varianceColumn = (
+      header: string,
+      field: VarianceField,
+      hideBelow?: 'lg',
+    ): Column<ActivitySummary>[] => {
+      if (!varianceByActivityId) return [];
+      const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
+      return [
+        {
+          header,
+          headClassName: show,
+          cellClassName: `whitespace-nowrap tabular-nums${show}`,
+          cell: (activity) => {
+            const row = varianceByActivityId.get(activity.id);
+            if (!row) return <span className="text-muted-foreground">—</span>;
+            const variance = formatDayVariance(row, field);
+            return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
+          },
+        },
+      ];
+    };
     const cols: Column<ActivitySummary>[] = [
       // The bulk-assign selection column, first so a tick is the leftmost thing on a row. Conditional
       // spread (not a post-hoc unshift) so its position cannot drift.
@@ -989,7 +1016,9 @@ export function ActivitiesTable({
       // Engine-owned computed columns (M6, read-only). Null renders as an em dash
       // until the plan is recalculated. Late dates hide first on narrow screens.
       scheduleColumn('Early start', (a) => a.earlyStart, 'md'),
+      ...varianceColumn('Start variance', 'start', 'lg'),
       scheduleColumn('Early finish', (a) => a.earlyFinish, 'md'),
+      ...varianceColumn('Finish variance', 'finish'),
       scheduleColumn('Late start', (a) => a.lateStart, 'lg'),
       scheduleColumn('Late finish', (a) => a.lateFinish, 'lg'),
       {
@@ -1001,6 +1030,11 @@ export function ActivitiesTable({
         cellClassName: 'whitespace-nowrap tabular-nums text-muted-foreground',
         cell: (activity) => formatRemainingFloat(activity.remainingFloat),
       },
+      // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
+      // column beside it is "Float left" (remaining float, above) — without the word, a
+      // reader takes this column to be variance OF that one, when it is always total float
+      // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
+      ...varianceColumn('Total float variance', 'float', 'lg'),
       {
         header: 'Critical path',
         cellClassName: 'whitespace-nowrap',
@@ -1014,39 +1048,6 @@ export function ActivitiesTable({
         },
       },
     ];
-    // Variance vs the active baseline — only when the route supplies the map (M7). The
-    // text carries the meaning ("3 d behind"/"ahead"); the tone colour merely reinforces.
-    // Finish variance is the headline (always shown); start/float variance hide first on
-    // narrow screens, mirroring the early/late date columns.
-    if (varianceByActivityId) {
-      const varianceColumn = (
-        header: string,
-        field: VarianceField,
-        hideBelow?: 'lg',
-      ): Column<ActivitySummary> => {
-        const show = hideBelow ? ` hidden ${hideBelow}:table-cell` : '';
-        return {
-          header,
-          headClassName: show,
-          cellClassName: `whitespace-nowrap tabular-nums${show}`,
-          cell: (activity) => {
-            const row = varianceByActivityId.get(activity.id);
-            if (!row) return <span className="text-muted-foreground">—</span>;
-            const variance = formatDayVariance(row, field);
-            return <span className={VARIANCE_TONE_CLASS[variance.tone]}>{variance.text}</span>;
-          },
-        };
-      };
-      cols.push(
-        varianceColumn('Start variance', 'start', 'lg'),
-        varianceColumn('Finish variance', 'finish'),
-        // "Total float variance", not "Float variance" (placement-baseline-variance, F2): the
-        // column beside it is "Float left" (remaining float, above) — without the word, a
-        // reader takes this column to be variance OF that one, when it is always total float
-        // (`variance.ts` is pinned off `remainingFloat` by `float-basis.structural.spec.ts`).
-        varianceColumn('Total float variance', 'float', 'lg'),
-      );
-    }
     cols.push({
       header: 'Actions',
       srHeader: true,

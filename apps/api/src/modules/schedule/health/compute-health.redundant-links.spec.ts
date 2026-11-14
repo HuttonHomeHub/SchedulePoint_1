@@ -72,9 +72,9 @@ describe('the redundant-links row', () => {
         ],
       }),
     );
-    expect(row(lagged).offenders[0]!.note).toBe('FS, lag of 60 min; already implied through B');
+    expect(row(lagged).offenders[0]!.note).toBe('FS, lag of 1h; already implied through B');
     expect(row(computeHealthReport(triangle({ lagMinutes: -60 }))).offenders[0]!.note).toBe(
-      'FS, lead of 60 min; already implied through B',
+      'FS, lead of 1h; already implied through B',
     );
   });
 

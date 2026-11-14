@@ -374,6 +374,26 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
   });
 
+  it('places each variance column beside the dates it compares, not past the right edge', () => {
+    renderWithVariance(varianceRow());
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    const at = (name: string): number => headers.indexOf(name);
+    expect(at('Start variance')).toBe(at('Early start') + 1);
+    expect(at('Finish variance')).toBe(at('Early finish') + 1);
+    expect(at('Total float variance')).toBe(at('Float left') + 1);
+    expect(at('Total float variance')).toBeLessThan(at('Critical path'));
+  });
+
+  it("does not cover the next row's actions button with a tooltip (it is named by its label)", () => {
+    // A name-echo tip below one row's button sat over the next row's button and swallowed its
+    // click (CI, PR #1366). Like every other row menu in the product, it is named by aria-label.
+    renderWithVariance(varianceRow());
+    const button = screen.getAllByRole('button', { name: /^Actions for / })[0]!;
+    fireEvent.focus(button);
+    fireEvent.pointerEnter(button);
+    expect(document.querySelector('[data-tooltip]')).toBeNull();
+  });
+
   it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {
     renderWithVariance(varianceRow({ finishVarianceDays: 3 }));
     expect(screen.getByText('3 d behind')).toBeInTheDocument();

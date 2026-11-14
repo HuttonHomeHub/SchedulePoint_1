@@ -143,6 +143,14 @@ vi.mock('@/features/calendars', () => ({
   usePlanScopedCalendars: () => query([]),
   useCalendar: () => query(undefined),
 }));
+// The Compare revisions dock reads the plan's baselines by this path (not the barrel above).
+vi.mock('@/features/baselines/api/use-baselines', () => ({
+  useBaselines: () =>
+    query([
+      { id: 'b1', name: 'Baseline one' },
+      { id: 'b2', name: 'Baseline two' },
+    ]),
+}));
 vi.mock('@/features/baselines', () => ({
   useBaselineVariance: () => query(undefined),
   BaselinesPanel: () => <div data-testid="baselines-panel" />,
@@ -593,6 +601,19 @@ describe("the pen's away notice (ADR-0220 D8)", () => {
     // The hook's state is mocked, so the button is still there; focus has already been handed on.
     expect(document.activeElement).not.toBe(dismiss);
     expect(document.activeElement).not.toBe(document.body);
+  });
+});
+
+describe('closing Compare revisions (walkthrough rank 62)', () => {
+  it('clears the chosen pair, so no comparison stays drawn once the dock is gone', () => {
+    renderScreen();
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Compare revisions…' }));
+    fireEvent.change(screen.getByLabelText('Earlier revision'), { target: { value: 'b1' } });
+    expect(h.tsldProps.current?.['hasRevisionPair']).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: /^close/i }));
+    expect(h.tsldProps.current?.['hasRevisionPair']).toBe(false);
   });
 });
 

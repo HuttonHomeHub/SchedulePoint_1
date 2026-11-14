@@ -3350,7 +3350,7 @@ export interface HealthOffender {
   id: string;
   code: string | null;
   name: string;
-  /** The one-line why — "no predecessor", "lead of −120 min (SS)", "float 61 d". */
+  /** The one-line why — "no predecessor", "lead of 2h (SS)", "float 61 d". */
   note: string;
   /** The activity the jump-to-offender seam selects. */
   activityId: string;

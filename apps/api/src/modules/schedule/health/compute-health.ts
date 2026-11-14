@@ -12,6 +12,7 @@ import {
   type ZeroDurationTasksAdvisory,
 } from '@repo/types';
 
+import { formatWorkingMinutes } from '../../../common/duration-text';
 import { resolveRemainingMinutes } from '../remaining-duration';
 
 import {
@@ -124,6 +125,13 @@ export interface HealthPlanInput {
   /** The data date (`plans.planned_start`), `YYYY-MM-DD` — NOT NULL since ADR-0033 M1. */
   dataDate: string;
   computedAt: string | null;
+  /**
+   * The plan calendar's working day in minutes (ADR-0068), for the one thing this model words
+   * itself: a lag or lead is shown as `2d 4h` rather than raw minutes. A link whose lag runs on
+   * another calendar is still worded on the plan's day — the figure is a reading aid, and the
+   * decision (`lagMinutes` below or above zero) never uses it.
+   */
+  dayFactorMinutes: number;
 }
 
 export interface HealthComputeInput {
@@ -246,15 +254,19 @@ function assignmentNote(count: number): string {
 /**
  * A redundant link's note: its type, its lag in metric 3's phrase when it has one, and the witness
  * ("already implied through B", "through B, C and 4 more", or the parallel link). A lead is named a
- * lead, with its size unsigned, because "lag of -60 min" reads as an error.
+ * lead, with its size unsigned, because "lag of -1h" reads as an error.
  */
-function redundantLinkNote(d: HealthDependencyInput, found: RedundantLink): string {
+function redundantLinkNote(
+  d: HealthDependencyInput,
+  found: RedundantLink,
+  dayFactorMinutes: number,
+): string {
   const lag =
     d.lagMinutes === 0
       ? ''
       : d.lagMinutes > 0
-        ? `, lag of ${d.lagMinutes} min`
-        : `, lead of ${-d.lagMinutes} min`;
+        ? `, lag of ${formatWorkingMinutes(d.lagMinutes, dayFactorMinutes)}`
+        : `, lead of ${formatWorkingMinutes(-d.lagMinutes, dayFactorMinutes)}`;
   const witness =
     found.parallelType !== null
       ? `already implied by the ${found.parallelType} link between the same two activities`
@@ -427,7 +439,12 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     if (dependencies.length === 0) return notAssessable('NO_RELATIONSHIPS');
     // MINUTES, never the rounded lagDays — a 2-hour lead rounds to lagDays 0 (ADR-0070).
     const leads = dependencies.filter((d) => d.lagMinutes < 0);
-    const offenders = leads.map((d) => relOffender(d, `lead of ${d.lagMinutes} min (${d.type})`));
+    const offenders = leads.map((d) =>
+      relOffender(
+        d,
+        `lead of ${formatWorkingMinutes(-d.lagMinutes, plan.dayFactorMinutes)} (${d.type})`,
+      ),
+    );
     return judged(measuredCount(leads.length), leads.length === 0, offenders);
   }
 
@@ -436,7 +453,12 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     if (dependencies.length === 0) return notAssessable('NO_RELATIONSHIPS');
     const lags = dependencies.filter((d) => d.lagMinutes > 0);
     const measured = measuredPercent(lags.length, dependencies.length);
-    const offenders = lags.map((d) => relOffender(d, `lag of ${d.lagMinutes} min (${d.type})`));
+    const offenders = lags.map((d) =>
+      relOffender(
+        d,
+        `lag of ${formatWorkingMinutes(d.lagMinutes, plan.dayFactorMinutes)} (${d.type})`,
+      ),
+    );
     return judged(measured, (measured.percent ?? 0) <= 5, offenders);
   }
 
@@ -591,7 +613,7 @@ export function computeHealthReport(input: HealthComputeInput): ScheduleHealthRe
     const depById = new Map(dependencies.map((d) => [d.id, d]));
     const offenders = result.offenders.map((o) => {
       const d = depById.get(o.linkId)!;
-      return relOffender(d, redundantLinkNote(d, o));
+      return relOffender(d, redundantLinkNote(d, o, plan.dayFactorMinutes));
     });
     return {
       id: 'REDUNDANT_LINKS',
