@@ -1,11 +1,12 @@
 import type { PlanEditLockStatus } from '@repo/types';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createElement, StrictMode, type ReactNode } from 'react';
+import { createElement, StrictMode, useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   planEditLockQueryOptions,
+  planLockKeys,
   useAcquireLock,
   useHandoff,
   useLockHeartbeat,
@@ -14,6 +15,11 @@ import {
   useRequestControl,
 } from './use-plan-edit-lock';
 
+import {
+  UnsavedWorkProvider,
+  useRegisterUnsavedWork,
+} from '@/components/layout/unsaved-work/unsaved-work-provider';
+import { AnnouncerProvider } from '@/components/ui/announcer';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 
 vi.mock('@/lib/api/client', async (importOriginal) => {
@@ -233,6 +239,244 @@ describe('useLockHeartbeat', () => {
     });
   });
 
+  describe('a visible tab nobody touches lets go (ADR-0220 D8)', () => {
+    const beats = (): number =>
+      vi.mocked(apiFetch).mock.calls.filter(([path]) => path.endsWith('/heartbeat')).length;
+    const MINUTE = 60_000;
+    const hold = (extra: Partial<Parameters<typeof useLockHeartbeat>[2]>) =>
+      renderHook(
+        () => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn(), ...extra }),
+        {
+          wrapper: wrapper(),
+        },
+      );
+
+    beforeEach(() => setVisibility('visible'));
+
+    it('stops beating after 30 idle minutes, never releases, and rests', async () => {
+      const resting = { current: false };
+      hold({ resting });
+      await vi.advanceTimersByTimeAsync(29 * MINUTE);
+      expect(resting.current).toBe(false);
+      await vi.advanceTimersByTimeAsync(MINUTE);
+      expect(resting.current).toBe(true);
+      const atThreshold = beats();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE);
+      expect(beats()).toBe(atThreshold);
+      expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+      expect(vi.mocked(apiFetch).mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(
+        false,
+      );
+    });
+
+    it('keeps beating while the pointer moves before the 30 minutes are up', async () => {
+      const resting = { current: false };
+      hold({ resting });
+      await vi.advanceTimersByTimeAsync(29 * MINUTE);
+      window.dispatchEvent(new Event('pointermove'));
+      await vi.advanceTimersByTimeAsync(29 * MINUTE);
+      expect(resting.current).toBe(false);
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(MINUTE);
+      expect(beats()).toBeGreaterThan(before);
+    });
+
+    it.each(['pointerdown', 'keydown', 'wheel', 'focus'])(
+      'a %s counts as input, even from a handler that stops propagation',
+      async (type) => {
+        const resting = { current: false };
+        hold({ resting });
+        const target = document.createElement('div');
+        target.addEventListener(type, (e) => e.stopPropagation());
+        document.body.append(target);
+        await vi.advanceTimersByTimeAsync(29 * MINUTE);
+        target.dispatchEvent(new Event(type, { bubbles: true }));
+        await vi.advanceTimersByTimeAsync(2 * MINUTE);
+        expect(resting.current).toBe(false);
+        target.remove();
+      },
+    );
+
+    it('a scroll event alone is not input', async () => {
+      const resting = { current: false };
+      hold({ resting });
+      await vi.advanceTimersByTimeAsync(29 * MINUTE);
+      window.dispatchEvent(new Event('scroll'));
+      await vi.advanceTimersByTimeAsync(2 * MINUTE);
+      expect(resting.current).toBe(true);
+    });
+
+    it('the first input after resting beats at once, wakes the caller and re-reads the status', async () => {
+      const resting = { current: false };
+      const onWake = vi.fn();
+      hold({ resting, onWake });
+      await vi.advanceTimersByTimeAsync(31 * MINUTE);
+      expect(resting.current).toBe(true);
+      const paused = beats();
+      act(() => {
+        window.dispatchEvent(new Event('pointermove'));
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resting.current).toBe(false);
+      expect(onWake).toHaveBeenCalledTimes(1);
+      expect(beats()).toBe(paused + 1);
+      // A second move in the same breath is not another wake.
+      act(() => {
+        window.dispatchEvent(new Event('pointermove'));
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(beats()).toBe(paused + 1);
+      expect(onWake).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps beating for ever while an editor in this tab holds unsaved work', async () => {
+      const resting = { current: false };
+      const Dirty = (): null => {
+        useRegisterUnsavedWork({
+          subject: 'Activity',
+          scopes: [{ key: 'details', label: 'Details', savable: true }],
+        });
+        return null;
+      };
+      const Wrapper = ({ children }: { children: ReactNode }) => {
+        const Query = wrapper();
+        return createElement(
+          Query,
+          null,
+          createElement(UnsavedWorkProvider, null, createElement(Dirty), children),
+        );
+      };
+      renderHook(
+        () => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn(), resting }),
+        { wrapper: Wrapper },
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(2 * 60 * MINUTE);
+      expect(resting.current).toBe(false);
+      expect(beats()).toBeGreaterThan(200);
+    });
+
+    describe('unsaved work is read at tick time', () => {
+      let setDirty: (dirty: boolean) => void = () => {};
+      const Dirty = (): null => {
+        const [dirty, set] = useState(false);
+        setDirty = set;
+        useRegisterUnsavedWork(
+          dirty
+            ? { subject: 'Activity', scopes: [{ key: 'details', label: 'Details', savable: true }] }
+            : null,
+        );
+        return null;
+      };
+      const mount = (resting: { current: boolean }) => {
+        const Wrapper = ({ children }: { children: ReactNode }) =>
+          createElement(
+            wrapper(),
+            null,
+            createElement(UnsavedWorkProvider, null, createElement(Dirty), children),
+          );
+        renderHook(
+          () => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn(), resting }),
+          {
+            wrapper: Wrapper,
+          },
+        );
+      };
+
+      it('clean, then dirty at minute 29 → never rests', async () => {
+        const resting = { current: false };
+        mount(resting);
+        await vi.advanceTimersByTimeAsync(29 * MINUTE);
+        act(() => setDirty(true));
+        await vi.advanceTimersByTimeAsync(10 * MINUTE);
+        expect(resting.current).toBe(false);
+      });
+
+      it('dirty, then clean at minute 20 → rests once 30 idle minutes are up', async () => {
+        const resting = { current: false };
+        mount(resting);
+        act(() => setDirty(true));
+        await vi.advanceTimersByTimeAsync(20 * MINUTE);
+        expect(resting.current).toBe(false);
+        act(() => setDirty(false));
+        await vi.advanceTimersByTimeAsync(11 * MINUTE);
+        expect(resting.current).toBe(true);
+      });
+    });
+
+    it('keeps the listeners attached while resting and clears resting when it stops holding', async () => {
+      const resting = { current: false };
+      const { rerender } = renderHook(
+        ({ holding }) => useLockHeartbeat('acme', 'p1', { holding, onLost: vi.fn(), resting }),
+        { wrapper: wrapper(), initialProps: { holding: true } },
+      );
+      await vi.advanceTimersByTimeAsync(31 * MINUTE);
+      expect(resting.current).toBe(true);
+      rerender({ holding: false });
+      expect(resting.current).toBe(false);
+    });
+
+    it('a re-render of the host does not wake a resting tab', async () => {
+      const resting = { current: false };
+      const { rerender } = renderHook(
+        () => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn(), resting }),
+        { wrapper: wrapper() },
+      );
+      await vi.advanceTimersByTimeAsync(31 * MINUTE);
+      expect(resting.current).toBe(true);
+      const before = { beats: beats(), calls: vi.mocked(apiFetch).mock.calls.length };
+      for (let i = 0; i < 5; i += 1) {
+        rerender();
+        // At once, before the next tick could set it again: the poll reads this flag when it re-arms.
+        expect(resting.current).toBe(true);
+        await vi.advanceTimersByTimeAsync(20_000);
+      }
+      expect(resting.current).toBe(true);
+      expect(beats()).toBe(before.beats);
+      expect(vi.mocked(apiFetch).mock.calls.length).toBe(before.calls);
+      // Only a real input wakes it.
+      act(() => {
+        window.dispatchEvent(new Event('keydown'));
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(resting.current).toBe(false);
+      expect(beats()).toBe(before.beats + 1);
+    });
+
+    it('a hidden tab that returns beats once and is awake', async () => {
+      const resting = { current: false };
+      const onWake = vi.fn();
+      hold({ resting, onWake });
+      await vi.advanceTimersByTimeAsync(31 * MINUTE);
+      act(() => setVisibility('hidden'));
+      await vi.advanceTimersByTimeAsync(MINUTE);
+      const before = beats();
+      act(() => setVisibility('visible'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(beats()).toBe(before + 1);
+      expect(onWake).toHaveBeenCalledTimes(1);
+      expect(resting.current).toBe(false);
+      // The clock restarted when the tab was shown, so it is not at once resting again.
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(resting.current).toBe(false);
+    });
+
+    it('a stream of pointer moves does not render the consumer', async () => {
+      let renders = 0;
+      renderHook(
+        () => {
+          renders += 1;
+          useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() });
+        },
+        { wrapper: wrapper() },
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      const before = renders;
+      for (let i = 0; i < 100; i += 1) window.dispatchEvent(new Event('pointermove'));
+      expect(renders).toBe(before);
+    });
+  });
+
   it('releases via a keepalive DELETE on pagehide (while holding)', () => {
     renderHook(() => useLockHeartbeat('acme', 'p1', { holding: true, onLost: vi.fn() }), {
       wrapper: wrapper(),
@@ -257,6 +501,18 @@ describe('useLockHeartbeat', () => {
 describe('planEditLockQueryOptions', () => {
   it('polls at 15s', () => {
     expect(planEditLockQueryOptions('acme', 'p1').refetchInterval).toBe(15_000);
+  });
+
+  it('pauses the poll while the tab is resting, and resumes when it is not', () => {
+    const resting = { current: false };
+    const interval = planEditLockQueryOptions('acme', 'p1', resting).refetchInterval;
+    expect(typeof interval).toBe('function');
+    const read = (): unknown => (interval as () => unknown)();
+    expect(read()).toBe(15_000);
+    resting.current = true;
+    expect(read()).toBe(false);
+    resting.current = false;
+    expect(read()).toBe(15_000);
   });
 });
 
@@ -1009,5 +1265,451 @@ describe('usePlanPen — a requester takes the freed pen', () => {
     await waitFor(() => expect(result.current.holdsPen).toBe(true));
     expect(posts()).toHaveLength(1);
     expect(result.current.cancelFailed).toBe(false);
+  });
+});
+
+// --- a tab that rested wakes (ADR-0220 D8) -----------------------------------
+
+describe('usePlanPen — waking after the tab rested', () => {
+  const MINUTE = 60_000;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(apiFetch).mockReset();
+    setVisibility('visible');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const announcing = (Inner: ReturnType<typeof wrapper>) =>
+    function Announcing({ children }: { children: ReactNode }) {
+      return createElement(Inner, null, createElement(AnnouncerProvider, null, children));
+    };
+
+  const flush = (ms = 0) => act(async () => void (await vi.advanceTimersByTimeAsync(ms)));
+
+  interface Server {
+    /** The lease lapsed while the tab rested. */
+    lapse: (after: PlanEditLockStatus) => void;
+    /** Hold the next heartbeat until `release` is called. */
+    holdBeat: () => (outcome: 'ok' | 'lost') => void;
+    /** Hold the next acquire until the returned function is called. */
+    holdAcquire: () => () => void;
+    beats: () => number;
+  }
+
+  /** Reads follow the lease; the heartbeat is refused once it has lapsed; an acquire restores it. */
+  function server(): Server {
+    let lapsed: PlanEditLockStatus | null = null;
+    let gate: Promise<'ok' | 'lost'> | null = null;
+    let acquireGate: Promise<void> | null = null;
+    let beats = 0;
+    vi.mocked(apiFetch).mockImplementation(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && path.endsWith('/heartbeat')) {
+        beats += 1;
+        const forced = gate ? await gate : null;
+        gate = null;
+        if (forced === 'ok') return HELD_BY_ME;
+        if (forced === 'lost' || lapsed) throw LOCKED_LOST;
+        return HELD_BY_ME;
+      }
+      if (init?.method === 'POST') {
+        if (acquireGate) await acquireGate;
+        acquireGate = null;
+        lapsed = null;
+        return HELD_BY_ME;
+      }
+      return lapsed ?? HELD_BY_ME;
+    });
+    return {
+      lapse: (after) => {
+        lapsed = after;
+      },
+      holdBeat: () => {
+        let release: (outcome: 'ok' | 'lost') => void = () => {};
+        gate = new Promise((r) => {
+          release = r;
+        });
+        return release;
+      },
+      holdAcquire: () => {
+        let release: () => void = () => {};
+        acquireGate = new Promise((r) => {
+          release = r;
+        });
+        return release;
+      },
+      beats: () => beats,
+    };
+  }
+
+  /** Mount holding, let the tab rest for 31 minutes, and record every status the view is given. */
+  async function rest() {
+    const seen: (string | undefined)[] = [];
+    let queryClient: QueryClient | undefined;
+    const hook = renderHook(
+      () => {
+        queryClient = useQueryClient();
+        const pen = usePlanPen('acme', 'p1', 'u1');
+        seen.push(pen.status?.state);
+        return pen;
+      },
+      { wrapper: announcing(wrapper()) },
+    );
+    await flush();
+    expect(hook.result.current.holdsPen).toBe(true);
+    await flush(31 * MINUTE);
+    seen.length = 0;
+    return { ...hook, seen, queryClient: queryClient as QueryClient };
+  }
+
+  const wake = () => {
+    act(() => {
+      window.dispatchEvent(new Event('pointermove'));
+    });
+  };
+
+  it('a resting tab polls no more, and sends no beats', async () => {
+    const api = server();
+    await rest();
+    const reads = (): number =>
+      vi.mocked(apiFetch).mock.calls.filter(([, init]) => !init?.method).length;
+    const before = { reads: reads(), beats: api.beats() };
+    await flush(10 * MINUTE);
+    expect(reads()).toBe(before.reads);
+    expect(api.beats()).toBe(before.beats);
+  });
+
+  it('wake, beat refused, plan free → a silent retake, and the view is never the free one', async () => {
+    const api = server();
+    const { result, seen } = await rest();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    await flush();
+    expect(posts()).toHaveLength(1);
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.holdsPen).toBe(true);
+    expect(seen).not.toContain('FREE');
+    expect(seen).not.toContain('EXPIRED');
+  });
+
+  it('wake, a status read lands FREE before the refused beat does → still not painted free', async () => {
+    const api = server();
+    const { result, seen } = await rest();
+    const settle = api.holdBeat();
+    api.lapse(FREE);
+    wake();
+    await flush(); // the fresh read has said FREE; the beat is still in the air
+    expect(result.current.status?.state).toBe('HELD_BY_ME');
+    expect(seen).not.toContain('FREE');
+    act(() => settle('lost'));
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBeNull();
+    expect(seen).not.toContain('FREE');
+  });
+
+  it('wake, beat refused, a colleague holds it → the existing lost-control reason', async () => {
+    const api = server();
+    const { result } = await rest();
+    api.lapse(HELD_BY_OTHER);
+    wake();
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST');
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('wake with a beat that succeeds → nothing changes', async () => {
+    const api = server();
+    const { result, seen } = await rest();
+    const before = api.beats();
+    wake();
+    await flush();
+    await flush();
+    expect(api.beats()).toBe(before + 1);
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.holdsPen).toBe(true);
+    expect(seen.every((s) => s === 'HELD_BY_ME')).toBe(true);
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('a write refused while waking, with the plan free → looks first, retakes, no lost sentence', async () => {
+    const api = server();
+    const { result } = await rest();
+    const settle = api.holdBeat();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    let outcome: { kind: string } | undefined;
+    act(() => {
+      outcome = result.current.onWriteRejected(LOCKED_LOST);
+    });
+    expect(outcome).toEqual({ kind: 'lock' });
+    act(() => settle('lost'));
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBeNull();
+    expect(posts()).toHaveLength(1);
+    expect(result.current.holdsPen).toBe(true);
+    await flush(50); // the announcer writes on the next animation frame
+    // The change was dropped, so the person is told once, and it is not sent again. The banner is the
+    // one channel; the shared live region must not also speak it.
+    expect(result.current.awayWrite).toBe(true);
+    expect(document.querySelector('[data-testid="announcer"]')?.textContent).toBe('');
+    act(() => result.current.dismissAwayWrite());
+    expect(result.current.awayWrite).toBe(false);
+  });
+
+  it('a write refused while waking, when a colleague took the plan → the lost sentence, no away notice', async () => {
+    const api = server();
+    const { result } = await rest();
+    const settle = api.holdBeat();
+    api.lapse(HELD_BY_OTHER);
+    wake();
+    await flush();
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    act(() => settle('lost'));
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST');
+    expect(result.current.awayWrite).toBe(false);
+  });
+
+  it('a refused beat with no write behind it retakes without any notice', async () => {
+    const api = server();
+    const { result } = await rest();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    await flush();
+    expect(result.current.holdsPen).toBe(true);
+    expect(result.current.awayWrite).toBe(false);
+  });
+
+  it('wake with a colleague holding the plan → the view goes straight from held to the lost sentence', async () => {
+    const api = server();
+    const { result, seen } = await rest();
+    const views: string[] = [];
+    const record = (): void => {
+      views.push(`${result.current.status?.state}/${result.current.lostControl ?? '-'}`);
+    };
+    record();
+    // The fresh read lands while the beat is still in the air, as it does in a browser.
+    const settle = api.holdBeat();
+    api.lapse(HELD_BY_OTHER);
+    wake();
+    await flush(20);
+    record();
+    act(() => settle('lost'));
+    for (let i = 0; i < 4; i += 1) {
+      await flush(20);
+      record();
+    }
+    // Never "{Name} is editing" first, and never "editing" again after it: held, then the lost sentence.
+    expect([...new Set(views)]).toEqual(['HELD_BY_ME/-', 'HELD_BY_OTHER/PLAN_EDIT_LOCK_LOST']);
+    expect(seen.filter((s, i) => s !== seen[i - 1])).toEqual(['HELD_BY_ME', 'HELD_BY_OTHER']);
+  });
+
+  it('beat refused first, retake in the air, then the write refused → no lost sentence, one notice', async () => {
+    const api = server();
+    const { result } = await rest();
+    const finish = api.holdAcquire();
+    api.lapse(FREE);
+    wake();
+    await flush(); // the beat is refused and the retake is now waiting on its acquire
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    act(() => finish());
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.holdsPen).toBe(true);
+    expect(result.current.awayWrite).toBe(true);
+  });
+
+  it('beat refused and the retake done, then a write refused for the same lapse → a notice, not the lost banner', async () => {
+    const api = server();
+    const { result } = await rest();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    await flush();
+    expect(result.current.holdsPen).toBe(true);
+    expect(result.current.awayWrite).toBe(false);
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.awayWrite).toBe(true);
+    expect(posts()).toHaveLength(1); // nothing was retaken a second time
+  });
+
+  it('a write refused after the retake, when a colleague has since taken the plan → the lost banner', async () => {
+    const api = server();
+    const { result } = await rest();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    await flush();
+    api.lapse(HELD_BY_OTHER);
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    await flush();
+    await flush();
+    expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST');
+    expect(result.current.awayWrite).toBe(false);
+  });
+
+  it('a write refused while declined leaves nothing behind for a later, unrelated retake', async () => {
+    const api = server();
+    const { result } = await rest();
+    const settle = api.holdBeat();
+    api.lapse(FREE);
+    wake();
+    await flush();
+    act(() => result.current.stopEditing());
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    await flush();
+    act(() => result.current.startEditing());
+    await flush();
+    await flush();
+    expect(result.current.awayWrite).toBe(false);
+    act(() => settle('lost'));
+    await flush();
+    await flush();
+    expect(result.current.awayWrite).toBe(false);
+  });
+
+  describe('the away notice goes away', () => {
+    async function withNotice(before?: (queryClient: QueryClient) => void) {
+      const api = server();
+      const hook = await rest();
+      before?.(hook.queryClient);
+      await flush(10);
+      const settle = api.holdBeat();
+      api.lapse(FREE);
+      wake();
+      await flush();
+      act(() => {
+        hook.result.current.onWriteRejected(LOCKED_LOST);
+      });
+      act(() => settle('lost'));
+      await flush();
+      await flush();
+      expect(hook.result.current.awayWrite).toBe(true);
+      return hook;
+    }
+
+    it('on Stop editing', async () => {
+      const { result } = await withNotice();
+      act(() => result.current.stopEditing());
+      expect(result.current.awayWrite).toBe(false);
+    });
+
+    it('when the next write is accepted, but not when a lock verb succeeds', async () => {
+      const { result, queryClient } = await withNotice();
+      // A heartbeat or an acquire succeeding is not a write.
+      await act(async () => {
+        await queryClient
+          .getMutationCache()
+          .build(queryClient, { mutationKey: ['plan-lock'], mutationFn: () => Promise.resolve(1) })
+          .execute(undefined);
+      });
+      expect(result.current.awayWrite).toBe(true);
+      await flush(10); // a write submitted after the notice, not in the same instant
+      await act(async () => {
+        await queryClient
+          .getMutationCache()
+          .build(queryClient, { mutationFn: () => Promise.resolve(1) })
+          .execute(undefined);
+      });
+      expect(result.current.awayWrite).toBe(false);
+    });
+
+    it('a write already in flight when the refusal landed does not clear it when it succeeds', async () => {
+      let finish: () => void = () => {};
+      let sibling: Promise<unknown> = Promise.resolve();
+      const { result } = await withNotice((queryClient) => {
+        sibling = queryClient
+          .getMutationCache()
+          .build(queryClient, {
+            mutationFn: () =>
+              new Promise<number>((resolve) => {
+                finish = () => resolve(1);
+              }),
+          })
+          .execute(undefined);
+      });
+      expect(result.current.awayWrite).toBe(true);
+      await act(async () => {
+        finish();
+        await sibling;
+      });
+      expect(result.current.awayWrite).toBe(true);
+    });
+  });
+
+  it('a reconnect that delivers FREE to a resting tab shows the honest state and retakes nothing', async () => {
+    const api = server();
+    const { result, queryClient } = await rest();
+    const beatsBefore = api.beats();
+    api.lapse(FREE);
+    // What a reconnect's refetch does: a read arrives with no input behind it.
+    act(() => {
+      void queryClient.invalidateQueries({ queryKey: planLockKeys.status('acme', 'p1') });
+    });
+    await flush();
+    await flush();
+    expect(result.current.status?.state).toBe('FREE');
+    expect(result.current.holdsPen).toBe(false);
+    expect(result.current.lostControl).toBeNull();
+    expect(posts()).toHaveLength(0);
+    expect(api.beats()).toBe(beatsBefore);
+  });
+
+  it('a write refused when the tab is not waking still says so at once', async () => {
+    server();
+    const { result } = await rest();
+    act(() => {
+      result.current.onWriteRejected(LOCKED_LOST);
+    });
+    expect(result.current.lostControl).toBe('PLAN_EDIT_LOCK_LOST');
+  });
+
+  it('a hidden tab returning after its lease lapsed is not painted free either', async () => {
+    const api = server();
+    const seen: (string | undefined)[] = [];
+    const { result } = renderHook(
+      () => {
+        const pen = usePlanPen('acme', 'p1', 'u1');
+        seen.push(pen.status?.state);
+        return pen;
+      },
+      { wrapper: wrapper() },
+    );
+    await flush();
+    act(() => setVisibility('hidden'));
+    await flush(20 * MINUTE);
+    api.lapse(FREE);
+    seen.length = 0;
+    act(() => setVisibility('visible'));
+    await flush();
+    await flush();
+    expect(seen).not.toContain('FREE');
+    expect(result.current.lostControl).toBeNull();
+    expect(result.current.holdsPen).toBe(true);
   });
 });

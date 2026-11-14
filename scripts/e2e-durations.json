@@ -3,7 +3,7 @@
   "run": "43447550605",
   "job": "131960858067",
   "measured": "2026-11-13",
-  "residualCheck": "The 51 web durations sum to 5522 s: 5,392 s measured (the four shard jobs' suite steps of run 43447550605: 1,570 + 1,643 + 1,164 + 1,016) plus the 130 s planned for `edit`. There is no independently-recorded total to reconcile against; the log-derived sum is the figure the pack is built from. The projected shard sums (suite steps only) are 1,089 / 1,109 / 1,108 / 1,108 / 1,108 s across five shards; with the ~97 s fixed cost, 1,186 / 1,206 / 1,205 / 1,205 / 1,205 s. The per-suite estimates the 2026-10-19 to 2026-10-30 notes recorded (authoring-flow-off, swimlanes) are superseded: swimlanes is now measured (265 s). The check still does what it exists for - a hand-edit cannot pass unnoticed - and this edit is recorded rather than hidden by rounding it into a neighbour.",
+  "residualCheck": "The 51 web durations sum to 5762 s: 5,392 s measured (the four shard jobs' suite steps of run 43447550605: 1,570 + 1,643 + 1,164 + 1,016), plus the 130 s planned for `edit`, plus a further 240 s ESTIMATE for `edit` (2026-11-13, idle-tab-lets-go: its two fake-clock journeys took about 2.1 and 4.0 minutes in one local run, against the 130 s planned for them). Re-harvest from CI to replace the estimate. There is no independently-recorded total to reconcile against; the log-derived sum is the figure the pack is built from. The projected shard sums (suite steps only) are 1,089 / 1,109 / 1,108 / 1,108 / 1,108 s across five shards; with the ~97 s fixed cost, 1,186 / 1,206 / 1,205 / 1,205 / 1,205 s. The per-suite estimates the 2026-10-19 to 2026-10-30 notes recorded (authoring-flow-off, swimlanes) are superseded: swimlanes is now measured (265 s). The check still does what it exists for - a hand-edit cannot pass unnoticed - and this edit is recorded rather than hidden by rounding it into a neighbour.",
   "keyedBy": "The package.json SCRIPT NAME, not the CI step's title and not a prose suite label. A title is prose; the script is the key check:e2e-roster derives its own roster from, so the two cannot drift apart. Verified as an exact set equality in both directions against apps/web/package.json (44) and apps/api/package.json (2) on 2026-09-11, and again on 2026-10-13 by this file's test (50 web, 2 API; 51 web from 2026-10-19; 52 web from 2026-10-24); 51 web from 2026-10-19 (52 from 2026-10-24, 51 again after 2026-11-08), and again on 2026-11-13.",
   "seconds": {
     "web": {
@@ -22,7 +22,7 @@
       "test:e2e:csp": 24,
       "test:e2e:designed-chrome": 29,
       "test:e2e:designed-ui": 52,
-      "test:e2e:edit": 657,
+      "test:e2e:edit": 897,
       "test:e2e:export": 43,
       "test:e2e:float-paths": 23,
       "test:e2e:gantt": 136,

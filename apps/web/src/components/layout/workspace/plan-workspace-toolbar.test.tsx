@@ -20,6 +20,8 @@ const h = vi.hoisted<{
   plannedStart: string | null;
   // The last props the (stubbed) TsldPanel received, so the strip forwarding can be asserted (B7).
   tsldProps: { current: Record<string, unknown> | null };
+  // The pen's away notice (ADR-0220 D8): what the hook says, and the dismiss it hands the banner.
+  penNotice: { value: boolean; dismiss: ReturnType<typeof vi.fn> };
   // The `?view=` search the route mock answers, so a case can open the Gantt (ADR-0059).
   search: Record<string, string>;
   // The canvas handle the stubbed panel publishes, so a viewport command's effect is observable.
@@ -40,6 +42,7 @@ const h = vi.hoisted<{
   role: 'PLANNER',
   plannedStart: '2026-01-01',
   tsldProps: { current: null },
+  penNotice: { value: false, dismiss: vi.fn() },
   search: {},
   canvasControl: { goToDate: vi.fn() },
   swimlanes: { source: 'NONE', list: { data: undefined, isPending: true } },
@@ -90,7 +93,11 @@ vi.mock('@/features/auth', () => ({ useSession: () => ({ data: { user: { id: 'us
 
 vi.mock('@/features/plan-lock', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  usePlanPen: () => ({ holdsPen: true }),
+  usePlanPen: () => ({
+    holdsPen: true,
+    awayWrite: h.penNotice.value,
+    dismissAwayWrite: h.penNotice.dismiss,
+  }),
   CompactPenStatus: () => null,
 }));
 
@@ -287,6 +294,7 @@ beforeEach(() => {
   h.role = 'PLANNER';
   h.plannedStart = '2026-01-01';
   h.tsldProps.current = null;
+  h.penNotice = { value: false, dismiss: vi.fn() };
   h.search = {};
   h.swimlanes = { source: 'NONE', list: { data: undefined, isPending: true } };
 });
@@ -566,6 +574,28 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
  * M2). The host builds the strip, `TsldPanel` decides whether the diagram's dock shows it, and the
  * Gantt's own chain places it — the same three-party seam as every dock strip.
  */
+describe("the pen's away notice (ADR-0220 D8)", () => {
+  const NOTICE = 'You were away, so that change was not saved. Try it again.';
+
+  it('is one polite status in the document, and Dismiss keeps focus somewhere real', () => {
+    h.penNotice = { value: true, dismiss: vi.fn() };
+    renderScreen();
+    // One live region carries it: the banner. A second channel would speak it twice.
+    const carriers = screen.getAllByText(NOTICE);
+    expect(carriers).toHaveLength(1);
+    expect(carriers[0]?.closest('[role]')?.getAttribute('role')).toBe('status');
+    expect(document.querySelector('[data-testid="announcer"]')?.textContent).not.toContain(NOTICE);
+
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    dismiss.focus();
+    fireEvent.click(dismiss);
+    expect(h.penNotice.dismiss).toHaveBeenCalledTimes(1);
+    // The hook's state is mocked, so the button is still there; focus has already been handed on.
+    expect(document.activeElement).not.toBe(dismiss);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+});
+
 describe('the touch-gesture tip', () => {
   /** A whole touch (down, up) of the given type, then long enough for the hook's frame. */
   const press = async (pointerType: string) => {

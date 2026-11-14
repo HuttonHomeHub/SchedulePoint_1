@@ -44,6 +44,11 @@ export const lockCopy = {
   expired: (holder: PlanEditLockActor | null): string =>
     holder ? `${firstName(holder)} was editing (inactive).` : 'No one is editing this plan.',
   holding: 'You’re editing this plan.',
+  /**
+   * A change was refused because the tab had been away while its hold lapsed, and the pen was then
+   * taken back (ADR-0220 D8, E4). Said once, in the workspace's refused-write banner.
+   */
+  awayWrite: 'You were away, so that change was not saved. Try it again.',
   incomingRequest: (requester: PlanEditLockActor): string =>
     `${firstName(requester)} is asking to edit this plan.`,
   heldByOther: (holder: PlanEditLockActor): string => `${firstName(holder)} is editing this plan.`,

@@ -7,14 +7,17 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 
 import { shouldAutoAcquire, shouldRetakeAfterLoss, shouldTakeOnFree } from '../lib/auto-acquire';
+import { decideBeat } from '../lib/let-go';
 import { classifyLockError } from '../lib/lock-error';
 
+import { useUnsavedWorkRegistry } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { API_BASE_URL } from '@/config/env';
 import { apiFetch } from '@/lib/api/client';
 import { planLockKeys } from '@/lib/query/hierarchy-keys';
+import { hasUnsavedWork } from '@/lib/unsaved-work/report';
 
 export { planLockKeys };
 
@@ -22,23 +25,43 @@ export { planLockKeys };
 const POLL_MS = 15_000;
 /** Holder heartbeat cadence (ADR-0028 config; the server enforces the 120 s TTL). */
 const HEARTBEAT_MS = 30_000;
+/** Every lock verb's mutation carries this key, so a listener can tell the person's own writes from them. */
+const LOCK_MUTATION_KEY = ['plan-lock'] as const;
+
 /**
- * A tab hidden this long stops beating (ADR-0220 D5), so a plan left in the background does not keep
- * colleagues out for ever. 15 minutes by the product owner's answer; the server then calls the
- * holder inactive after 90 s without a beat and expires the lease at 120 s.
+ * What counts as the person using this tab (ADR-0220 D8, R1). Scroll is not one: the app scrolls
+ * itself. `focus` is: a capture listener on `window` sees every element's focus as well as the
+ * window's own, which is how a person returns to a window or tabs into a page. The app moves focus
+ * only in answer to something that happened (a control removed, a dialog closed), and the timers
+ * we found in the workspace redraw text (the pen's one-second relative-time tick) or poll the
+ * status, which is paused while the tab rests, so we found nothing that keeps a tab awake by
+ * moving focus. Chrome can also dispatch a trusted synthetic `pointermove` after a layout shift
+ * under a still cursor; that is accepted and would only postpone the rest.
  */
-const HIDDEN_LET_GO_MS = 15 * 60_000;
+const INPUT_EVENTS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'focus'] as const;
 
 const lockPath = (orgSlug: string, planId: string): string =>
   `/organizations/${orgSlug}/plans/${planId}/edit-lock`;
 
 // --- status query ----------------------------------------------------------
 
-export function planEditLockQueryOptions(orgSlug: string, planId: string) {
+/**
+ * `resting` is the tab that has let go for idleness (ADR-0220 D8, R5): while it is set the poll
+ * pauses, as it already does in a hidden tab, so the view stays as the person left it. TanStack
+ * Query reads a `refetchInterval` function again whenever the query updates (a fetch starting or
+ * settling) and when the options change, not on every tick, so the poll stops after the read that
+ * is already in flight and restarts with the fetch the wake asks for
+ * (`@tanstack/query-core`, `queryObserver.js:460-462` and `queryObserver.js:286-288`).
+ */
+export function planEditLockQueryOptions(
+  orgSlug: string,
+  planId: string,
+  resting?: RefObject<boolean>,
+) {
   return queryOptions({
     queryKey: planLockKeys.status(orgSlug, planId),
     queryFn: () => apiFetch<PlanEditLockStatus>(lockPath(orgSlug, planId)),
-    refetchInterval: POLL_MS,
+    refetchInterval: resting ? () => (resting.current ? false : POLL_MS) : POLL_MS,
     refetchOnWindowFocus: true,
     staleTime: 0, // lock status is inherently volatile — never serve it stale on mount
   });
@@ -48,8 +71,9 @@ export function planEditLockQueryOptions(orgSlug: string, planId: string) {
 export function usePlanEditLock(
   orgSlug: string,
   planId: string,
+  resting?: RefObject<boolean>,
 ): UseQueryResult<PlanEditLockStatus> {
-  return useQuery(planEditLockQueryOptions(orgSlug, planId));
+  return useQuery(planEditLockQueryOptions(orgSlug, planId, resting));
 }
 
 // --- mutations (one per verb) ----------------------------------------------
@@ -59,6 +83,7 @@ export function useAcquireLock(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   const key = planLockKeys.status(orgSlug, planId);
   return useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: (vars?: { takeover?: boolean }) =>
       apiFetch<PlanEditLockStatus>(lockPath(orgSlug, planId), {
         method: 'POST',
@@ -74,6 +99,7 @@ export function useReleaseLock(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   const key = planLockKeys.status(orgSlug, planId);
   return useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: () => apiFetch<void>(lockPath(orgSlug, planId), { method: 'DELETE' }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
   });
@@ -84,6 +110,7 @@ export function useRequestControl(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   const key = planLockKeys.status(orgSlug, planId);
   return useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: () =>
       apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/request`, { method: 'POST' }),
     onSuccess: (data) => queryClient.setQueryData(key, data),
@@ -100,6 +127,7 @@ export function useCancelRequest(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   const key = planLockKeys.status(orgSlug, planId);
   return useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: () =>
       apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/request`, { method: 'DELETE' }),
     // A read that left before the DELETE could land after it and put the request back in the cache.
@@ -114,6 +142,7 @@ export function useHandoff(orgSlug: string, planId: string) {
   const queryClient = useQueryClient();
   const key = planLockKeys.status(orgSlug, planId);
   return useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: () =>
       apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/handoff`, { method: 'POST' }),
     onSuccess: (data) => queryClient.setQueryData(key, data),
@@ -137,14 +166,24 @@ export function useHandoff(orgSlug: string, planId: string) {
  * - A **423 `PLAN_EDIT_LOCK_LOST`** heartbeat invalidates the status and calls
  *   `onLost` — the same drop-to-read-only transition as a lost write, unless the caller finds the
  *   plan free and takes it back (ADR-0220 D3). `onBeat` reports a beat the server accepted, which is
- *   what proves a retaken lease is live.
+ *   what proves a retaken lease is live; `onBeatSettled` reports every beat's end, accepted or not.
  * - On `visibilitychange → visible`, fire an immediate heartbeat to recover from
  *   background-tab interval throttling (a beat can slip toward 60 s, still < TTL).
- * - A tab hidden for {@link HIDDEN_LET_GO_MS} skips its beats (D5) but never releases: a visible
+ * - A tab hidden for `HIDDEN_LET_GO_MS` skips its beats (D5) but never releases: a visible
  *   sibling tab of the same person shares the lease and keeps it alive with its own beats. The
  *   hidden time is measured from the `visibilitychange` that hid the tab, not by counting ticks,
  *   because a hidden tab's timers are throttled. The visible-again beat resumes the lease, or meets
  *   the 423 the caller's `onLost` already handles.
+ * - A **visible** tab with no input for `IDLE_LET_GO_MS` does the same (D8), unless this tab's
+ *   unsaved-work registry holds typed changes (R4). Input is any `pointerdown`, `pointermove`,
+ *   `keydown`, `wheel` or `focus` (a capture listener on `window` hears every element's focus), heard once on `window` in the capture phase and
+ *   written to a ref, so a mouse move costs no render. The tab then **rests**: `resting` is set (it
+ *   also pauses the status poll, R5) and the listeners stay attached, because they are what wake
+ *   it. The first input beats at once and asks for a fresh status; `onWake` tells the caller a beat
+ *   is in the air so its view can hold still until `onBeatSettled` (R6, R7).
+ * - Its refs (last input, resting, hidden-since) are per mount and are not reset when `planId` changes:
+ *   the caller mounts it under a key that changes with the plan (`usePlanPen`'s remarks;
+ *   `routes/plan-detail.tsx` keys the workspace on `${orgSlug}/${planId}`).
  */
 export function useLockHeartbeat(
   orgSlug: string,
@@ -153,16 +192,28 @@ export function useLockHeartbeat(
     holding,
     onLost,
     onBeat,
+    onBeatSettled,
+    onWake,
+    resting,
   }: {
     holding: boolean;
     onLost: (reason: PlanEditLockReason) => void;
     onBeat?: () => void;
+    onBeatSettled?: () => void;
+    onWake?: () => void;
+    /** Shared with the status query, which pauses its poll while it is set. */
+    resting?: RefObject<boolean>;
   },
 ): void {
   const queryClient = useQueryClient();
-  const key = planLockKeys.status(orgSlug, planId);
+  // Stable across renders: `planLockKeys.status` builds a new array each call, and the effects below
+  // list the key as a dependency. A key that changed every render re-attached the input listeners on
+  // every render of the host (a one-second timer elsewhere in the workspace is enough).
+  const key = useMemo(() => planLockKeys.status(orgSlug, planId), [orgSlug, planId]);
+  const registry = useUnsavedWorkRegistry();
 
   const heartbeat = useMutation({
+    mutationKey: LOCK_MUTATION_KEY,
     mutationFn: () =>
       apiFetch<PlanEditLockStatus>(`${lockPath(orgSlug, planId)}/heartbeat`, { method: 'POST' }),
     onSuccess: (data) => {
@@ -176,6 +227,7 @@ export function useLockHeartbeat(
         onLost(reason);
       }
     },
+    onSettled: () => onBeatSettled?.(),
   });
 
   // Keep the interval/visibility callbacks off a stale `mutate` closure.
@@ -187,20 +239,64 @@ export function useLockHeartbeat(
   useEffect(() => {
     holdingRef.current = holding;
   });
+  const wakeRef = useRef(onWake);
+  useEffect(() => {
+    wakeRef.current = onWake;
+  });
+  const registryRef = useRef(registry);
+  useEffect(() => {
+    registryRef.current = registry;
+  });
+  const ownResting = useRef(false);
+  const restingRef = resting ?? ownResting;
 
   // When this tab was hidden, or null while it is visible.
   const hiddenSinceRef = useRef<number | null>(null);
+  // The last input in this tab. Written by every pointer move, so it is a ref and nothing else.
+  const lastInputAtRef = useRef(0);
 
   // The heartbeat interval — only while holding.
   useEffect(() => {
     if (!holding) return;
+    lastInputAtRef.current = Date.now();
     const id = setInterval(() => {
-      const hiddenSince = hiddenSinceRef.current;
-      if (hiddenSince !== null && Date.now() - hiddenSince >= HIDDEN_LET_GO_MS) return;
-      beatRef.current();
+      const decision = decideBeat({
+        now: Date.now(),
+        hiddenSince: hiddenSinceRef.current,
+        lastInputAt: lastInputAtRef.current,
+        hasUnsavedWork: hasUnsavedWork(registryRef.current?.read() ?? []),
+      });
+      if (decision === 'idle') restingRef.current = true;
+      if (decision === 'beat') beatRef.current();
     }, HEARTBEAT_MS);
-    return () => clearInterval(id);
-  }, [holding]);
+    return () => {
+      clearInterval(id);
+      // Resting means "holding and let go for idleness", so it ends with holding. This cleanup runs
+      // only when `holding` changes or the host unmounts, never on a re-render, which must not wake a
+      // resting tab (the input listeners' own cleanup runs far more often and so cannot do this).
+      restingRef.current = false;
+    };
+  }, [holding, restingRef]);
+
+  // Input in this tab, and the wake it causes in a resting one. Attached for as long as the tab
+  // holds, and a resting tab still counts as holding (its poll is paused), so nothing detaches them.
+  useEffect(() => {
+    if (!holding) return;
+    const onInput = (): void => {
+      lastInputAtRef.current = Date.now();
+      if (!restingRef.current) return;
+      restingRef.current = false;
+      wakeRef.current?.();
+      beatRef.current();
+      void queryClient.invalidateQueries({ queryKey: key });
+    };
+    for (const type of INPUT_EVENTS) {
+      window.addEventListener(type, onInput, { capture: true, passive: true });
+    }
+    return () => {
+      for (const type of INPUT_EVENTS) window.removeEventListener(type, onInput, { capture: true });
+    };
+  }, [holding, queryClient, key, restingRef]);
 
   // Immediate recovery beat when a backgrounded tab returns to the foreground.
   useEffect(() => {
@@ -212,11 +308,16 @@ export function useLockHeartbeat(
         return;
       }
       hiddenSinceRef.current = null;
-      if (document.visibilityState === 'visible') beatRef.current();
+      lastInputAtRef.current = Date.now();
+      if (document.visibilityState === 'visible') {
+        restingRef.current = false;
+        wakeRef.current?.();
+        beatRef.current();
+      }
     };
     document.addEventListener('visibilitychange', onChange);
     return () => document.removeEventListener('visibilitychange', onChange);
-  }, [holding]);
+  }, [holding, restingRef]);
 
   // Release on nav-away (unmount) and tab close — keepalive DELETE, only while holding.
   useEffect(() => {
@@ -276,6 +377,9 @@ export interface PlanPen {
   handoff: () => void;
   /** Take over a live lock (peer post-grace, or admin immediate — server decides). */
   takeOver: () => void;
+  /** A change did not apply because the tab had been away while its hold lapsed (`lockCopy.awayWrite`). */
+  awayWrite: boolean;
+  dismissAwayWrite: () => void;
   /** Classify + absorb a rejected write; returns whether it was a lock error. */
   onWriteRejected: (err: unknown) => WriteRejection;
 }
@@ -287,7 +391,7 @@ export interface PlanPen {
  * Query keyed by plan; the only local state is the transient `lostControl` flag
  * (ADR-0004 split).
  *
- * @remarks Its per-opening state (the opening decision, `declined`, the one silent retake) lives in
+ * @remarks Its per-opening state (the opening decision, `declined`, the one silent retake, the away-write notice, the resting flag) lives in
  * this hook instance, so it is per **mount**: mount it under a key that changes with the plan, as
  * `routes/plan-detail.tsx` does (`${orgSlug}/${planId}`). Without one, a plan switch would carry
  * the previous plan's "the person pressed Stop" into the next opening.
@@ -299,7 +403,9 @@ export function usePlanPen(
 ): PlanPen {
   const queryClient = useQueryClient();
 
-  const lockQuery = usePlanEditLock(orgSlug, planId);
+  // Set by the heartbeat hook while this tab has let go for idleness; the status poll pauses on it.
+  const restingRef = useRef(false);
+  const lockQuery = usePlanEditLock(orgSlug, planId, restingRef);
   const status = lockQuery.data;
   const holdsPen = status?.state === 'HELD_BY_ME';
 
@@ -308,6 +414,38 @@ export function usePlanPen(
   // `useAnnounce()` for these — a second, near-identical utterance per action reads
   // as a double-announcement to AT (a11y review). The banner is the single source.
   const [lostControl, setLostControl] = useState<PlanEditLockReason | null>(null);
+  const [awayWrite, setAwayWrite] = useState(false);
+  // When the notice was shown: a write accepted after that, and only one submitted after it, ends it.
+  const awayAtRef = useRef(0);
+  const showAwayWrite = useCallback(() => {
+    awayAtRef.current = Date.now();
+    setAwayWrite(true);
+  }, []);
+  const dismissAwayWrite = useCallback(() => setAwayWrite(false), []);
+  // The notice is about a change that did not apply: it is over once the person's next write is accepted.
+  // Only writes made through a mutation can be seen here; the rest end it by Dismiss or Stop editing.
+  // Mutation keys are not scoped to a plan, so a write to THIS plan cannot be told from any other
+  // mutation; what can be told is when it was submitted, so one already in flight when the refusal
+  // landed (a sibling write, an unrelated save) cannot clear a notice nobody has read yet.
+  useEffect(() => {
+    if (!awayWrite) return;
+    return queryClient.getMutationCache().subscribe((event) => {
+      if (
+        event.type === 'updated' &&
+        event.action.type === 'success' &&
+        event.mutation.options.mutationKey?.[0] !== LOCK_MUTATION_KEY[0] &&
+        (event.mutation.state.submittedAt ?? 0) > awayAtRef.current
+      ) {
+        setAwayWrite(false);
+      }
+    });
+  }, [awayWrite, queryClient]);
+  // A write was refused while the tab was waking, so the retake in `handleLost` has a change to
+  // account for. A ref: the refusal can arrive while a retake started by the beat is already running.
+  const writeDroppedRef = useRef(false);
+  // The pen was silently taken back and no beat has been accepted since: a write refused just before
+  // that was refused for the lapse the retake has already answered (ADR-0220 D8, E4).
+  const retookRef = useRef(false);
 
   // --- the automatic acquire (ADR-0220) ------------------------------------
   // Everything below is per opening: the workspace is keyed per plan, so a reload, a plan switch or a
@@ -348,6 +486,20 @@ export function usePlanPen(
   // flip Stop editing to Start editing for a retake that is meant to be silent.
   const [lastHeld, setLastHeld] = useState<PlanEditLockStatus | undefined>(undefined);
   if (status?.state === 'HELD_BY_ME' && lastHeld !== status) setLastHeld(status);
+  // A beat sent on waking (an input after the tab rested, or a hidden tab returning) is in the air
+  // (ADR-0220 D8, R7). Until it settles a read of FREE or EXPIRED must not repaint the pen as free:
+  // the beat is about to say whether the lease is still this person's. A ref as well as state, so a
+  // rejected write can ask whether the tab is waking without waiting for a render.
+  const [waking, setWaking] = useState(false);
+  const wakingRef = useRef(false);
+  const startWaking = useCallback(() => {
+    wakingRef.current = true;
+    setWaking(true);
+  }, []);
+  const endWaking = useCallback(() => {
+    wakingRef.current = false;
+    setWaking(false);
+  }, []);
   // The last status that named another holder, kept for the freed-pen acquire for the same reason:
   // the refetch in the middle reads FREE, and the requester should go from the waiting sentence
   // straight to holding the plan.
@@ -480,8 +632,11 @@ export function usePlanPen(
   // A heartbeat said the lease is gone. Look before announcing: a lease released by this person's own
   // other tab or by a reload leaves the plan free, and "taken over" would be false.
   const handleLost = useCallback(
-    (reason: PlanEditLockReason) => {
+    (reason: PlanEditLockReason, { fromWrite = false }: { fromWrite?: boolean } = {}) => {
       if (declinedRef.current) return; // a beat in flight while Stop was pressed
+      // After the declined check: a refusal that is not going to be retaken has nothing to report, and
+      // the flag would otherwise outlive it and attach to some later, unrelated retake.
+      if (fromWrite) writeDroppedRef.current = true;
       if (retakeInFlightRef.current) return; // the beat before this one is already being answered
       retakeInFlightRef.current = true;
       setRetaking(true);
@@ -493,27 +648,39 @@ export function usePlanPen(
             retakenRef.current = true;
             await mutateAutoAsync({ takeover: false });
             setLostControl(null);
+            retookRef.current = true;
+            if (writeDroppedRef.current) {
+              showAwayWrite();
+            }
             return;
           }
         } catch {
           // Could not look, or the retake was refused: fall through to the honest default.
         } finally {
           retakeInFlightRef.current = false;
+          writeDroppedRef.current = false;
           setRetaking(false);
         }
         if (!declinedRef.current) acknowledgeLost(reason);
       })();
     },
-    [readLatestStatus, mutateAutoAsync, acknowledgeLost],
+    [readLatestStatus, mutateAutoAsync, acknowledgeLost, showAwayWrite],
   );
+  // Not reset by the retake's own acquire succeeding, only by an accepted beat: a server that accepts
+  // an acquire and then refuses the beat would otherwise be retaken for ever, silently, every 30 s.
+  // The cost is that a second real loss inside that 30 s window reads as a loss, which it is.
   const confirmLive = useCallback(() => {
     retakenRef.current = false;
+    retookRef.current = false;
   }, []);
 
   useLockHeartbeat(orgSlug, planId, {
     holding: Boolean(holdsPen),
     onLost: handleLost,
     onBeat: confirmLive,
+    onBeatSettled: endWaking,
+    onWake: startWaking,
+    resting: restingRef,
   });
 
   const startEditing = useCallback(() => {
@@ -522,6 +689,7 @@ export function usePlanPen(
   }, [acquire, resume]);
 
   const stopEditing = useCallback(() => {
+    setAwayWrite(false);
     decline();
     release.mutate();
   }, [release, decline]);
@@ -561,18 +729,41 @@ export function usePlanPen(
     (err: unknown): WriteRejection => {
       const reason = classifyLockError(err);
       if (reason) {
-        acknowledgeLost(reason);
+        // A write that left in the same instant as the wake beat (ADR-0220 D8, E4) may be refused
+        // only because the lease lapsed while the tab rested: look first, as a refused beat does.
+        if (wakingRef.current || retakeInFlightRef.current) {
+          handleLost(reason, { fromWrite: true });
+        } else if (retookRef.current) {
+          // The beat's 423 got there first and the retake is done: this write was refused for the same
+          // lapse. Confirm the pen is ours before saying so, rather than declining on a stale answer.
+          void (async () => {
+            try {
+              if ((await readLatestStatus()).state === 'HELD_BY_ME') {
+                showAwayWrite();
+                return;
+              }
+            } catch {
+              // Could not look: fall through to the honest default.
+            }
+            if (!declinedRef.current) acknowledgeLost(reason);
+          })();
+        } else {
+          acknowledgeLost(reason);
+        }
         void queryClient.invalidateQueries({ queryKey: planLockKeys.status(orgSlug, planId) });
         return { kind: 'lock' };
       }
       return { kind: 'passthrough' };
     },
-    [acknowledgeLost, queryClient, orgSlug, planId],
+    [acknowledgeLost, handleLost, readLatestStatus, showAwayWrite, queryClient, orgSlug, planId],
   );
 
   return {
     status:
-      retaking && lastHeld
+      // Until the wake's beat and the retake's read have both settled, whatever the status says, the
+      // view keeps the last held lease: a colleague's name, then "editing", then the lost sentence is
+      // three announcements for what is one event (ADR-0220 D8, R7).
+      (retaking || waking) && lastHeld
         ? lastHeld
         : takingFreedPen && lastOther && (status?.state === 'FREE' || status?.state === 'EXPIRED')
           ? lastOther
@@ -595,6 +786,8 @@ export function usePlanPen(
     requestControl,
     cancelRequest,
     cancelFailed,
+    awayWrite,
+    dismissAwayWrite,
     handoff,
     takeOver,
     onWriteRejected,

@@ -16,6 +16,7 @@ export {
   type WriteRejection,
 } from './api/use-plan-edit-lock';
 export { classifyLockError, isLockError } from './lib/lock-error';
+export { lockCopy } from './lib/lock-copy';
 export {
   derivePlanGating,
   scheduleRefusal,
