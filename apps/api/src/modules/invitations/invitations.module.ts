@@ -5,6 +5,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { InvitationRepository } from './invitation.repository';
 import { InvitationsController } from './invitations.controller';
 import { InvitationsService } from './invitations.service';
+import { MyInvitationsController } from './my-invitations.controller';
 import { OrgInvitationsController } from './org-invitations.controller';
 
 /**
@@ -14,7 +15,7 @@ import { OrgInvitationsController } from './org-invitations.controller';
  */
 @Module({
   imports: [OrganizationsModule],
-  controllers: [OrgInvitationsController, InvitationsController],
+  controllers: [OrgInvitationsController, InvitationsController, MyInvitationsController],
   providers: [InvitationsService, InvitationRepository],
 })
 export class InvitationsModule {}

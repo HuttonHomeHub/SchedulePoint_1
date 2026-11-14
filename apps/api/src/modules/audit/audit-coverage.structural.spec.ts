@@ -77,6 +77,8 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'DELETE /api/v1/organizations/:orgSlug/projects/:projectId': ['project.deleted'],
   'PATCH /api/v1/organizations/:orgSlug/members/:memberId': ['member.role_changed'],
   'POST /api/v1/invitations/accept': ['invitation.accepted', 'member.joined'],
+  // The second door (ADR-0221): the same two rows through the same routine, plus `acceptedVia`.
+  'POST /api/v1/me/invitations/:invitationId/accept': ['invitation.accepted', 'member.joined'],
   // Recorded by Better Auth's `afterEmailVerification` seam, not by the controller (TECH_DEBT #88):
   // the confirm POST calls the library's verifier, which writes `auth.email_verified` itself.
   'POST /api/v1/email-verification/confirm': ['auth.email_verified'],
@@ -240,6 +242,7 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
   'GET /api/v1/me': REASONS.READ,
+  'GET /api/v1/me/invitations': REASONS.READ,
   'GET /api/v1/me/audit-events': REASONS.AUDIT_READ,
   'GET /api/v1/organizations': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug': REASONS.READ,
@@ -471,6 +474,7 @@ describe('audit coverage census (ADR-0072)', () => {
       'POST /api/v1/organizations/:orgSlug/invitations',
       'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId',
       'POST /api/v1/invitations/accept',
+      'POST /api/v1/me/invitations/:invitationId/accept',
       // Minting a guest link grants a read of plan data to somebody with no account at all, and
       // revoking it is the only way that grant ever ends. It is the widest permission change the
       // product offers and the one whose subject can never be asked what they saw.

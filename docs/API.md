@@ -2674,6 +2674,26 @@ for up to an hour) do no token lookup: they answer `303` to `{web}/reset-passwor
 `?error=INVALID_TOKEN` when the token is unusable, including an undecodable path), with
 `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. `callbackURL` is ignored.
 
+### Invitations sent to my confirmed address (ADR-0221)
+
+Two authenticated routes, no organisation role (the caller is not a member yet). They exist for a person
+who has confirmed their address and signed in without the emailed accept link.
+
+| Method | Path                                          | Notes                                                                                                                                                                                                         |
+| ------ | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/me/invitations`                      | `{ data: [{ id, organizationName, role, expiresAt }], meta }`, oldest `createdAt` first, cursor-paginated (`limit`, `cursor`); `meta` is `{ nextCursor, hasMore }`. A malformed `limit` or `cursor` is `400`. |
+| POST   | `/api/v1/me/invitations/:invitationId/accept` | No body; `200` with the same organisation envelope as `POST /invitations/accept` (`{ data: <organisation with the caller's role> }`). A non-UUID `invitationId` is `400`.                                     |
+
+- **Only where a confirmed address is proof.** Both act only when the host enforces
+  `AUTH_REQUIRE_EMAIL_VERIFICATION` **and** the caller's `emailVerified` is true. Otherwise the list is
+  `data: []` and the accept is `404`. The invitation token stays the only key on every other host.
+- **Yours only, and 404 not 403.** The list holds pending, unexpired invitations to the caller's own address, of
+  organisations they are not already in. An id that is unknown, someone else's, or refused by the host condition
+  is `404`; `410` (expired, revoked or accepted) and `409` (already a member) are answered only for the caller's own.
+- **No secret.** The server holds only the token's hash, so no response, log line, audit row or mail event carries one.
+  The audit rows are the link door's `invitation.accepted` and `member.joined`, with `after.acceptedVia: 'verified-address'`.
+- `accept` is throttled to 10 requests per minute (`429`), as the confirm route is. The counter is keyed by client IP, not by user: the throttler's default tracker is `req.ip` and `AppModule` configures no other (`ThrottlerModule.forRootAsync`, no `getTracker` override anywhere in `apps/api/src`).
+
 ## OpenAPI / docs
 
 - The spec is generated from decorators (`@nestjs/swagger`) and served at

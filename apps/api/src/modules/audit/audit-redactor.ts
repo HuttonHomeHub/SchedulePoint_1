@@ -23,12 +23,14 @@ const CHANGES_BUDGET_BYTES = 7168;
  */
 const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   // — Membership, invitations, organisation.
-  'member.joined': ['role'],
+  // `acceptedVia` names the door an invitation came through; today only 'verified-address' (ADR-0221),
+  // absent on the link door. A fixed word, never a credential.
+  'member.joined': ['role', 'acceptedVia'],
   'member.removed': ['role'],
   'member.role_changed': ['role'],
   'invitation.created': ['email', 'role', 'expiresAt'],
   'invitation.revoked': ['email', 'role', 'status'],
-  'invitation.accepted': ['email', 'role', 'status'],
+  'invitation.accepted': ['email', 'role', 'status', 'acceptedVia'],
   'organization.created': ['name', 'slug'],
   // — Guest share links. `planId` and `expiresAt` say what was exposed and for how long; `label`
   //   is the operator's own note. The TOKEN and its HASH are absent, and that is not a matter of

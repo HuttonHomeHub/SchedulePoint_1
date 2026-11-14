@@ -232,6 +232,82 @@ export class InvitationsService {
       throw new ForbiddenError('Verify your email address before accepting this invitation.');
     }
 
+    return this.joinFromInvitation(invitation, principal, context);
+  }
+
+  /**
+   * The invitations waiting for the signed-in person's confirmed address (ADR-0221). Empty, not an
+   * error, wherever the second door is closed, so the screen that asks needs no host knowledge.
+   */
+  async listForVerifiedUser(
+    principal: Principal,
+    query: { limit: number; cursor?: string },
+  ): Promise<{ items: InvitationWithOrg[]; meta: PageMeta }> {
+    const user = await this.verifiedUser(principal);
+    if (!user) return { items: [], meta: { nextCursor: null, hasMore: false } };
+
+    const rows = await this.invitations.findManyLiveForEmail({
+      email: user.email.toLowerCase(),
+      userId: principal.userId,
+      now: new Date(),
+      take: query.limit + 1,
+      ...(query.cursor ? { cursor: query.cursor } : {}),
+    });
+    const hasMore = rows.length > query.limit;
+    const items = hasMore ? rows.slice(0, query.limit) : rows;
+    const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
+    return { items, meta: { nextCursor, hasMore } };
+  }
+
+  /**
+   * Accept an invitation addressed to the signed-in person's confirmed address, without the token
+   * (ADR-0221). Everything that says "this is not yours" is a 404, never a 403, so the route tells a
+   * caller nothing about anyone else's invitations; 410 and 409 come only after ownership is shown.
+   */
+  async acceptForVerifiedUser(
+    principal: Principal,
+    invitationId: string,
+    context?: RequestContext,
+  ): Promise<AcceptedInvitationResult> {
+    const user = await this.verifiedUser(principal);
+    if (!user) throw new NotFoundError('Invitation not found.');
+    const invitation = await this.invitations.findActiveByIdForEmail(
+      invitationId,
+      user.email.toLowerCase(),
+    );
+    if (!invitation) throw new NotFoundError('Invitation not found.');
+    if (invitation.status !== 'PENDING') throw new GoneError('This invitation is no longer valid.');
+    // `<=`, not the link door's `<`: the list hides an invitation at `expiresAt <= now`
+    // (`liveInvitationWhere` is strict `>`), so an invitation the screen no longer shows must not be
+    // acceptable at that same millisecond either.
+    if (invitation.expiresAt.getTime() <= Date.now()) {
+      throw new GoneError('This invitation has expired.');
+    }
+    return this.joinFromInvitation(invitation, principal, context, 'verified-address');
+  }
+
+  /**
+   * The session's user, only where a verified address is a sufficient key: the host enforces
+   * verification AND this user has confirmed theirs. With enforcement off every account is
+   * unverified and an address proves nothing, so the token stays the only key (ADR-0016 §5).
+   */
+  private async verifiedUser(principal: Principal): Promise<{ email: string } | null> {
+    if (!this.config.requireEmailVerification) return null;
+    const user = await this.prisma.user.findUnique({ where: { id: principal.userId } });
+    return user?.emailVerified ? user : null;
+  }
+
+  /**
+   * Membership, status change and audit rows for one acceptance: the ONE routine both doors call,
+   * so they cannot drift. `via` marks a door that is not the link; it is recorded on both audit rows
+   * and never carries anything secret.
+   */
+  private async joinFromInvitation(
+    invitation: InvitationWithOrg,
+    principal: Principal,
+    context: RequestContext | undefined,
+    via?: 'verified-address',
+  ): Promise<AcceptedInvitationResult> {
     const existing = await this.members.findActiveByOrgAndUser(
       invitation.organizationId,
       principal.userId,
@@ -271,7 +347,12 @@ export class InvitationsService {
             subjectId: invitation.id,
             subjectLabel: invitation.email,
             before: { email: invitation.email, role: invitation.role, status: 'PENDING' },
-            after: { email: invitation.email, role: invitation.role, status: 'ACCEPTED' },
+            after: {
+              email: invitation.email,
+              role: invitation.role,
+              status: 'ACCEPTED',
+              ...(via ? { acceptedVia: via } : {}),
+            },
             ...actor,
           },
           tx,
@@ -283,7 +364,7 @@ export class InvitationsService {
             organizationId: invitation.organizationId,
             subjectType: 'ORG_MEMBER',
             subjectLabel: invitation.email,
-            after: { role: invitation.role },
+            after: { role: invitation.role, ...(via ? { acceptedVia: via } : {}) },
             ...actor,
           },
           tx,

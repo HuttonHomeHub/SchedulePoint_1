@@ -465,6 +465,11 @@ keep `main` releasable.
   who opens a plan nobody is editing now holds the pen without pressing Start editing; if someone else holds it, the
   hand-off controls are as before, and Stop editing is respected until the plan is opened again. The requester's
   retake and the hidden-tab release follow in M2 and M3.
+- **An invitation waits for the address it was sent to** (M1 in progress,
+  [ADR-0221](adr/0221-an-invitation-waits-for-the-address-it-was-sent-to.md); spec and plan at
+  [`docs/specs/invitation-survives-email-confirmation/`](specs/invitation-survives-email-confirmation/feature-spec.md)).
+  On a host that requires email confirmation, an invitee who confirms and signs in will find the invitation waiting on
+  the first screen, whichever browser they used. M1 adds the two API routes; the screen follows in M2.
 
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at

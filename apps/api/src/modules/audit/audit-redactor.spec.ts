@@ -16,6 +16,23 @@ describe('redactChanges — the allow-list', () => {
     expect(changes).toEqual({ before: { role: 'VIEWER' }, after: { role: 'PLANNER' } });
   });
 
+  it('keeps which door an invitation was accepted through, on both rows it writes (ADR-0221)', () => {
+    // Without the allow-list entry the service's `acceptedVia` is dropped from every stored row,
+    // which is the silent failure an allow-list has: the producer is right and the log is wrong.
+    expect(
+      redactChanges('invitation.accepted', undefined, {
+        role: 'PLANNER',
+        acceptedVia: 'verified-address',
+      }),
+    ).toEqual({ before: {}, after: { role: 'PLANNER', acceptedVia: 'verified-address' } });
+    expect(
+      redactChanges('member.joined', undefined, {
+        role: 'PLANNER',
+        acceptedVia: 'verified-address',
+      }),
+    ).toEqual({ before: {}, after: { role: 'PLANNER', acceptedVia: 'verified-address' } });
+  });
+
   it('records NOTHING for an authentication action', () => {
     // The five auth actions allow no fields at all: everything worth knowing is a column, and any
     // payload would be attacker-influenced sign-in input. NULL, not an empty envelope.

@@ -137,6 +137,17 @@ export interface CreatedInvitation extends InvitationSummary {
   acceptUrl: string;
 }
 
+/**
+ * An invitation as its addressee sees it after confirming their address (ADR-0221): no token, no
+ * inviter, no email (it is the caller's own).
+ */
+export interface MyInvitation {
+  id: string;
+  organizationName: string;
+  role: OrganizationRole;
+  expiresAt: string;
+}
+
 /** What an invitee sees before accepting (token-gated, minimal). */
 export interface InvitationPreview {
   organizationName: string;
