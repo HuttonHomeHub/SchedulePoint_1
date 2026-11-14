@@ -374,6 +374,24 @@ describe('ActivitiesTable — baseline variance', () => {
     expect(screen.getByRole('columnheader', { name: 'Total float variance' })).toBeInTheDocument();
   });
 
+  it('places each variance column beside the dates it compares, not past the right edge', () => {
+    renderWithVariance(varianceRow());
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    const at = (name: string): number => headers.indexOf(name);
+    expect(at('Start variance')).toBe(at('Early start') + 1);
+    expect(at('Finish variance')).toBe(at('Early finish') + 1);
+    expect(at('Total float variance')).toBe(at('Float left') + 1);
+    expect(at('Total float variance')).toBeLessThan(at('Critical path'));
+  });
+
+  it("shows the name of a row's icon-only actions button as a tooltip on focus (ADR-0117)", () => {
+    renderWithVariance(varianceRow());
+    fireEvent.focus(screen.getAllByRole('button', { name: /^Actions for / })[0]!);
+    expect(
+      screen.getByText(/^Actions for /, { selector: '[aria-hidden="true"]' }),
+    ).toBeInTheDocument();
+  });
+
   it('formats a slip as "behind" and a gain as "ahead" (text, not colour alone)', () => {
     renderWithVariance(varianceRow({ finishVarianceDays: 3 }));
     expect(screen.getByText('3 d behind')).toBeInTheDocument();

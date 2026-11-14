@@ -659,6 +659,12 @@ export function ToolbarPlanWorkspace({
   const closeRevisionsAndFocus = useCallback(() => {
     setRevisionsOpen(false);
     setRevisionRevealId(null);
+    // The pair belongs to the open dock. Left set, `hasRevisionPair` kept the Compare-on-diagram
+    // ghosts drawn over a comparison nobody could see or turn off from the dock, and the
+    // Baseline switch then looked dead beneath them.
+    setRevisionFrom(null);
+    setRevisionTo(LIVE_REVISION);
+    setComparePlanId(null);
     focusDockTrigger('revisions');
   }, []);
 

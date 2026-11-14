@@ -78,6 +78,7 @@ export function computeInput(overrides: Partial<HealthComputeInput> = {}): Healt
       name: 'Test plan',
       dataDate: '2026-03-02',
       computedAt: '2026-03-02T08:00:00.000Z',
+      dayFactorMinutes: 480,
       ...(overrides.plan ?? {}),
     },
     activities: overrides.activities ?? [activity()],

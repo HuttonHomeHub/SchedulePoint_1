@@ -13,6 +13,8 @@ import {
   type RevisionPaidChangeClass,
 } from '@repo/types';
 
+import { formatSignedWorkingMinutes, formatWorkingMinutes } from '../../common/duration-text';
+
 import { compareFloat, floatDaysOnFrame } from './float-movement';
 import type { RevisionEdge, RevisionRow } from './revision-delta';
 
@@ -96,21 +98,21 @@ type RowChangeClass =
   Exclude<FreeChangeClass, 'ADDED' | 'REMOVED'> | (typeof PAID_ROW_CHANGE_CLASSES)[number];
 
 /**
- * A duration for display.
+ * A duration for display, in the product's own text (`2d 4h`) on the comparison's frame — the
+ * earlier revision's working day, the one the float label already uses.
  *
- * **Days are refused and hours are not**, and the difference is the point. `hours_per_day_minutes`
- * is frozen per capture (ADR-0068), so two baselines of one plan can carry different day factors
- * and a days figure would be a claim the comparison cannot make. Minutes→hours is exact and
- * calendar-independent, so withholding it bought nothing and cost the reader arithmetic on the
- * field they care about most — the M8 ux review's finding, and the reason this reads
- * `2880 min (48 h)` rather than `2880 min`.
+ * `hours_per_day_minutes` is frozen per capture (ADR-0068), so two baselines of one plan can carry
+ * different day factors and a days figure alone is a claim about one of them. The comparison
+ * itself is still decided on MINUTES (`changed`), so a pure calendar edit never lists as a duration
+ * change; this only chooses the words. A figure with a day part keeps its exact hours beside it,
+ * the way float does (`float 2 d (16 h)`), so the reader can see what the frame rounded away.
  */
-function minutesLabel(minutes: number | null): string | null {
+function durationLabel(minutes: number | null, frameMinutes: number): string | null {
   if (minutes === null) return null;
+  const text = formatWorkingMinutes(minutes, frameMinutes);
+  if (!/\d+d/.test(text) || minutes === 0) return text;
   const hours = minutes / 60;
-  if (!Number.isFinite(hours) || minutes === 0) return `${String(minutes)} min`;
-  const rounded = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
-  return `${String(minutes)} min (${rounded} h)`;
+  return `${text} (${Number.isInteger(hours) ? String(hours) : hours.toFixed(1)} h)`;
 }
 
 /**
@@ -184,7 +186,7 @@ function labelOf(
       // been reading; it now lives in `@repo/types` so there is one list rather than two.
       return ACTIVITY_TYPE_LABELS[row.type];
     case 'REDURATIONED':
-      return minutesLabel(row.durationMinutes);
+      return durationLabel(row.durationMinutes, frameMinutes);
     case 'REDATED':
       return row.earlyStart === null || row.earlyFinish === null
         ? null
@@ -279,12 +281,10 @@ function changed(
   }
 }
 
-/** How an edge reads on one side. `FS +480 min`, `SS −120 min (24-hour)`, `FF`. */
-function edgeLabel(edge: RevisionEdge): string {
+/** How an edge reads on one side. `FS +1d`, `SS −2h (24-hour)`, `FF`. */
+function edgeLabel(edge: RevisionEdge, frameMinutes: number): string {
   const lag =
-    edge.lagMinutes === 0
-      ? ''
-      : ` ${edge.lagMinutes > 0 ? '+' : '−'}${String(Math.abs(edge.lagMinutes))} min`;
+    edge.lagMinutes === 0 ? '' : ` ${formatSignedWorkingMinutes(edge.lagMinutes, frameMinutes)}`;
   // The lag CALENDAR is named only when the lag is non-zero, because it decides what the number
   // means (ADR-0036 §6) and means nothing beside a zero. Naming it anyway would put a difference on
   // screen for an edit — switching the lag calendar of a zero-lag link — that changes no date.
@@ -442,7 +442,7 @@ export function classifyRevisionChanges(
     });
   }
 
-  collectLogicChanges(from, to, fromById, toById, bucket);
+  collectLogicChanges(from, to, fromById, toById, bucket, dayFactorMinutes);
 
   // **A date-bearing class is not assessable when either side has no computed schedule.** Reporting
   // it as "nothing changed" would be a lie whose shape a reader cannot detect: an unscheduled side
@@ -493,6 +493,7 @@ function collectLogicChanges(
   fromById: ReadonlyMap<string, RevisionRow>,
   toById: ReadonlyMap<string, RevisionRow>,
   bucket: Map<ChangeClass, ChangeRow[]>,
+  frameMinutes: number,
 ): void {
   const fromEdges = new Map(from.edges.map((e) => [e.dependencyId, e]));
   const toEdges = new Map(to.edges.map((e) => [e.dependencyId, e]));
@@ -527,14 +528,18 @@ function collectLogicChanges(
   for (const [id, toEdge] of toEdges) {
     const fromEdge = fromEdges.get(id);
     if (!fromEdge) {
-      rows.push({ ...rowFor(toEdge, toById), from: null, to: edgeLabel(toEdge) });
+      rows.push({ ...rowFor(toEdge, toById), from: null, to: edgeLabel(toEdge, frameMinutes) });
       continue;
     }
     if (!edgeChanged(fromEdge, toEdge)) continue;
-    rows.push({ ...rowFor(toEdge, toById), from: edgeLabel(fromEdge), to: edgeLabel(toEdge) });
+    rows.push({
+      ...rowFor(toEdge, toById),
+      from: edgeLabel(fromEdge, frameMinutes),
+      to: edgeLabel(toEdge, frameMinutes),
+    });
   }
   for (const [id, fromEdge] of fromEdges) {
     if (toEdges.has(id)) continue;
-    rows.push({ ...rowFor(fromEdge, fromById), from: edgeLabel(fromEdge), to: null });
+    rows.push({ ...rowFor(fromEdge, fromById), from: edgeLabel(fromEdge, frameMinutes), to: null });
   }
 }

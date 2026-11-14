@@ -98,7 +98,9 @@ export class HealthOffenderDto implements HealthOffender {
   name!: string;
 
   @ApiProperty({
-    description: 'The one-line why — "no predecessor", "lead of −120 min (SS)", "float 61 d".',
+    description:
+      'The one-line why — "no predecessor", "lead of 2h (SS)", "float 61 d". Leads and lags are ' +
+      'worded on the plan calendar’s working day, even when the link’s lag runs on another calendar.',
   })
   note!: string;
 

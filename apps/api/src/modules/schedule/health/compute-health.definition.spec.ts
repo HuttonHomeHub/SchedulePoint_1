@@ -79,14 +79,14 @@ describe('metrics 2 and 3 — leads and lags, in minutes', () => {
     expect(m.offenders[0]).toMatchObject({ kind: 'RELATIONSHIP', activityId: 'b' });
   });
 
-  it('a −120-minute lead is counted and named in minutes', () => {
+  it('a −120-minute lead is counted and named in the plan’s own units', () => {
     const input = computeInput({
       activities: [activity({ id: 'a' }), activity({ id: 'b' })],
       dependencies: [
         dependency({ predecessorId: 'a', successorId: 'b', lagMinutes: -120, type: 'SS' }),
       ],
     });
-    expect(metric(input, 'LEADS').offenders[0]!.note).toBe('lead of -120 min (SS)');
+    expect(metric(input, 'LEADS').offenders[0]!.note).toBe('lead of 2h (SS)');
   });
 
   it('lags: exactly 5 % passes, above fails', () => {
