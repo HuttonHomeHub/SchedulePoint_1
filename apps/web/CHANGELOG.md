@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.12.0
+
+### Minor Changes
+
+- [#1374](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1374) [`22058b5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/22058b553cee6f16ba50604a3795d9cc9a11104d) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - After confirming your email, any invitation sent to you is waiting on the first screen when you sign in, with Accept and join.
+
 ## 1.11.0
 
 ### Minor Changes
