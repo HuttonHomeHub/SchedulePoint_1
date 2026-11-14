@@ -3,145 +3,85 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-13, after the GUI-fixes session of 2026-11-12/13 closed at **web 1.8.0 and api 1.2.0**. Two
-approved plans are **finished and released**: "diagram keys and selection"
-([`docs/specs/diagram-keys-and-selection/`](specs/diagram-keys-and-selection/feature-spec.md), ADR-0218 and ADR-0219)
-and "the first planner gets the pen" ([`docs/specs/first-planner-gets-the-pen/`](specs/first-planner-gets-the-pen/feature-spec.md),
-ADR-0220). So is the smaller "progress before the data date" ([`docs/specs/progress-before-data-date/`](specs/progress-before-data-date/feature-spec.md),
-ADR-0217). The owner's **hard rule** still stands: nothing that needs the owner to run or check anything on their
-server or devices (a decision question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do
-not offer them.
+**Written:** 2026-11-14, after the session of 2026-11-13/14 closed at **web 1.16.0 and api 1.5.0** (it opened at
+web 1.8.0 and api 1.2.0). **Every item the owner approved in that session is built, merged and released.** The
+owner's **hard rule** still stands: nothing that needs the owner to run or check anything on their server or devices
+(a decision question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
 
-## What shipped (2026-11-12 and 13)
+**The standing approval has ended.** The owner gave it on 2026-11-13 for that day's approved work (merge and release
+when every check on the current head is green after dedupe, reviewers have nothing blocking, and the merge is pinned to
+a commit ID from GitHub). That work is finished, so **the next session asks again** before merging anything that is not
+docs-only.
 
-Every change went through a pull request with the pre-push gate run first and every check read green on the head
-that merged. Five releases; the owner's host pulls each one automatically.
+## What shipped (2026-11-13 and 14)
 
-- **web 1.4.0 and api 1.2.0 — progress before the data date, and the blank print** (PRs #1326 spec, #1327, #1330,
-  #1331, #1332, #1333; release #1328).
-  - A refused progress save now names the field and the data date (`details.fields`, `dataDate`, `latestActual` on
-    the API's refusal), is shown on that field in plain words, and every refused save in the product is shown beside
-    its Save button (`ScopeSaveBar`'s `error` slot, ADR-0217), so at 1024 × 600 it is on screen. Closed
-    `docs/TECH_DEBT.md` #583 and #584.
-  - The plan's date is called **Data date** in "Edit plan details" and the footer refreshes when it is saved.
-  - "Print…" on the diagram waited for nothing and opened a blank page; it now waits for the image (#585 closed).
-  - The rule itself (no actual date after the data date) was **kept**, by the owner's choice. Open: #586, moving the
-    data date **backwards** is never checked against actuals already reported.
-- **web 1.5.0 — the diagram takes the keyboard** (PRs #1334 verification, #1335, #1337, #1338; release #1336).
-  A click or drag on the diagram now leaves the keyboard with it (ADR-0218), so Ctrl+Z, Ctrl+C / Ctrl+V, Escape and
-  the arrows work straight after a mouse press. Delete or Backspace deletes the selection after the same confirmation
-  as the button. Ctrl-click and Shift-click change the selection whether or not you are editing.
-- **web 1.6.0 — double-click and the plural bar** (PRs #1339, #1340 measurement, #1342, #1343; release #1341).
-  Double-clicking a bar opens its editor (General when you can edit, Progress when you can only report progress).
-  With several activities selected the bar reads "N selected" then the actions, Delete last. "Link in sequence…"
-  skips pairs already linked and says so quietly when nothing is left to link (it stays pressable on purpose).
-- **web 1.7.0 — the selection bar on a short window** (PR #1344; release #1345). On a window up to 44 rem high the
-  plan's facts and the quiet "Editing" badge are visually hidden while a selection bar is docked (ADR-0219, shape
-  "S-B", the owner's choice; no overflow menu). A "Locked" or lost-lock badge does **not** yield. A bar selected by a
-  click is no longer panned with a 60 px margin. Measured at 1024 × 600 (`m5-measurement.md`): the fullest bar
-  (15 controls) goes from 5 lines to 3 and the diagram from 200 to 266 px; a plain bar 246 to 286 px. **Still under
-  the 350 px floor** while something is selected.
-- **web 1.8.0 — the pen arrives on opening** (PRs #1346 test groundwork, #1347, #1349; one release, #1348, held
-  until all three steps were merged and reviewed).
-  - Opening a plan nobody is editing starts editing straight away for a Planner or Org Admin (one acquire,
-    `takeover: false`, once per opening, visible tab only). Stop editing is respected until the plan is reopened.
-  - A lease lost to nobody (your own other tab closed, a reload) is retaken once, silently.
-  - Whoever pressed Request control starts editing when the holder hands over or leaves.
-  - A tab **hidden** for 15 minutes stops renewing its hold; a colleague can take over within about two minutes
-    after that. Undo history survives a lost pen (ADR-0176 D4; two older documents that said otherwise now carry a
-    "superseded" note).
-  - **Why one release:** with the first step alone, anyone opening a plan just to look would have held it with no
-    limit (`ux-reviewer`, adopted).
-- **The two artifact pages.** The walkthrough's ranked list
-  (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`) was brought up to date from the owner's runbook answers
-  (94 answers, chapters 1 to 8) and now holds **142 problems**, each marked when fixed with the version that fixed
-  it; its top line says the pictures were taken on web 1.1.0. Both first-severity problems that were open are closed.
-  The runbook (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`) had its chapter 9 to 12 hints checked against
-  web 1.3.0 and corrected, without touching the answers. **Runbook hints for steps changed since** (3.3 double-click,
-  3.14 Delete key, 4.1 progress refusal, 7.14 and 8.4 to 8.6 selection and copy, anything saying "press Start
-  editing") **have not been re-checked against 1.8.0.**
+Every change went through a pull request with the pre-push gate run first and every check (eleven names, five of them
+web shards) read green on the head that merged. Releases: web 1.9.0 to 1.16.0, api 1.3.0, 1.3.1, 1.4.0 and 1.5.0.
+The owner's host pulls each one automatically.
+
+- **The pen follow-ups.** A **Cancel request** button and `DELETE …/edit-lock/request`, with the tab's memory of a
+  request following the server's record (#1352, #1354; `docs/TECH_DEBT.md` #588 closed). A plan left idle in a visible
+  tab for 30 minutes is let go quietly and taken back on the next input (#1362, ADR-0220 D8).
+- **Wording.** Read-only messages say "Ask a Planner…" and no screen says "edit lock" (#1355); eight confusing screens
+  reworded (#1358); the Select tool's hint fits one line at 1024 wide (#1361).
+- **Follow logic.** A dismissed whole-plan offer is remembered on this browser (#1357). On a short window, where the
+  dock has no room for the offer, **Follow logic in the selection bar gains an arrow offering "Let all bars follow"**
+  (#1382, web 1.16.0). Measured first (`docs/specs/follow-logic-follow-ups/m3a-measurement.md`): the arrow adds no line or height
+  at 1024 × 600 — but the plan's premise that the bar sits on one line was wrong; with eleven controls it already wraps
+  to three. The same change fixed a real defect in the shared announcer: two messages in one frame lost the first, so
+  Follow logic's outcome was never heard behind the focus hand-off. Messages in one frame are now joined in order, each
+  spoken once, and a standing count can be marked `transient` so it never prefixes the real announcement
+  (`components/ui/announcer.tsx`). A split button's pressed state became optional, so Follow logic and Go to today are
+  no longer announced as toggles. **CI caught two things the first push got wrong, both fixed in the same PR:** the
+  join read two quick, separate key presses together ("No successors. No predecessors.", `e2e/tsld.spec.ts`), so a
+  key press or pointer press now starts a new announcement and only what one press caused is joined; and
+  `e2e-splitting/splitting.spec.ts` excluded the idle onboarding warm-up by that chunk's name only, so the chunks it
+  imports (`members`, `overview`, `ui-shared`, two copy modules) counted as a third wave whenever the idle callback
+  fired late. The warm-up set is now derived from the build (the onboarding chunk's imports minus the entry's).
+- **Batches by screen** (the walkthrough's second-severity list): home, members and invitations (#1359); setting up a
+  plan (#1364); baseline comparison and progress reading (#1366); the Gantt timeline gets room on a narrow window, two
+  columns hidden and Activity starting at its 120 px floor (#1372, the owner's choice after the 40 % measure missed);
+  the client's shared page tidied and a picked activity's facts shown, with float as "Total float" (#1378).
+- **The plan finish against the baseline** (#1368 api, #1376 web): `meta.projectFinishVarianceDays` and a slip fact
+  in working days, shown **only when it fits** (it yields when the dock is in use, the schedule is not current, or
+  below `sm`) — the owner's choice after the M0 measure fired its stop rule.
+- **Invitations survive email confirmation** (#1370 api, #1374 web; ADR-0221): a confirmed address can list and accept
+  its waiting invitations, and they are offered after sign-in.
+- **The activity name stays in view** when the activities table scrolls sideways, from 1024 wide (#1380, web 1.15.0;
+  ADR-0146 D3 amended).
 
 ## Decisions the owner made this session
 
-- Keep the "no actual after the data date" rule; reword journey 2 of the brief; do not separate plan start from
-  data date now (a `docs/BACKLOG.md` item records the idea).
-- Selection bar on a short window: the bar takes the row, plan facts step aside, no "More" menu.
-- A planner who double-clicks without the pen opens Progress.
-- Firefox and Safari engines: not now.
-- The pen: take it on opening; Org Admins too; let go after 15 minutes hidden; no per-person switch.
-- **Standing approval, for the two plans above only,** to merge and release when every check on the current head is
-  green, reviewers have nothing blocking and the merge is pinned to a commit ID from GitHub. Both plans are finished,
-  so **the next session asks again** before merging anything that is not docs-only.
+- Every recommendation on the 2026-11-13 question list (Cancel request; idle tab lets go at 30 minutes; "Ask a
+  Planner"; remember Dismiss; a short-window "let all follow"; shorten the Select hint); batches in the order G, A, B,
+  C, then D, E, F.
+- Slip fact: "working days", shown only when it fits. Pinned names: Name only. First client: leave as it is. Guest:
+  a picked activity's facts, float as "Total float". Gantt: hide two columns on narrow windows, reset the divider once
+  for everyone, "narrow" means the Gantt's own space is tight, Activity starts at its floor; the late bar note stays.
 
 ## What is next
 
-**Updated 2026-11-13 (second session of the day).** When this was written nothing had been built yet. **The owner
-answered every question below the same day: yes to each recommendation** (Cancel request with the reload fix; the
-idle tab lets go quietly at 30 minutes, spec first; "Ask a Planner"; remember Dismiss; a short-window "let all
-follow" action, spec first; shorten the Select hint) **and chose every batch, in the order G, A, B, C, then D, E, F.**
+Nothing approved is waiting. Candidates for the owner, none started:
 
-**Two specs written and approved (no code yet):**
+**Batch G (the "needs a browser" group) was checked in Chromium; verdicts, no fixes made.** Ranks are the walkthrough
+list's (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, not updated with these):
 
-1. **"Cancel request"** ([`docs/specs/cancel-request-control/`](specs/cancel-request-control/feature-spec.md),
-   `docs/TECH_DEBT.md` #588). `DELETE …/edit-lock/request` (clears only the caller's own request, returns the
-   status), a **Cancel request** button beside the waiting "Take over now", and the tab's memory of a request made
-   to follow the server's record. No schema change (the two request columns exist). Two milestones: M1 the route
-   (api minor), M2 the button and journey (web minor). ADR-0220 gains a D7; no new ADR.
-   **Found while checking, and fixed by the spec's Q1 if approved:** after a reload the requester still reads "you
-   will start editing when {Name} hands over or leaves", but the reloaded tab no longer takes the plan when the
-   holder merely leaves (`use-plan-edit-lock.ts`, `requestedOf` starts empty); and a tab whose request was replaced
-   by a later requester can still race for the freed plan. An Org Admin is never offered Request control
-   (`lock-view.ts`: override is checked first), so Cancel is a Planner's control on screen.
-2. **Wording for people who cannot edit** ([`docs/specs/read-only-wording/`](specs/read-only-wording/feature-spec.md)).
-   The empty plan says "Ask a Planner to add activities." for a Viewer or Contributor, through an optional
-   `form: 'ask'` on `scheduleRefusal` (the panel still does not learn the role). Eleven sentences change in all,
-   including every leftover "edit lock" (`use-plan-workspace-model.ts`, `unsaved-work/report.ts`, `RolesPanel`,
-   `ProgrammeScheduleSection`, and `NeedsAttentionSection.tsx` "You are holding the editing lock.", which the last
-   hand-off missed). One of them was wrong, not just old: the selection bar says "Take the edit lock…" even when a
-   colleague is editing. Web patch, two small milestones, accessibility review in a browser before release.
+| Rank | Verdict          | What was seen                                                                                                                                                          |
+| ---- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 20   | Still open, S    | A one-day or zero-length task draws as two touching circles at Week and Month zoom.                                                                                    |
+| 42   | Still open, S    | The Codes dialog's right pane clips the Add value form at 1024 × 600; it scrolls, with empty space below.                                                              |
+| 43   | Fixed            | Nothing overlaps the bottom bar.                                                                                                                                       |
+| 47   | Still open, M    | With touch at 1024 × 600 the toolbar takes about 0.43 of the height in four rows; the canvas about 0.37, against 0.59 with a mouse.                                    |
+| 49   | Still open, S/M  | The calendar editor scrolls sideways at 1024 with 200 % text (weekly-hours buttons past the edge): the same defect as `docs/TECH_DEBT.md` #592, whose row now says so. |
+| 53   | Cannot reproduce | The control dims to pale blue as designed; in forced colours the button outline is lost.                                                                               |
 
-**Questions put to the owner on 2026-11-13:**
+**Known and recorded, not started:** `docs/TECH_DEBT.md` #586 (data date moved backwards is unchecked), #587
+(force-release undone by a silent retake; unreachable today), #592 (calendar editor reflow, above), #593 (a baseline's
+`capturedProjectFinish` is the network finish), #594 (invitations read by address scans the table; an index is a
+`database-architect` decision). At 1024 × 600 the diagram with a selection is still under the 350 px floor. Runbook
+hints for steps changed since 1.8.0 have not been re-checked.
 
-3. **A visible, unattended tab.** Options put: leave it (a colleague can already Request control and take over
-   after the 45-second grace, so the plan is never stuck); let go quietly after a period with no mouse or keyboard
-   input in the tab (recommended: 30 minutes, no prompt, resumes on the next input); or an "Are you still
-   editing?" prompt (not recommended: it interrupts reading). A yes needs a spec.
-4. **Three "Follow logic" choices:** remember Dismiss per device after a reload (recommended yes); a whole-plan
-   action on a short window (recommended: inside the conflict review, not a strip; needs a short spec); shorten
-   the Select tool's hint ("Marquee select · drag to select, Ctrl to add · Esc to stop", `CanvasModeBand.tsx`)
-   so it fits one line at 1024 px (recommended yes, measured in a journey).
-5. **Which batch next.** All 57 open second-severity problems on the walkthrough list were checked against the
-   1.8.0 code by reading it (no browser): **1 fixed** (rank 74, the SF link, by the 1.2.0 offer; an SF case was
-   not run), **3 partly fixed** (21, 61, 75; 46 also partly, by 1.8.0), **5 changed** (40, 41, 51, 56 and 34
-   slightly), **6 need a browser to tell** (20, 42, 43, 47, 49, 53), the rest still open. The per-item evidence is
-   in the three tables this session produced; the walkthrough page itself was **not** updated with these verdicts.
-   Batches proposed by screen: quick copy fixes across screens; home, members and invitations; plan set-up
-   (new plan, calendar dialog, schedule settings); baseline and progress feedback on the plan; Gantt; share page;
-   import; and a "needs a browser first" group.
-
-**The runbook** (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`) had 32 hints corrected against web 1.8.0 by
-reading the code (double-click, the Delete key, keys after a drag, Ctrl-click, "3 selected", every "press Start
-editing", and the hand-over wording in chapter 12). Step 3.1's goal and the "expect" lines of 7.14, 8.4 and 12.6
-were also corrected, because they described behaviour that has changed. The 94 answers were not touched and none
-is newer than 2026-11-11, so the problem list gained nothing.
-
-**Known and recorded, not started:**
-
-- `docs/TECH_DEBT.md` **#586** (data date moved backwards is unchecked), **#587** (an administrator's force-release
-  would be undone by the released editor's silent retake; no screen reaches force-release today) and **#588**
-  (specified above, not built).
-- At 1024 × 600 the diagram with a selection is still 64 to 84 px under the 350 px floor.
-- When the pen is lost to a colleague the sentence can be announced twice: first "Someone else is now editing…",
-  then with the name once the status read lands.
-- Two suggestions from `security-reviewer`, neither a defect: mark automatic acquires in the lock's log line (needs
-  an API field), and give `POST …/edit-lock` its own rate limit.
-
-**Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader, a real
-15-minute wait (the journey uses a fake clock). The accessibility reviews of the short-window bar (1.7.0) and of
-the hidden-tab step were code reads; the other pen steps and the keys work were run in Chromium.
-
-Other candidates, each needing the owner's say, are unchanged: making the Baseline criticality columns NOT NULL
-(a schema change, so `database-architect` first), and the optional dev-time audit overrides.
+**Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader.
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -258,3 +198,16 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
 - **Do not run a gate as `pnpm -s check:…`.** The silent flag reaches the pnpm calls inside
   `scripts/prepush-push.test.mjs`'s fixtures, an exit code 2 comes back as 1, and `check:doc-register` fails on
   "an advisory WARN still pushes" with nothing wrong in the tree (2026-11-13). `pnpm check:doc-register` passes.
+- **Never run the pre-push gate beside Playwright or another vitest run** (2026-11-14). The machine runs out of memory
+  (exit 137) or timing tests fail under the load. Wait until `ps aux | grep -cE '[c]hrome-linux64/chrome'` reads 0,
+  then run `scripts/prepush.sh` alone.
+- **Worktrees per change, one to push from.** This session's builders each worked in their own worktree
+  (`/home/user/sp-build2` … `sp-build6`); `/home/user/sp-push`, reset to `origin/main`, took each change with
+  `git diff $(git merge-base origin/main BRANCH) BRANCH -- . ':!CLAUDE.md' | git apply --3way --index`, so
+  `CLAUDE.md` (counts and ADR lines) was edited by hand there and never conflicted.
+- **After a merge GitHub removes the session's branch**, so the next push needs the full name:
+  `scripts/prepush.sh --push -u origin HEAD:refs/heads/<branch>`. A bare `HEAD:<branch>` is refused by the dry run.
+- **Serialise browser runs through a queue.** A small script in the scratchpad ran one `scripts/e2e-local.sh` target
+  after another and wrote a summary line each, so builders never started two at once.
+- **Wake-ups can arrive late** (tens of minutes). Keep exactly one armed and delete the old one before arming another
+  out of turn.

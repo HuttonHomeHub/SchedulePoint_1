@@ -9392,14 +9392,14 @@ The four-shard pack of 2026-10-13 was derived from those figures and looked bala
 
 **Next:** a "Cancel request" control backed by a withdrawal endpoint on the API, which clears the web's memory of the request too. That adds a user-facing entry point and an API route, so it needs a spec (ADR-0105). **Trigger:** owner approval of that spec.
 
-### 592. The calendar editor dialog scrolls sideways at phone widths
+### 592. The calendar editor dialog scrolls sideways at phone widths, and at 1024 px with 200 % text
 
-**Status:** open · **Verified:** 2026-11-14, by an accessibility review run in Chromium on branch `fix/plan-setup`: at 400 px and 320 px viewports the calendar editor dialog's content is 518 px wide inside a 366 px or 286 px box, and the weekly-hours rows' "Copy Monday to…" and "Remove … hours" controls are clipped.
+**Status:** open · **Verified:** 2026-11-14, by an accessibility review run in Chromium on branch `fix/plan-setup`: at 400 px and 320 px viewports the calendar editor dialog's content is 518 px wide inside a 366 px or 286 px box, and the weekly-hours rows' "Copy Monday to…" and "Remove … hours" controls are clipped. Re-seen 2026-11-14 in Chromium (walkthrough Batch G, rank 49): at 1024 px wide with text at 200 % the same weekly-hours row's buttons sit past the dialog's edge and the dialog scrolls sideways, so this is also inside the design floor.
 **Raised:** 2026-11-14 (Batch C review) · **Size:** S · **Owner:** web
 
-Calendar editing is designed from 1024 px up (ADR-0179), so this is below the design floor, but WCAG 2.2 SC 1.4.10 (reflow) still applies there. The weekly-hours rows are one flex row that does not wrap. Pre-existing; not caused by Batch C, whose holiday add-row change wraps correctly at every width.
+Calendar editing is designed from 1024 px up (ADR-0179). The phone widths are below that floor, where WCAG 2.2 SC 1.4.10 (reflow) still applies; the 200 % text case is at the floor itself (SC 1.4.4, resize text). The weekly-hours rows are one flex row that does not wrap. Pre-existing; not caused by Batch C, whose holiday add-row change wraps correctly at every width.
 
-**Next:** let each weekly-hours row wrap below the small breakpoint, as the holiday add-row now does (ADR-0114), with a journey check at 320 px that nothing is cut off and nothing scrolls sideways. **Trigger:** the next change to the calendar editor, or the owner asks.
+**Next:** let each weekly-hours row wrap below the small breakpoint, as the holiday add-row now does (ADR-0114), with a journey check at 320 px, and at 1024 px with 200 % text, that nothing is cut off and nothing scrolls sideways. **Trigger:** the next change to the calendar editor, or the owner asks.
 
 ### 593. A baseline's `capturedProjectFinish` is the network finish while its variance is placed
 
