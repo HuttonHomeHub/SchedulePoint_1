@@ -31,7 +31,7 @@ export function GuestSelectionFacts({
       data-testid="guest-selection-facts"
       className="m-0 flex min-h-5 flex-wrap items-baseline gap-x-3 gap-y-0 text-xs"
     >
-      <div className="text-foreground font-semibold">
+      <div className="text-foreground">
         <dt className="sr-only">Activity</dt>
         <dd className="m-0">{subject}</dd>
       </div>
