@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.16.0
+
+### Minor Changes
+
+- [#1382](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1382) [`21369fb`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/21369fbd0b1cafaf6396af4ae2ea27c1d12fbcb5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a short window, Follow logic on a selected early bar has a menu to let every early bar follow its logic at once.
+
 ## 1.15.0
 
 ### Minor Changes
