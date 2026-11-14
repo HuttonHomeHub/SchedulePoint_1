@@ -1,5 +1,11 @@
 # @repo/web
 
+## 1.13.0
+
+### Minor Changes
+
+- [#1376](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1376) [`b105501`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b105501340b45557461b9ee60f5d7210f139fa06) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When a baseline is active, the bottom bar shows how far the plan's finish has moved against it, in working days, beside the Finish date. It steps aside, still read out by screen readers, whenever something else is on the bar, so the diagram never gets shorter for it.
+
 ## 1.12.0
 
 ### Minor Changes
