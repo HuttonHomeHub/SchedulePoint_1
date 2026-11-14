@@ -596,6 +596,181 @@ for (const { pointer, touch } of [
   });
 }
 
+/**
+ * **The baseline slip costs the diagram nothing** (`baseline-slip-and-pinned-names` M2, after the M0
+ * measurement in `measure-toolbar/baseline-slip-m0.spec.ts`).
+ *
+ * The fact is a third item on the facts' dates row, so the claim is arithmetic and is asserted as
+ * arithmetic, machine-independently: the diagram is exactly as tall with a slip shown as the same plan
+ * is with no baseline, the fact's box is inside the foot row's, the panel toggle and (in the stale
+ * state) Recalculate answer a pointer at their centre, and the page does not scroll sideways. No pixel
+ * figure is compared with a constant: every height is read in the same cell, on the same runner.
+ */
+test.describe('the baseline slip in the foot row', () => {
+  test.use({ acknowledgeViewportNotice: true });
+
+  const WINDOWS = [
+    { width: 1024, height: 600 },
+    { width: 1366, height: 768 },
+  ] as const;
+
+  async function api(
+    page: Page,
+    method: string,
+    path: string,
+    body: unknown,
+  ): Promise<{ data: { version?: number } }> {
+    return page.evaluate(
+      async ({ m, url, payload }) => {
+        const response = await fetch(`/api/v1${url}`, {
+          method: m,
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`${m} ${url}: ${String(response.status)}`);
+        return (await response.json()) as { data: { version?: number } };
+      },
+      { m: method, url: path, payload: body },
+    );
+  }
+
+  test('the diagram is as tall with a slip as without a baseline, and nothing is cut off', async ({
+    page,
+  }) => {
+    test.setTimeout(300_000);
+    const orgSlug = await onboard(page, STAMP + 95);
+    await createHierarchy(page);
+    await newPlan(page, 'Slip');
+    await holdThePen(page);
+    const [, steel] = await seedActivities(page, orgSlug, [
+      { name: 'Dig footings', laneIndex: 0, durationDays: 3 },
+      { name: 'Steel frame', laneIndex: 1, durationDays: 6 },
+    ]);
+    if (!steel) throw new Error('seeding returned no activity');
+    await recalculate(page, orgSlug);
+    await holdThePen(page);
+    await expect(canvas(page)).toBeVisible();
+    const planId = openPlanId(page);
+
+    // The same plan with NO baseline, read at each window: the figures the slip must not change.
+    const bare: number[] = [];
+    for (const size of WINDOWS) {
+      await page.setViewportSize(size);
+      await expect(page.locator('[data-schedule-state="current"]')).toBeVisible();
+      bare.push(await canvasHeight(page));
+    }
+    await expect(page.locator('[data-baseline-slip]')).toHaveCount(0);
+
+    // Capture, then lengthen the last-finishing activity by three working days and recalculate.
+    await api(page, 'POST', `/organizations/${orgSlug}/plans/${planId}/baselines`, {
+      name: 'Contract Baseline',
+    });
+    const current = await api(
+      page,
+      'GET',
+      `/organizations/${orgSlug}/activities/${steel.id}`,
+      undefined,
+    );
+    if (current.data.version === undefined) throw new Error('the activity read carries no version');
+    await api(page, 'PATCH', `/organizations/${orgSlug}/activities/${steel.id}`, {
+      durationDays: 9,
+      version: current.data.version,
+    });
+    await recalculate(page, orgSlug);
+    await holdThePen(page);
+
+    for (const [i, size] of WINDOWS.entries()) {
+      await page.setViewportSize(size);
+      const label = `${String(size.width)} x ${String(size.height)}`;
+      const slip = page.locator('[data-baseline-slip]');
+      await expect(slip, `${label}: the slip is stated`).toHaveText(
+        'Finish: 3 working days later than baseline',
+      );
+      expect(await canvasHeight(page), `${label}: the slip costs the diagram nothing`).toBe(
+        bare[i],
+      );
+      expect(
+        (await slip.boundingBox())?.width ?? 0,
+        `${label}: shown, because nothing else is on the row`,
+      ).toBeGreaterThan(2);
+      const inside = await slip.evaluate((el) => {
+        const foot = document.querySelector('[data-activities-bar]');
+        if (!foot) return false;
+        const a = el.getBoundingClientRect();
+        const b = foot.getBoundingClientRect();
+        return (
+          a.left >= b.left - 1 &&
+          a.right <= b.right + 1 &&
+          a.top >= b.top - 1 &&
+          a.bottom <= b.bottom + 1
+        );
+      });
+      expect(inside, `${label}: the fact is inside the foot row`).toBe(true);
+      expect(
+        await selfHit(page.getByRole('button', { name: 'Expand activities panel' })),
+        `${label}: the panel toggle`,
+      ).toBe(true);
+      const figures = await footFigures(page);
+      expect(figures.sideways, `${label}: the foot row must not scroll sideways`).toBe(false);
+      expect(
+        await page.evaluate(() => {
+          const el = document.scrollingElement ?? document.documentElement;
+          return el.scrollWidth > el.clientWidth;
+        }),
+        `${label}: the page must not scroll sideways`,
+      ).toBe(false);
+    }
+
+    // WCAG 1.4.10: at 320 CSS px the dates row cannot hold the sentence, so it must step aside, still in
+    // the accessibility tree, rather than be cut off by the row's overflow.
+    await page.setViewportSize({ width: 320, height: 640 });
+    const narrow = page.locator('[data-baseline-slip]');
+    await expect(narrow).toHaveText(/^Finish: 3 working days later than baseline$/);
+    expect(
+      (await narrow.boundingBox())?.width ?? 0,
+      '320 px: the slip has stepped aside rather than being cut off',
+    ).toBeLessThanOrEqual(2);
+    expect(
+      (await footFigures(page)).sideways,
+      '320 px: the foot row does not scroll sideways',
+    ).toBe(false);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+      '320 px: the page does not scroll sideways',
+    ).toBe(true);
+
+    // The stale state is the widest the row gets: an activity created after the last calculation.
+    await holdThePen(page);
+    await seedActivities(page, orgSlug, [{ name: 'Late addition', laneIndex: 2 }]);
+    await page.reload();
+    await holdThePen(page);
+    await expect(page.locator('[data-schedule-state="stale"]')).toBeVisible({ timeout: 20_000 });
+    for (const size of WINDOWS) {
+      await page.setViewportSize(size);
+      const label = `stale ${String(size.width)} x ${String(size.height)}`;
+      // Shown only when it fits: beside a stale sentence it steps aside, visually hidden and still in
+      // the accessibility tree, so a screen reader hears it and the row does not grow.
+      await expect(page.locator('[data-baseline-slip]')).toHaveText(/^Finish: /);
+      expect(
+        (await page.locator('[data-baseline-slip]').boundingBox())?.width ?? 0,
+        `${label}: the slip has stepped aside`,
+      ).toBeLessThanOrEqual(2);
+      expect(
+        await selfHit(page.getByRole('button', { name: 'Recalculate', exact: true })),
+        `${label}: Recalculate`,
+      ).toBe(true);
+      expect(
+        await selfHit(page.getByRole('button', { name: 'Expand activities panel' })),
+        `${label}: the panel toggle`,
+      ).toBe(true);
+      expect((await footFigures(page)).sideways, `${label}: no sideways scroll`).toBe(false);
+    }
+  });
+});
+
 test.describe('the facts and the toggle are one item (docs/TECH_DEBT.md #581)', () => {
   /**
    * The shipped dock stranded the panel toggle on a line of its own, with a bar selected, in three
@@ -686,9 +861,16 @@ test.describe('the follow-logic offer at 200 % text', () => {
         await page.evaluate(() => {
           document.documentElement.style.fontSize = '';
         });
-        await diagramList(page).focus();
-        await page.keyboard.press('Escape');
-        await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0);
+        // Retried as a unit: the root font just changed, the diagram re-fits on its own observer, and
+        // an Escape pressed before the list has taken focus again is lost (a flake on one run in
+        // several, with no baseline and so no slip in this plan).
+        await expect(async () => {
+          await diagramList(page).focus();
+          await page.keyboard.press('Escape');
+          await expect(page.getByRole('toolbar', { name: /^Actions for / })).toHaveCount(0, {
+            timeout: 1_500,
+          });
+        }).toPass({ timeout: 15_000 });
         await page.evaluate(() => {
           document.documentElement.style.fontSize = '32px';
         });

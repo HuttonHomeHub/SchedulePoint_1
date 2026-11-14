@@ -519,3 +519,75 @@ describe('the facts pairs', () => {
     }
   });
 });
+
+/**
+ * **The slip fact: the plan's finish against the active baseline** (`baseline-slip-and-pinned-names`
+ * M2). It is a third item on the dates row, never a third row (the foot row's 40 px floor), shown only
+ * when the caller has a number, and its words carry the direction.
+ */
+describe('the baseline slip fact', () => {
+  const base = {
+    activityCount: 12,
+    criticalCount: 0,
+    dataDate: '2026-03-02',
+    projectFinish: '2026-09-30',
+    scheduleState: { kind: 'current' } as ScheduleState,
+    onRecalculate: () => {},
+    pending: false,
+  };
+
+  const slipFact = (): HTMLElement | null => document.querySelector('[data-baseline-slip]');
+
+  const datesRow = (): HTMLElement => {
+    const row = document.querySelector('[aria-label^="Finish:"]')?.parentElement;
+    if (!row) throw new Error('dates row not found');
+    return row;
+  };
+
+  it('shows nothing when there is no slip to report', () => {
+    render(<PlanStatusBar {...base} />);
+    expect(slipFact()).toBeNull();
+  });
+
+  it('says how many working days later, on the dates row beside Finish', () => {
+    render(<PlanStatusBar {...base} baselineSlip={3} />);
+    // Hidden subject first, then the visible sentence: the spoken words are the written ones.
+    expect(slipFact()).toHaveTextContent('Finish: 3 working days later than baseline');
+    expect(slipFact()?.querySelector('.sr-only')).toHaveTextContent('Finish:');
+    expect(slipFact()).not.toHaveAttribute('aria-label');
+    expect(datesRow()).toContainElement(slipFact());
+    // The dates row keeps its two rows: a third would grow the foot row.
+    expect(datesRow().parentElement?.children).toHaveLength(2);
+  });
+
+  it('says "working day" in the singular for one', () => {
+    render(<PlanStatusBar {...base} baselineSlip={1} />);
+    expect(slipFact()).toHaveTextContent('Finish: 1 working day later than baseline');
+  });
+
+  it('says earlier in a word, never a minus sign', () => {
+    render(<PlanStatusBar {...base} baselineSlip={-2} />);
+    expect(slipFact()).toHaveTextContent('Finish: 2 working days earlier than baseline');
+    expect(slipFact()?.textContent).not.toContain('-');
+  });
+
+  it('says "On baseline" for no movement rather than printing zero', () => {
+    render(<PlanStatusBar {...base} baselineSlip={0} />);
+    expect(slipFact()).toHaveTextContent('Finish: On baseline');
+  });
+
+  it('shows nothing while the summary has not arrived', () => {
+    render(<PlanStatusBar {...base} pending baselineSlip={3} />);
+    expect(slipFact()).toBeNull();
+  });
+
+  it('is not coloured: the words carry the direction', () => {
+    render(<PlanStatusBar {...base} baselineSlip={3} />);
+    expect(slipFact()?.outerHTML).not.toMatch(/destructive|warning|success/);
+  });
+
+  it('sits inside the list the foot row sets aside on a short window', () => {
+    const { container } = render(<PlanStatusBar {...base} baselineSlip={3} />);
+    expect(container.querySelector('[data-plan-fact-list] [data-baseline-slip]')).not.toBeNull();
+  });
+});

@@ -227,6 +227,30 @@ const SELECTION_FACTS_YIELD =
   'short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:gap-x-0 short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:px-0 short:has-[[data-selection-bar]]:[&_[data-plan-fact-list]]:sr-only short:has-[[data-selection-bar]]:[&_[data-pen-badge]]:sr-only';
 
 /**
+ * **The baseline slip is shown only when it fits, and the diagram never pays for it**
+ * (`baseline-slip-and-pinned-names`, product owner 2026-11-14, after M0 measured it costing the
+ * diagram up to 52 px in 7 of 15 gating cells).
+ *
+ * The slip is a third item on the dates row, so the width it takes comes out of whatever shares the
+ * row: a docked strip (the dock wraps its own items to absorb it) or the stale sentence and its
+ * Recalculate (the facts wrap onto a second line). It therefore steps aside, **visually hidden and
+ * never removed** (`sr-only`, so a screen reader still hears "Finish: ..."), whenever either is
+ * present: the dock outlet holds something, the schedule is not `current`, or the window is narrower
+ * than `sm`, where the dates row (`whitespace-nowrap` under the row's `overflow: hidden`) would be cut off
+ * at 320 px (WCAG 1.4.10, found by the browser accessibility review). That is the same
+ * mechanism as {@link SELECTION_FACTS_YIELD}: declared at the row, in CSS, from what the row can
+ * already see, so nothing can disagree with what is on screen and it returns the moment the strip
+ * unmounts. It is not a width measurement, deliberately: this row's width is an output of what is in
+ * it, and a `ResizeObserver` here would feed it back in as an input (`no-resize-observer.structural`,
+ * ADR-0091 M7). The price is that the slip also steps aside at a wide window where it would have
+ * fitted beside a strip; the idle row, where the reader is looking at the plan, always shows it,
+ * which M0 measured free at every window (`m0-measurement.md`). A literal string, because Tailwind
+ * reads classes from source.
+ */
+const BASELINE_SLIP_YIELD =
+  'max-sm:[&_[data-baseline-slip]]:sr-only has-[[data-dock-outlet]:not(:empty)]:[&_[data-baseline-slip]]:sr-only has-[[data-schedule-state]:not([data-schedule-state=current])]:[&_[data-baseline-slip]]:sr-only';
+
+/**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
  * (ADR-0030). It fills the height its container gives it and scrolls internally, so the
  * canvas above keeps the rest. The workspace owns the drag-resizer (the shared
@@ -587,6 +611,7 @@ export function PlanActivitiesFootRow({
       className={cn(
         'border-t-primary flex min-h-9 shrink-0 flex-wrap items-center gap-x-2 gap-y-0 border-t-[3px] px-2 py-1 pointer-coarse:py-0.5',
         SELECTION_FACTS_YIELD,
+        BASELINE_SLIP_YIELD,
       )}
     >
       {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the

@@ -239,6 +239,15 @@ sequenceDiagram
 - **Fallbacks if M0 stops** (owner chooses): the dates row as "+3 working days" with the label carrying "against
   baseline" for screen readers only (weaker for sighted readers); or the population row instead, if it is the
   narrower one in the measured states.
+- **Changed in build, 2026-11-14 (owner): shows only when it fits.** M0 measured the stop rule firing: the diagram
+  lost up to 52 px (stale sentence at 1024 x 768) and a docked strip made the dock wrap in several selection and
+  armed-tool cells; the idle row was free at every window. The owner chose "show it only when it fits": the slip is
+  visually hidden (`sr-only`, still in the accessibility tree: "Finish: ...") whenever the dock outlet holds
+  something or the schedule is not `current`. It reuses ADR-0219's mechanism, a CSS rule declared on the foot row
+  (`BASELINE_SLIP_YIELD`, `activity-bottom-panel.tsx`), and is not a width measurement (the row's width is an output
+  of what is in it). It steps aside also at a wide window where it would have fitted beside a strip: a deliberate
+  over-approximation. The M0 harness now settles the layout before each reading and reads the absent state twice,
+  because its first run compared readings taken mid-settle.
 - Announces nothing (the component's rule, `plan-facts.tsx:38-48`).
 
 ### 4.4 Part B: options for the DataTable contract

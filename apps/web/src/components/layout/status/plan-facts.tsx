@@ -6,6 +6,7 @@ import { scheduleStateAttr, type ScheduleState } from './schedule-state';
 import { PenStatusOutlet } from '@/components/layout/workspace/plan-slot-host';
 import { Button } from '@/components/ui/button';
 import { useTooltip } from '@/components/ui/tooltip';
+import { slipSentence } from '@/features/overview/model/standing-copy';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /**
@@ -52,6 +53,7 @@ export function PlanFacts({
   criticalCount,
   dataDate,
   projectFinish,
+  baselineSlip,
   scheduleState,
   onRecalculate,
   pending,
@@ -60,6 +62,8 @@ export function PlanFacts({
   criticalCount: number | undefined;
   dataDate: string | null | undefined;
   projectFinish: string | null | undefined;
+  /** See `PlanStatusBar`: `undefined` renders no slip fact. */
+  baselineSlip?: number | undefined;
   /** What the schedule owes the reader — see {@link ScheduleState}. */
   scheduleState: ScheduleState;
   /** Run a recalculation now. Called only from the `stale` state with no refusal. */
@@ -159,6 +163,7 @@ export function PlanFacts({
           criticalCount={criticalCount}
           dataDate={dataDate}
           projectFinish={projectFinish}
+          baselineSlip={baselineSlip}
           pending={pending}
         />
       </div>
@@ -206,12 +211,14 @@ function FactList({
   criticalCount,
   dataDate,
   projectFinish,
+  baselineSlip,
   pending,
 }: {
   activityCount: number | undefined;
   criticalCount: number | undefined;
   dataDate: string | null | undefined;
   projectFinish: string | null | undefined;
+  baselineSlip: number | undefined;
   pending: boolean;
 }): React.ReactElement {
   return (
@@ -234,6 +241,17 @@ function FactList({
                   'Not calculated'
           }
         />
+        {/* **A third item on the dates row, never a third row** (`baseline-slip-and-pinned-names`
+            4.3). Three rows would make the facts 48 px against the 40 px floor that keeps the foot
+            row from growing, and that is diagram height. It is `whitespace-nowrap` like every fact
+            here (ADR-0114: a row that cannot shrink is never asked to wrap), so the width it costs
+            comes out of the dock beside it, which M0 measured before this was built; and the whole
+            list already yields to a selection on a short window (ADR-0219 D1). Only with an active
+            baseline, and the pending state shows nothing rather than a stale slip. Not coloured:
+            the words carry the direction. */}
+        {!pending && baselineSlip !== undefined && Number.isFinite(baselineSlip) ? (
+          <SlipFact slip={baselineSlip} />
+        ) : null}
       </div>
       <div className="flex items-center gap-x-4">
         <Fact label="Activities" value={pending ? '…' : (activityCount ?? 0).toString()} />
@@ -245,6 +263,30 @@ function FactList({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * The finish's movement against the baseline: one sentence, which carries its own subject.
+ *
+ * It has no label span, because "3 working days later than baseline" already reads as a sentence about
+ * the finish beside it. A screen reader needs the subject, so a visually hidden "Finish: " leads the
+ * visible text: the spoken words are the written ones plus that prefix, with no `aria-label` for the
+ * two to disagree through (an `aria-label` on a bare `span` is not reliably announced).
+ *
+ * **Left as it is when the schedule is stale, deliberately:** it reads the same stored dates as the
+ * Finish beside it, so the two are stale together and the stale sentence already says so.
+ */
+function SlipFact({ slip }: { slip: number }): React.ReactElement {
+  return (
+    <span
+      className="text-foreground inline-flex items-center whitespace-nowrap"
+      // The hook the journeys and the M0 measurement find the fact by.
+      data-baseline-slip=""
+    >
+      <span className="sr-only">Finish: </span>
+      {slipSentence(slip)}
+    </span>
   );
 }
 

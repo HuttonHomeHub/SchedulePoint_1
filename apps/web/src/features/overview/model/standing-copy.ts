@@ -82,6 +82,23 @@ export function movementSentence(movement: BaselineMovement): string {
 }
 
 /**
+ * The plan's finish against the active baseline, as the bottom bar's fact says it
+ * (`baseline-slip-and-pinned-names`, product owner 2026-11-13).
+ *
+ * One string per state: it is the visible text, and the fact's screen-reader reading is that same text
+ * behind a hidden "Finish: " (so name and text agree, WCAG 2.5.3). Working days, on the plan's
+ * calendar: the unit the planner schedules in, the same one {@link movementSentence} uses. **The
+ * direction is a word, never a sign or a colour** (WCAG 1.4.1), and a slip of nothing says so rather
+ * than printing "0".
+ */
+export function slipSentence(workingDays: number): string {
+  if (workingDays === 0) return 'On baseline';
+  const days = Math.abs(workingDays);
+  const unit = days === 1 ? 'working day' : 'working days';
+  return `${String(days)} ${unit} ${workingDays > 0 ? 'later' : 'earlier'} than baseline`;
+}
+
+/**
  * The tone a movement should be drawn in — **a second channel, never the only one.**
  *
  * `neutral` for everything that is not a slip, including a plan pulling in: finishing early is not

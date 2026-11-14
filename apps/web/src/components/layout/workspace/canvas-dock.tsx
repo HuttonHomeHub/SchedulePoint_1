@@ -145,6 +145,8 @@ export function CanvasDockOutlet(): React.ReactElement {
   return (
     <div
       ref={ref}
+      // The hook the foot row's slip rule reads (`BASELINE_SLIP_YIELD`): "something is docked here".
+      data-dock-outlet=""
       className="flex min-w-0 flex-1 flex-wrap items-center gap-2 not-empty:min-w-[min(18rem,100%)] not-empty:has-[[data-dock-row]]:min-w-[min(36rem,100%)] sm:pointer-coarse:has-[[data-dock-wide]]:min-w-[min(36rem,100%)]"
     />
   );
