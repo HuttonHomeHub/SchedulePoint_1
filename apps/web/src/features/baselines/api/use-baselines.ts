@@ -32,6 +32,9 @@ const EMPTY_SUMMARY: PlanVarianceSummary = {
   addedCount: 0,
   removedCount: 0,
   basis: null,
+  baselineProjectFinish: null,
+  currentProjectFinish: null,
+  projectFinishVarianceDays: null,
 };
 
 export function baselinesQueryOptions(orgSlug: string, planId: string) {

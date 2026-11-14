@@ -204,6 +204,18 @@ columns; no "code changed since the baseline" report exists. The `ck_baselines_s
 widened in the same release whatever the owner answered, because without it the first baseline of a code-grouped
 plan failed (`23514`).
 
+### 5 — The variance roll-up states the plan's finish against the baseline's (`baseline-slip-and-pinned-names` M1, 2026-11-13)
+
+`meta` of `GET …/baselines/variance` gains `baselineProjectFinish`, `currentProjectFinish` and
+`projectFinishVarianceDays`. The first is the latest frozen `placedFinish` over every snapshot row (the frozen early `baselineFinish` where a row has none, as the live side falls back to `earlyFinish`); the second the
+latest `COALESCE(visualEffectiveFinish, earlyFinish)` over the plan's live activities (the in-memory twin of
+`placedFinishSql`, so it equals the schedule summary's `projectFinish`); the third their difference in working days on
+the plan calendar and the baseline's frozen day length (Amendment 3's basis, ADR-0068 §5), positive = later, through the
+same `workingDiff` every row uses. A slip under half a working day rounds to 0. It is the **plan's** finish, not
+`worstFinishSlipDays` (the largest single activity), so an activity added or removed since capture moves it where no
+matched row does. All three are `null` with no active baseline. No schema change: the frozen `placedFinish` was already
+captured. `capturedProjectFinish` is deliberately not used (it is the network finish, `docs/TECH_DEBT.md` #593).
+
 ## References
 
 - Feature spec: [`docs/specs/baselines.md`](../specs/baselines.md) · Implementation plan:

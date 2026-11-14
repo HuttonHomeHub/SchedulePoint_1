@@ -637,6 +637,8 @@ export class BaselineRepository {
       name: string;
       placedStart: Date | null;
       placedFinish: Date | null;
+      /** The frozen early finish: the plan finish's fallback, as `earlyFinish` is on the live side. */
+      baselineFinish: Date | null;
       totalFloat: number | null;
       totalFloatMinutes: number | null;
     }[]
@@ -649,6 +651,7 @@ export class BaselineRepository {
         name: true,
         placedStart: true,
         placedFinish: true,
+        baselineFinish: true,
         totalFloat: true,
         totalFloatMinutes: true,
       },
@@ -995,6 +998,8 @@ export class BaselineRepository {
       name: string;
       visualEffectiveStart: Date | null;
       visualEffectiveFinish: Date | null;
+      /** The fallback for the placed finish when a row was never recalculated (`placedFinishSql`). */
+      earlyFinish: Date | null;
       totalFloat: number | null;
       totalFloatMinutes: number | null;
     }[]
@@ -1008,6 +1013,7 @@ export class BaselineRepository {
         name: true,
         visualEffectiveStart: true,
         visualEffectiveFinish: true,
+        earlyFinish: true,
         totalFloat: true,
         totalFloatMinutes: true,
       },

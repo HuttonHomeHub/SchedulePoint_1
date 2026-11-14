@@ -700,7 +700,14 @@ describe('BaselinesService', () => {
       expect(rows).toEqual([]);
       // `basis: null` names "nothing was compared" — the one case where null is not a
       // missing answer but the correct one (placement-baseline-variance).
-      expect(summary).toMatchObject({ baselineId: null, behindCount: 0, basis: null });
+      expect(summary).toMatchObject({
+        baselineId: null,
+        behindCount: 0,
+        basis: null,
+        baselineProjectFinish: null,
+        currentProjectFinish: null,
+        projectFinishVarianceDays: null,
+      });
       expect(baselines.loadSnapshotRowsForVariance).not.toHaveBeenCalled();
     });
 
@@ -736,9 +743,110 @@ describe('BaselinesService', () => {
         worstFinishSlipDays: 3,
         behindCount: 1,
         basis: 'PLACED',
+        baselineProjectFinish: '2026-01-09',
+        currentProjectFinish: '2026-01-12',
+        projectFinishVarianceDays: 3,
       });
       // plan.calendarId is null in the fixture → all-days-work, no calendar load.
       expect(baselines.loadPlanCalendar).not.toHaveBeenCalled();
+    });
+
+    // The live finish is the PLACED finish with the network one as its fallback — the in-memory twin
+    // of `placedFinishSql` the Finish fact reads — so a row never recalculated since the column was
+    // added still counts, and the slip cannot disagree with the Finish beside it.
+    it('states the plan finish from the network finish when a row has no placed one', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
+      baselines.loadSnapshotRowsForVariance.mockResolvedValue([
+        {
+          sourceActivityId: 'a1',
+          code: 'A1',
+          name: 'A',
+          placedStart: new Date('2026-01-05T00:00:00Z'),
+          placedFinish: new Date('2026-01-09T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+      baselines.loadActiveActivitiesForVariance.mockResolvedValue([
+        {
+          id: 'a1',
+          code: 'A1',
+          name: 'A',
+          visualEffectiveStart: null,
+          visualEffectiveFinish: null,
+          earlyFinish: new Date('2026-01-14T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+
+      const { summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
+      expect(summary).toMatchObject({
+        currentProjectFinish: '2026-01-14',
+        projectFinishVarianceDays: 5,
+      });
+    });
+
+    it('gives no plan finish slip when nothing has been recalculated since capture', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
+      baselines.loadSnapshotRowsForVariance.mockResolvedValue([
+        {
+          sourceActivityId: 'a1',
+          code: 'A1',
+          name: 'A',
+          placedStart: new Date('2026-01-05T00:00:00Z'),
+          placedFinish: new Date('2026-01-09T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+      baselines.loadActiveActivitiesForVariance.mockResolvedValue([
+        {
+          id: 'a1',
+          code: 'A1',
+          name: 'A',
+          visualEffectiveStart: null,
+          visualEffectiveFinish: null,
+          earlyFinish: null,
+          totalFloat: null,
+        },
+      ]);
+
+      const { summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
+      expect(summary).toMatchObject({
+        baselineProjectFinish: '2026-01-09',
+        currentProjectFinish: null,
+        projectFinishVarianceDays: null,
+      });
+    });
+
+    // The frozen side has the same fallback as the live one: the snapshot keeps the early finish.
+    it('falls back to the frozen early finish when a snapshot row has no placed finish', async () => {
+      baselines.findActiveBaselineByPlan.mockResolvedValue(baseline({ id: 'active-1' }));
+      baselines.loadSnapshotRowsForVariance.mockResolvedValue([
+        {
+          sourceActivityId: 'a1',
+          code: 'A1',
+          name: 'A',
+          placedStart: null,
+          placedFinish: null,
+          baselineFinish: new Date('2026-01-09T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+      baselines.loadActiveActivitiesForVariance.mockResolvedValue([
+        {
+          id: 'a1',
+          code: 'A1',
+          name: 'A',
+          visualEffectiveStart: null,
+          visualEffectiveFinish: new Date('2026-01-12T00:00:00Z'),
+          totalFloat: 0,
+        },
+      ]);
+
+      const { summary } = await service.variance(principalWith(ALL), 'acme', PLAN_ID);
+      expect(summary).toMatchObject({
+        baselineProjectFinish: '2026-01-09',
+        projectFinishVarianceDays: 3,
+      });
     });
 
     // U1: frozen placed D+7 against live placed D+11 = +4. The loaders return no network dates, so

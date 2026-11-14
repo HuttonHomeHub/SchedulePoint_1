@@ -14,6 +14,9 @@ function summary(overrides: Partial<PlanVarianceSummary> = {}): PlanVarianceSumm
     addedCount: 1,
     removedCount: 0,
     basis: 'PLACED',
+    baselineProjectFinish: '2026-01-09',
+    currentProjectFinish: '2026-01-15',
+    projectFinishVarianceDays: 6,
     ...overrides,
   };
 }
