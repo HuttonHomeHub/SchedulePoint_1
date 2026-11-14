@@ -1,5 +1,15 @@
 # @repo/web
 
+## 1.14.0
+
+### Minor Changes
+
+- [#1378](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1378) [`8f9741e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f9741e8c0ba8b3c054dd39a45f21b4b3bb8d2d4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a shared plan, selecting an activity shows its start, finish, total float, progress and status in the line above the diagram. Press Escape or click empty ground and the usual instruction comes back.
+
+### Patch Changes
+
+- [#1378](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1378) [`8f9741e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/8f9741e8c0ba8b3c054dd39a45f21b4b3bb8d2d4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The shared page no longer shows a "Diagram shortcuts and gestures" button that opened nothing, and its Today line now draws like the one in the workspace. The legend is folded away until you open it, and lists only the marks the shared diagram is actually drawing.
+
 ## 1.13.0
 
 ### Minor Changes
