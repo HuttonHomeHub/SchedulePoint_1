@@ -167,6 +167,10 @@ export const GANTT_COLUMNS: readonly GanttColumn[] = [
  * The variance readout, shown only when a baseline is active. Signed and unit-suffixed so the
  * direction is unambiguous in text — a ghost bar alone says "different", not "later" (spec GV-3:
  * every visual encoding needs a text equivalent).
+ *
+ * It measures the **start** and nothing else, so zero reads `0d`, a number under the "Start vs
+ * baseline" header, and not "On plan": that read as a verdict on the whole activity, and an activity
+ * that started on time and overran said it too (`docs/TECH_DEBT.md` #591).
  */
 export function varianceText(row: BaselineVarianceRow | undefined): string {
   // No row at all is NOT the same fact as "added since the baseline". The API returns a row per
@@ -176,7 +180,7 @@ export function varianceText(row: BaselineVarianceRow | undefined): string {
   if (!row.inBaseline) return 'New';
   const days = row.startVarianceDays;
   if (days === null) return '—';
-  if (days === 0) return 'On plan';
+  if (days === 0) return '0d';
   return days > 0 ? `+${days}d late` : `${days}d early`;
 }
 

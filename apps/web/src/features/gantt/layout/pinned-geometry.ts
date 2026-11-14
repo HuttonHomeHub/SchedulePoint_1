@@ -41,3 +41,17 @@ export function pinnedExtraWidth(showVariance: boolean, hasRowMenus: boolean): n
     GRID_END_GUTTER
   );
 }
+
+/**
+ * **How much of the Gantt's own width a new view leaves the timeline**: two fifths
+ * (`docs/specs/gantt-narrow-default-columns/`, approved 2026-11-13). Below it, a view that has chosen
+ * no columns opens without Code and Finish (`layout/narrow-default.ts`). In this module because the
+ * journey reads the same number the code does, as a ratio and never as a pixel figure.
+ *
+ * It is the smallest round share at which a 1024 px window counts as narrow with the Explorer open
+ * (a Gantt of about 748 px against a threshold of about 1,053) or closed (about 1,024), while a
+ * 1440 px window with the Explorer open does not (about 1,164). Those widths are arithmetic from the
+ * constants in this file and `column-widths.ts`, not a browser measurement: the spec's measuring task
+ * was set aside so the journey, which asserts the ratio rather than a width, is the check.
+ */
+export const TIMELINE_MIN_SHARE = 0.4;

@@ -45,6 +45,29 @@ export interface BarPointerDrag {
 }
 
 /**
+ * The part of the scroller a drag may scroll, **in viewport pixels**: the scroller itself and the
+ * span of it that shows the timeline (the sticky grid column covers the rest, so the timeline's left
+ * edge is not the scroller's).
+ */
+export interface DragScrollRegion {
+  scroller: HTMLElement;
+  /** The viewport x where the visible timeline begins. */
+  left: number;
+  /** The viewport x where the visible timeline ends. */
+  right: number;
+}
+
+/** How close (px) to the timeline's edge the pointer must be for the drag to scroll it. */
+export const DRAG_SCROLL_EDGE_PX = 40;
+
+/**
+ * How fast (px a second) the timeline scrolls while the pointer is in that zone. **One steady rate,
+ * with no easing and no smooth-scroll animation**, so a planner who has asked for reduced motion
+ * gets nothing that moves on its own beyond what they are holding the pointer still to ask for.
+ */
+export const DRAG_SCROLL_PX_PER_SECOND = 600;
+
+/**
  * How far (px) sideways a press must travel before it counts as a drag attempt rather than a tap or
  * a hold. One threshold for the refusal path and the row's `contextmenu` handler, so "this was a
  * drag" is not decided two ways.
@@ -56,6 +79,7 @@ export function useBarPointerDrag({
   touchArmed,
   onCommit,
   onRefused,
+  scrollRegion,
 }: {
   enabled: boolean;
   /** Whether a `touch` or `pen` press may start (or be refused) here — the bar is selected. */
@@ -65,6 +89,12 @@ export function useBarPointerDrag({
   onRefused?: () => void;
   /** Called once, on release, with the total x movement. Never called for a cancelled drag. */
   onCommit: (deltaX: number) => void;
+  /**
+   * The timeline's scroller and visible span, when the drag should scroll it with the pointer near
+   * an edge. The reported `deltaX` then counts how far the scroller has moved as well as the pointer,
+   * because a bar drawn in the scrolling content has travelled both. Absent: a drag stays on screen.
+   */
+  scrollRegion?: () => DragScrollRegion | null;
 }): BarPointerDrag {
   const [deltaX, setDeltaX] = useState<number | null>(null);
 
@@ -73,6 +103,10 @@ export function useBarPointerDrag({
   const liveDeltaX = useRef(0);
   const frame = useRef<number | null>(null);
   const cancelled = useRef(false);
+  const lastClientX = useRef(0);
+  const originScroll = useRef(0);
+  const scrollFrame = useRef<number | null>(null);
+  const lastScrollTick = useRef<number | null>(null);
   // Detaches the live gesture's window listeners, or null between gestures. Held in a ref so the
   // unmount effect can reach it: the release handler does not run for a row virtualized away.
   const teardown = useRef<(() => void) | null>(null);
@@ -146,8 +180,11 @@ export function useBarPointerDrag({
 
       const pointerId = event.pointerId;
       originX.current = event.clientX;
+      lastClientX.current = event.clientX;
+      originScroll.current = scrollRegion?.()?.scroller.scrollLeft ?? 0;
       liveDeltaX.current = 0;
       cancelled.current = false;
+      lastScrollTick.current = null;
       setDeltaX(0);
 
       const publish = (): void => {
@@ -155,12 +192,58 @@ export function useBarPointerDrag({
         setDeltaX(liveDeltaX.current);
       };
 
+      // The pointer's travel plus the scroller's: the bar lives in the scrolling content, so what it
+      // has moved is both, and the day under the pointer is read from the sum.
+      const measureDelta = (): void => {
+        const scrolled =
+          (scrollRegion?.()?.scroller.scrollLeft ?? originScroll.current) - originScroll.current;
+        liveDeltaX.current = lastClientX.current - originX.current + scrolled;
+      };
+
+      // While the pointer holds in an edge zone the timeline scrolls at a steady rate, so a bar can
+      // be taken further than the screen shows. Driven by its own frame loop rather than by
+      // pointermove, because a pointer held still at the edge sends none.
+      const scrollTick = (timestamp: number): void => {
+        scrollFrame.current = null;
+        const region = scrollRegion?.();
+        if (!region) return;
+        // A press that has not yet become a drag must not scroll: a bar near the edge would otherwise
+        // run away from a click.
+        const pointer = lastClientX.current;
+        const zone = Math.min(DRAG_SCROLL_EDGE_PX, (region.right - region.left) / 3);
+        const direction =
+          Math.abs(liveDeltaX.current) <= DRAG_INTENT_PX
+            ? 0
+            : pointer < region.left + zone
+              ? -1
+              : pointer > region.right - zone
+                ? 1
+                : 0;
+        if (direction === 0) {
+          lastScrollTick.current = null;
+          return;
+        }
+        // Capped so a backgrounded tab's first frame back is not a lurch.
+        const elapsed = lastScrollTick.current === null ? 16 : timestamp - lastScrollTick.current;
+        lastScrollTick.current = timestamp;
+        const before = region.scroller.scrollLeft;
+        region.scroller.scrollLeft =
+          before + (direction * DRAG_SCROLL_PX_PER_SECOND * Math.min(50, elapsed)) / 1000;
+        if (region.scroller.scrollLeft !== before) {
+          measureDelta();
+          frame.current ??= requestAnimationFrame(publish);
+        }
+        scrollFrame.current = requestAnimationFrame(scrollTick);
+      };
+
       const onMove = (moveEvent: PointerEvent): void => {
         if (moveEvent.pointerId !== pointerId) return;
-        liveDeltaX.current = moveEvent.clientX - originX.current;
+        lastClientX.current = moveEvent.clientX;
+        measureDelta();
         // At most one publish per frame. Without this the row re-renders per pointermove, which on a
         // virtualized list is the whole window.
         frame.current ??= requestAnimationFrame(publish);
+        if (scrollRegion !== undefined) scrollFrame.current ??= requestAnimationFrame(scrollTick);
       };
 
       const finish = (): void => {
@@ -169,11 +252,16 @@ export function useBarPointerDrag({
         window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('keydown', onKey, true);
         teardown.current = null;
+        if (scrollFrame.current !== null) {
+          cancelAnimationFrame(scrollFrame.current);
+          scrollFrame.current = null;
+        }
         stop();
       };
 
       const onUp = (upEvent: PointerEvent): void => {
         if (upEvent.pointerId !== pointerId) return;
+        measureDelta();
         const total = liveDeltaX.current;
         const wasCancelled = cancelled.current;
         finish();
@@ -208,7 +296,7 @@ export function useBarPointerDrag({
       window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
-    [enabled, touchArmed, onCommit, onRefused, stop],
+    [enabled, touchArmed, onCommit, onRefused, scrollRegion, stop],
   );
 
   return { deltaX, dragging: deltaX !== null, cancel, intentExceeded, onPointerDown };

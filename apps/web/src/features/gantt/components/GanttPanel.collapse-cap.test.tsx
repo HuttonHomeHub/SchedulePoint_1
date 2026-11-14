@@ -43,6 +43,7 @@ function bundle(withheld: number): GanttViewStateBundle {
   return {
     sort: { key: 'name', direction: 'asc' },
     hiddenColumns: new Set(),
+    hiddenStated: true,
     collapsed: new Set(),
     onSortChange: () => {},
     onHiddenColumnsChange: () => {},

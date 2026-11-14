@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { clampSize, useResizablePanelPrefs } from './use-resizable-panel-prefs';
 
@@ -123,6 +123,99 @@ describe('useResizablePanelPrefs', () => {
 
       const tight = renderHook(() => useResizablePanelPrefs({ ...OPTS, ceiling: 10 }));
       expect(tight.result.current.limit).toBe(100);
+    });
+  });
+});
+
+describe("persist: 'on-change'", () => {
+  const ON_CHANGE = { ...OPTS, persist: 'on-change' as const };
+
+  it('writes nothing at mount and reads defaultSize', () => {
+    const { result } = renderHook(() => useResizablePanelPrefs(ON_CHANGE));
+    expect(result.current.size).toBe(200);
+    expect(localStorage.getItem('test-panel')).toBeNull();
+  });
+
+  it('follows defaultSize while nothing has been placed', () => {
+    const { result, rerender } = renderHook(
+      ({ defaultSize }) => useResizablePanelPrefs({ ...ON_CHANGE, defaultSize }),
+      { initialProps: { defaultSize: 200 } },
+    );
+    rerender({ defaultSize: 320 });
+    expect(result.current.size).toBe(320);
+    expect(localStorage.getItem('test-panel')).toBeNull();
+  });
+
+  it('stores once the size is set, and then stands against a changed defaultSize', () => {
+    const { result, rerender } = renderHook(
+      ({ defaultSize }) => useResizablePanelPrefs({ ...ON_CHANGE, defaultSize }),
+      { initialProps: { defaultSize: 200 } },
+    );
+    act(() => result.current.setSize(350));
+    expect(JSON.parse(localStorage.getItem('test-panel')!)).toEqual({
+      collapsed: false,
+      size: 350,
+    });
+    rerender({ defaultSize: 150 });
+    expect(result.current.size).toBe(350);
+  });
+
+  it('reads a stored size back and does not rewrite it at mount', () => {
+    localStorage.setItem('test-panel', JSON.stringify({ collapsed: false, size: 260 }));
+    const spy = vi.spyOn(Storage.prototype, 'setItem');
+    const { result } = renderHook(() => useResizablePanelPrefs(ON_CHANGE));
+    expect(result.current.size).toBe(260);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('resetSize removes the stored value and returns to following defaultSize', () => {
+    localStorage.setItem('test-panel', JSON.stringify({ collapsed: false, size: 260 }));
+    const { result, rerender } = renderHook(
+      ({ defaultSize }) => useResizablePanelPrefs({ ...ON_CHANGE, defaultSize }),
+      { initialProps: { defaultSize: 200 } },
+    );
+    act(() => result.current.resetSize());
+    expect(localStorage.getItem('test-panel')).toBeNull();
+    expect(result.current.size).toBe(200);
+    rerender({ defaultSize: 310 });
+    expect(result.current.size).toBe(310);
+  });
+
+  it('stores a collapse without a size, so the pane still follows defaultSize after expand', () => {
+    const { result, rerender } = renderHook(
+      ({ defaultSize }) => useResizablePanelPrefs({ ...ON_CHANGE, defaultSize }),
+      { initialProps: { defaultSize: 200 } },
+    );
+    act(() => result.current.collapse());
+    expect(JSON.parse(localStorage.getItem('test-panel')!)).toEqual({ collapsed: true });
+    act(() => result.current.expand());
+    expect(JSON.parse(localStorage.getItem('test-panel')!)).toEqual({ collapsed: false });
+    rerender({ defaultSize: 320 });
+    expect(result.current.size).toBe(320);
+  });
+
+  it('is silent when storage throws', () => {
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    const remove = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    const { result } = renderHook(() => useResizablePanelPrefs(ON_CHANGE));
+    expect(() => act(() => result.current.setSize(300))).not.toThrow();
+    expect(result.current.size).toBe(300);
+    expect(() => act(() => result.current.resetSize())).not.toThrow();
+    expect(result.current.size).toBe(200);
+    set.mockRestore();
+    remove.mockRestore();
+  });
+
+  it("leaves the default 'mount' path writing at mount, as every other panel does", () => {
+    renderHook(() => useResizablePanelPrefs(OPTS));
+    expect(JSON.parse(localStorage.getItem('test-panel')!)).toEqual({
+      collapsed: false,
+      size: 200,
     });
   });
 });

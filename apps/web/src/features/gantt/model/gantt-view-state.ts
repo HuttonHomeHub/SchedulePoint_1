@@ -35,6 +35,13 @@ import { searchString } from '@/lib/router/search-string';
  * rollback contract if the two `createRouter` options are ever reverted. A hand-edited URL lands the
  * planner on a working chart, never an error boundary.
  *
+ * ## An absent `ghide` is "say nothing", not "the default set"
+ *
+ * What an absent `ghide` shows depends on the room the Gantt has (`NARROW_DEFAULT_HIDDEN` against
+ * `DEFAULT_HIDDEN_COLUMNS`), which only the host can measure. The parser therefore reports whether a
+ * choice was **stated** and leaves the resolving to `layout/narrow-default.ts`; a stated value,
+ * `none` included, is used as written at every width (`docs/specs/gantt-narrow-default-columns/`).
+ *
  * ## What is NOT here, and why
  *
  * **Grid width and column widths.** Neither is in the URL: they are per-device ergonomics, not a view
@@ -67,13 +74,37 @@ export const HIDEABLE_COLUMNS: readonly GanttColumnKey[] = [
 ];
 
 /**
- * Columns hidden when the URL says nothing.
+ * Columns hidden when the URL says nothing **and the Gantt has room**.
  *
  * `predecessors` is off by default: it is the widest column and the newest, and a chart that grew
  * a column overnight for every existing user is a change nobody asked for. The other five have
  * been visible since ADR-0059 and stay that way.
  */
 export const DEFAULT_HIDDEN_COLUMNS: readonly GanttColumnKey[] = ['predecessors'];
+
+/**
+ * Columns hidden when the URL says nothing **and the Gantt is narrow**: the standard set plus Code
+ * and Finish, so the timeline keeps the room (`docs/specs/gantt-narrow-default-columns/`). Which of
+ * the two applies is decided where the frame is measured (`layout/narrow-default.ts`), never here:
+ * the parser stays pure and total.
+ */
+export const NARROW_DEFAULT_HIDDEN: readonly GanttColumnKey[] = [
+  ...DEFAULT_HIDDEN_COLUMNS,
+  'code',
+  'earlyFinish',
+];
+
+/**
+ * "The URL says nothing", as a value the URL's default slot can hold.
+ *
+ * Once the default depends on the frame, "absent" and "the default set" are no longer one string:
+ * a planner on a narrow Gantt who ticks Code and Finish back on writes `predecessors`, which the
+ * old default-is-deleted rule removed from the address — and an absent `ghide` then hid them
+ * again. This is the trap {@link HIDE_NOTHING} was invented for, one value along.
+ * {@link serialiseHiddenColumns} yields a list or `none`, never this, so any chooser change is
+ * written and survives; a hand-typed `?ghide=auto` reads as "say nothing" and is harmless.
+ */
+export const HIDDEN_UNSTATED = 'auto';
 
 /**
  * "Hide nothing", as a value the URL can actually carry.
@@ -95,7 +126,13 @@ export const MAX_COLLAPSED_IN_URL = 40;
 
 export interface GanttViewState {
   sort: GanttSort;
+  /**
+   * The columns the URL hides. When {@link hiddenStated} is false this is the standard default and
+   * the host may replace it with the narrow one; when true it is the planner's choice at every width.
+   */
   hiddenColumns: ReadonlySet<GanttColumnKey>;
+  /** Whether the address carried a column choice (`none`, a list, or a list of unknown keys). */
+  hiddenStated: boolean;
   collapsed: ReadonlySet<string>;
   /**
    * The code types the planner asked to see as columns (P6 activity codes, M3-T2), **unresolved**: the
@@ -148,6 +185,15 @@ export function serialiseSort(sort: GanttSort): string {
 }
 
 /**
+ * What the address says about hidden columns: a choice (`stated`), or nothing.
+ *
+ * Tagged rather than defaulted here, because the default depends on the room the Gantt has and the
+ * parser knows nothing of that (`docs/specs/gantt-narrow-default-columns/` §4.2).
+ */
+export type ParsedHiddenColumns =
+  { stated: true; hidden: ReadonlySet<GanttColumnKey> } | { stated: false };
+
+/**
  * A comma-separated list of hidden columns.
  *
  * **Hidden rather than shown**, which is the load-bearing choice: a column added to the product
@@ -155,20 +201,23 @@ export function serialiseSort(sort: GanttSort): string {
  * would make every stored view a snapshot that quietly withholds anything new — the failure being
  * invisible, because the reader has no way to know a column exists.
  */
-export function parseHiddenColumns(value: unknown): ReadonlySet<GanttColumnKey> {
+export function parseHiddenColumns(value: unknown): ParsedHiddenColumns {
   const raw = asSearchString(value);
-  if (raw === null) return new Set(DEFAULT_HIDDEN_COLUMNS);
+  if (raw === null || raw === HIDDEN_UNSTATED) return { stated: false };
   // `none` (and, read permissively, an empty string) means "hide nothing", which is NOT the default
   // and must survive the round trip — otherwise a planner who switches `predecessors` on cannot
   // express it. See {@link HIDE_NOTHING} for why the empty string alone could not carry it.
-  if (raw === HIDE_NOTHING) return new Set();
+  if (raw === HIDE_NOTHING) return { stated: true, hidden: new Set() };
   const parts = raw
     .split(',')
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
-  return new Set(
-    parts.filter((p): p is GanttColumnKey => HIDEABLE_COLUMNS.includes(p as GanttColumnKey)),
-  );
+  return {
+    stated: true,
+    hidden: new Set(
+      parts.filter((p): p is GanttColumnKey => HIDEABLE_COLUMNS.includes(p as GanttColumnKey)),
+    ),
+  };
 }
 
 export function serialiseHiddenColumns(hidden: ReadonlySet<GanttColumnKey>): string {
@@ -215,9 +264,11 @@ export function serialiseCollapsed(collapsed: ReadonlySet<string>): {
 
 /** Read the whole view state out of the router's raw search object. */
 export function parseGanttViewState(raw: Record<string, unknown>): GanttViewState {
+  const hidden = parseHiddenColumns(raw[GANTT_VIEW_PARAMS.hidden]);
   return {
     sort: parseSort(raw[GANTT_VIEW_PARAMS.sort]),
-    hiddenColumns: parseHiddenColumns(raw[GANTT_VIEW_PARAMS.hidden]),
+    hiddenColumns: hidden.stated ? hidden.hidden : new Set(DEFAULT_HIDDEN_COLUMNS),
+    hiddenStated: hidden.stated,
     collapsed: parseCollapsed(raw[GANTT_VIEW_PARAMS.collapsed]),
     codeColumnIds: parseCodeColumnIds(raw[GANTT_VIEW_PARAMS.codes]),
   };
@@ -230,7 +281,7 @@ export function parseGanttViewState(raw: Record<string, unknown>): GanttViewStat
  */
 export const GANTT_VIEW_DEFAULTS: Record<string, string> = {
   [GANTT_VIEW_PARAMS.sort]: serialiseSort(DEFAULT_GANTT_SORT),
-  [GANTT_VIEW_PARAMS.hidden]: serialiseHiddenColumns(new Set(DEFAULT_HIDDEN_COLUMNS)),
+  [GANTT_VIEW_PARAMS.hidden]: HIDDEN_UNSTATED,
   [GANTT_VIEW_PARAMS.collapsed]: '',
   [GANTT_VIEW_PARAMS.codes]: '',
 };

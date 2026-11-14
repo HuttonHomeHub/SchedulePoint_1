@@ -75,7 +75,7 @@ import {
 import { indentTarget, isRefusal, outdentTarget } from '../model/structure-edit';
 import { swimlaneCellGate, swimlaneCellLabel, type GanttSwimlanes } from '../model/swimlane-cell';
 import { TOUCH_ARM_HINT, takeTouchHint, touchSelectionNote } from '../model/touch-note';
-import { useBarPointerDrag } from '../model/use-bar-pointer-drag';
+import { useBarPointerDrag, type DragScrollRegion } from '../model/use-bar-pointer-drag';
 import type { GanttColumnWidthsBundle } from '../model/use-gantt-column-widths';
 import { useGanttGridPrefs, type GanttGridPrefs } from '../model/use-gantt-grid-prefs';
 import type { GanttViewStateBundle } from '../model/use-gantt-view-state';
@@ -566,9 +566,11 @@ function GanttPanelBody({
    * failure mode and a wider blast radius, and the reason it cannot recur here is that there is
    * nowhere else for the number to come from.
    *
-   * **The planner's width wins over a column change.** The stored size seeds from the default widths
-   * on first use and then stands: widening or hiding a column afterwards does not move a divider the
-   * planner placed — Activity gives up the room instead. Its floor and ceiling are the host's
+   * **The planner's width wins over a column change.** A width somebody placed is stored and then
+   * stands: widening or hiding a column afterwards does not move a divider the planner placed —
+   * Activity gives up the room instead. A pane nobody placed is not stored, and reads the seed of the
+   * columns the view opened with (this said it seeded "on first use" and stored it, which is why a
+   * hidden column's room went to Activity and never to the timeline). Its floor and ceiling are the host's
    * `min`/`max`, derived from the same `column-widths.ts` arithmetic as `FIXED_WIDTH` above.
    */
   const gridWidth = gridPrefs.size;
@@ -1480,6 +1482,7 @@ function GanttPanelBody({
                 codeColumns,
                 codeWidth,
                 gridWidth,
+                scrollRef,
                 resolveColumnWidth,
                 showVariance,
                 isTabStop: item.index === tabStopIndex,
@@ -1772,6 +1775,8 @@ interface GanttRowViewProps {
   codeColumns: readonly CodeColumn[];
   codeWidth: number;
   gridWidth: number;
+  /** The horizontal scroller, so a bar drag can scroll the timeline at its edge. */
+  scrollRef: React.RefObject<HTMLDivElement | null>;
   /** One width per column, resolved against the pane — see the panel's own docblock. */
   resolveColumnWidth: (column: GanttColumn) => number;
   variance: BaselineVarianceRow | undefined;
@@ -1842,6 +1847,7 @@ function GanttRowView({
   predecessorsById,
   rowMenuContextFor,
   gridWidth,
+  scrollRef,
   resolveColumnWidth,
   variance,
   showVariance,
@@ -1914,10 +1920,24 @@ function GanttRowView({
   // A finger or stylus drags only what it has selected (ADR-0177 D2) — one input for all three
   // hooks, so the body and both edges arm together.
   const touchArmed = isSelected;
+  // The timeline's visible span in the viewport, for edge auto-scroll while a bar is dragged. The
+  // sticky grid column covers the scroller's left `gridWidth` px, so the timeline begins after it,
+  // and the scrollbar is not part of what shows.
+  const scrollRegion = useCallback((): DragScrollRegion | null => {
+    const scroller = scrollRef.current;
+    if (!scroller) return null;
+    const box = scroller.getBoundingClientRect();
+    return {
+      scroller,
+      left: box.left + scroller.clientLeft + gridWidth,
+      right: box.left + scroller.clientLeft + scroller.clientWidth,
+    };
+  }, [scrollRef, gridWidth]);
   const barDrag = useBarPointerDrag({
     enabled: moveGate?.movable === true && geometry !== null,
     touchArmed,
     onCommit: commitDrag,
+    scrollRegion,
     // A drag on a bar that cannot move SAYS why, on the channel the keyboard nudge refuses on —
     // summary, started and read-only alike, so no refused gesture is silent (#431).
     onRefused: () => {
@@ -1974,6 +1994,7 @@ function GanttRowView({
     enabled: finishGate?.resizable === true && geometry !== null && !geometry.milestone,
     touchArmed,
     onCommit: commitResize,
+    scrollRegion,
   });
 
   /**
@@ -2035,6 +2056,7 @@ function GanttRowView({
       geometry.width >= START_HANDLE_MIN_BAR_PX,
     touchArmed,
     onCommit: commitResizeStart,
+    scrollRegion,
   });
 
   // The live bar while an edge is dragged: calendar columns, as `previewBarSpan` explains (the

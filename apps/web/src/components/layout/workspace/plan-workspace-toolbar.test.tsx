@@ -150,6 +150,8 @@ vi.mock('@/features/baselines/api/use-baselines', () => ({
       { id: 'b1', name: 'Baseline one' },
       { id: 'b2', name: 'Baseline two' },
     ]),
+  // The Gantt's narrow-default opening waits on the variance read (gantt-narrow-default-columns).
+  useBaselineVariance: () => query(undefined),
 }));
 vi.mock('@/features/baselines', () => ({
   useBaselineVariance: () => query(undefined),

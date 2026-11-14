@@ -434,6 +434,7 @@ describe('how the closed cell looks', () => {
       viewState: {
         sort: { key: 'name', direction: 'asc' },
         hiddenColumns: new Set(['swimlane']),
+        hiddenStated: true,
         collapsed: new Set(),
         onSortChange: vi.fn(),
         onHiddenColumnsChange: vi.fn(),
@@ -452,6 +453,7 @@ describe('how the closed cell looks', () => {
       viewState: {
         sort: { key: 'name', direction: 'asc' },
         hiddenColumns: new Set(['swimlane']),
+        hiddenStated: true,
         collapsed: new Set(),
         onSortChange: vi.fn(),
         onHiddenColumnsChange: vi.fn(),

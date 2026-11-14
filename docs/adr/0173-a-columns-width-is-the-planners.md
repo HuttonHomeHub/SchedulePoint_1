@@ -3,6 +3,14 @@
 - **Status:** Accepted
 - **Amended by:** ADR-0188 (2026-10-11) — the Consequences' "filed rather than answered": the Explorer and the
   docks now have a typed twin too (the divider's size box).
+- **Amended:** 2026-11-14 — the grid pane is stored only once a planner places it (`persist: 'on-change'` on the
+  shared resizable-panel hook); the mount write this ADR's column-widths paragraph called "harmless" for the
+  pane is withdrawn, because it made a seed saved by the app indistinguishable from a divider somebody dragged
+  and kept a hidden column's room with Activity instead of the timeline. The pane moved to the key
+  `schedulepoint:gantt-grid-width.v2` and the old one is removed once on first use, so every divider starts
+  afresh once (owner decision, 2026-11-13, recorded on the device only). An untouched pane reads the seed of
+  the columns the view opened with, and a view that opened narrow with no column choice seeds Activity at its
+  120 px floor (owner, 2026-11-14), still draggable wider. `docs/specs/gantt-narrow-default-columns/`.
 - **Date:** 2026-10-04
 - **Deciders:** James Ewbank (product owner — approved the spec and plan as written, Q1–Q4 at their
   recommended defaults, 2026-10-03), with Claude Code

@@ -55,10 +55,11 @@ function readFromStorage(): ColumnWidths {
 /**
  * The planner's column widths, kept on this device (ADR-0173 D1).
  *
- * **Writes only on a planner's change, never on mount.** `useResizablePanelPrefs` writes its seed as
- * soon as it mounts, which for the pane is harmless (the seed is what it would have read anyway); for
- * widths it would freeze today's defaults into every browser, so that a future change to a default
- * never reached anyone who had merely opened a plan. `reset` therefore **removes** the key.
+ * **Writes only on a planner's change, never on mount.** Written at mount, today's defaults would be
+ * frozen into every browser, so that a future change to a default never reached anyone who had merely
+ * opened a plan. `reset` therefore **removes** the key. The grid pane now follows the same rule
+ * (`persist: 'on-change'`): its mount write was called harmless here until the narrow-default change,
+ * which needs the seed to follow the columns, and withdrawn then.
  *
  * Held by the host rather than the panel because two surfaces read it — the grid and the `View ▾`
  * Columns chooser — and two `useState`s over one key do not sync.

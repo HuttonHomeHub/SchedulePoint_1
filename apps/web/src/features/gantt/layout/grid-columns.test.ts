@@ -55,7 +55,7 @@ describe('varianceText', () => {
   it('signs and names the direction, so it reads the same in black and white', () => {
     expect(varianceText(row({ startVarianceDays: 3 }))).toBe('+3d late');
     expect(varianceText(row({ startVarianceDays: -2 }))).toBe('-2d early');
-    expect(varianceText(row({ startVarianceDays: 0 }))).toBe('On plan');
+    expect(varianceText(row({ startVarianceDays: 0 }))).toBe('0d');
   });
 
   it('says "New" only for an activity the baseline genuinely does not contain', () => {

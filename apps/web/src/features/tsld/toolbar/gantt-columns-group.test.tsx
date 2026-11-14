@@ -1,14 +1,17 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { GanttColumnsGroup } from './gantt-columns-group';
+import { GanttColumnsGroup, NARROW_DEFAULT_REASON } from './gantt-columns-group';
 import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { resolveColumnWidths } from '@/features/gantt/layout/column-widths';
-import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import {
+  DEFAULT_HIDDEN_COLUMNS,
+  NARROW_DEFAULT_HIDDEN,
+} from '@/features/gantt/model/gantt-view-state';
 
 /**
  * **The Columns group's typed widths** (ADR-0173 M1). A typed number is the keyboard, screen-reader
@@ -23,6 +26,8 @@ type Bundle = NonNullable<TsldToolbarContext['ganttColumns']>;
 function bundle(over: Partial<Bundle> = {}): Bundle {
   return {
     hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+    printHidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+    narrowDefault: false,
     setHidden: vi.fn(),
     widths: resolveColumnWidths({}),
     setWidth: vi.fn((_key: string, width: number) => width),
@@ -430,5 +435,41 @@ describe('the Codes sub-section of the chooser (P6 activity codes, M3-T2)', () =
     render(<GanttColumnsGroup columns={bundle({ codes: codes({ types: [] }) })} />);
     openCodes();
     expect(screen.getByText(/This plan has no codes yet/)).toBeInTheDocument();
+  });
+});
+
+describe('the narrow-default reason line', () => {
+  it('is absent unless the columns are the narrow default', () => {
+    render(<GanttColumnsGroup columns={bundle()} />);
+    expect(screen.queryByText(NARROW_DEFAULT_REASON)).toBeNull();
+  });
+
+  it('is printed once, read with Code and Finish, and is not a live region', () => {
+    render(
+      <GanttColumnsGroup
+        columns={bundle({ hidden: new Set(NARROW_DEFAULT_HIDDEN), narrowDefault: true })}
+      />,
+    );
+    const reason = screen.getByText(NARROW_DEFAULT_REASON);
+    expect(reason).toHaveTextContent(
+      'Code and Finish start off when the Gantt is narrow. Tick them to show them.',
+    );
+    expect(reason.closest('[role="status"], [aria-live]')).toBeNull();
+    for (const name of ['Code', 'Finish']) {
+      expect(screen.getByRole('checkbox', { name })).toHaveAccessibleDescription(
+        NARROW_DEFAULT_REASON,
+      );
+    }
+    // The other boxes are not described by it: it is about those two.
+    expect(screen.getByRole('checkbox', { name: 'Duration' })).not.toHaveAccessibleDescription(
+      NARROW_DEFAULT_REASON,
+    );
+  });
+
+  it('writes the stated set when Code is ticked', () => {
+    const columns = bundle({ hidden: new Set(NARROW_DEFAULT_HIDDEN), narrowDefault: true });
+    render(<GanttColumnsGroup columns={columns} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Code' }));
+    expect(columns.setHidden).toHaveBeenCalledWith(new Set(['earlyFinish', 'predecessors']));
   });
 });

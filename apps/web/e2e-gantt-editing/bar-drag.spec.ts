@@ -465,3 +465,44 @@ test('a milestone and a started activity carry no left handle; an eligible bar d
   // The finish is a duration the engine still uses, so a started activity keeps its right handle.
   await expect(edgeFor(page, started.id, 'finish')).toHaveCount(1);
 });
+
+/**
+ * **A drag held at the timeline's edge scrolls it, and the bar's day goes with the pointer.**
+ *
+ * Without the auto-scroll a bar could only be taken as far as the screen showed. Asserted as a fact
+ * about the product and not about a pixel: the scroller moved while the pointer was held, and the
+ * stored placement is later than the visible window alone could have put it.
+ */
+test('holding a bar drag at the right edge scrolls the timeline and the move is stored', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const orgSlug = await ganttPlan(page);
+  await showGantt(page);
+
+  const scroller = page.getByTestId('gantt-scroll');
+  const scrollable = await scroller.evaluate((el) => el.scrollWidth > el.clientWidth + 50);
+  test.skip(!scrollable, 'the preset fits the whole plan on screen, so there is nothing to scroll');
+
+  const before = byName(await readActivities(page, orgSlug), 'Seeded 0');
+  const bar = await ganttRow(page, 'Seeded 0').locator('span[style*="cursor: grab"]').boundingBox();
+  const box = await scroller.boundingBox();
+  if (bar === null || box === null) throw new Error('the bar or the scroller has no box');
+  const y = bar.y + bar.height / 2;
+
+  await page.mouse.move(bar.x + bar.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width / 2 + 30, y, { steps: 4 });
+  // Inside the edge zone, then held: the scroller moves on its own.
+  await page.mouse.move(box.x + box.width - 10, y, { steps: 8 });
+  await expect.poll(async () => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => byName(await readActivities(page, orgSlug), 'Seeded 0').visualStart, {
+      timeout: 20_000,
+    })
+    .not.toBe(before.visualStart);
+  // The page itself never scrolled sideways to make room.
+  expect(await page.evaluate(() => document.documentElement.scrollLeft)).toBe(0);
+});

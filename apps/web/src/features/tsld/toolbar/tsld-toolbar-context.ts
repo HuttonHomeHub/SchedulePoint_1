@@ -82,6 +82,18 @@ export interface TsldToolbarContext {
   ganttColumns?:
     | {
         hidden: ReadonlySet<GanttColumnKey>;
+        /**
+         * The columns paper carries: the reader's **stated** choice, else the standard set. Paper is
+         * not narrow, so a narrow default never reaches it (`docs/specs/gantt-narrow-default-columns/`
+         * §4.6). **Required**, like the print input it feeds: an optional one is how a threaded-but-dead
+         * input ships (#217).
+         */
+        printHidden: ReadonlySet<GanttColumnKey>;
+        /**
+         * The columns above are the narrow default, not a choice: the list says why Code and Finish are
+         * off. A standing condition, so it is printed and not announced (ADR-0132).
+         */
+        narrowDefault: boolean;
         /** The plan has swimlanes to show, so the chooser lists the Swimlane column (M4-T2). */
         swimlanesOffered?: boolean;
         setHidden: (next: ReadonlySet<GanttColumnKey>) => void;

@@ -252,24 +252,26 @@ export function gridCeiling(fixedWidth: number): number {
 }
 
 /**
- * The seed for the pane, from the **default** widths only. The planner's stored pane then stands
- * (a width somebody placed does not move under them when a column changes), and the zoom framing
+ * The seed for the pane, from the **default** widths only. A pane the planner placed is stored and
+ * stands (it does not move under them when a column changes); one nobody placed is not stored and
+ * reads this; the narrow-default threshold (`narrow-default.ts`) is this sum over the usual columns. The zoom framing
  * input derives from this and never from a planner's width, so a column change cannot rescale bars.
  */
 export function defaultGridWidth(
   columns: readonly GanttColumn[],
   extraPinnedWidth: number,
   codeColumnCount: number,
+  /**
+   * What Activity opens at. Its default, except for a narrow opening, which seeds it at its floor
+   * (owner decision, 2026-11-14) so the timeline gets its share; Activity stays draggable wider.
+   */
+  nameWidth: number = DEFAULT_NAME_WIDTH,
 ): number {
   return (
     columns.reduce(
       (sum, c) =>
         sum +
-        (c.key === 'name'
-          ? DEFAULT_NAME_WIDTH
-          : isResizableKey(c.key)
-            ? DEFAULT_COLUMN_WIDTHS[c.key]
-            : 0),
+        (c.key === 'name' ? nameWidth : isResizableKey(c.key) ? DEFAULT_COLUMN_WIDTHS[c.key] : 0),
       0,
     ) +
     codeColumnCount * DEFAULT_COLUMN_WIDTHS.codes +

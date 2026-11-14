@@ -6,8 +6,11 @@ import {
   DEFAULT_HIDDEN_COLUMNS,
   GANTT_VIEW_DEFAULTS,
   GANTT_VIEW_PARAMS,
+  HIDDEN_UNSTATED,
+  HIDE_NOTHING,
   HIDEABLE_COLUMNS,
   MAX_COLLAPSED_IN_URL,
+  NARROW_DEFAULT_HIDDEN,
   parseCollapsed,
   parseGanttViewState,
   parseHiddenColumns,
@@ -15,6 +18,7 @@ import {
   serialiseCollapsed,
   serialiseHiddenColumns,
   serialiseSort,
+  type GanttColumnKey,
 } from './gantt-view-state';
 
 /**
@@ -67,27 +71,71 @@ describe('the sort param', () => {
   });
 });
 
+/** The hidden set of a parse that must have stated one. */
+function stated(value: unknown): GanttColumnKey[] {
+  const parsed = parseHiddenColumns(value);
+  if (!parsed.stated) throw new Error(`expected a stated choice for ${String(value)}`);
+  return [...parsed.hidden];
+}
+
 describe('the hidden-columns param', () => {
-  it('hides predecessors by default — a chart does not grow a column overnight', () => {
-    expect([...parseHiddenColumns(undefined)]).toEqual([...DEFAULT_HIDDEN_COLUMNS]);
+  it("says nothing when absent, and the default is the host's to resolve", () => {
+    expect(parseHiddenColumns(undefined)).toEqual({ stated: false });
+    expect([...parseGanttViewState({}).hiddenColumns]).toEqual([...DEFAULT_HIDDEN_COLUMNS]);
+    expect(parseGanttViewState({}).hiddenStated).toBe(false);
+  });
+
+  it('reads the `auto` stand-in as saying nothing, whoever typed it', () => {
+    expect(parseHiddenColumns(HIDDEN_UNSTATED)).toEqual({ stated: false });
+    expect(parseGanttViewState({ [GANTT_VIEW_PARAMS.hidden]: HIDDEN_UNSTATED }).hiddenStated).toBe(
+      false,
+    );
   });
 
   it('distinguishes "hide nothing" from "say nothing"', () => {
     // The case that makes the round trip work at all: a planner who switches Predecessors ON must
     // be able to express it, and an empty string is how. Reading it as "unset" would silently
     // restore the default and make that choice unstickable.
-    expect([...parseHiddenColumns('')]).toEqual([]);
-    expect([...parseHiddenColumns(undefined)]).toEqual([...DEFAULT_HIDDEN_COLUMNS]);
+    expect(stated('')).toEqual([]);
+    expect(stated(HIDE_NOTHING)).toEqual([]);
+    expect(parseHiddenColumns(undefined).stated).toBe(false);
+  });
+
+  it('lets an explicit `none` win: it is a stated choice, so no width is ever consulted', () => {
+    const state = parseGanttViewState({ [GANTT_VIEW_PARAMS.hidden]: HIDE_NOTHING });
+    expect(state.hiddenStated).toBe(true);
+    expect([...state.hiddenColumns]).toEqual([]);
+  });
+
+  it('treats a list of unknown keys as stated, and empty', () => {
+    expect(parseHiddenColumns('notAColumn')).toEqual({ stated: true, hidden: new Set() });
+  });
+
+  it('never serialises to the stand-in, so any chooser change is written to the address', () => {
+    for (const hidden of [
+      new Set<GanttColumnKey>(),
+      new Set<GanttColumnKey>(DEFAULT_HIDDEN_COLUMNS),
+      new Set<GanttColumnKey>(NARROW_DEFAULT_HIDDEN),
+      new Set<GanttColumnKey>(HIDEABLE_COLUMNS),
+    ]) {
+      expect(serialiseHiddenColumns(hidden)).not.toBe(HIDDEN_UNSTATED);
+    }
+  });
+
+  it('narrows the standard default by exactly Code and Finish', () => {
+    expect([...NARROW_DEFAULT_HIDDEN].sort()).toEqual(
+      [...DEFAULT_HIDDEN_COLUMNS, 'code', 'earlyFinish'].sort(),
+    );
   });
 
   it('drops a key nobody may hide, rather than honouring it', () => {
     // `name` identifies the row and carries the editor and the de-emphasis marker. A URL asking to
     // hide it is answered by not hiding it.
-    expect([...parseHiddenColumns('name,code')]).toEqual(['code']);
+    expect(stated('name,code')).toEqual(['code']);
   });
 
   it('ignores a key that is not a column at all', () => {
-    expect([...parseHiddenColumns('code,notAColumn')]).toEqual(['code']);
+    expect(stated('code,notAColumn')).toEqual(['code']);
   });
 
   it('serialises in a stable order, whatever order they were switched off in', () => {
@@ -109,18 +157,16 @@ describe('the hidden-columns param', () => {
     // ENCODING instead: whatever "hide nothing" serialises to must survive a rule that drops empties.
     const serialised = serialiseHiddenColumns(new Set());
     expect(serialised).not.toBe('');
-    expect([...parseHiddenColumns(serialised)]).toEqual([]);
+    expect(stated(serialised)).toEqual([]);
   });
 
   it('still reads a bare empty string as "hide nothing", for a URL typed by hand', () => {
-    expect([...parseHiddenColumns('')]).toEqual([]);
+    expect(stated('')).toEqual([]);
   });
 
   it('round-trips every hideable column', () => {
     const all = new Set(HIDEABLE_COLUMNS);
-    expect([...parseHiddenColumns(serialiseHiddenColumns(all))].sort()).toEqual(
-      [...HIDEABLE_COLUMNS].sort(),
-    );
+    expect(stated(serialiseHiddenColumns(all)).sort()).toEqual([...HIDEABLE_COLUMNS].sort());
   });
 });
 
@@ -196,9 +242,9 @@ describe('the whole state', () => {
     // the omit-check no longer recognises it.
     const state = parseGanttViewState({});
     expect(GANTT_VIEW_DEFAULTS[GANTT_VIEW_PARAMS.sort]).toBe(serialiseSort(state.sort));
-    expect(GANTT_VIEW_DEFAULTS[GANTT_VIEW_PARAMS.hidden]).toBe(
-      serialiseHiddenColumns(state.hiddenColumns),
-    );
+    // The hidden slot is the stand-in rather than a serialised set, so an absent param and a ticked-back
+    // default are two different strings (the problem the narrow default created).
+    expect(GANTT_VIEW_DEFAULTS[GANTT_VIEW_PARAMS.hidden]).toBe(HIDDEN_UNSTATED);
     expect(GANTT_VIEW_DEFAULTS[GANTT_VIEW_PARAMS.collapsed]).toBe('');
   });
 });

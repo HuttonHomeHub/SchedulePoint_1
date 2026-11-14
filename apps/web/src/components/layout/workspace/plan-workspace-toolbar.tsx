@@ -60,7 +60,7 @@ import { useMediaQuery } from '@/components/ui/use-media-query';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
-import { useBaselines } from '@/features/baselines/api/use-baselines';
+import { useBaselines, useBaselineVariance } from '@/features/baselines/api/use-baselines';
 import {
   CodeAssignButton,
   CodeAssignControl,
@@ -80,14 +80,18 @@ import {
 import { GanttPanel, usePlanViewMode } from '@/features/gantt';
 import {
   isDefaultWidths,
+  NAME_COLUMN_MIN_WIDTH,
   resolveColumnWidths,
   shownColumns,
   pinnedExtraWidth,
 } from '@/features/gantt/layout/column-widths';
+import { narrowThreshold } from '@/features/gantt/layout/narrow-default';
 import { settleBarWrite, type GanttBarDrag } from '@/features/gantt/model/bar-drag';
+import type { ParsedHiddenColumns } from '@/features/gantt/model/gantt-view-state';
 import { useGanttColumnWidths } from '@/features/gantt/model/use-gantt-column-widths';
 import { useGanttGridEditing } from '@/features/gantt/model/use-gantt-grid-editing';
 import { useGanttGridPrefs } from '@/features/gantt/model/use-gantt-grid-prefs';
+import { useGanttOpening } from '@/features/gantt/model/use-gantt-opening';
 import { useGanttViewState } from '@/features/gantt/model/use-gantt-view-state';
 import { PlanNotesSection } from '@/features/notes';
 import {
@@ -824,17 +828,61 @@ export function ToolbarPlanWorkspace({
   // storage key do not sync. The pane's bounds derive from the same pure arithmetic the panel lays
   // out with, from the visible columns and whether a baseline column is showing.
   const ganttColumnWidths = useGanttColumnWidths();
+  const ganttExtraPinned = pinnedExtraWidth(
+    model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
+    GANTT_HAS_ROW_MENUS,
+  );
+  // **A view with no column choice opens with the columns its frame has room for**
+  // (`docs/specs/gantt-narrow-default-columns/`): decided once per opening from the Gantt's own box, so an
+  // open Explorer or side panel counts. A stated `ghide` is used as written and the width is never
+  // consulted. `ganttFrameRef` is the box `GanttPanel` fills, attached where the surface mounts below.
+  const ganttFrameRef = useRef<HTMLDivElement>(null);
+  const ganttParsedHidden = useMemo<ParsedHiddenColumns>(
+    () =>
+      ganttViewState.hiddenStated
+        ? { stated: true, hidden: ganttViewState.hiddenColumns }
+        : { stated: false },
+    [ganttViewState.hiddenStated, ganttViewState.hiddenColumns],
+  );
+  // The same query the model reads (shared cache), only for its loading state.
+  const ganttVariance = useBaselineVariance(model.orgSlug, model.planId);
+  const ganttOpening = useGanttOpening({
+    frameRef: ganttFrameRef,
+    active: planView === 'gantt',
+    openingKey: model.planId,
+    // The pieces the threshold is made of. The swimlane column has no pending signal of its own (a
+    // deleted code type would never settle), so it is not waited for.
+    ready:
+      !model.activities.isPending &&
+      !ganttVariance.isPending &&
+      ganttCodes.choice.status !== 'loading',
+    parsed: ganttParsedHidden,
+    threshold: narrowThreshold({
+      swimlanesOffered: tableSwimlanes !== null,
+      extraPinned: ganttExtraPinned,
+      codeCount: ganttCodes.columns.length,
+    }),
+  });
+  // The panel and the chooser read one resolved set; the URL setters are untouched, so a change from
+  // either writes a stated choice.
+  const ganttResolvedViewState = useMemo(
+    () => ({ ...ganttViewState, hiddenColumns: ganttOpening.hidden }),
+    [ganttViewState, ganttOpening.hidden],
+  );
   const ganttVisibleColumns = useMemo(
-    () => shownColumns(ganttViewState.hiddenColumns, tableSwimlanes !== null),
-    [ganttViewState.hiddenColumns, tableSwimlanes],
+    () => shownColumns(ganttOpening.hidden, tableSwimlanes !== null),
+    [ganttOpening.hidden, tableSwimlanes],
+  );
+  const ganttOpeningColumns = useMemo(
+    () => shownColumns(ganttOpening.openingHidden, tableSwimlanes !== null),
+    [ganttOpening.openingHidden, tableSwimlanes],
   );
   const ganttGridPrefs = useGanttGridPrefs({
     columns: ganttVisibleColumns,
+    seedColumns: ganttOpeningColumns,
+    ...(ganttOpening.openingNarrow ? { seedNameWidth: NAME_COLUMN_MIN_WIDTH } : {}),
     widths: ganttColumnWidths.widths,
-    extraPinnedWidth: pinnedExtraWidth(
-      model.varianceByActivityId !== undefined && model.varianceByActivityId.size > 0,
-      GANTT_HAS_ROW_MENUS,
-    ),
+    extraPinnedWidth: ganttExtraPinned,
     codeColumnCount: ganttCodes.columns.length,
   });
   const updateParents = useReparentActivities(model.orgSlug, model.planId);
@@ -1082,7 +1130,9 @@ export function ToolbarPlanWorkspace({
     ganttColumns:
       planView === 'gantt'
         ? {
-            hidden: ganttViewState.hiddenColumns,
+            hidden: ganttOpening.hidden,
+            printHidden: ganttOpening.printHidden,
+            narrowDefault: ganttOpening.narrowDefault,
             swimlanesOffered: tableSwimlanes !== null,
             setHidden: ganttViewState.onHiddenColumnsChange,
             widths: resolveColumnWidths(ganttColumnWidths.widths),
@@ -2026,7 +2076,7 @@ export function ToolbarPlanWorkspace({
           {...(GANTT_HAS_ROW_MENUS ? { rowMenuContextFor } : {})}
           // Sort, columns and the collapse set, made to stick (M5-T6). The SAME object the `View ▾`
           // chooser writes through, so the menu and the grid cannot disagree about what is hidden.
-          viewState={ganttViewState}
+          viewState={ganttResolvedViewState}
           // Column widths and the grid pane, owned HERE so the `View ▾` fields and the grid read the
           // same numbers (ADR-0173).
           columnWidths={ganttColumnWidths}
@@ -2847,6 +2897,7 @@ export function ToolbarPlanWorkspace({
                   the row: the row also holds the four right docks, and an inert dock cannot take focus
                   on mount or be closed from the keyboard. */}
                   <div
+                    ref={ganttFrameRef}
                     inert={dockSqueezed || canvasRowTooShort}
                     className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
                   >

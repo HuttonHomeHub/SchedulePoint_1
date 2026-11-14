@@ -135,6 +135,7 @@ describe('the summary row arrow', () => {
         viewState={{
           sort: { key: 'name', direction: 'asc' },
           hiddenColumns,
+          hiddenStated: true,
           collapsed: new Set(),
           onSortChange: () => {},
           onHiddenColumnsChange: () => {},

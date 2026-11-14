@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 28 API modules
-> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1919 web
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1924 web
 > source files with 48 Playwright suites beside the base journey, and
 > 221 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -493,7 +493,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0092** _(Accepted; M5 withdrawn; vertical budget amended by ADR-0180; D2 amended by ADR-0216)_ — The canvas dock, and the diagram's vertical budget → [`0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md`](docs/adr/0092-the-canvas-dock-and-the-diagram-s-vertical-budget.md)
 - **ADR-0093** _(Accepted)_ — An object action belongs on the object → [`0093-an-object-action-belongs-on-the-object.md`](docs/adr/0093-an-object-action-belongs-on-the-object.md)
 - **ADR-0094** _(Accepted; D5 amended by ADR-0186; D5/D6 remedy label renamed 2026-11-11)_ — One meaning of "conflict", and a remedy on the object → [`0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md`](docs/adr/0094-one-meaning-of-conflict-and-a-remedy-on-the-object.md)
-- **ADR-0095** _(Accepted; amended by ADR-0170 and ADR-0177)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
+- **ADR-0095** _(Accepted; amended by ADR-0170 and ADR-0177; amended 2026-11-14)_ — The Gantt becomes a working surface → [`0095-the-gantt-becomes-a-working-surface.md`](docs/adr/0095-the-gantt-becomes-a-working-surface.md)
 - **ADR-0096** _(Accepted; D4 and D9 amended by ADR-0193)_ — Deleted work expires, and purge is refused structurally → [`0096-deleted-work-expires-and-purge-is-refused.md`](docs/adr/0096-deleted-work-expires-and-purge-is-refused.md)
 - **ADR-0097** _(Accepted)_ — The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped → [`0097-a-theme-is-a-system-not-a-palette.md`](docs/adr/0097-a-theme-is-a-system-not-a-palette.md)
 - **ADR-0098** _(Accepted)_ — The landing is the organisation overview → [`0098-the-landing-is-the-organisation-overview.md`](docs/adr/0098-the-landing-is-the-organisation-overview.md)
@@ -573,7 +573,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0171** _(Accepted)_ — Routes load when they are opened, and the chunk groups that keep that fast → [`0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md`](docs/adr/0171-routes-load-when-opened-and-the-groups-that-keep-that-fast.md)
 - **ADR-0172** _(Accepted)_ — A soft-delete filter is stated at the query, and the build refuses a read that states none → [`0172-a-soft-delete-filter-is-stated-at-the-query.md`](docs/adr/0172-a-soft-delete-filter-is-stated-at-the-query.md)
 - **ADR-0175** _(Accepted)_ — A spent budget is reported as a spent budget → [`0175-a-spent-budget-is-reported-as-a-spent-budget.md`](docs/adr/0175-a-spent-budget-is-reported-as-a-spent-budget.md)
-- **ADR-0173** _(Accepted; amended by ADR-0188)_ — A column's width is the planner's, kept on their device, and its drag has a typed twin → [`0173-a-columns-width-is-the-planners.md`](docs/adr/0173-a-columns-width-is-the-planners.md)
+- **ADR-0173** _(Accepted; amended by ADR-0188; amended 2026-11-14)_ — A column's width is the planner's, kept on their device, and its drag has a typed twin → [`0173-a-columns-width-is-the-planners.md`](docs/adr/0173-a-columns-width-is-the-planners.md)
 - **ADR-0174** _(Accepted)_ — An activity's history is working memory, not an audit trail → [`0174-an-activitys-history-is-working-memory-not-an-audit-trail.md`](docs/adr/0174-an-activitys-history-is-working-memory-not-an-audit-trail.md)
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template → [`0057-real-modules-replace-the-reference-template.md`](docs/adr/0057-real-modules-replace-the-reference-template.md)
 - **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where there is none → [`0104-a-shell-control-whose-subject-is-an-organisation.md`](docs/adr/0104-a-shell-control-whose-subject-is-an-organisation.md)
