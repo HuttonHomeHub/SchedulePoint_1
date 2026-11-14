@@ -101,6 +101,24 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   await expect(guestPage.getByRole('toolbar')).toHaveCount(0);
   await expect(guestPage.getByRole('button', { name: 'Start editing' })).toHaveCount(0);
 
+  // **No dead control on the guest page** (walkthrough ranks 16 and 64). The shortcuts sheet mounts at
+  // the workspace, so its button opened nothing here and is not offered; the key is folded away until
+  // asked for, and once open it names only marks this one-task, link-free diagram can draw.
+  await expect(
+    guestPage.getByRole('button', { name: 'Diagram shortcuts and gestures' }),
+  ).toHaveCount(0);
+  const legendToggle = guestPage.getByRole('button', { name: 'Legend' });
+  await expect(legendToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(guestPage.getByRole('list', { name: 'Legend' })).toHaveCount(0);
+  await legendToggle.click();
+  const legendKey = guestPage.getByRole('list', { name: 'Legend' });
+  await expect(legendKey).toBeVisible();
+  await expect(legendKey.getByRole('listitem').filter({ hasText: /Today/ })).toHaveCount(1);
+  for (const absent of [/Constraint/, /Over-allocated/, /Milestone/, /Baseline/, /Lag on a link/]) {
+    await expect(legendKey.getByRole('listitem').filter({ hasText: absent })).toHaveCount(0);
+  }
+  await legendToggle.click();
+
   // The token rides ONLY in the URL fragment — never the query string — and the page URL still carries
   // the literal `#`.
   const guestUrl = new URL(guestPage.url());
@@ -515,7 +533,9 @@ test('a guest sees the near-critical rung and hears what drives, as a member doe
     })
     .toBeGreaterThan(500);
 
-  // The legend rows match what is now drawn: the near-critical rung is keyed on the guest too.
+  // The legend rows match what is now drawn: the near-critical rung is keyed on the guest too. The
+  // key is folded away until asked for (walkthrough rank 16), so open it first.
+  await guestPage.getByRole('button', { name: 'Legend' }).click();
   await expect(
     guestPage.getByRole('list', { name: 'Legend' }).getByText('Near-critical', { exact: true }),
   ).toBeVisible();
@@ -570,4 +590,118 @@ test('the guest loading frame is the same for a live and a dead token, with one 
   const live = await pendingDom(liveUrl);
   const dead = await pendingDom(deadUrl);
   expect(dead, 'a dead token must not look different while loading').toBe(live);
+});
+
+/**
+ * **A guest who selects an activity reads its facts, in the row the instruction occupied**
+ * (`docs/specs/guest-activity-details/`, M1; ADR-0051 §4).
+ *
+ * Machine-independent: equalities between two readings on the same machine (the diagram's height
+ * with and without a selection; the share-request count before and after) and a comparison between
+ * two strings the page itself produces (the line's Start and Finish, and the dates the selected
+ * option speaks). No pixel figure and no date typed here that the seed does not set.
+ *
+ * Both entry points are driven: the keyboard (focus the diagram, arrow) and the pointer (click a
+ * bar, found by its painted ink so the click does not depend on a viewport-specific coordinate).
+ */
+test('a guest who selects an activity reads its facts, and the diagram does not shrink', async ({
+  page,
+  browser,
+}) => {
+  const stamp = Date.now() + 2;
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await holdThePen(page);
+  await seedActivities(page, orgSlug, [
+    { name: 'Pour', laneIndex: 1, durationDays: 5 },
+    { name: 'Excavate', laneIndex: 0, durationDays: 2 },
+  ]);
+  await recalculatePlan(page, orgSlug);
+  await openShare(page);
+  const dialog = page.getByRole('dialog', { name: 'Share links' });
+  await dialog.getByLabel('Label').fill('Facts check');
+  await dialog.getByRole('button', { name: 'Create link' }).click();
+  const shareUrl = await dialog.getByLabel('Guest link').inputValue();
+
+  const context = await browser.newContext({ viewport: { width: 1024, height: 600 } });
+  const guest = await context.newPage();
+  await guest.goto(shareUrl);
+  const region = guest.getByRole('region', { name: 'Time-scaled logic diagram' });
+  await expect(region.getByRole('option')).toHaveCount(2, { timeout: 15_000 });
+  const instruction = guest.getByText(
+    'Drag to pan, scroll to zoom. The critical path is highlighted.',
+  );
+  await expect(instruction).toBeVisible();
+
+  const canvasHeightOf = (): Promise<number> =>
+    guest.evaluate(() => document.querySelector('canvas')?.getBoundingClientRect().height ?? 0);
+  const requests: string[] = [];
+  guest.on('request', (r) => {
+    if (r.url().includes('/api/v1/share/')) requests.push(r.url());
+  });
+  // (1) Before: the diagram's height, and the requests the page has made.
+  const heightBefore = await canvasHeightOf();
+  const requestsBefore = requests.length;
+
+  // (2) Keyboard: focus the diagram, arrow to an activity. The line replaces the instruction.
+  const listbox = region.getByRole('listbox');
+  await listbox.focus();
+  await listbox.press('ArrowDown');
+  const line = guest.getByTestId('guest-selection-facts');
+  await expect(line).toBeVisible();
+  await expect(instruction).toHaveCount(0);
+
+  const factOf = (label: string) =>
+    line
+      .locator('dt', { hasText: new RegExp(`^${label}$`) })
+      .locator('xpath=following-sibling::dd');
+  const subject = (await line.locator('dd').first().textContent()) ?? '';
+  const selectedName = /Excavate/.test(subject) ? 'Excavate' : 'Pour';
+  const optionText =
+    (await region.getByRole('option', { name: new RegExp(selectedName) }).textContent()) ?? '';
+  // The line's dates are the spoken sentence's dates: one source, two renderings.
+  await expect(factOf('Start')).toHaveText(/\S/);
+  const start = (await factOf('Start').textContent()) ?? '';
+  const finish = (await factOf('Finish').textContent()) ?? '';
+  expect(optionText).toContain(start);
+  expect(optionText).toContain(finish);
+  await expect(factOf('Total float')).toHaveText(/\d+ d/);
+  // Seeded progress: nothing is started on a fresh plan.
+  await expect(factOf('Progress')).toHaveText('0%');
+  await expect(factOf('Status')).toHaveText('Not started');
+
+  // (3) Nothing shrank and nothing was fetched.
+  expect(await canvasHeightOf(), 'the diagram keeps its height on selection').toBe(heightBefore);
+  expect(requests.length, 'selecting sends no share request').toBe(requestsBefore);
+
+  // (4) Escape gives the instruction back; then the pointer path: click a bar.
+  await listbox.press('Escape');
+  await expect(line).toHaveCount(0);
+  await expect(instruction).toBeVisible();
+  const bands = await barExtentsByRow(guest);
+  const band = bands[0];
+  if (!band) throw new Error('no bar is painted to click');
+  const geometry = await guest.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const r = c?.getBoundingClientRect();
+    return c && r
+      ? { left: r.left, top: r.top, scaleX: c.width / r.width, scaleY: c.height / r.height }
+      : null;
+  });
+  if (!geometry) throw new Error('no canvas to click');
+  await guest.mouse.click(
+    geometry.left + (band.left + band.right) / 2 / geometry.scaleX,
+    geometry.top + (band.top + band.bottom) / 2 / geometry.scaleY,
+  );
+  await expect(line).toBeVisible();
+  expect(await canvasHeightOf(), 'the diagram keeps its height on a click').toBe(heightBefore);
+  expect(requests.length).toBe(requestsBefore);
+
+  // (5) At 320 the facts wrap whole and nothing scrolls sideways (WCAG 1.4.10).
+  await guest.setViewportSize({ width: 320, height: 720 });
+  await expect(line).toBeVisible();
+  const scrollWidth = await guest.evaluate(() => document.documentElement.scrollWidth);
+  expect(scrollWidth, 'no horizontal overflow at 320 px with a selection').toBeLessThanOrEqual(324);
+
+  await context.close();
 });

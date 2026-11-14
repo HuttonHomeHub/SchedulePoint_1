@@ -176,16 +176,128 @@ const SWIMLANE_BOUNDARY: LegendItem = {
   weight: 1,
 };
 
+/**
+ * What the diagram in front of the reader is actually drawing, for a surface that keys only that
+ * (the guest share view; ADR-0127 "an overlay draws what it knows"). Absent on every other surface,
+ * which keeps the full key byte for byte. Each field answers "would the painter draw this mark?".
+ */
+export interface LegendDrawn {
+  critical: boolean;
+  nearCritical: boolean;
+  onSchedule: boolean;
+  laneOverlap: boolean;
+  nonWorking: boolean;
+  dataDate: boolean;
+  today: boolean;
+  /** Any link at all: keys the direction chevron and the gap label. */
+  links: boolean;
+  drivingLinks: boolean;
+  nonDrivingLinks: boolean;
+  /** A link carries a lag: keys the lag plate, the lag run and the partway join. */
+  laggedLinks: boolean;
+  milestone: boolean;
+  levelOfEffort: boolean;
+  wbsSummary: boolean;
+  progress: boolean;
+  visualConflict: boolean;
+  window: boolean;
+  overAllocation: boolean;
+}
+
+/** The facts {@link legendDrawnFor} reads — the panel's own scene activities and dependencies. */
+export interface LegendDrawnInput {
+  activities: ReadonlyArray<{
+    type: string;
+    isCritical: boolean;
+    isNearCritical: boolean;
+    laneOverlap?: boolean | undefined;
+    percentComplete?: number | undefined;
+    visualConflict?: boolean | undefined;
+  }>;
+  dependencies: ReadonlyArray<{ isDriving?: boolean | undefined; lagMinutes: number }>;
+  nonWorking: boolean;
+  dataDate: boolean;
+  today: boolean;
+  window: boolean;
+  overAllocation: boolean;
+}
+
+/** Derive {@link LegendDrawn} from what the panel holds, so the key and the painter read one source. */
+export function legendDrawnFor(input: LegendDrawnInput): LegendDrawn {
+  const { activities, dependencies } = input;
+  const some = (test: (a: LegendDrawnInput['activities'][number]) => boolean): boolean =>
+    activities.some(test);
+  return {
+    critical: some((a) => a.isCritical),
+    nearCritical: some((a) => !a.isCritical && a.isNearCritical),
+    onSchedule: some((a) => !a.isCritical && !a.isNearCritical),
+    laneOverlap: some((a) => a.laneOverlap === true),
+    nonWorking: input.nonWorking,
+    dataDate: input.dataDate,
+    today: input.today,
+    links: dependencies.length > 0,
+    // A link with no `isDriving` flag is drawn as driving, the older payload's picture.
+    drivingLinks: dependencies.some((d) => d.isDriving !== false),
+    nonDrivingLinks: dependencies.some((d) => d.isDriving === false),
+    laggedLinks: dependencies.some((d) => d.lagMinutes !== 0),
+    milestone: some((a) => a.type === 'START_MILESTONE' || a.type === 'FINISH_MILESTONE'),
+    levelOfEffort: some((a) => a.type === 'LEVEL_OF_EFFORT'),
+    wbsSummary: some((a) => a.type === 'WBS_SUMMARY'),
+    progress: some((a) => (a.percentComplete ?? 0) > 0),
+    visualConflict: some((a) => a.visualConflict === true),
+    window: input.window,
+    overAllocation: input.overAllocation,
+  };
+}
+
+/** Whether the painter would draw the mark `item` keys, given what the diagram holds. */
+function isDrawn(item: LegendItem, d: LegendDrawn): boolean {
+  if ('criticality' in item) {
+    return item.criticality === 'critical'
+      ? d.critical
+      : item.criticality === 'near'
+        ? d.nearCritical
+        : d.onSchedule;
+  }
+  if ('overlap' in item) return d.laneOverlap;
+  if ('swatch' in item) return item.label === 'Non-working' ? d.nonWorking : true;
+  if ('dataDate' in item) return d.dataDate;
+  if ('today' in item) return d.today;
+  if ('line' in item) {
+    if (item.label === 'Non-driving link') return d.nonDrivingLinks;
+    // The critical/near rungs ride on a driving link between critical work, so they need both.
+    if (item.label === 'Driving link — critical') return d.drivingLinks && d.critical;
+    if (item.label === 'Driving link — near-critical') return d.drivingLinks && d.nearCritical;
+    if (item.label === 'Swimlane boundary') return true;
+    return d.drivingLinks;
+  }
+  if ('gapLabel' in item || 'chevron' in item) return d.links;
+  if ('lagPlate' in item || 'attachDot' in item || 'lag' in item) return d.laggedLinks;
+  if ('milestone' in item) return d.milestone;
+  if ('loe' in item) return d.levelOfEffort;
+  if ('summary' in item) return d.wbsSummary;
+  if ('progress' in item) return d.progress;
+  if ('conflict' in item) return d.visualConflict;
+  if ('window' in item) return d.window;
+  if ('overAllocation' in item) return d.overAllocation;
+  return true;
+}
+
 /** Build the legend item list for the active lenses (or today's default when no lens is provided).
  * `withoutConstraint` drops the pin row for a surface that can never draw one (TECH_DEBT #521). */
 function legendItems(
   lens: LensLegendInfo | undefined,
   withoutConstraint: boolean,
   swimlaneBoundary: boolean,
+  drawn: LegendDrawn | undefined,
 ): ReadonlyArray<LegendItem> {
   const all = lens ? lensItems(lens) : LEGEND;
-  const kept = withoutConstraint ? all.filter((item) => !('pin' in item)) : all;
-  return swimlaneBoundary ? [...kept, SWIMLANE_BOUNDARY] : kept;
+  // A surface that can never draw a constraint keys neither the task pin nor the milestone's "!".
+  const kept = withoutConstraint
+    ? all.filter((item) => !('pin' in item) && !('constrained' in item))
+    : all;
+  const withBoundary = swimlaneBoundary ? [...kept, SWIMLANE_BOUNDARY] : kept;
+  return drawn ? withBoundary.filter((item) => isDrawn(item, drawn)) : withBoundary;
 }
 
 function lensItems(lens: LensLegendInfo): ReadonlyArray<LegendItem> {
@@ -216,6 +328,7 @@ export function TsldLegend({
   lens,
   withoutConstraint = false,
   swimlaneBoundary = false,
+  drawn,
 }: {
   orientation?: 'horizontal' | 'vertical';
   lens?: LensLegendInfo;
@@ -224,8 +337,10 @@ export function TsldLegend({
   /** The share view: constraints are outside a guest's scope (ADR-0051 §4), so no guest bar can
    * wear the pin and the key must not promise one (TECH_DEBT #521). */
   withoutConstraint?: boolean;
+  /** Key only the marks the diagram is drawing (the share view). Absent keys everything. */
+  drawn?: LegendDrawn | undefined;
 } = {}): React.ReactElement {
-  const items = legendItems(lens, withoutConstraint, swimlaneBoundary);
+  const items = legendItems(lens, withoutConstraint, swimlaneBoundary, drawn);
   return (
     // `role="list"`/`role="listitem"` are explicit: Tailwind v4's Preflight sets `list-style: none`,
     // which is a documented cause of WebKit/VoiceOver dropping the implicit roles (ADR-0122, the same

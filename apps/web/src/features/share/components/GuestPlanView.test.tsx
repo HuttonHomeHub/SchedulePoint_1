@@ -34,6 +34,16 @@ vi.mock('@/features/tsld', () => ({
     swimlanes?: { swimlanes: { id: string }[]; membership: Map<string, string | null> } | null;
     gutterWidthPx?: number;
     swimlanesToggle?: { checked: boolean; onChange: () => void };
+    guestChrome?: boolean;
+    todayIso?: string;
+    activities?: {
+      id: string;
+      status: string;
+      percentComplete: number;
+      totalFloat: number | null;
+      isNearCritical: boolean;
+      visualEffectiveStart: string | null;
+    }[];
   }) => (
     <div
       data-testid="tsld-panel"
@@ -46,6 +56,18 @@ vi.mock('@/features/tsld', () => ({
           : ''
       }
       data-gutter-width={String(props.gutterWidthPx)}
+      data-guest-chrome={String(props.guestChrome)}
+      data-today-iso={props.todayIso ?? ''}
+      data-facts={JSON.stringify(
+        (props.activities ?? []).map((a) => [
+          a.id,
+          a.status,
+          a.percentComplete,
+          a.totalFloat,
+          a.isNearCritical,
+          a.visualEffectiveStart,
+        ]),
+      )}
     >
       canvas
       {props.swimlanesToggle ? (
@@ -180,6 +202,36 @@ describe('GuestPlanView', () => {
     expect(panel.dataset.barDateSource).toBe('visual');
   });
 
+  /**
+   * A selection's facts line (`docs/specs/guest-activity-details/`) is read from the activities the
+   * panel is handed, so this view must hand it the fields the line needs and must not fetch anything
+   * more: the line reads only what the shared page already downloads.
+   */
+  it('hands the panel every field the selected-activity line reads, and fetches nothing extra', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
+    vi.mocked(fetchGuestActivities).mockResolvedValue([
+      activity({
+        status: 'IN_PROGRESS',
+        percentComplete: 40,
+        totalFloat: 3,
+        isNearCritical: true,
+        isCritical: false,
+        visualEffectiveStart: '2026-01-06',
+        visualEffectiveFinish: '2026-01-12',
+      }),
+    ]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    const panel = await screen.findByTestId('tsld-panel');
+    expect(JSON.parse(panel.dataset.facts ?? '[]')).toEqual([
+      ['a1', 'IN_PROGRESS', 40, 3, true, '2026-01-06'],
+    ]);
+    expect(fetchGuestPlan).toHaveBeenCalledTimes(1);
+    expect(fetchGuestActivities).toHaveBeenCalledTimes(1);
+    expect(fetchGuestDependencies).toHaveBeenCalledTimes(1);
+  });
+
   it('tells the panel it is the guest view, so the legend keys no constraint pin', async () => {
     vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
     vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
@@ -187,6 +239,17 @@ describe('GuestPlanView', () => {
     renderView();
 
     expect((await screen.findByTestId('tsld-panel')).dataset.showConstraintKey).toBe('false');
+  });
+
+  it('asks for the guest chrome and gives the diagram a Today, so no control on the page is dead', async () => {
+    vi.mocked(fetchGuestPlan).mockResolvedValue(PLAN);
+    vi.mocked(fetchGuestActivities).mockResolvedValue([activity()]);
+    vi.mocked(fetchGuestDependencies).mockResolvedValue([]);
+    renderView();
+
+    const panel = await screen.findByTestId('tsld-panel');
+    expect(panel.dataset.guestChrome).toBe('true');
+    expect(panel.dataset.todayIso).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   describe('swimlanes (ADR-0205)', () => {
