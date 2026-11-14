@@ -9,7 +9,7 @@ import {
 import { GANTT_COLUMNS } from '../layout/grid-columns';
 import type { GanttColumnKey } from '../model/gantt-view-state';
 import { useGanttColumnWidths } from '../model/use-gantt-column-widths';
-import { useGanttGridPrefs } from '../model/use-gantt-grid-prefs';
+import { GANTT_GRID_STORAGE_KEY, useGanttGridPrefs } from '../model/use-gantt-grid-prefs';
 
 import { GANTT_ROW_HEIGHT, GanttPanel } from './GanttPanel';
 
@@ -250,10 +250,7 @@ describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () 
     Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: px });
   };
   const storePane = (size: number): void =>
-    localStorage.setItem(
-      'schedulepoint:gantt-grid-width',
-      JSON.stringify({ collapsed: false, size }),
-    );
+    localStorage.setItem(GANTT_GRID_STORAGE_KEY, JSON.stringify({ collapsed: false, size }));
   /** The timeline column's width: what the preset's px-per-day multiplies out to. */
   const chartPx = (): number =>
     parseFloat(
@@ -326,6 +323,7 @@ describe('GanttPanel — zoom framing follows the pane (#437, ADR-0173 D5)', () 
         viewState={{
           sort: { key: 'name', direction: 'asc' },
           hiddenColumns: new Set<GanttColumnKey>(['predecessors', 'code']),
+          hiddenStated: true,
           collapsed: new Set(),
           onSortChange: () => {},
           onHiddenColumnsChange: () => {},

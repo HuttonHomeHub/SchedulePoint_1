@@ -14,7 +14,11 @@ import {
   isResizableKey,
 } from '@/features/gantt/layout/column-widths';
 import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
-import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import {
+  DEFAULT_HIDDEN_COLUMNS,
+  HIDEABLE_COLUMNS,
+  NARROW_DEFAULT_HIDDEN,
+} from '@/features/gantt/model/gantt-view-state';
 import {
   CODE_COLUMN_CAP_REASON,
   CODE_COLUMNS_FAILED_SENTENCE,
@@ -36,6 +40,19 @@ const FIELD_INDENT = 'pl-6';
 const CHART_GUARD = `so the chart keeps at least ${CHART_MIN_WIDTH} px`;
 
 /**
+ * Why Code and Finish are off while no choice has been made and the Gantt is narrow. A standing
+ * condition, not an event, so it is a printed line pointed at by the two boxes and never announced
+ * (ADR-0132); it goes the moment a choice is stated.
+ */
+export const NARROW_DEFAULT_REASON =
+  'Code and Finish start off when the Gantt is narrow. Tick them to show them.';
+
+/** The two columns {@link NARROW_DEFAULT_REASON} is about. */
+const NARROW_DEFAULT_KEYS: readonly string[] = NARROW_DEFAULT_HIDDEN.filter(
+  (key) => !DEFAULT_HIDDEN_COLUMNS.includes(key),
+);
+
+/**
  * **The Gantt's Columns group** (ADR-0095 M5-T1, widths ADR-0173): which columns show, how wide each
  * is, how wide the table is, and a way back to standard.
  *
@@ -53,6 +70,7 @@ export function GanttColumnsGroup({
   const columnHintId = useId();
   const tableHintId = useId();
   const resetReasonId = useId();
+  const narrowReasonId = useId();
   const { setNotice, status } = useSizeNotice();
 
   return (
@@ -67,6 +85,9 @@ export function GanttColumnsGroup({
               label={GANTT_COLUMN_LABELS[key]}
               density="compact"
               checked={shown}
+              {...(columns.narrowDefault && NARROW_DEFAULT_KEYS.includes(key)
+                ? { 'aria-describedby': narrowReasonId }
+                : {})}
               onChange={() => {
                 const next = new Set(columns.hidden);
                 if (shown) next.add(key);
@@ -91,6 +112,11 @@ export function GanttColumnsGroup({
           </div>
         );
       })}
+      {columns.narrowDefault ? (
+        <p id={narrowReasonId} className="text-muted-foreground text-xs">
+          {NARROW_DEFAULT_REASON}
+        </p>
+      ) : null}
       <CodeColumnsList
         choice={columns.codes}
         width={columns.widths.codes}

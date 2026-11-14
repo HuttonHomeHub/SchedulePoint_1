@@ -416,7 +416,7 @@ describe('GanttPanel — baseline variance (ADR-0025)', () => {
   it.each([
     [2, '+2d late'],
     [-3, '-3d early'],
-    [0, 'On plan'],
+    [0, '0d'],
   ])('states a %d-day variance in words', (days, expected) => {
     withVariance([varianceRow({ startVarianceDays: days })]);
     expect(screen.getByText(expected)).toBeInTheDocument();

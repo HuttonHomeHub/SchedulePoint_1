@@ -882,9 +882,13 @@ export function useTsldToolbarContext({
                 // ("passed IN rather than re-derived here", the rule `host-parity.structural.test.ts`
                 // exists to hold) being ignored. The failure was the design telling me so.
                 //
-                // The fallback is the screen's own default, so a host that wires no chooser prints the
-                // document its reader would see rather than every column there is.
-                hiddenColumns: ganttColumns?.hidden ?? new Set(DEFAULT_HIDDEN_COLUMNS),
+                // `printHidden`, not `hidden`: the reader's stated choice, else the standard set. A narrow
+                // default is the screen's answer to a small frame and paper is not one
+                // (`docs/specs/gantt-narrow-default-columns/` §4.6).
+                //
+                // The fallback is the standard default, so a host that wires no chooser prints the
+                // document its reader would see on a wide screen rather than every column there is.
+                hiddenColumns: ganttColumns?.printHidden ?? new Set(DEFAULT_HIDDEN_COLUMNS),
                 // The edges the Predecessors column prints. Already in scope and memoised above; the
                 // surface derives the per-successor index from them with the SAME function the panel
                 // uses, so screen and paper cannot disagree about what an activity follows.

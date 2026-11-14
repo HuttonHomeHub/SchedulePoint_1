@@ -15,7 +15,10 @@ import type {
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
 import { resolveColumnWidths } from '@/features/gantt/layout/column-widths';
-import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import {
+  DEFAULT_HIDDEN_COLUMNS,
+  NARROW_DEFAULT_HIDDEN,
+} from '@/features/gantt/model/gantt-view-state';
 import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
 import { CodeColumnsUnavailableError, type CodeColumn } from '@/lib/code-columns';
 
@@ -363,6 +366,8 @@ describe('useTsldToolbarContext — the printed Gantt carries its code columns',
   ): NonNullable<TsldToolbarContext['ganttColumns']> {
     return {
       hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      printHidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      narrowDefault: false,
       setHidden: vi.fn(),
       widths: resolveColumnWidths({}),
       setWidth: vi.fn((_key: string, width: number) => width),
@@ -454,6 +459,66 @@ describe('useTsldToolbarContext — the printed Gantt carries its code columns',
       await Promise.resolve();
     });
     expect(printGanttSchedule).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * **Paper is not narrow** (`docs/specs/gantt-narrow-default-columns/` §4.6): the printed columns are the
+ * bundle's `printHidden` — the reader's stated choice, else the standard set — and never the narrow
+ * default the screen shows.
+ */
+describe('useTsldToolbarContext — the printed Gantt carries printHidden, not the screen set', () => {
+  function hiddenBundle(
+    over: Partial<NonNullable<TsldToolbarContext['ganttColumns']>>,
+  ): NonNullable<TsldToolbarContext['ganttColumns']> {
+    return {
+      hidden: new Set(NARROW_DEFAULT_HIDDEN),
+      printHidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      narrowDefault: true,
+      setHidden: vi.fn(),
+      widths: resolveColumnWidths({}),
+      setWidth: vi.fn((_key: string, width: number) => width),
+      table: { size: 584, min: 524, max: 720, setSize: vi.fn((size: number) => size) },
+      reset: vi.fn(),
+      isDefault: true,
+      codes: { status: 'ready', types: [], shownIds: [], setShown: vi.fn() },
+      resolvePrintCodeColumns: vi.fn(() => Promise.resolve([])),
+      ...over,
+    };
+  }
+
+  async function printedHidden(
+    ganttColumns: NonNullable<TsldToolbarContext['ganttColumns']>,
+  ): Promise<string[]> {
+    const { result } = build('gantt', { ganttColumns });
+    await act(async () => {
+      result.current.printDiagram();
+      await Promise.resolve();
+    });
+    const [arg] = printGanttSchedule.mock.calls.at(-1) as unknown as [
+      { hiddenColumns: ReadonlySet<string> },
+    ];
+    return [...arg.hiddenColumns].sort();
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('prints the standard columns when the screen is on the narrow default', async () => {
+    expect(await printedHidden(hiddenBundle({}))).toEqual([...DEFAULT_HIDDEN_COLUMNS].sort());
+  });
+
+  it('prints a stated choice as stated', async () => {
+    expect(
+      await printedHidden(
+        hiddenBundle({
+          hidden: new Set(['duration']),
+          printHidden: new Set(['duration']),
+          narrowDefault: false,
+        }),
+      ),
+    ).toEqual(['duration']);
   });
 });
 

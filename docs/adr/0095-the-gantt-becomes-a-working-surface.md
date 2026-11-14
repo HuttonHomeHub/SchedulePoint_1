@@ -8,6 +8,14 @@
   lifted; the Gantt offers it, with the diagram's write and working-day arithmetic.
 - **Amended by:** ADR-0177 (2026-10-06) — on touch and stylus a bar's body and edges respond only once
   the bar is selected, and a row's `contextmenu` opens its menu.
+- **Amended:** 2026-11-13 — a bar drag held within 40 px of the timeline's left or right edge scrolls
+  it at a steady 600 px a second, and the bar's day counts the scroll as well as the pointer.
+- **Amended:** 2026-11-14 — M5-T6's "an absent `ghide` is the default set" no longer holds. An absent
+  `ghide` is "say nothing", resolved once when the Gantt opens against the Gantt's own width: with less
+  room than lets the timeline keep two fifths of it beside the usual columns, a new view opens without Code
+  and Finish. A stated `ghide`, `none` included, is used as written at every width and the width is never
+  consulted; the address keeps a stated value even when it equals the standard set. Paper prints the stated
+  set, else the standard one. `docs/specs/gantt-narrow-default-columns/`.
 - **Amends:** ADR-0059 (its §4 "read-only, no dependency arrows" first ship, and its §2 shared time
   axis extended to the inverse direction), ADR-0093 (discharges the promise it left outstanding)
 - **Builds on:** ADR-0022/0023/0033 (recalculation, dates, scheduling modes), ADR-0028 (the pen),

@@ -446,3 +446,135 @@ describe('useBarPointerDrag', () => {
     });
   });
 });
+
+describe('useBarPointerDrag edge auto-scroll', () => {
+  /** A scroller whose `scrollLeft` clamps like a real one, over a 1,000 px timeline in a 600 px view. */
+  function makeScroller(maxScroll = 400) {
+    let scrollLeft = 0;
+    const element = {
+      get scrollLeft() {
+        return scrollLeft;
+      },
+      set scrollLeft(value: number) {
+        scrollLeft = Math.min(maxScroll, Math.max(0, value));
+      },
+    } as unknown as HTMLElement;
+    return element;
+  }
+
+  // The timeline shows from x=200 (the sticky grid covers 0-200) to x=800.
+  const region = (scroller: HTMLElement) => () => ({ scroller, left: 200, right: 800 });
+
+  /** One frame boundary at an explicit clock, so the scroll distance is arithmetic. */
+  function tickFrame(timestamp: number): void {
+    const queued = frames;
+    frames = [];
+    for (const callback of queued) callback(timestamp);
+  }
+
+  it('scrolls the timeline while the pointer holds near the right edge, and the delta follows it', () => {
+    const scroller = makeScroller();
+    const onCommit = vi.fn();
+    const { result } = renderHook(() =>
+      useBarPointerDrag({
+        enabled: true,
+        touchArmed: true,
+        onCommit,
+        scrollRegion: region(scroller),
+      }),
+    );
+
+    act(() => result.current.onPointerDown(pointerDown(500)));
+    act(() => move(790));
+    // Frame 1 starts the clock (16 ms), frame 2 is 100 ms later and capped at 50 ms.
+    act(() => tickFrame(1000));
+    act(() => tickFrame(1100));
+    const scrolled = scroller.scrollLeft;
+    expect(scrolled).toBeGreaterThan(0);
+
+    act(() => up());
+    // The pointer travelled 290 px and the content slid `scrolled` px under it: the bar's day is
+    // read from the sum, which is what keeps it tracking the pointer past the screen edge.
+    expect(onCommit).toHaveBeenCalledWith(290 + scrolled);
+  });
+
+  it('scrolls left near the timeline left edge, which is not the scroller left edge', () => {
+    const scroller = makeScroller();
+    scroller.scrollLeft = 300;
+    const { result } = renderHook(() =>
+      useBarPointerDrag({
+        enabled: true,
+        touchArmed: true,
+        onCommit: vi.fn(),
+        scrollRegion: region(scroller),
+      }),
+    );
+
+    act(() => result.current.onPointerDown(pointerDown(500)));
+    // 215 is over the timeline by 15 px but inside the 40 px zone; the grid's own 200 px is not a margin.
+    act(() => move(215));
+    act(() => tickFrame(1000));
+    act(() => tickFrame(1050));
+    expect(scroller.scrollLeft).toBeLessThan(300);
+  });
+
+  it('does not scroll away from the edge zone, or before the press has become a drag', () => {
+    const scroller = makeScroller();
+    const { result } = renderHook(() =>
+      useBarPointerDrag({
+        enabled: true,
+        touchArmed: true,
+        onCommit: vi.fn(),
+        scrollRegion: region(scroller),
+      }),
+    );
+
+    // A press that starts in the zone and has not moved is a click, not a drag.
+    act(() => result.current.onPointerDown(pointerDown(790)));
+    act(() => move(790 + DRAG_INTENT_PX));
+    act(() => tickFrame(1000));
+    expect(scroller.scrollLeft).toBe(0);
+
+    // A drag well inside the timeline never scrolls.
+    act(() => move(500));
+    act(() => tickFrame(1016));
+    act(() => tickFrame(1032));
+    expect(scroller.scrollLeft).toBe(0);
+  });
+
+  it('stops scrolling on release, and on Escape without committing', () => {
+    const scroller = makeScroller();
+    const onCommit = vi.fn();
+    const { result } = renderHook(() =>
+      useBarPointerDrag({
+        enabled: true,
+        touchArmed: true,
+        onCommit,
+        scrollRegion: region(scroller),
+      }),
+    );
+
+    act(() => result.current.onPointerDown(pointerDown(500)));
+    act(() => move(790));
+    act(() => tickFrame(1000));
+    act(() => escape());
+    const stoppedAt = scroller.scrollLeft;
+    act(() => tickFrame(1100));
+    act(() => up());
+
+    expect(scroller.scrollLeft).toBe(stoppedAt);
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(frames).toHaveLength(0);
+  });
+
+  it('stays on screen when no scroll region is given', () => {
+    const onCommit = vi.fn();
+    const { result } = renderHook(() =>
+      useBarPointerDrag({ enabled: true, touchArmed: true, onCommit }),
+    );
+    act(() => result.current.onPointerDown(pointerDown(500)));
+    act(() => move(790));
+    act(() => up());
+    expect(onCommit).toHaveBeenCalledWith(290);
+  });
+});

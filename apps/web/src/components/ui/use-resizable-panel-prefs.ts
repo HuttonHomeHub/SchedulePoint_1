@@ -35,6 +35,18 @@ export interface ResizablePanelOptions {
    * Never taken below `min`.
    */
   ceiling?: number;
+  /**
+   * **When the preference is written to storage.** `'mount'` (the default, and what every panel
+   * but one has always done) writes the state as soon as the hook mounts, so the first opening
+   * stores the seed. `'on-change'` writes nothing until the person places the panel — `setSize`,
+   * `collapse` or `expand` — and until a **size** is placed the panel **follows `defaultSize` live**
+   * (a collapse or expand stores the flag alone and never the seed), which may change
+   * from one opening to the next. It exists for a panel whose seed depends on something else the
+   * person can change (the Gantt's pane follows which columns open), where a stored seed is
+   * indistinguishable from a divider somebody placed and would freeze the old answer for ever.
+   * `resetSize` then removes the stored value and returns to unplaced.
+   */
+  persist?: 'mount' | 'on-change';
 }
 
 export interface UseResizablePanelPrefs {
@@ -56,7 +68,10 @@ export interface UseResizablePanelPrefs {
 
 interface PanelPrefs {
   collapsed: boolean;
-  size: number;
+  /** `null` only under `persist: 'on-change'`, while nothing has been placed: the panel reads `defaultSize`. */
+  size: number | null;
+  /** Whether the person has changed anything since mount, which is what earns a write. Always true under `'mount'`. */
+  placed: boolean;
 }
 
 /** Clamp a candidate size to `[min, max]` and round to whole px. */
@@ -64,49 +79,81 @@ export function clampSize(size: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(size)));
 }
 
-function readPrefs({ storageKey, min, max, defaultSize }: ResizablePanelOptions): PanelPrefs {
+function readPrefs({
+  storageKey,
+  min,
+  max,
+  defaultSize,
+  persist,
+}: ResizablePanelOptions): PanelPrefs {
+  const onChange = persist === 'on-change';
   try {
     const raw = localStorage.getItem(storageKey);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<PanelPrefs>;
+      const parsed = JSON.parse(raw) as Partial<{ collapsed: boolean; size: number }>;
       return {
         collapsed: parsed.collapsed === true,
         size:
           typeof parsed.size === 'number' && Number.isFinite(parsed.size)
             ? clampSize(parsed.size, min, max)
-            : defaultSize,
+            : onChange
+              ? null
+              : defaultSize,
+        placed: !onChange,
       };
     }
   } catch {
     // Corrupt storage (or access denied) → fall back to defaults.
   }
-  return { collapsed: false, size: defaultSize };
+  return { collapsed: false, size: onChange ? null : defaultSize, placed: !onChange };
 }
 
 export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResizablePanelPrefs {
-  const { storageKey, min, max, defaultSize, ceiling } = options;
+  const { storageKey, min, max, defaultSize, ceiling, persist = 'mount' } = options;
   const limit = Math.max(min, Math.min(max, ceiling ?? max));
   const [prefs, setPrefs] = useState<PanelPrefs>(() => readPrefs(options));
 
   useEffect(() => {
+    // Under 'on-change' an unplaced panel stores nothing: the seed is not a choice.
+    if (!prefs.placed) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify(prefs));
+      localStorage.setItem(
+        storageKey,
+        // A collapse placed before any drag stores no size: writing the seed here would freeze it as
+        // a width somebody chose, and the pane would stop following `defaultSize`.
+        JSON.stringify(
+          prefs.size === null
+            ? { collapsed: prefs.collapsed }
+            : { collapsed: prefs.collapsed, size: prefs.size },
+        ),
+      );
     } catch {
       // Storage full or disabled — the preference simply won't persist.
     }
   }, [storageKey, prefs]);
 
-  const collapse = useCallback(() => setPrefs((p) => ({ ...p, collapsed: true })), []);
-  const expand = useCallback(() => setPrefs((p) => ({ ...p, collapsed: false })), []);
+  const collapse = useCallback(
+    () => setPrefs((p) => ({ ...p, collapsed: true, placed: true })),
+    [],
+  );
+  const expand = useCallback(() => setPrefs((p) => ({ ...p, collapsed: false, placed: true })), []);
   const setSize = useCallback(
-    (size: number) => setPrefs((p) => ({ ...p, size: clampSize(size, min, limit) })),
+    (size: number) => setPrefs((p) => ({ ...p, size: clampSize(size, min, limit), placed: true })),
     [min, limit],
   );
 
-  const resetSize = useCallback(
-    () => setPrefs((p) => ({ ...p, size: defaultSize })),
-    [defaultSize],
-  );
+  const resetSize = useCallback(() => {
+    if (persist === 'on-change') {
+      try {
+        localStorage.removeItem(storageKey);
+      } catch {
+        // Storage disabled — there is nothing stored to remove.
+      }
+      setPrefs((p) => ({ ...p, size: null, placed: false }));
+      return;
+    }
+    setPrefs((p) => ({ ...p, size: defaultSize }));
+  }, [defaultSize, persist, storageKey]);
 
   /**
    * **Clamped on the way OUT, not only on the way in.**
@@ -126,7 +173,7 @@ export function useResizablePanelPrefs(options: ResizablePanelOptions): UseResiz
    */
   return {
     collapsed: prefs.collapsed,
-    size: clampSize(prefs.size, min, limit),
+    size: clampSize(prefs.size ?? defaultSize, min, limit),
     limit,
     collapse,
     expand,

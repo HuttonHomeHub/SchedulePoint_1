@@ -32,6 +32,8 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     planView: 'gantt',
     ganttColumns: {
       hidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      printHidden: new Set(DEFAULT_HIDDEN_COLUMNS),
+      narrowDefault: false,
       // The chooser lists the Swimlane column only for a plan that has swimlanes (swimlanes M4-T2).
       swimlanesOffered: true,
       setHidden,
