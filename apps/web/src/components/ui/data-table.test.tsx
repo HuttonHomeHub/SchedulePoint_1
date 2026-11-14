@@ -575,7 +575,6 @@ describe('DataTable — pinnedColumn', () => {
       const cells = screen.getAllByRole('cell');
       expect(cells.map(pinned)).toEqual([false, true, false, false, true, false]);
       expect(cells[1]!.className).toContain('lg:bg-(--page-background)');
-      expect(cells[1]!.className).toContain('lg:bg-fixed');
       expect(cells[1]!.className).toContain('lg:border-r');
       expect(cells[1]!.className).toContain('lg:z-10');
     },

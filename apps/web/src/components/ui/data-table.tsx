@@ -155,20 +155,20 @@ const CELL_DEFAULT = 'py-2 pr-4';
  * below 1024 px the table reflows exactly as an unpinned one does (ADR-0179). `border-r` and not a
  * shadow, because forced colours drop shadows and keep borders (ADR-0191).
  *
- * **Opaque, and the page's own ground rather than `bg-background`.** A sticky cell with a
- * transparent background shows the columns scrolling underneath it, so it must paint. But the rows
- * of this table are transparent over the page's gradient (`body`, `--page-backdrop`, fixed), and a
- * flat `bg-background` cell beside them read as a lighter column (seen in the journey's screenshot,
- * 2026-11-14). The cell therefore paints the SAME two tokens `body` does, `--page-background` under
- * `--page-backdrop`, with `bg-fixed` so the gradient is anchored to the viewport exactly as `body`'s
- * is and the cell is seamless wherever it sits. No colour literal and no new token. Forced colours
- * drop the image and force the colour to Canvas, which is opaque, so the cell still hides what
- * scrolls under it. Cost to measure: a fixed background repaints on scroll (performance review).
+ * **Opaque, and the page's own colour rather than `bg-background`.** A sticky cell with a
+ * transparent background shows the columns scrolling underneath it, so it must paint. The rows of
+ * this table are transparent over the page's ground (`body`: `--page-background` under the
+ * `--page-backdrop` gradient), and a flat `bg-background` cell beside them read as a clearly lighter
+ * column (journey screenshot, 2026-11-14). The cell paints `--page-background`, the colour under the
+ * gradient, which is within a few levels of it. Painting the gradient itself (`bg-fixed`) was tried
+ * and dropped the same day: it cost no measurable frame time, but it put the render-blocking CSS over
+ * its budget and, after the panel was resized, kept a stale gradient until the next scroll. Forced
+ * colours force Canvas, which is opaque, so the cell still hides what scrolls under it.
  * **A future selected-row or hover tint must reach the pinned cell too**: it is opaque, so a tint
  * set on the `<tr>` would leave one untinted cell at the left edge.
  */
 const PIN_CELL =
-  'lg:sticky lg:left-0 lg:z-10 lg:bg-(--page-background) lg:bg-(image:--page-backdrop) lg:bg-fixed lg:border-r lg:border-input';
+  'lg:sticky lg:left-0 lg:z-10 lg:bg-(--page-background) lg:border-r lg:border-input';
 /** The scroll region's padding, so focus lands beside the pin and not under it (WCAG 2.4.11). */
 const PIN_REGION = ' lg:scroll-ps-(--dt-pin-start)';
 /** The pinned header cell sits above the other header cells (`z-20`) and above every body cell. */
