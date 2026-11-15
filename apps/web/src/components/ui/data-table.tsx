@@ -3,6 +3,7 @@ import { Children, Fragment, isValidElement, memo, useCallback } from 'react';
 
 import { DataTableWindowedBody } from './data-table-windowed-body';
 
+import { layoutSize } from '@/components/layout/workspace/workspace-scale';
 import { LoadingShape } from '@/components/ui/page/loading-shape';
 import { Skeleton, SkeletonText } from '@/components/ui/page/skeleton';
 import { QueryErrorState } from '@/components/ui/query-error-state';
@@ -614,7 +615,8 @@ export function DataTable<T>({
     if (!th || !region) return;
     let last = -1;
     const write = () => {
-      const width = th.getBoundingClientRect().width;
+      // Written back as a CSS length, so layout px (ADR-0222 D6).
+      const width = layoutSize(th).width;
       if (width === last) return;
       last = width;
       region.style.setProperty('--dt-pin-start', `${width}px`);

@@ -166,6 +166,7 @@ export function GanttRowMenu({
         data-gantt-coarse-exempt="row-menu"
         variant="ghost"
         size="icon-sm"
+        className="shrink-0"
         // **`tabIndex={-1}`, and that is the whole point of a roving tab stop.**
         //
         // This is rendered once per MOUNTED row, so without it every visible row contributes its

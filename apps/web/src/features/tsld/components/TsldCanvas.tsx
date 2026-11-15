@@ -124,6 +124,12 @@ import {
   minimapHasRoom,
 } from './viewport-column';
 
+import {
+  deltaInLayout,
+  layoutRect,
+  pointInLayout,
+  workspaceScaleOf,
+} from '@/components/layout/workspace/workspace-scale';
 import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -530,8 +536,14 @@ const POPOVER_W = 224;
 const POPOVER_H = 140;
 const POPOVER_MARGIN = 8;
 
-function getDpr(): number {
-  return Math.min(globalThis.devicePixelRatio || 1, 2);
+/**
+ * The backing-store ratio: the display's, capped at 2, times the workspace's scale. A scaled canvas is
+ * drawn at `scale` of its layout size, so a store sized to the layout resamples and blurs it; sized to
+ * the pixels it is drawn at, it is as sharp as at 1 (SC-7, `m0-measurement.md` §2.6). The cap is on the
+ * display, not on the product, so a 0.75 scale on a 2x display is 1.5.
+ */
+function getDpr(scale = 1): number {
+  return Math.min(globalThis.devicePixelRatio || 1, 2) * scale;
 }
 
 /** Keep the create popover fully inside the canvas by clamping its anchor to the surface. */
@@ -1060,6 +1072,8 @@ export function TsldCanvas({
   const republishRoomRef = useRef<() => void>(() => {});
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
+  // The workspace scale the backing stores were last sized at (`measure`), read by the paint loop.
+  const scaleRef = useRef(1);
   const dirtyRef = useRef(true);
   const fittedRef = useRef(false);
   // Whether the surface is on-screen (an IntersectionObserver drives it below). When it's hidden —
@@ -1563,11 +1577,9 @@ export function TsldCanvas({
     const root = containerRef.current;
     if (!box || !root) return;
     const read = (): void => {
-      const shift = Math.max(
-        0,
-        Math.round(root.getBoundingClientRect().bottom - box.getBoundingClientRect().bottom),
-      );
-      const key = `${String(shift)}|${String(Math.round(root.getBoundingClientRect().height))}`;
+      const rootRect = layoutRect(root);
+      const shift = Math.max(0, Math.round(rootRect.bottom - layoutRect(box).bottom));
+      const key = `${String(shift)}|${String(Math.round(rootRect.height))}`;
       if (key !== stageKeyRef.current) {
         stageKeyRef.current = key;
         setStageTick((tick) => tick + 1);
@@ -1661,8 +1673,8 @@ export function TsldCanvas({
     // journey caught the obstacle step sliding a wholly clickable bar 37 px before the dock had taken
     // anything. The keyboard has no such proof, so it keeps the clearance.
     if (column && container && !bandBar && !pointerSelected && clusterRoomRef.current) {
-      const c = column.getBoundingClientRect();
-      const o = container.getBoundingClientRect();
+      const c = layoutRect(column);
+      const o = layoutRect(container);
       const origin = sceneOrigin(wbsBandHeightPx, gutterWidthPx);
       const extra = clearOfObstacle(
         { x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h },
@@ -1819,6 +1831,7 @@ export function TsldCanvas({
     //
     // Resetting per init makes the first measure after any (re-)mount always apply.
     let applied: Size = { width: 0, height: 0 };
+    let appliedScale = 1;
 
     // The minimap's room is a function of the stage AND the pointer (the cluster's buttons are
     // taller under a finger), so it is recomputed from both: here when the stage resizes, and in the
@@ -1858,7 +1871,7 @@ export function TsldCanvas({
         width = 0;
         for (const sample of ['00', '88', '28', '69', '31']) {
           probe.textContent = sample;
-          width = Math.max(width, probe.getBoundingClientRect().width);
+          width = Math.max(width, layoutRect(probe).width);
         }
         probe.remove();
         // A zero width means the row was not laid out; do not cache a lie, keep the last good one.
@@ -1892,7 +1905,7 @@ export function TsldCanvas({
         width = 0;
         for (const sample of ['0000', '8888', '2026', '1999']) {
           probe.textContent = sample;
-          width = Math.max(width, probe.getBoundingClientRect().width);
+          width = Math.max(width, layoutRect(probe).width);
         }
         probe.remove();
         if (width <= 0) return;
@@ -1906,7 +1919,8 @@ export function TsldCanvas({
     };
 
     const measure = (): void => {
-      const rect = container.getBoundingClientRect();
+      // Layout px: under a scaled workspace the screen rect is `s` times too small (ADR-0222 D6).
+      const rect = layoutRect(container);
       // A hidden container (the short-body swap sets `display: none` on the canvas row) measures
       // 0 x 0. Applying it would clamp to 1 x 1, reallocate every backing store, and publish a
       // 1 px width to `setMinimapRoom`, all for a size nobody can see — then reallocate again on
@@ -1931,11 +1945,18 @@ export function TsldCanvas({
         width: Math.max(1, rect.width - origin.left),
         height: Math.max(1, rect.height - origin.top - stripBand),
       };
-      if (size.width !== applied.width || size.height !== applied.height) {
+      const scale = workspaceScaleOf(container);
+      if (
+        size.width !== applied.width ||
+        size.height !== applied.height ||
+        scale !== appliedScale
+      ) {
         applied = size;
+        appliedScale = scale;
+        scaleRef.current = scale;
         sizeRef.current = size;
         publishMinimapRoom();
-        const dpr = getDpr();
+        const dpr = getDpr(scale);
         for (const c of [canvas, interactionCanvasRef.current]) {
           if (!c) continue;
           c.width = Math.round(size.width * dpr);
@@ -2095,7 +2116,7 @@ export function TsldCanvas({
           probe.style.visibility = 'hidden';
           probe.textContent = label;
           row.appendChild(probe);
-          const measured = probe.getBoundingClientRect().width;
+          const measured = layoutRect(probe).width;
           probe.remove();
           rememberWidth(widths, label, measured);
           return measured;
@@ -2170,7 +2191,7 @@ export function TsldCanvas({
       const widths = axisMarkerWidthsRef.current;
       let width = widths.get(label);
       if (width === undefined) {
-        width = node.getBoundingClientRect().width;
+        width = layoutRect(node).width;
         rememberWidth(widths, label, width);
       }
       node.style.transform = `translateX(${String(clampMarkLeft(cursorAnchorRef.current, width, sizeRef.current.width))}px)`;
@@ -2187,7 +2208,7 @@ export function TsldCanvas({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       const size = sizeRef.current;
-      const dpr = getDpr();
+      const dpr = getDpr(scaleRef.current);
       if (!fittedRef.current && size.width > 1) {
         const withDates = sceneRef.current.activities.some((a) => a.drawnStart !== null);
         viewRef.current = withDates
@@ -2439,10 +2460,9 @@ export function TsldCanvas({
 
     const onWheel = (e: WheelEvent): void => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
       viewRef.current = zoomAt(
         viewRef.current,
-        e.clientX - rect.left,
+        pointInLayout(e, canvas).x,
         e.deltaY < 0 ? 1.1 : 1 / 1.1,
         MAX_PX_PER_DAY,
       );
@@ -2595,8 +2615,7 @@ export function TsldCanvas({
       id === null ? null : { id, count: last?.id === id ? last.count + 1 : 1 };
   };
   const localPoint = (e: React.PointerEvent | React.MouseEvent): Point => {
-    const rect = canvasRef.current!.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return pointInLayout(e, canvasRef.current!);
   };
   const machineCtx = () => ({
     mode,
@@ -2894,12 +2913,8 @@ export function TsldCanvas({
           }}
           className="absolute inset-x-0 block cursor-pointer"
           onClick={(e) => {
-            const box = e.currentTarget.getBoundingClientRect();
-            const bar = wbsBandHitTest(
-              wbsBandBarsRef.current,
-              e.clientX - box.left,
-              e.clientY - box.top,
-            );
+            const at = pointInLayout(e, e.currentTarget);
+            const bar = wbsBandHitTest(wbsBandBarsRef.current, at.x, at.y);
             // A bar with no id is the derived bucket — it is not in the database, so there is
             // nothing to select. Refusing it here (rather than in the hit-test) keeps the geometry
             // a purely geometric question; see `wbsBandHitTest`.
@@ -3100,8 +3115,8 @@ export function TsldCanvas({
             }
             return;
           }
-          const dx = e.clientX - drag.current.x;
-          const dy = e.clientY - drag.current.y;
+          const dx = deltaInLayout(e.currentTarget, e.clientX - drag.current.x);
+          const dy = deltaInLayout(e.currentTarget, e.clientY - drag.current.y);
           if (Math.abs(dx) + Math.abs(dy) > CLICK_MOVE_THRESHOLD_PX) drag.current.moved = true;
           viewRef.current = pan(viewRef.current, dx, dy);
           drag.current.x = e.clientX;

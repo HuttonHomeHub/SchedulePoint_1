@@ -1,40 +1,21 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useMemo } from 'react';
 
 import type { PromotionPointer, PromotionStage, PromotionState } from './toolbar-promotion';
 
+import { useWorkspaceMatches } from '@/components/layout/workspace/workspace-media';
 import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { PROMOTION_STAGE_REMS, promotionStageQuery } from '@/lib/breakpoints';
 
 const QUERIES = PROMOTION_STAGE_REMS.map(promotionStageQuery);
-
-/** Whether this environment can answer a media query at all (jsdom cannot). */
-function canMatch(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function';
-}
-
-function subscribe(onChange: () => void): () => void {
-  if (!canMatch()) return () => undefined;
-  const lists = QUERIES.map((query) => window.matchMedia(query));
-  for (const list of lists) list.addEventListener('change', onChange);
-  return () => {
-    for (const list of lists) list.removeEventListener('change', onChange);
-  };
-}
-
-/** Every threshold is read in the same call, so a snapshot is never a half-applied resize. */
-function readStage(): PromotionStage {
-  if (!canMatch()) return 0;
-  let reached = 0;
-  for (const query of QUERIES) if (window.matchMedia(query).matches) reached += 1;
-  return reached as PromotionStage;
-}
 
 /**
  * **Which promotion stage this viewport has reached, and which pointer set applies at it**
  * (toolbar-redesign M5, spec §4.11). Media-query listeners only: no observer, no measurement of the
  * deck, so the ladder cannot become the width mechanism ADR-0109 D1 deleted. The stage is derived
  * from the *viewport*, which is honest for the deck because the band spans both grid columns whatever
- * the Explorer does (`app-shell.tsx`).
+ * the Explorer does (`app-shell.tsx`). **Inside a plan workspace the viewport is the workspace's layout
+ * window** (`workspace-media.ts`, ADR-0222 D5): a scaled band is laid out wider than the real window, and the
+ * stage it has reached is the one its own layout width reaches.
  *
  * **One subscription over every threshold, not one `useMediaQuery` per threshold.** Each query's
  * listener fires on its own, and per-query state rendered the intermediate stage of a resize that
@@ -52,7 +33,8 @@ function readStage(): PromotionStage {
  * stylesheet's `pointer-coarse:` and this hook cannot then disagree about which set applies.
  */
 export function usePromotionStage(): PromotionState {
-  const stage = useSyncExternalStore(subscribe, readStage, (): PromotionStage => 0);
+  const reached = useWorkspaceMatches(QUERIES, false);
+  const stage = reached.filter(Boolean).length as PromotionStage;
   const coarse = useCoarsePointer();
   const pointer: PromotionPointer = coarse ? 'coarse' : 'fine';
   return useMemo(() => ({ stage, pointer }), [stage, pointer]);

@@ -143,7 +143,7 @@ export const TOOLBAR_INSET_RULE =
  * 44 wide under a coarse pointer, matching the height the same token gives it.
  */
 export const TOOLBAR_CARET_TARGET =
-  'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
+  'min-w-6 in-data-[workspace-scaled]:min-w-8 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 /**
  * **The deck's row geometry, in CSS px, in one place** (toolbar-grid M1). The Tailwind classes below and

@@ -14,6 +14,7 @@ import {
 import { CanvasDockOutlet } from './canvas-dock';
 import { PlanFactsOutlet } from './plan-facts-host';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
+import { WorkspaceScaleSwitch } from './workspace-scale-switch';
 
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
@@ -206,14 +207,16 @@ const FOOT_TOGGLE_CLASS = 'ml-auto shrink-0';
  * **On a short window a selected activity's bar takes the foot row's whole width, and the plan's
  * passive facts step aside while it is there** (diagram-keys-and-selection M6, ADR-0219).
  *
- * Declared at the row, in CSS, and from the two things the row can already see: the existing `short`
- * variant (`globals.css`, the window at most 44 rem high) and the `data-selection-bar` marker both
+ * Declared at the row, in CSS, and from the two things the row can already see: the `ws-short`
+ * variant (`globals.css`: `short`, a window at most 44 rem high, asked of the workspace's own box, ADR-0222 D5)
+ * and the `data-selection-bar` marker both
  * selection bars carry (the single one, and the plural one so that it is never dearer than the single
  * one on the same window, which `e2e-multi-select` holds). No JS state, so nothing can disagree with the bar: the facts
- * return the moment the bar unmounts. Four things yield, and each is **visually hidden, never
+ * return the moment the bar unmounts. These yield, and each is **visually hidden, never
  * removed** (`sr-only` keeps the text in the accessibility tree, so what a screen reader reads does
- * not change): the data date, finish, count and critical-count list, the pen's badge, and the
- * inset and gap the facts' own row carries around them. What does NOT yield is anything a reader
+ * not change): the data date, finish, count and critical-count list, the pen's badge, the
+ * inset and gap the facts' own row carries around them, and the words of the workspace-scale switch
+ * (its icon, name and pressed state stay: ADR-0222 D4.3, `workspace-scale-switch.tsx`). What does NOT yield is anything a reader
  * can press or that announces: Recalculate and the schedule's state, the pen's hand-off actions and
  * its live sentence. A command is shaded with its reason, never hidden (ADR-0082), and the same
  * rule keeps a stale schedule's remedy on the row while a bar is selected. For the editing and free
@@ -224,7 +227,7 @@ const FOOT_TOGGLE_CLASS = 'ml-auto shrink-0';
  * Tailwind reads classes from source.
  */
 const SELECTION_FACTS_YIELD =
-  'short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:gap-x-0 short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:px-0 short:has-[[data-selection-bar]]:[&_[data-plan-fact-list]]:sr-only short:has-[[data-selection-bar]]:[&_[data-pen-badge]]:sr-only';
+  'ws-short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:gap-x-0 ws-short:has-[[data-selection-bar]]:[&_[data-plan-facts]]:px-0 ws-short:has-[[data-selection-bar]]:[&_[data-plan-fact-list]]:sr-only ws-short:has-[[data-selection-bar]]:[&_[data-pen-badge]]:sr-only ws-short:has-[[data-selection-bar]]:[&_[data-workspace-scale-label]]:sr-only';
 
 /**
  * **The baseline slip is shown only when it fits, and the diagram never pays for it**
@@ -248,7 +251,7 @@ const SELECTION_FACTS_YIELD =
  * reads classes from source.
  */
 const BASELINE_SLIP_YIELD =
-  'max-sm:[&_[data-baseline-slip]]:sr-only has-[[data-dock-outlet]:not(:empty)]:[&_[data-baseline-slip]]:sr-only has-[[data-schedule-state]:not([data-schedule-state=current])]:[&_[data-baseline-slip]]:sr-only';
+  'ws-max-sm:[&_[data-baseline-slip]]:sr-only has-[[data-dock-outlet]:not(:empty)]:[&_[data-baseline-slip]]:sr-only has-[[data-schedule-state]:not([data-schedule-state=current])]:[&_[data-baseline-slip]]:sr-only';
 
 /**
  * The activity list docked at the bottom of the canvas-first {@link PlanWorkspace}
@@ -635,6 +638,9 @@ export function PlanActivitiesFootRow({
       >
         <PlanFactsOutlet />
         {toggle}
+        {/* **The scale's switch, last** (ADR-0222 D4.3): "Scaled to 88 %" while the workspace is shrunk
+            to fit, "Actual size" once the reader has chosen it. Absent in a window that fits. */}
+        <WorkspaceScaleSwitch />
       </div>
     </Surface>
   );

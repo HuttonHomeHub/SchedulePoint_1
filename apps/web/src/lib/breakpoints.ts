@@ -1,7 +1,18 @@
 /**
- * **The layout is designed from this width up** (ADR-0179). Below it the signed-in app still
- * reflows — nothing is hidden — but it is no longer designed, and the viewport notice tells the
- * reader so.
+ * **The designed window: 1280 x 800 CSS px** (ADR-0222 D1, which moved it from ADR-0179's 1024 x 600). Every
+ * screen is designed and gated at and above it, and below it the plan workspace scales to fit
+ * (`components/layout/workspace/workspace-scale.ts`) rather than rearranging itself. The notice states
+ * these two numbers; 1280 is also the first promotion stage's width ({@link PROMOTION_STAGES}).
+ */
+export const DESIGNED_WINDOW_WIDTH_PX = 1280;
+export const DESIGNED_WINDOW_HEIGHT_PX = 800;
+
+/**
+ * **The viewport notice speaks below this width** (ADR-0179; the trigger is kept by ADR-0222 D8): the width
+ * below which even the smallest workspace scale (0.75) cannot fit the designed layout. Below it the
+ * signed-in app still reflows — nothing is hidden — but it is no longer designed, and the notice tells the
+ * reader so. It read "the layout is designed from this width up" until ADR-0222 moved the designed size to
+ * {@link DESIGNED_WINDOW_WIDTH_PX} x {@link DESIGNED_WINDOW_HEIGHT_PX}.
  *
  * It is `64rem`, not `1024px`, and that is the whole reason this is one constant: Tailwind's `lg`
  * is `64rem`, the shell's docked Project Explorer switches to a sheet at exactly that width
@@ -71,6 +82,10 @@ export const SQUAT_QUERY = '(width < 64rem) and (height <= 26rem)';
  * stylesheet, so the two cannot drift. A media query answers `rem` at the browser's initial size,
  * not the reader's root size (ADR-0213's reason for the `squat` container query): a reader whose
  * text is enlarged by a style sheet in a tall window keeps the offer and its own row.
+ *
+ * **Asked of a scaled workspace it means the workspace's layout height** (ADR-0222 D5): its root plus the
+ * 139 px the shell keeps above it (`WORKSPACE_WINDOW_INSET_HEIGHT_PX`) is the height of the window it is laid
+ * out as if it were in, so a 1024 x 600 window at 0.75 is not short. Its stylesheet twin is `ws-short`.
  */
 export const SHORT_MAX_HEIGHT_REM = 44;
 export const SHORT_QUERY = `(max-height: ${String(SHORT_MAX_HEIGHT_REM)}rem)`;
@@ -88,6 +103,13 @@ export const SHORT_QUERY = `(max-height: ${String(SHORT_MAX_HEIGHT_REM)}rem)`;
  * these constants, which is what keeps it from being a width mechanism that measures itself and gets
  * it wrong. `breakpoints.test.ts` pins them; `promotion-ladder.test.ts` pins every entry's stage to
  * `computePromotionStages` over the committed widths.
+ *
+ * **Inside a scaled plan workspace these are asked of the workspace, not the window** (ADR-0222 D5): the
+ * band is laid out at its width divided by the scale, so a 1024 px window at 0.75 has reached the stages a
+ * 1365 px window reaches (`usePromotionStage` reads `useWorkspaceMatches`, `workspace-media.ts`). While the
+ * workspace is not scaled the window answers, exactly as before, and so a harness that stubs
+ * `window.matchMedia` by these strings (`measure-toolbar/toolbar-redesign-m5.spec.ts`) still acts at the
+ * widths it runs at.
  */
 export const PROMOTION_STAGES = [
   { name: 'PROMOTE_80', rem: 80 },
@@ -119,6 +141,8 @@ export function promotionStageQuery(rem: number): string {
  * `matchMedia` by the stage queries' exact strings: a query equal to one of them would be answered "not
  * reached" there as well (the gear would stay put in the unpromoted reading) and, if the harness
  * exempted it, would let stage one's promotions through. A different spelling of the same width is
- * what keeps the two apart. `(width >= …)` is the form `SQUAT_QUERY` already uses.
+ * what keeps the two apart. `(width >= …)` is the form `SQUAT_QUERY` already uses. In a scaled
+ * workspace it is answered from the band's layout width like the stages (`workspace-media.ts` parses both
+ * spellings).
  */
 export const DECK_TAIL_ROOM_QUERY = `(width >= ${String(PROMOTION_STAGES[0].rem)}rem)`;

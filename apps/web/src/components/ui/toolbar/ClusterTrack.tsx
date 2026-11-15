@@ -24,7 +24,7 @@ export interface ClusterTrackProps {
  * row wrappers; `deck-seams.structural.test.tsx` pins the invariant. (The header's `Diagram | Gantt`
  * wrapper is a different thing: it is a named `group` made by `Toolbar`'s segments, and it keeps both.)
  *
- * `data-toolbar-cluster` is the test and CSS handle; `max-lg:shrink-0` is the rule every deck box
+ * `data-toolbar-cluster` is the test and CSS handle; `band-max-lg:shrink-0` is the rule every deck box
  * follows on the scrolling line below `lg`.
  */
 export function ClusterTrack({ cluster, lead, children }: ClusterTrackProps): React.ReactElement {
@@ -35,7 +35,7 @@ export function ClusterTrack({ cluster, lead, children }: ClusterTrackProps): Re
       className={cn(
         TOOLBAR_TRACK,
         cluster.kind === 'switch' && TOOLBAR_TRACK_SWITCH,
-        'max-lg:shrink-0',
+        'band-max-lg:shrink-0',
       )}
     >
       {children}
@@ -43,7 +43,7 @@ export function ClusterTrack({ cluster, lead, children }: ClusterTrackProps): Re
   );
   if (lead === undefined) return track;
   return (
-    <span className="inline-flex flex-nowrap items-center gap-1 max-lg:shrink-0">
+    <span className="band-max-lg:shrink-0 inline-flex flex-nowrap items-center gap-1">
       {lead}
       {track}
     </span>

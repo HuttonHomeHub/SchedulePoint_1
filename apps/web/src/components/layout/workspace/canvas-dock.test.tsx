@@ -215,7 +215,8 @@ describe('the data-dock-row marker', () => {
 
   it('is a floor and never a content basis: the outlet stays basis zero', () => {
     const outlet = read('src/components/layout/workspace/canvas-dock.tsx');
-    expect(outlet).toMatch(/className="flex min-w-0 flex-1 flex-wrap/);
+    // Not anchored at the start: the class sorter puts the workspace's custom `ws-sm:` variant first.
+    expect(outlet).toMatch(/className="[^"]*\bflex min-w-0 flex-1 flex-wrap/);
     expect(outlet).not.toMatch(/basis-(auto|full)/);
   });
 });

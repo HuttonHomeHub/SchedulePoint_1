@@ -13,7 +13,11 @@ import { useCoarsePointer } from '@/components/ui/use-coarse-pointer';
 import { useNativeModal } from '@/components/ui/use-native-modal';
 import { useSession, useSignOut } from '@/features/auth';
 import { useOrganizations } from '@/features/organizations';
-import { designedMinWidthPx } from '@/lib/breakpoints';
+import {
+  DESIGNED_WINDOW_HEIGHT_PX,
+  DESIGNED_WINDOW_WIDTH_PX,
+  designedMinWidthPx,
+} from '@/lib/breakpoints';
 
 const NoticeContext = createContext<ViewportNoticeState | null>(null);
 
@@ -229,8 +233,9 @@ function PageContent({
         SchedulePoint is designed for larger screens
       </h1>
       <p id={leadId} className="text-muted-foreground text-sm">
-        It&apos;s designed for screens at least {floor} pixels wide. Your window is {width} pixels
-        wide.
+        It&apos;s designed for a window at least {DESIGNED_WINDOW_WIDTH_PX} ×{' '}
+        {DESIGNED_WINDOW_HEIGHT_PX} pixels. Below that the plan view shrinks to fit, down to {floor}{' '}
+        pixels wide. Your window is {width} pixels wide.
       </p>
       {/* A list with no focusable controls, on purpose: it keeps "Continue anyway" the first tab
           stop, which is the one thing a keyboard reader came here to find. */}

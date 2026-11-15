@@ -1,5 +1,6 @@
 import { ToolbarPlanWorkspace } from './plan-workspace-toolbar';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
+import { WorkspaceScaleFrame, WorkspaceScaleProvider } from './workspace-scale-provider';
 
 import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
 
@@ -31,7 +32,15 @@ export function PlanWorkspace({
   // with every screen looking correct.
   return (
     <CanvasSurfaceProvider>
-      <ToolbarPlanWorkspace model={model} plan={plan} />
+      {/* **The scale's provider and the root's frame** (ADR-0222). The provider is above BOTH halves for
+          the reason the facts provider is: the command band is portalled into the shell, React context
+          crosses the portal, and `ToolbarPlanWorkspace` wraps the band in its own half of the mechanism.
+          Only the frame is DOM here; at scale 1 it is a pass-through box. */}
+      <WorkspaceScaleProvider>
+        <WorkspaceScaleFrame>
+          <ToolbarPlanWorkspace model={model} plan={plan} />
+        </WorkspaceScaleFrame>
+      </WorkspaceScaleProvider>
     </CanvasSurfaceProvider>
   );
 }

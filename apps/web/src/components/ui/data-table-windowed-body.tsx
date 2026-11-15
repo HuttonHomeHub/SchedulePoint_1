@@ -9,6 +9,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { Column } from './data-table';
 
+import { layoutSize } from '@/components/layout/workspace/workspace-scale';
 import { cn } from '@/lib/utils';
 
 /**
@@ -105,7 +106,7 @@ function measureColumnWidths(table: HTMLTableElement): number[] | null {
   const widths: number[] = [];
   for (const th of table.querySelectorAll('thead th')) {
     if (getComputedStyle(th).display === 'none') continue;
-    widths.push(th.getBoundingClientRect().width);
+    widths.push(layoutSize(th).width);
   }
   return widths.some((w) => w > 0) ? widths : null;
 }

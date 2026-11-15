@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { workspaceScaleOf } from '@/components/layout/workspace/workspace-scale';
+
 /**
  * **Dragging a bar with a pointer, without re-rendering per pointermove.**
  *
@@ -179,6 +181,9 @@ export function useBarPointerDrag({
       teardown.current?.();
 
       const pointerId = event.pointerId;
+      // The pointer travels in screen px and the bar's day pitch is in layout px, so the travel is divided
+      // by the workspace scale (1 outside a scaled workspace, ADR-0222 D6).
+      const scale = workspaceScaleOf(event.currentTarget);
       originX.current = event.clientX;
       lastClientX.current = event.clientX;
       originScroll.current = scrollRegion?.()?.scroller.scrollLeft ?? 0;
@@ -197,7 +202,7 @@ export function useBarPointerDrag({
       const measureDelta = (): void => {
         const scrolled =
           (scrollRegion?.()?.scroller.scrollLeft ?? originScroll.current) - originScroll.current;
-        liveDeltaX.current = lastClientX.current - originX.current + scrolled;
+        liveDeltaX.current = (lastClientX.current - originX.current) / scale + scrolled;
       };
 
       // While the pointer holds in an edge zone the timeline scrolls at a steady rate, so a bar can

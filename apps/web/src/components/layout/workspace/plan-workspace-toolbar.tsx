@@ -38,6 +38,9 @@ import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model'
 import { useRightDockSize } from './use-right-dock-size';
 import { useShortBodySwap } from './use-short-body-swap';
 import { useTouchGestureHint } from './use-touch-gesture-hint';
+import { useWorkspaceMedia } from './workspace-media';
+import { distanceFromEdgeInLayout, layoutRect } from './workspace-scale';
+import { WorkspaceScaleBand } from './workspace-scale-provider';
 import { CanvasLoading } from './workspace-skeleton';
 
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
@@ -56,7 +59,6 @@ import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
 import { PanelSurface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
-import { useMediaQuery } from '@/components/ui/use-media-query';
 import { clampSize } from '@/components/ui/use-resizable-panel-prefs';
 import { type ActivitiesTableCodeBulk, type ActivitiesTableSwimlanes } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
@@ -918,10 +920,12 @@ export function ToolbarPlanWorkspace({
     const row = canvasRowRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
-      const rect = el.getBoundingClientRect();
+      // Layout px, not screen px: these feed the docks' bounds and the panel's clamp, which are in the
+      // pixels the workspace is laid out in (ADR-0222 D6).
+      const rect = layoutRect(el);
       setBodyHeight(rect.height);
       setBodyWidth(rect.width);
-      if (row) setCanvasRowHeight(row.getBoundingClientRect().height);
+      if (row) setCanvasRowHeight(layoutRect(row).height);
     });
     ro.observe(el);
     // The row's height moves with the panel's even when the body's does not.
@@ -948,7 +952,9 @@ export function ToolbarPlanWorkspace({
   // callback for all four docks, since they share the body's right edge.
   const rightDockPointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+      bodyRef.current
+        ? distanceFromEdgeInLayout(bodyRef.current, 'right', event.clientX)
+        : -event.clientX,
     [],
   );
 
@@ -1201,7 +1207,9 @@ export function ToolbarPlanWorkspace({
 
   const pointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
-      (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
+      bodyRef.current
+        ? distanceFromEdgeInLayout(bodyRef.current, 'bottom', event.clientY)
+        : -event.clientY,
     [],
   );
 
@@ -1347,7 +1355,7 @@ export function ToolbarPlanWorkspace({
   // The planner reaches the same action per bar, through the conflict chip and the selection bar's
   // Follow logic, exactly as before. Its busy, failed and done phases are events the planner started
   // and may use the row; a press can only have been made on a window tall enough to show it.
-  const shortFrame = useMediaQuery(SHORT_QUERY);
+  const shortFrame = useWorkspaceMedia(SHORT_QUERY);
   const followPlanNotice = useMemo(() => {
     if (followPlan === null) return null;
     if (shortFrame && followPlan.phase === 'idle') return null;
@@ -2479,7 +2487,7 @@ export function ToolbarPlanWorkspace({
               page with no plan has no empty region. "Plan command band", not "Plan commands": that
               is the deck's own `toolbar` name inside it, and a landmark and a widget answering to
               the same words is one thing announced twice. */}
-            <section aria-label="Plan command band" className="flex flex-col">
+            <WorkspaceScaleBand label="Plan command band" className="flex flex-col">
               {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
@@ -2770,7 +2778,7 @@ export function ToolbarPlanWorkspace({
                 wrapper's own inset is the last of the band's height that is not a control.
                 `activity-bottom-panel.tsx` follows it by the rule written in that file: its inset
                 COPIES this one rather than judging its own, so the two cannot part company. */}
-              <div className="px-2 py-1 max-lg:px-0">
+              <div className="band-max-lg:px-0 px-2 py-1">
                 <Deck
                   items={rows.strip}
                   context={ctx}
@@ -2778,7 +2786,7 @@ export function ToolbarPlanWorkspace({
                   authoringEnabled={model.canEditSchedule && !lateOverlayActive}
                 />
               </div>
-            </section>
+            </WorkspaceScaleBand>
           </ChromePortal>
 
           {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the

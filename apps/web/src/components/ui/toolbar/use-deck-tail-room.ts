@@ -1,4 +1,4 @@
-import { useMediaQuery } from '@/components/ui/use-media-query';
+import { useWorkspaceMedia } from '@/components/layout/workspace/workspace-media';
 import { DECK_TAIL_ROOM_QUERY } from '@/lib/breakpoints';
 
 /**
@@ -20,5 +20,5 @@ import { DECK_TAIL_ROOM_QUERY } from '@/lib/breakpoints';
  * existing test's order.
  */
 export function useDeckTailRoom(): boolean {
-  return useMediaQuery(DECK_TAIL_ROOM_QUERY, false);
+  return useWorkspaceMedia(DECK_TAIL_ROOM_QUERY, false);
 }

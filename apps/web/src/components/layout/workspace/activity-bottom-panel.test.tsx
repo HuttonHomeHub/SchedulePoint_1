@@ -112,9 +112,11 @@ describe('PlanActivitiesFootRow', () => {
     // **Verified red** by deleting the constant from the row's class list. jsdom applies no
     // stylesheet, so the declaration and the three hooks it reads are the checkable half; the
     // 1024 x 600 journey (`e2e-workspace-fit/floor-states.spec.ts`) is the proof it takes effect.
-    for (const hook of ['plan-facts', 'plan-fact-list', 'pen-badge']) {
+    for (const hook of ['plan-facts', 'plan-fact-list', 'pen-badge', 'workspace-scale-label']) {
       expect(
-        classes.some((c) => c.startsWith('short:has-[[data-selection-bar]]:') && c.includes(hook)),
+        classes.some(
+          (c) => c.startsWith('ws-short:has-[[data-selection-bar]]:') && c.includes(hook),
+        ),
         hook,
       ).toBe(true);
     }
