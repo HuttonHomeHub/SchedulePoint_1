@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 28 API modules
 > (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1939 web
 > source files with 48 Playwright suites beside the base journey, and
-> 221 ADRs.
+> 223 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -326,7 +326,7 @@ documents (keep them authoritative):
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
 styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
-(ADR-0055). **Designed from a laptop or 11-inch tablet up (1024 × 600, ADR-0179), content still reflows below, and no one-off component styling — ever.** The product has
+(ADR-0055). **Designed at a 1280 × 800 window and up (ADR-0222); below it the plan workspace scales to fit and everything else still reflows, and no one-off component styling — ever.** The product has
 **one theme**, declared at `:root` (ADR-0097) — light, dark and system were withdrawn,
 and the mechanism that would carry a future dark variant is kept live rather than
 deleted, so "never branch on theme in JS" still holds and still matters. The
@@ -363,9 +363,12 @@ boundary (ADR-0057). **Security is on by default.**
 
 ## 13. Accessibility requirements
 
-- Target **WCAG 2.2 AA**. This is a merge requirement, not a nicety.
+- Target **WCAG 2.2 AA**. The basics (keyboard, names, zoom and text size, colour) are
+  checked as every change is built, the automated checks gate every build, and a full sweep runs at the end of
+  each epic (ADR-0223).
 - Semantic HTML first; ARIA only to fill genuine gaps.
-- Reflow (1.4.10) and resize text (1.4.4) still hold below the 1024 px design floor (ADR-0179).
+- Reflow (1.4.10) and resize text (1.4.4) still hold below the 1280 × 800 design size; the plan workspace's
+  scaling never undoes a reader's own zoom or text size (ADR-0179, ADR-0222).
 - Full keyboard operability, visible focus, and correct focus management.
 - Colour contrast ≥ 4.5:1 (text). Never encode meaning in colour alone.
 - `eslint-plugin-jsx-a11y` runs in CI; Playwright journeys include a11y checks.
@@ -510,14 +513,14 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0108** _(Accepted; D2 amended by ADR-0169)_ — A modal guards the canvas and nothing else → [`0108-a-modal-guards-the-canvas-and-nothing-else.md`](docs/adr/0108-a-modal-guards-the-canvas-and-nothing-else.md)
 - **ADR-0109** _(Accepted; D1 amended by ADR-0185)_ — A command surface wraps, and the leading edge belongs to the work → [`0109-a-command-surface-wraps.md`](docs/adr/0109-a-command-surface-wraps.md)
 - **ADR-0110** _(Accepted; M5's keep overturned by ADR-0185)_ — A gate is verified against the defect it names → [`0110-a-gate-is-verified-against-the-defect-it-names.md`](docs/adr/0110-a-gate-is-verified-against-the-defect-it-names.md)
-- **ADR-0111** _(Accepted)_ — A shared primitive's keyboard contract is reviewed before release, not after → [`0111-a-primitives-keyboard-contract-is-reviewed-before-release.md`](docs/adr/0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)
+- **ADR-0111** _(Accepted; decision withdrawn by ADR-0223)_ — A shared primitive's keyboard contract is reviewed before release, not after → [`0111-a-primitives-keyboard-contract-is-reviewed-before-release.md`](docs/adr/0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)
 - **ADR-0112** _(Accepted)_ — A header row wraps, and a pen sentence is a fact → [`0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md`](docs/adr/0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md)
 - **ADR-0113** _(Accepted)_ — Measure the problem, not just the remedy → [`0113-measure-the-problem-before-designing-the-remedy.md`](docs/adr/0113-measure-the-problem-before-designing-the-remedy.md)
 - **ADR-0114** _(Accepted; D1 and D2 amended by ADR-0216)_ — A row that cannot shrink is never asked to wrap → [`0114-a-row-that-cannot-shrink-never-wraps.md`](docs/adr/0114-a-row-that-cannot-shrink-never-wraps.md)
 - **ADR-0115** _(Accepted)_ — A bound governs what it encloses, and the wrap was measured from one state → [`0115-a-bound-governs-what-it-encloses.md`](docs/adr/0115-a-bound-governs-what-it-encloses.md)
 - **ADR-0116** _(Accepted)_ — A health finding is not a conflict, and a report never omits a check → [`0116-a-health-finding-is-not-a-conflict.md`](docs/adr/0116-a-health-finding-is-not-a-conflict.md)
 - **ADR-0117** _(Accepted; `purpose` set extended by ADR-0204)_ — An icon-only control names itself, and a tooltip states its purpose → [`0117-an-icon-only-control-names-itself.md`](docs/adr/0117-an-icon-only-control-names-itself.md)
-- **ADR-0118** _(Accepted; amended by ADR-0177, ADR-0179, ADR-0183 and ADR-0188)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
+- **ADR-0118** _(Accepted; amended by ADR-0177, ADR-0179, ADR-0183, ADR-0188 and ADR-0222)_ — A control height is one decision, and the input is an axis of it → [`0118-a-control-height-is-one-decision-with-an-input-axis.md`](docs/adr/0118-a-control-height-is-one-decision-with-an-input-axis.md)
 - **ADR-0120** _(Accepted)_ — A documented obligation with no computed observer → [`0120-a-documented-obligation-with-no-computed-observer.md`](docs/adr/0120-a-documented-obligation-with-no-computed-observer.md)
 - **ADR-0121** _(Accepted)_ — One stack derivation, two renderers, and a cap set by height rather than cost → [`0121-one-derivation-two-renderers-and-a-cap-set-by-height.md`](docs/adr/0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)
 - **ADR-0119** _(Accepted)_ — A group of buttons says which of them are alternatives → [`0119-a-group-of-buttons-says-which-of-them-are-alternatives.md`](docs/adr/0119-a-group-of-buttons-says-which-of-them-are-alternatives.md)
@@ -581,7 +584,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0176** _(Accepted; D3 amended by ADR-0201)_ — Undo checks before it writes, and sets aside what it cannot apply → [`0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md`](docs/adr/0176-undo-checks-before-it-writes-and-sets-aside-what-it-cannot-apply.md)
 - **ADR-0177** _(Accepted)_ — A finger drags what it has selected → [`0177-a-finger-drags-what-it-has-selected.md`](docs/adr/0177-a-finger-drags-what-it-has-selected.md)
 - **ADR-0178** _(Accepted)_ — A console is grouped by what the reader came to do → [`0178-a-console-is-grouped-by-what-the-reader-came-to-do.md`](docs/adr/0178-a-console-is-grouped-by-what-the-reader-came-to-do.md)
-- **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
+- **ADR-0179** _(Accepted; amends ADR-0029 and ADR-0118; D1, D2, D8–D10 amended by ADR-0222)_ — The layout is designed from a laptop up, and says so below it → [`0179-the-layout-is-designed-from-a-laptop-up.md`](docs/adr/0179-the-layout-is-designed-from-a-laptop-up.md)
 - **ADR-0180** _(Accepted; amends ADR-0030 and ADR-0092)_ — The panel takes the body when it cannot show rows → [`0180-the-panel-takes-the-body-when-it-cannot-show-rows.md`](docs/adr/0180-the-panel-takes-the-body-when-it-cannot-show-rows.md)
 - **ADR-0181** _(Accepted; supersedes ADR-0030's and ADR-0031's below-`md` rule)_ — The below-`md` single-pane workspace is retired → [`0181-the-below-md-single-pane-workspace-is-retired.md`](docs/adr/0181-the-below-md-single-pane-workspace-is-retired.md)
 - **ADR-0182** _(Accepted; amends ADR-0143)_ — A page grid splits on the width it has → [`0182-a-page-grid-splits-on-the-width-it-has.md`](docs/adr/0182-a-page-grid-splits-on-the-width-it-has.md)
@@ -624,6 +627,8 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0219** _(Accepted; amends ADR-0092, extends ADR-0216 D9 and ADR-0026)_ — A selected activity's bar takes the whole foot row on a short window, and the facts wait → [`0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md`](docs/adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)
 - **ADR-0220** _(Accepted; amends ADR-0028; D7 added for #588)_ — The first planner to open a free plan holds the pen → [`0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md`](docs/adr/0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md)
 - **ADR-0221** _(Accepted; amends ADR-0016 §5)_ — An invitation waits for the address it was sent to → [`0221-an-invitation-waits-for-the-address-it-was-sent-to.md`](docs/adr/0221-an-invitation-waits-for-the-address-it-was-sent-to.md)
+- **ADR-0222** _(Accepted; amends ADR-0179 D1, D2, D8–D10 and ADR-0118 D1)_ — The layout is designed at 1280 × 800, and the plan workspace scales to fit below it → [`0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md`](docs/adr/0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md)
+- **ADR-0223** _(Accepted; amends ADR-0111, CLAUDE.md §13 and §19.13)_ — Accessibility basics as we build, a full sweep at milestones → [`0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md`](docs/adr/0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
@@ -1183,24 +1188,10 @@ run_once_fired`) and its notification was delivered **at 16:47 — about
       everything that does not depend on it**. A blocking question blocks one
       milestone, not the programme.
 
-13. **A shared primitive's keyboard contract is reviewed before release** (ADR-0111).
-    Changing which keys `Deck`, `Toolbar`, `Menu`, `Combobox`, `Tabs`, `Dialog` or a
-    `*Field` claims — or where focus goes when one opens, closes, unmounts or shades —
-    means running **accessibility-reviewer** (and **component-reviewer** where more than
-    one primitive implements the rule) **before** the change ships, not at the next
-    epic's gate pass.
-
-    It is not a gate and cannot be. Every defect in this class is a statement about what
-    a real browser does with a real focus ring — that a single-line input ignores the
-    vertical arrows and a date input does not, that a modal's top layer swallows a
-    portalled menu, that `preventDefault` without `stopPropagation` still reaches an
-    ancestor through the React tree. jsdom has none of those things, so the unit tier
-    structurally cannot ask; a journey can, but only about a path somebody thought to
-    drive, and nobody writes one for "press ArrowUp in the date field" before suspecting
-    it. **Twice in two days such a change passed every gate here and was wrong — the
-    second time inside the fix for the first, already released** (`docs/TECH_DEBT.md`
-    #189, then #192). Both were found in minutes by a reviewer that executed the
-    component. Treat it as the weak instrument §19.11's last bullet describes.
+13. **Accessibility is swept at milestones** (ADR-0223). Check the basics as you build; run
+    `accessibility-reviewer` over the epic's screens at its end, and fix what it finds before the next
+    epic starts. ADR-0111's per-change review is withdrawn, but its diagnosis stands: no gate sees
+    this class of defect, so the sweep is the only thing that does.
 
 14. **Spend the expensive model on decisions, not on keystrokes** (product owner, 2026-09-29).
     The standard does not change with the model; what changes is which model does which part.

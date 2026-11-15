@@ -1,6 +1,7 @@
 # ADR-0111 — A shared primitive's keyboard contract is reviewed before release, not after
 
-- **Status:** Accepted
+- **Status:** Accepted; its decision is withdrawn by ADR-0223 (2026-11-15), which moves the review to a
+  sweep at the end of each epic. The diagnosis below still stands.
 - **Date:** 2026-08-26
 - **Supersedes:** nothing
 - **Amends:** ADR-0110 (which established that a gate is verified against the defect it names; this
