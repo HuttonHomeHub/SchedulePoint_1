@@ -61,7 +61,30 @@ The owner's host pulls each one automatically.
 
 ## What is next
 
-Nothing approved is waiting. Candidates for the owner, none started:
+**The owner set the direction on 2026-11-15, after this file was first written. It replaces the candidate list
+below as the starting point; nothing of it is built or specified yet.**
+
+1. **A new minimum window size, first.** The design floor moves from 1024 × 600 (ADR-0179) to **1280 × 800**, a
+   normal laptop. Below it, **the plan workspace (diagram, Gantt and their toolbars) scales down to fit**, like a
+   small zoom; forms, dialogs and every other page keep reflowing normally at any size. The owner's devices (the Dell
+   monitor, about a 1912 × 948 browser window, and the Surface Pro) are well above it. **The catch to design for:**
+   browser zoom and larger text make the window look smaller to the app, so scaling must never undo a reader's own
+   zoom or 200 % text (WCAG 1.4.4, a merge requirement, §13). This changes ADR-0179 and the rules built on the
+   1024 floor (ADR-0118, -0180, -0183, -0185, -0213, -0219 and the short-window work), so it is an ADR plus a spec
+   for the owner's approval before any code, and it comes before the runbook because it changes what the runbook
+   tests. The owner's words: rather than keep making rules for small windows, scale the app down so it works at any
+   size as a tiny zoom.
+2. **A new, fully detailed runbook, one section at a time.** The old runbook
+   (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`, chapters 1 to 8 answered, 9 to 12 not) is retired, because
+   its later chapters grew thin. The new one has **more, smaller sections, each fully detailed**, and each is written
+   against the current release **only after the previous section's problems are all fixed and released**. **No
+   parked list** (the owner's choice): every problem a section raises, however big, is fixed before the next section
+   is written; a fix that crosses an ADR-0105 trigger still gets its spec and approval first, and the next section
+   waits for it. Before writing section 1, bring the walkthrough problem list
+   (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, last marked at web 1.8.0) up to date against the code, so
+   the first section does not re-test what is already known.
+
+The candidates below are still real defects; the new runbook will meet most of them.
 
 **Batch G (the "needs a browser" group) was checked in Chromium; verdicts, no fixes made.** Ranks are the walkthrough
 list's (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, not updated with these):
