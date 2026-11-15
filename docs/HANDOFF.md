@@ -84,6 +84,14 @@ below as the starting point; nothing of it is built or specified yet.**
    (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, last marked at web 1.8.0) up to date against the code, so
    the first section does not re-test what is already known.
 
+3. **Accessibility: basics now, a sweep later** (owner, 2026-11-15). Keep the cheap basics as work is built
+   (keyboard operation, clear names on controls, browser zoom and larger text keep working). **Drop the rule that
+   every change to focus, announcements or shared controls needs a browser accessibility review before release**
+   (CLAUDE.md §19.13, ADR-0111) and run a full accessibility sweep at milestones instead; §13's "merge requirement"
+   wording changes to match. The owner's reason: build the application first rather than let accessibility slow it.
+   Write this as an ADR amending ADR-0111 and §13, alongside the window-size ADR; until it is accepted, the old rule
+   still applies.
+
 The candidates below are still real defects; the new runbook will meet most of them.
 
 **Batch G (the "needs a browser" group) was checked in Chromium; verdicts, no fixes made.** Ranks are the walkthrough
