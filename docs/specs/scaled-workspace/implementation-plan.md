@@ -1,7 +1,7 @@
 # Implementation Plan: The plan workspace scales to fit below 1280 × 800
 
-- **Status:** Draft — 2026-11-15, waiting for the product owner's approval.
-- **Spec:** [`feature-spec.md`](feature-spec.md) · **ADR:** [ADR-0222](adr-0222-draft.md)
+- **Status:** Approved — 2026-11-15 by the product owner.
+- **Spec:** [`feature-spec.md`](feature-spec.md) · **ADR:** [ADR-0222](../../adr/0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md)
 
 ## Breakdown
 
@@ -66,14 +66,14 @@ built and released here; none is parked. _Complexity M; scope set by the measure
 ## Sequencing & slices
 
 M0 → M1 → M2 → M3, each released before the next starts. M1 is shippable alone (scaling with the guards); M2 adds
-the switch that covers browsers M0 could not verify, so **M1 and M2 ship together if Q3 is answered "scale with a
-switch"**, because without the switch a zoomed reader in such a browser would lose their zoom for one release.
+the switch that covers browsers M0 could not verify, so **M1 and M2 ship together** (Q3 was answered "shrink, with a
+switch"), because without the switch a zoomed reader in such a browser would lose their zoom for one release.
 
 ## Definition of Done (per task)
 
 The pre-push gate run (`scripts/prepush.sh`), the relevant `scripts/e2e-local.sh web:<suite>` runs, every check on
 the pull request's head green after dedupe, a changeset, docs updated, and the accessibility basics checked
-(ADR-0223 D1 if accepted; otherwise ADR-0111's review for the shared toolbar and deck changes).
+(ADR-0223 D1), with the full accessibility sweep at the end of the epic (ADR-0223 D3).
 
 ## Risks & assumptions (rollup)
 

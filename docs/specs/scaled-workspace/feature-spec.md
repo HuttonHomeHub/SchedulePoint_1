@@ -1,7 +1,8 @@
 # Feature Spec: The plan workspace scales to fit below 1280 × 800
 
-- **Status:** Draft — 2026-11-15, waiting for the product owner's approval.
-- **ADR:** [ADR-0222](adr-0222-draft.md)
+- **Status:** Approved — 2026-11-15 by the product owner, with every recommendation (Q1 the window, Q2 0.75,
+  Q3 shrink with the switch); filed as ADR-0222.
+- **ADR:** [ADR-0222](../../adr/0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md)
 - **Plan:** [`implementation-plan.md`](implementation-plan.md)
 - **Why a spec** (ADR-0105): it adds a control (the actual-size switch), changes shared gates (the designed
   sweep moves) and changes how shared components answer layout questions.

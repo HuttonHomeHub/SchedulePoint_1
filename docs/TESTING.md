@@ -432,26 +432,19 @@ Claude Code container with `date +%s.%N` either side of `pnpm -s check:web-bundl
 (`docs/specs/prepush-bundle-gate/m1-measurement.md`). Until then the budget ran only in CI, on the
 premise of "a five-second prepush", and PR #701 passed this gate and failed CI on the bundle.
 
-### One thing the gate structurally cannot check (ADR-0111)
+### One thing the gate structurally cannot check (ADR-0111, ADR-0223)
 
-**A change to a shared primitive's keyboard or focus contract gets a specialist review before it is
-released.** `accessibility-reviewer`, plus `component-reviewer` when the change touches a rule more
-than one primitive implements.
+**Accessibility defects of the focus-and-keyboard kind are found by a sweep at the end of each epic**
+(ADR-0223), not by a review of every change. `accessibility-reviewer` runs over every screen and control
+the epic added or changed, with `component-reviewer` when a shared primitive in `components/ui/` changed,
+and what it finds is fixed before the next epic starts. As each change is built, check the basics:
+keyboard, names, zoom and 200 % text, colour.
 
-The primitives are the things in `components/ui/` owning a roving `tabindex`, a focus trap, an
-arrow-key model or focus restoration — `Deck`, `Toolbar`, `Menu`, `Combobox`, `Tabs`, `Dialog`, the
-`*Field` family. The contract is which keys they claim, which they pass on, and where focus goes
-when something opens, closes, unmounts or shades.
-
-**Why a review and not a test:** every defect in this class is a statement about what a real browser
-does with a real focus ring — that a single-line input ignores the vertical arrows and a date input
-does not, that a modal's top layer swallows a portalled menu, that `preventDefault` without
-`stopPropagation` still reaches an ancestor through the React tree. jsdom has no layout, no top
-layer and no focus ring, so the unit tier cannot ask; a journey can, but only about paths somebody
-thought to drive, and nobody writes one for "press ArrowUp in the date field" before suspecting it.
-Twice in two days such a change passed every gate here and was wrong (`docs/TECH_DEBT.md` #189, then
-#192 **inside the fix for #189**, released). Both were found in minutes by a reviewer that executed
-the component. Treat this as the weak instrument it is — it is cheap, and nothing else covers it.
+**Why a review and not a test** (ADR-0111's diagnosis, which still stands): every defect in this class is
+a statement about what a real browser does with a real focus ring — that a single-line input ignores the
+vertical arrows and a date input does not, that a modal's top layer swallows a portalled menu. jsdom has no
+layout, no top layer and no focus ring, so the unit tier cannot ask; a journey can, but only about paths
+somebody thought to drive (`docs/TECH_DEBT.md` #189 and #192).
 
 **And the e2e half is where a reused server quietly invalidates the result.** `scripts/e2e-local.sh`
 refuses to run while anything answers on 3000 or 5173, because `reuseExistingServer` is true outside

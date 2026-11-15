@@ -1,9 +1,10 @@
 ---
 name: accessibility-reviewer
 description: >-
-  Use to audit UI changes for accessibility (WCAG 2.2 AA) before merge — any new
-  or changed component, form, dialog, table, or page. Invoke PROACTIVELY after
-  building interactive UI. Read-only: reports findings, does not edit code.
+  Use to audit UI for accessibility (WCAG 2.2 AA) — the full sweep at the end of
+  each epic over every screen and control it added or changed (ADR-0223), or a
+  single change when a problem is suspected. Read-only: reports findings, does not
+  edit code.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---

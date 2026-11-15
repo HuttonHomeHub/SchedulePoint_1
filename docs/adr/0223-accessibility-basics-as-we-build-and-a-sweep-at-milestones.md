@@ -1,6 +1,6 @@
 # ADR-0223: Accessibility basics as we build, a full sweep at milestones
 
-- **Status:** Proposed — 2026-11-15. Waiting for the product owner's approval.
+- **Status:** Accepted — 2026-11-15 by the product owner, as written.
 - **Date:** 2026-11-15
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:**
@@ -65,7 +65,7 @@ saved by removing them.
 **D5 — The target is unchanged.** SchedulePoint still aims at WCAG 2.2 AA. What changes is that conformance is
 established at each sweep rather than claimed for every merge.
 
-**The new wording, applied when this is accepted:**
+**The new wording, applied with this ADR:**
 
 - CLAUDE.md §13, first bullet: "Target **WCAG 2.2 AA**. The basics (keyboard, names, zoom and text size, colour) are
   checked as every change is built, the automated checks gate every build, and a full sweep runs at the end of

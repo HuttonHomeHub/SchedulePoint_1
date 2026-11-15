@@ -470,7 +470,13 @@ keep `main` releasable.
   [`docs/specs/invitation-survives-email-confirmation/`](specs/invitation-survives-email-confirmation/feature-spec.md)).
   On a host that requires email confirmation, an invitee who confirms and signs in will find the invitation waiting on
   the first screen, whichever browser they used. M1 adds the two API routes; the screen follows in M2.
-- **Accessibility basics as we build, a full sweep at milestones** (proposed 2026-11-15,
+- **The layout is designed at 1280 × 800, and the plan workspace scales to fit below it** (approved 2026-11-15,
+  [ADR-0222](adr/0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md); spec and plan at
+  [`docs/specs/scaled-workspace/`](specs/scaled-workspace/feature-spec.md)). Below a 1280 × 800 window the diagram,
+  the Gantt and their toolbars shrink to fit, down to 75 %, instead of rearranging themselves; forms, dialogs and
+  other pages reflow as before. The scale never undoes a reader's own browser zoom or larger text, and a "Scaled to
+  N %" switch gives actual size on browsers that cannot report zoom.
+- **Accessibility basics as we build, a full sweep at milestones** (accepted 2026-11-15,
   [ADR-0223](adr/0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md)). Keyboard, names, zoom and text
   size are checked as work is built and the automated checks still gate every build; the per-change browser review
   gives way to a full sweep at the end of each epic.

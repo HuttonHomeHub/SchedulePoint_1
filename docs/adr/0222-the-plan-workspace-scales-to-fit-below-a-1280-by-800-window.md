@@ -1,9 +1,9 @@
 # ADR-0222: The layout is designed at 1280 × 800, and the plan workspace scales to fit below it
 
-- **Status:** Draft — kept beside its spec until the product owner approves both; it is then filed as
-  `docs/adr/0222-the-plan-workspace-scales-to-fit-below-a-1280-by-800-window.md`.
-- **Spec:** [`docs/specs/scaled-workspace/feature-spec.md`](feature-spec.md)
-  · **Plan:** [`implementation-plan.md`](implementation-plan.md)
+- **Status:** Accepted — 2026-11-15, with its spec. The product owner chose every recommendation: Q1 the
+  browser window, Q2 a floor of 0.75, Q3 shrink with the "Scaled to N %" switch.
+- **Spec:** [`docs/specs/scaled-workspace/feature-spec.md`](../specs/scaled-workspace/feature-spec.md)
+  · **Plan:** [`implementation-plan.md`](../specs/scaled-workspace/implementation-plan.md)
 - **Date:** 2026-11-15
 - **Deciders:** James Ewbank (product owner) and Claude Code.
 - **Amends:**
@@ -66,8 +66,7 @@ the scale must never do that.
 
 **D1 — The designed size is a 1280 × 800 CSS px browser window.** Every screen is designed and gated at and
 above it. 1280 is the existing first promotion stage (`PROMOTION_STAGES`, 80 rem, `breakpoints.ts`), so the
-toolbar's wide layout and the designed size begin at the same width. _(Pending spec question Q1: window or
-screen.)_
+toolbar's wide layout and the designed size begin at the same width.
 
 **D2 — Below it, the plan workspace scales; nothing else does.**
 
@@ -81,7 +80,7 @@ screen.)_
 - **When it changes:** the scale is recomputed when the workspace's box changes size, never during a pointer
   drag (it waits for the pointer to be released, as the viewport banner does under ADR-0179 D4).
 
-**D3 — The scale has a floor of 0.75, and nothing pressable renders under 24 px.** _(Pending Q2.)_
+**D3 — The scale has a floor of 0.75, and nothing pressable renders under 24 px.**
 
 - 0.75 is what a 1024 × 600 window needs (600 / 800), so every window that met the old floor gets the designed
   layout, scaled.
@@ -97,7 +96,7 @@ screen.)_
    decided by M0's measurement. A browser that cannot report it is covered by item 3.
 3. **The reader chose actual size.** While the workspace is scaled, the foot row shows a small control,
    "Scaled to 88 %" (the live figure), which switches to actual size and back. The choice is kept on this device
-   (ADR-0173's precedent), so a zoomed reader whose browser cannot report zoom makes it once. _(Pending Q3.)_
+   (ADR-0173's precedent), so a zoomed reader whose browser cannot report zoom makes it once.
 
 So zooming in never makes the workspace smaller and never leaves it the same size: in a browser that reports
 zoom, the scale drops out as soon as the reader zooms; in one that does not, the control is one press away and
