@@ -1,7 +1,7 @@
 import { type Locator, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, chooseActualSize, expect, test } from '../e2e-support/test';
 import {
   canvas,
   createHierarchy,
@@ -31,7 +31,7 @@ import { LANE_HEIGHT } from '../src/features/tsld/render/geometry';
 const SHORT = { width: 1024, height: 600 } as const;
 const LANES = 12;
 /** The class that is the rule under test: removing it from the row restores the facts beside the bar. */
-const RULE_PREFIX = 'short:has-[[data-selection-bar]]:';
+const RULE_PREFIX = 'ws-short:has-[[data-selection-bar]]:';
 
 interface Frame {
   top: number;
@@ -121,6 +121,8 @@ test('on a short window the selection bar takes the whole row, and the clicked b
 }) => {
   test.setTimeout(300_000);
   await acknowledgeViewportNotice(page.context());
+  // ADR-0219 is a rule for a workspace that is not scaled; at actual size the window is the layout.
+  await chooseActualSize(page.context());
   await page.setViewportSize(SHORT);
   const stamp = Date.now();
   const orgSlug = await onboard(page, stamp);

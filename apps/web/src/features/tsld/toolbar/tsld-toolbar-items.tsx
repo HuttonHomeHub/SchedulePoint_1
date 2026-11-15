@@ -1336,7 +1336,7 @@ function applyLevellingPlanReason(
  * placeholder is the only thing that loses room, and the accessible name does not. Wider windows
  * keep 240, so the product owner's own displays (1646 and 1912) are unchanged.
  */
-const SEARCH_FIELD_WIDTH_CLASS = 'w-42 max-sm:w-36 wide:w-[min(15rem,32vw)]';
+const SEARCH_FIELD_WIDTH_CLASS = 'w-42 band-max-sm:w-36 band-wide:w-[min(15rem,32vw)]';
 
 /**
  * The search field's own geometry.

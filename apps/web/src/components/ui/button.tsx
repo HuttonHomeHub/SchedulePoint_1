@@ -60,6 +60,11 @@ const buttonVariants = cva(
         // the variant's whole reason had lapsed and its one consumer — the minimap's close — was
         // the odd size out in a family of three. A variant kept for a rule that no longer exists
         // is the drift class this register tracks, in the design system rather than in prose.
+        // **Inside a scaled plan workspace the two 28 px sizes lay out at 32** (`in-data-[workspace-scaled]`,
+        // ADR-0222 D3): a transform at the 0.75 floor draws 32 px as 24, the smallest target WCAG 2.2 §2.5.8
+        // allows, where 28 would render at 21. The attribute is on the scaled wrapper
+        // (`workspace-scale-provider.tsx`) and absent at scale 1, and a coarse pointer's own rule below
+        // still outranks it (it is declared later), so a finger never gets less than before.
         // Row icon button for a target in a row that GROWS with it. 28 px on a fine pointer, 44 on
         // a coarse one (ADR-0118 D2), written as a coarse override for the reason `icon` gives
         // above. The row has to be able to take the extra 16 px: the rows of the
@@ -68,7 +73,7 @@ const buttonVariants = cva(
         //
         // A target in a row that grows with it is `icon-row`; a target in a fixed container is
         // `icon-sm` and is on ADR-0118 D1's list.
-        'icon-row': 'size-7 pointer-coarse:size-(--control-h)',
+        'icon-row': 'size-7 in-data-[workspace-scaled]:size-8 pointer-coarse:size-(--control-h)',
         // Icon button for a target in a container whose height is fixed independently of it. **Stays
         // 28 px on BOTH pointers, and that is ADR-0118 D1's second named exception rather than an
         // oversight** — see D6a.
@@ -88,7 +93,7 @@ const buttonVariants = cva(
         // `control-height.structural.test.ts` lists the call sites, so a new one is a decision. The
         // tables, the Explorer tree and the spine take `icon-row`: their containers follow the
         // pointer, so they grow with the button.
-        'icon-sm': 'size-7',
+        'icon-sm': 'size-7 in-data-[workspace-scaled]:size-8',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

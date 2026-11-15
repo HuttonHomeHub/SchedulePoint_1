@@ -1,4 +1,4 @@
-import { useMediaQuery } from '@/components/ui/use-media-query';
+import { useWorkspaceMedia } from '@/components/layout/workspace/workspace-media';
 import { DESIGNED_MIN_WIDTH_QUERY } from '@/lib/breakpoints';
 
 /**
@@ -26,6 +26,6 @@ import { DESIGNED_MIN_WIDTH_QUERY } from '@/lib/breakpoints';
  * doing that, that test is the one that fails.
  */
 export function useDeckRowOrder<Row extends string>(rows: readonly Row[]): readonly Row[] {
-  const wide = useMediaQuery(DESIGNED_MIN_WIDTH_QUERY, true);
+  const wide = useWorkspaceMedia(DESIGNED_MIN_WIDTH_QUERY, true);
   return wide ? rows : [...rows].reverse();
 }

@@ -5,6 +5,7 @@ import type { LegendPanelPosition } from '../toolbar/use-legend-panel-prefs';
 
 import { TsldLegend, type LensLegendInfo } from './TsldLegend';
 
+import { deltaInLayout, layoutRect } from '@/components/layout/workspace/workspace-scale';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
@@ -84,8 +85,8 @@ export function TsldLegendPanel({
     const parent = panel?.offsetParent as HTMLElement | null;
     if (!panel || !parent) return;
     const clamp = (): void => {
-      const parentRect = parent.getBoundingClientRect();
-      const panelRect = panel.getBoundingClientRect();
+      const parentRect = layoutRect(parent);
+      const panelRect = layoutRect(panel);
       const x = Math.min(Math.max(0, parentRect.width - panelRect.width), Math.max(0, position.x));
       const y = Math.min(
         Math.max(0, parentRect.height - panelRect.height),
@@ -112,8 +113,8 @@ export function TsldLegendPanel({
     const panel = panelRef.current;
     const parent = panel?.offsetParent as HTMLElement | null;
     if (!panel || !parent) return;
-    const panelRect = panel.getBoundingClientRect();
-    const parentRect = parent.getBoundingClientRect();
+    const panelRect = layoutRect(panel);
+    const parentRect = layoutRect(parent);
     dragOrigin.current = {
       pointerX: event.clientX,
       pointerY: event.clientY,
@@ -129,15 +130,18 @@ export function TsldLegendPanel({
     const panel = panelRef.current;
     const parent = panel?.offsetParent as HTMLElement | null;
     if (!origin || !panel || !parent) return;
-    const parentRect = parent.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
+    const parentRect = layoutRect(parent);
+    const panelRect = layoutRect(panel);
     const maxX = Math.max(0, parentRect.width - panelRect.width);
     const maxY = Math.max(0, parentRect.height - panelRect.height);
     const x = Math.min(
       Math.max(leftInsetPx, maxX),
-      Math.max(leftInsetPx, origin.x + (event.clientX - origin.pointerX)),
+      Math.max(leftInsetPx, origin.x + deltaInLayout(panel, event.clientX - origin.pointerX)),
     );
-    const y = Math.min(maxY, Math.max(0, origin.y + (event.clientY - origin.pointerY)));
+    const y = Math.min(
+      maxY,
+      Math.max(0, origin.y + deltaInLayout(panel, event.clientY - origin.pointerY)),
+    );
     setDrag({ x, y });
   };
 

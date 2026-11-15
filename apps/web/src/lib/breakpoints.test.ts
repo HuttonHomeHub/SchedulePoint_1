@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   DECK_TAIL_ROOM_QUERY,
+  DESIGNED_WINDOW_HEIGHT_PX,
+  DESIGNED_WINDOW_WIDTH_PX,
   DESIGNED_MIN_WIDTH_PX,
   DESIGNED_MIN_WIDTH_QUERY,
   designedMinWidthPx,
@@ -142,5 +144,52 @@ describe('SHORT_QUERY', () => {
   it('puts the 1024 x 600 design floor inside it and a 1280 x 800 window outside', () => {
     expect(600).toBeLessThanOrEqual(SHORT_MAX_HEIGHT_REM * 16);
     expect(800).toBeGreaterThan(SHORT_MAX_HEIGHT_REM * 16);
+  });
+});
+
+describe('the plan workspace’s container variants (ADR-0222 D5)', () => {
+  const globals = readFileSync(resolve(import.meta.dirname, '../styles/globals.css'), 'utf8');
+  const scale = readFileSync(
+    resolve(import.meta.dirname, '../components/layout/workspace/workspace-scale.ts'),
+    'utf8',
+  );
+  const insetHeight = Number(/WORKSPACE_WINDOW_INSET_HEIGHT_PX = (\d+)/.exec(scale)?.[1]);
+
+  it('answers `ws-short` with `short`’s threshold less what the shell keeps above the root', () => {
+    // The 139 px is the header 48, the band 88 and its 3 px rule: the root's box at 1280 x 800 is 661.
+    expect(insetHeight).toBe(139);
+    expect(globals).toContain(
+      `@container workspace (height <= calc(${String(SHORT_MAX_HEIGHT_REM)}rem - ${String(insetHeight)}px))`,
+    );
+  });
+
+  it('asks the band the width questions `max-lg`, `max-sm` and `wide` ask of the window', () => {
+    expect(DESIGNED_MIN_WIDTH_QUERY).toBe('(min-width: 64rem)');
+    expect(globals).toContain('@container workspace-band (width < 64rem)');
+    expect(globals).toContain('@container workspace-band (width < 40rem)');
+    expect(globals).toContain('@container workspace-band (width >= 100rem)');
+    expect(globals).toContain('--breakpoint-wide: 100rem');
+  });
+
+  it('asks the root the `sm` question at the same 40rem', () => {
+    expect(globals).toContain('@container workspace (width >= 40rem)');
+    expect(globals).toContain('@container workspace (width < 40rem)');
+  });
+
+  it('applies the two containers as utilities, one size and one inline-size', () => {
+    expect(globals).toContain('container: workspace / size;');
+    expect(globals).toContain('container: workspace-band / inline-size;');
+  });
+});
+
+describe('the designed window (ADR-0222 D1)', () => {
+  it('is 1280 x 800, and its width is the first promotion stage', () => {
+    expect(DESIGNED_WINDOW_WIDTH_PX).toBe(1280);
+    expect(DESIGNED_WINDOW_HEIGHT_PX).toBe(800);
+    expect(PROMOTION_STAGES[0].rem * 16).toBe(DESIGNED_WINDOW_WIDTH_PX);
+  });
+
+  it('is above the notice’s trigger, which stays where ADR-0179 put it', () => {
+    expect(DESIGNED_WINDOW_WIDTH_PX).toBeGreaterThan(DESIGNED_MIN_WIDTH_PX);
   });
 });

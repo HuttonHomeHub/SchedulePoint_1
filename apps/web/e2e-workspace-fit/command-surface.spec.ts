@@ -4,7 +4,7 @@ import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { showActivities } from '../e2e/workspace';
 import { ganttRow } from '../e2e-gantt/support';
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, chooseActualSize, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   linkActivities,
@@ -640,6 +640,11 @@ test.describe('The plan command surface', () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
+    // **At actual size, for the whole file** (ADR-0222 D9). This file asserts how the command surface
+    // reflows at 1024 and 1280, which is the layout a reader who zoomed, enlarged their text or chose
+    // actual size gets; left to itself a window under 1280 x 800 is now the designed layout drawn at
+    // 0.75, which `scaled-workspace.spec.ts` asserts, including the 24 px target floor.
+    await chooseActualSize(page.context());
     const orgSlug = await onboard(page, Date.now());
     orgSlugForDividers = orgSlug;
     await createHierarchy(page);
@@ -2534,6 +2539,7 @@ test.describe('The plan command surface, under a coarse pointer', () => {
     // The upright-tablet check below narrows this page to 834: a reader who got there pressed
     // Continue anyway first. (A `beforeAll` context is outside the fixture's reach.)
     await acknowledgeViewportNotice(context);
+    await chooseActualSize(context);
     page = await context.newPage();
     const orgSlug = await onboard(page, Date.now() + 7);
     orgSlugForSweep = orgSlug;
@@ -3279,6 +3285,7 @@ test.describe('The collapsed spine, under a mouse', () => {
   test.beforeAll(async ({ browser }) => {
     context = await browser.newContext({ viewport: { width: 1912, height: 948 } });
     await acknowledgeViewportNotice(context);
+    await chooseActualSize(context);
     page = await context.newPage();
     await onboard(page, Date.now() + 11);
     await createHierarchy(page);
@@ -3382,6 +3389,7 @@ test.describe('The plan command surface, at a fractional device scale', () => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: { width: 1646, height: 1097 } });
     await acknowledgeViewportNotice(context);
+    await chooseActualSize(context);
     const seeded = await context.newPage();
     const orgSlug = await onboard(seeded, Date.now() + 41);
     await createHierarchy(seeded);
@@ -3419,6 +3427,7 @@ test.describe('The plan command surface, at a fractional device scale', () => {
     });
     try {
       await acknowledgeViewportNotice(context);
+      await chooseActualSize(context);
       const page = await context.newPage();
       await page.goto(planUrl);
       await holdThePen(page);

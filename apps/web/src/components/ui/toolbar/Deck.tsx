@@ -299,7 +299,7 @@ export function Deck<Ctx>({
 
   /**
    * **A control the keyboard focuses is brought inside the scrolling line, clear of the edge fade**
-   * (US-6, ADR-0111). `scroll-padding` on the deck (`max-lg:scroll-px-8`, the fade's width) is what makes
+   * (US-6, ADR-0111). `scroll-padding` on the deck (`band-max-lg:scroll-px-8`, the fade's width) is what makes
    * `nearest` stop short of the edge instead of leaving the control flush with it, or under the fade.
    *
    * **Keyboard focus only (`:focus-visible`).** A pointer press focuses a button too, and scrolling
@@ -500,16 +500,16 @@ export function Deck<Ctx>({
         '@container/deck flex flex-col gap-2',
         // **Below `lg` the deck is ONE line that scrolls sideways** (toolbar-redesign M3, US-6,
         // #471). Both rows sit side by side on a `flex-nowrap` line, LOOK then DO, and the rows,
-        // groups and sections below stop wrapping and stop shrinking (`max-lg:shrink-0`), so a
+        // groups and sections below stop wrapping and stop shrinking (`band-max-lg:shrink-0`), so a
         // control keeps its width and the line runs past the edge instead of folding into five or
         // eleven stacked lines that took 355-603 px of a 360-720 px window. `scroll-px-8` is the
         // edge fade's width (`deck-edge-fade`, `globals.css`): a control scrolled into view stops
         // short of the edge rather than flush with it or under the fade. The inset is the root's
-        // own (`max-lg:px-2`), because the wrapper's gives way at this width so the line runs to the
+        // own (`band-max-lg:px-2`), because the wrapper's gives way at this width so the line runs to the
         // window's edge, where a half-clipped control tells a reader there is more.
-        // `max-lg:overflow-y-hidden` is not a decision: a scroller on one axis computes the other
+        // `band-max-lg:overflow-y-hidden` is not a decision: a scroller on one axis computes the other
         // to `auto`, and a line exactly its own height must not grow a vertical scrollbar.
-        'max-lg:deck-edge-fade max-lg:scroll-px-8 max-lg:flex-row max-lg:items-start max-lg:gap-4 max-lg:overflow-x-auto max-lg:overflow-y-hidden max-lg:px-2',
+        'band-max-lg:deck-edge-fade band-max-lg:scroll-px-8 band-max-lg:flex-row band-max-lg:items-start band-max-lg:gap-4 band-max-lg:overflow-x-auto band-max-lg:overflow-y-hidden band-max-lg:px-2',
         // **A designed focus state, not an incidental one** (accessibility gate, ADR-0135).
         // This container became focusable only when the handoff gained somewhere to put focus,
         // and until then nothing had ever decided what "the toolbar itself is focused" looks
@@ -532,14 +532,14 @@ export function Deck<Ctx>({
             // `lg` would change). Clip margin, divider offsets and the gap are one set of numbers:
             // `DECK_GEOMETRY_PX`. Horizontal gap only, so a wrapped line does not move further from the
             // one above it.
-            '@roomy/deck:gap-x-6 deck-row-clip flex flex-wrap items-start gap-2 max-lg:shrink-0 max-lg:flex-nowrap',
+            '@roomy/deck:gap-x-6 deck-row-clip band-max-lg:shrink-0 band-max-lg:flex-nowrap flex flex-wrap items-start gap-2',
             // The seam between the two rows on the scrolling line: below `lg` the second row follows
             // the first on the same line, and nothing else would say a row ended. A border and not a
             // pseudo-element, because the row's clip would hide anything outside its box; `-ml-2`
-            // and `pl-2` put it mid-gap (half of the root's `max-lg:gap-4`). That is a different gap
+            // and `pl-2` put it mid-gap (half of the root's `band-max-lg:gap-4`). That is a different gap
             // from `DECK_GEOMETRY_PX.gap` (between rows, below `lg`), so it is not derived from it.
             rowIndex > 0 &&
-              'max-lg:border-muted-foreground/40 max-lg:-ml-2 max-lg:border-l max-lg:pl-2',
+              'band-max-lg:border-muted-foreground/40 band-max-lg:-ml-2 band-max-lg:border-l band-max-lg:pl-2',
           )}
         >
           {groups
@@ -585,7 +585,7 @@ export function Deck<Ctx>({
                       // it they anchor to an ancestor outside the scrolling line below `lg`, escape its
                       // `overflow-x-auto`, widen the shell and let a click scroll the whole page sideways
                       // (found by `narrow-shell.spec.ts` when the pill, which was `relative`, went).
-                      'relative flex items-stretch gap-2 max-lg:shrink-0',
+                      'band-max-lg:shrink-0 relative flex items-stretch gap-2',
                       trailing && 'ml-auto',
                       // **Every group but the first on its row is split from its neighbour by a divider**
                       // (toolbar-grid M1, R1) — a pseudo-element in the gap before it, so it costs the row
@@ -615,7 +615,7 @@ export function Deck<Ctx>({
                 the commands. It was this span, its `pr-2`, its `border-r` and the gaps either
                 side, twice over on a row carrying two cards. The captions cost the row more than
                 the control the previous milestone added to it. */}
-                    <div className="flex flex-wrap items-stretch gap-1 max-lg:flex-nowrap">
+                    <div className="band-max-lg:flex-nowrap flex flex-wrap items-stretch gap-1">
                       {group.sections.map((section, sectionIndex) => (
                         <div
                           key={
@@ -624,7 +624,7 @@ export function Deck<Ctx>({
                               : (section[0]?.item.group ?? sectionIndex)
                           }
                           className={cn(
-                            'flex flex-wrap items-stretch gap-1 max-lg:shrink-0 max-lg:flex-nowrap',
+                            'band-max-lg:shrink-0 band-max-lg:flex-nowrap flex flex-wrap items-stretch gap-1',
                             // The seven-group taxonomy, surviving as an inset hairline between sections
                             // rather than as a caption above them — the ONE seam treatment the three
                             // bands share (`TOOLBAR_INSET_RULE`), where this was a `border-l` of its own.

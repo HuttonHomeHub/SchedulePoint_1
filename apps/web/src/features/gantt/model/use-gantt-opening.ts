@@ -8,6 +8,8 @@ import {
   type ParsedHiddenColumns,
 } from './gantt-view-state';
 
+import { layoutSize } from '@/components/layout/workspace/workspace-scale';
+
 /** What {@link useGanttOpening} hands the host. */
 export interface GanttOpening {
   /** The columns this view hides: the stated choice, else the narrow or the usual default. */
@@ -101,7 +103,7 @@ export function useGanttOpening(input: {
           threshold: latest.current.threshold,
         }),
       });
-    const width = element.getBoundingClientRect().width;
+    const width = layoutSize(element).width;
     if (width > 0) {
       take(width);
       return;
@@ -109,7 +111,7 @@ export function useGanttOpening(input: {
     // Not laid out yet: take the first real width, then stop looking.
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => {
-      const next = element.getBoundingClientRect().width;
+      const next = layoutSize(element).width;
       if (next > 0) {
         take(next);
         observer.disconnect();

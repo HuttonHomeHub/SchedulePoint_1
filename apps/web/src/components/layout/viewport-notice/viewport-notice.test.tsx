@@ -149,7 +149,9 @@ describe('the full page: when it opens', () => {
     const dialog = pageDialog();
     expect(dialog).toHaveAttribute('aria-labelledby', heading.id);
     expect(
-      within(dialog).getByText(/at least 1024 pixels wide\. Your window is\s+900 pixels wide\./),
+      within(dialog).getByText(
+        /at least 1280 × 800\s+pixels\. Below that the plan view shrinks to fit, down to 1024 pixels wide\. Your window is\s+900 pixels wide\./,
+      ),
     ).toHaveAttribute('id', dialog.getAttribute('aria-describedby'));
   });
 
@@ -209,7 +211,7 @@ describe('the full page: when it opens', () => {
     try {
       render(<Tree />);
       expect(
-        within(pageDialog()).getByText(/at least 1280 pixels wide\. Your window is\s+1100 pixels/),
+        within(pageDialog()).getByText(/down to 1280 pixels wide\. Your window is\s+1100 pixels/),
       ).toBeInTheDocument();
     } finally {
       document.documentElement.style.fontSize = '';

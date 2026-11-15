@@ -11,8 +11,11 @@
 1. **Clarity over cleverness.** Data must be unambiguous and scannable.
 2. **Consistency.** One way to do a thing; reuse primitives, never reinvent.
 3. **Accessible by default** — WCAG 2.2 AA is a merge requirement.
-4. **Designed from a laptop up, reflowing below.** Designed from 1024 × 600 (ADR-0179); the
-   Tailwind min-width cascade stays, and content still reflows to 320 px below the floor.
+4. **Designed at 1280 × 800, scaled to fit below it, reflowing everywhere else.** Designed at a
+   1280 × 800 window and up (ADR-0222, which moved the 1024 × 600 floor of ADR-0179). Below it the
+   plan workspace (the command band, the diagram, the Gantt, the panel and the foot row) is laid out at
+   its designed size and drawn smaller, down to 0.75; every other screen, form and dialog keeps
+   reflowing to 320 px. The Tailwind min-width cascade stays.
 5. **One theme, driven by tokens.** ADR-0097 withdrew light, dark and system: the product's
    only theme is declared at `:root`, no class is stamped on `<html>`, and there is no picker. The
    mechanism that would carry a future variant is kept live rather than deleted, so "never branch
@@ -203,8 +206,11 @@ Prefer `border` + low elevation on light surfaces; avoid stacking heavy shadows.
 
 Tailwind's min-width defaults: `sm 40rem` · `md 48rem` · `lg 64rem` ·
 `xl 80rem` · `2xl 96rem`. Primary layout shift (sidebar ⇄ drawer) at `lg`, which is also
-the design floor's width (1024 px, ADR-0179): the layout is designed at `lg` and up, and
-below it content must still reflow without being designed.
+the viewport notice's trigger (1024 px, ADR-0179, kept by ADR-0222 D8): below it content must
+still reflow without being designed. The designed window is 1280 × 800 (ADR-0222 D1), the first
+promotion stage's width, and inside the plan workspace the `sm`/`lg`/`short`/`wide` questions are asked of
+the workspace and its band, not of the window (ADR-0222 D5; `ws-short`, `ws-sm`, `band-max-lg`,
+`band-max-sm` and `band-wide` in `globals.css`).
 
 #### A command surface wraps (ADR-0109)
 

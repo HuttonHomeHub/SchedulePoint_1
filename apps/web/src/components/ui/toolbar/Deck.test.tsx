@@ -623,7 +623,7 @@ describe('Deck — which row leads (owner decision, 2026-10-10)', () => {
     // A border on the row wrapper and not a pseudo-element on its first group: the row clips its
     // own left edge, which would hide anything hung outside its box.
     const seamed = [...document.querySelectorAll('[data-deck-row]')].filter((row) =>
-      row.className.includes('max-lg:border-l'),
+      row.className.includes('band-max-lg:border-l'),
     );
     expect(seamed).toHaveLength(1);
     expect(seamed[0]?.getAttribute('data-deck-row')).toBe('look');

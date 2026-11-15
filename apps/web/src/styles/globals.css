@@ -66,6 +66,70 @@
   height: 100dvh;
 }
 
+/* **The plan workspace's two containers, and the variants that ask them** (ADR-0222 D5). The workspace is
+   laid out at its box divided by a scale and drawn at the scale, so the real window is the wrong box for a
+   layout question inside it (at 1024 x 600 the window is "short" and the workspace is laid out 783 high).
+   `workspace` is the root's wrapper (a size container: width and height); `workspace-band` is the command
+   band's (inline size: the band's height is its content's). `workspace-scale-provider.tsx` is where they are
+   applied. A query inside them answers to the workspace's LAYOUT box, which at scale 1 is the real box.
+
+   - `ws-short` is `short` (a window at most 44rem high) asked of the root. The root is the window less
+     139 px at the designed size (the header 48, the band 88 and its 3 px rule), so 44rem of window is
+     44rem less 139 px of root: the two agree at 1280 x 800, and in a scaled workspace the root answers in
+     layout px. `WORKSPACE_WINDOW_INSET_HEIGHT_PX` (`workspace-scale.ts`) is the same 139 and
+     `breakpoints.test.ts` pins them to each other.
+   - `ws-sm` and `ws-max-sm` are `sm` and `max-sm` (40rem) asked of the root. No inset: the root is at least
+     747 px wide beside a docked Explorer, so `sm` is true in both and the window's own narrow case (the
+     Explorer is a sheet below `lg` and the root is the window's width) answers exactly as the window did.
+   - `band-max-lg`, `band-max-sm` and `band-wide` are `max-lg`, `max-sm` and `wide` asked of the band, which
+     spans the whole window, so the thresholds are the window's own.
+
+   A `ws-` or `band-` class matches only INSIDE its container; outside one (a harness mounting a deck on its
+   own) it never matches, which `workspace-scale.structural.test.ts` guards by listing who uses them. */
+@utility workspace-container {
+  container: workspace / size;
+}
+
+@utility workspace-band-container {
+  container: workspace-band / inline-size;
+}
+
+@custom-variant ws-short {
+  @container workspace (height <= calc(44rem - 139px)) {
+    @slot;
+  }
+}
+
+@custom-variant ws-sm {
+  @container workspace (width >= 40rem) {
+    @slot;
+  }
+}
+
+@custom-variant ws-max-sm {
+  @container workspace (width < 40rem) {
+    @slot;
+  }
+}
+
+@custom-variant band-max-lg {
+  @container workspace-band (width < 64rem) {
+    @slot;
+  }
+}
+
+@custom-variant band-max-sm {
+  @container workspace-band (width < 40rem) {
+    @slot;
+  }
+}
+
+@custom-variant band-wide {
+  @container workspace-band (width >= 100rem) {
+    @slot;
+  }
+}
+
 /* `wide`: 100rem (1600 px). The deck's search field is 240 px from here and 168 below, so the product
    owner's 1646 and 1912 displays keep the field they were designed with
    (`docs/specs/minimum-viewport/m4-measurement.md`). */

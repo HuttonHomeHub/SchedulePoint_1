@@ -59,7 +59,8 @@ describe('Deck and Toolbar measure no width to decide a layout', () => {
 
   it('the one media-query read is the row-order hook, on the shared floor query, and Deck imports it', () => {
     const hook = code('use-deck-row-order.ts');
-    expect(hook).toMatch(/useMediaQuery\(DESIGNED_MIN_WIDTH_QUERY/);
+    // Asked of the workspace (`workspace-media.ts`, ADR-0222 D5), which falls back to the window.
+    expect(hook).toMatch(/useWorkspaceMedia\(DESIGNED_MIN_WIDTH_QUERY/);
     expect(code('Deck.tsx')).toMatch(/useDeckRowOrder\(DECK_ROWS\)/);
     // None of the other three source files reads a media query by itself.
     for (const file of ['Deck.tsx', 'Toolbar.tsx', 'ToolbarButton.tsx', 'ToolbarPopover.tsx']) {
@@ -69,7 +70,7 @@ describe('Deck and Toolbar measure no width to decide a layout', () => {
 
   it('the tail-room read is the shared query, decides a placement, and Deck imports it', () => {
     const hook = code('use-deck-tail-room.ts');
-    expect(hook).toMatch(/useMediaQuery\(DECK_TAIL_ROOM_QUERY/);
+    expect(hook).toMatch(/useWorkspaceMedia\(DECK_TAIL_ROOM_QUERY/);
     expect(hook).not.toMatch(/matchMedia|innerWidth|ResizeObserver/);
     expect(code('Deck.tsx')).toMatch(/useDeckTailRoom\(\)/);
   });

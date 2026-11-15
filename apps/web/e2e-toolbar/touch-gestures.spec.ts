@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { expect, test } from '../e2e-support/test';
+import { chooseActualSize, expect, test } from '../e2e-support/test';
 
 import { addActivity, onboard, openNewPlan } from './support';
 
@@ -390,6 +390,8 @@ test('the tip is raised in the Gantt too, on a coarse pointer', async ({ browser
     viewport: { width: 1024, height: 600 },
     hasTouch: true,
   });
+  // ADR-0118's 44 px finger size is stated at scale 1; a scaled workspace holds 24 (ADR-0222 D3).
+  await chooseActualSize(context);
   const page = await context.newPage();
   try {
     await onboard(page, Date.now() + 2);

@@ -12,6 +12,7 @@ import {
   type MinimapWindow,
 } from '../render/minimap';
 
+import { workspaceScaleOf } from '@/components/layout/workspace/workspace-scale';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -254,7 +255,10 @@ export function TsldMinimap({
       (event.currentTarget as HTMLElement)
         .closest('[data-minimap-surface]')!
         .getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    // The minimap's own coordinates are layout px; under a scaled workspace the pointer and the rect are
+    // both on screen (ADR-0222 D6).
+    const scale = workspaceScaleOf(event.currentTarget);
+    return { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
   };
 
   const onPadPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {

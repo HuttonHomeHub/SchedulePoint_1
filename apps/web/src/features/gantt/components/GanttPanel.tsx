@@ -89,6 +89,7 @@ import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 import { GanttSwimlaneCell } from './GanttSwimlaneCell';
 
 import { CodeColumnsNotice } from '@/components/layout/code-columns-notice';
+import { pointInLayout, workspaceScaleOf } from '@/components/layout/workspace/workspace-scale';
 import { Button } from '@/components/ui/button';
 import {
   FORCED_ARMED_OUTLINE,
@@ -202,7 +203,7 @@ const OFF_FLOAT_PATH_ROW_CLASS = 'text-muted-foreground';
  * empty box so the names line up whatever their kind.
  */
 const DISCLOSURE_SLOT_CLASS =
-  'inline-flex size-6 shrink-0 items-center justify-center align-middle';
+  'inline-flex size-6 in-data-[workspace-scaled]:size-8 shrink-0 items-center justify-center align-middle';
 
 /** Indent per WBS level, ahead of the slot, in the Activity column. */
 const NAME_INDENT_PX = 14;
@@ -1336,7 +1337,8 @@ function GanttPanelBody({
                           // the target-size sweep was specified to run "in both plan views" and
                           // ran in one, so the only surface with sortable headers had never been
                           // swept at all.
-                          'min-h-6',
+                          // A scaled workspace lays it out at 32 so it renders at 24 or more (ADR-0222 D3).
+                          'min-h-6 in-data-[workspace-scaled]:min-h-8',
                           column.align === 'right' ? 'justify-end text-right' : 'text-left',
                           active
                             ? 'text-foreground'
@@ -1566,8 +1568,8 @@ function GanttPanelBody({
           // is measured from — `clientX` alone would be the viewport's and would be wrong by
           // however far the panel sits from the window edge.
           pointerToSize={(event) => {
-            const box = scrollRef.current?.getBoundingClientRect();
-            return box ? event.clientX - box.left : gridWidth;
+            const scroller = scrollRef.current;
+            return scroller ? pointInLayout(event, scroller).x : gridWidth;
           }}
           className="absolute inset-0"
         />
@@ -1926,11 +1928,13 @@ function GanttRowView({
   const scrollRegion = useCallback((): DragScrollRegion | null => {
     const scroller = scrollRef.current;
     if (!scroller) return null;
+    // The region is compared with pointer positions, which are screen px; the widths are layout px.
     const box = scroller.getBoundingClientRect();
+    const scale = workspaceScaleOf(scroller);
     return {
       scroller,
-      left: box.left + scroller.clientLeft + gridWidth,
-      right: box.left + scroller.clientLeft + scroller.clientWidth,
+      left: box.left + (scroller.clientLeft + gridWidth) * scale,
+      right: box.left + (scroller.clientLeft + scroller.clientWidth) * scale,
     };
   }, [scrollRef, gridWidth]);
   const barDrag = useBarPointerDrag({
@@ -2397,7 +2401,9 @@ function GanttRowView({
           <div
             role="gridcell"
             aria-colindex={COLUMNS.length + codeColumns.length + 1}
-            className="flex shrink-0"
+            // `justify-center`: while the workspace is scaled the trigger lays out at 32 in this 28 px
+            // column (`icon-sm`, ADR-0222 D3) and overflows it evenly, rather than being squeezed.
+            className="flex shrink-0 justify-center"
             style={{ width: ACTIONS_COLUMN_WIDTH }}
           >
             <GanttRowMenu

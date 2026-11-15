@@ -12,6 +12,6 @@
   "headroomRatioIsAJudgement": "1.05 is a CHOICE, not a measurement (product-owner decision, docs/specs/delivery-gates/ CQ-2). It is about 20 kB gzip on the entry graph — room for an ordinary feature without a conversation, and not room for a library. There is no evidence behind the number; it is the smallest margin that does not make the gate fire on routine work.",
   "entryGraphGzipBytes": 189440,
   "maxNonEntryChunkGzipBytes": 135168,
-  "cssGzipBytes": 19456,
-  "raisedBecause": "CSS 18432 -> 19456: toolbar-grid M3 adds the deck's inset rule wrapper (DECK_RULE_BEFORE) and the quiet-icon ink variants for +0.08 KiB gzip, measured against origin/main 49ec2639 (17.97 -> 18.05 KiB) after dropping a redundant utility; the entry graph is unchanged."
+  "cssGzipBytes": 20480,
+  "raisedBecause": "CSS 19456 -> 20480: the scaled plan workspace (ADR-0222) adds two size containers, six container variants (ws-short, ws-sm, ws-max-sm, band-max-lg, band-max-sm, band-wide) and the `in-data-[workspace-scaled]` 32 px target sizes; measured on this branch at 19.19 KiB gzip against the 19.00 KiB budget."
 }

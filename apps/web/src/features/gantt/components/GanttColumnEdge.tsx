@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 
 import { RULER_HEIGHT } from './GanttRuler';
 
+import { deltaInLayout } from '@/components/layout/workspace/workspace-scale';
 import { usePointerDrag } from '@/components/ui/use-pointer-drag';
 
 export interface GanttColumnEdgeProps {
@@ -46,7 +47,7 @@ export function GanttColumnEdge({
   );
   const toValue = useCallback(
     (event: React.PointerEvent<HTMLSpanElement>) =>
-      origin.current.width + (event.clientX - origin.current.x),
+      origin.current.width + deltaInLayout(event.currentTarget, event.clientX - origin.current.x),
     [],
   );
   const pointer = usePointerDrag<HTMLSpanElement>({

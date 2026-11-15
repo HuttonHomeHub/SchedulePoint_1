@@ -11,6 +11,10 @@
   - chose the floor "tablet landscape, about 1024 × 640";
   - asked for a polished page below it;
   - answered the half-screen question: "keep 1024, half-screen is fine with continue".
+- **Amended by:** ADR-0222 (2026-11-15) — D1 (the designed size is 1280 × 800, not 1024 × 600), D2 (the plan
+  workspace scales to fit instead of scrolling in the band between), D8 (the notice's copy states the designed
+  size and that the plan view shrinks to fit below it) and D9 and D10 (the sweep and the "made to fit" milestone
+  move to 1280 × 800). D3–D7, the notice's trigger at 64rem and its memory, are unchanged.
 - **Amends:**
   - ADR-0029 — `:110` "Mobile-first … non-negotiable" is withdrawn.
   - ADR-0118 — retires M4's 390 × 844 coarse width (`:235-238`). Below 1024, the 24 px target floor

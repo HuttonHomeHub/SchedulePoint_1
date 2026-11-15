@@ -6,6 +6,8 @@ import {
   monthLabelSamples,
 } from '../layout/ruler-ticks';
 
+import { layoutSize } from '@/components/layout/workspace/workspace-scale';
+
 /**
  * Height of the ruler band, in pixels. Fixed, so a reader's own line-height override (WCAG 1.4.12)
  * can push a label's box past the row; nothing clips it, because no ancestor hides overflow.
@@ -59,10 +61,7 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
       // labels. Never below the default: the constant already covers the default size, and a zero read
       // from a not-yet-laid-out probe must not lift the floor off the labels.
       setLabelPitchPx(
-        Math.max(
-          MONTH_LABEL_MIN_PITCH_PX,
-          Math.ceil(probe.getBoundingClientRect().width) + LABEL_GAP_PX,
-        ),
+        Math.max(MONTH_LABEL_MIN_PITCH_PX, Math.ceil(layoutSize(probe).width) + LABEL_GAP_PX),
       );
     };
     measure();

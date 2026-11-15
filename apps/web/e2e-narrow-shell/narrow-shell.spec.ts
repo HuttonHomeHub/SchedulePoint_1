@@ -3,7 +3,7 @@ import { type CDPSession, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, chooseActualSize, expect, test } from '../e2e-support/test';
 import { recalculate } from '../e2e-support/toolbar';
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
 
@@ -144,6 +144,15 @@ async function pageOverflow(page: Page): Promise<{ x: number; document: number }
   });
 }
 
+// **Every journey here is the narrow layout of a reader who is not scaled** (ADR-0222 D9). Below the
+// designed window the plan workspace is laid out at its box divided by a scale, so a 700 px window is a
+// 933 px layout and the squeeze, swap and edge rules written for 700, 640 and 320 would not fire. Those rules
+// still run wherever the workspace is not scaled (zoom, larger text, actual size), which is what this file
+// reads; the notice's own pages are not the workspace and do not care.
+test.beforeEach(async ({ page }) => {
+  await chooseActualSize(page.context());
+});
+
 test.describe('after "Continue anyway" the shell is the narrow layout', () => {
   // The reader has pressed Continue anyway before this test starts (ADR-0179): this journey's
   // subject is the shell's narrow branches, not the page that precedes them.
@@ -270,7 +279,9 @@ test('the larger-screens page: opens, fits, answers, and leads to the narrow lay
   await page.goto(planUrl);
   await expect(dialog).toBeVisible();
   await expect(heading).toBeFocused();
-  await expect(dialog).toContainText('at least 1024 pixels wide. Your window is 640 pixels wide.');
+  await expect(dialog).toContainText(
+    'at least 1280 × 800 pixels. Below that the plan view shrinks to fit, down to 1024 pixels wide. Your window is 640 pixels wide.',
+  );
   await expect(dialog).toContainText('Signed in as Narrow Tester');
   await expectAxeClean(page, 'the page');
 

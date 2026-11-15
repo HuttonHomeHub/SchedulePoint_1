@@ -95,18 +95,26 @@ async function ringReachesOutside(page: Page, target: Locator, side: Side) {
   await page.locator('body').click({ position: { x: 2, y: 2 } });
   const box = await target.boundingBox();
   if (!box) throw new Error('the control has no box');
+  // The ring is drawn in the workspace's own pixels, so in a scaled workspace (1024 x 600 is drawn at
+  // 0.75) it reaches RING_PX x scale on screen, and that is where the strip is read (ADR-0222).
+  const scale = await target.evaluate((el) =>
+    Number.parseFloat(
+      el.closest('[data-workspace-scale]')?.getAttribute('data-workspace-scale') ?? '1',
+    ),
+  );
+  const ring = RING_PX * scale;
   const across = side === 'left' || side === 'right';
   const clip = {
     x: across
       ? side === 'left'
-        ? box.x - RING_PX
-        : box.x + box.width + RING_PX - OUTER_BAND_PX
+        ? box.x - ring
+        : box.x + box.width + ring - OUTER_BAND_PX
       : box.x + 4,
     y: across
       ? box.y + 4
       : side === 'top'
-        ? box.y - RING_PX
-        : box.y + box.height + RING_PX - OUTER_BAND_PX,
+        ? box.y - ring
+        : box.y + box.height + ring - OUTER_BAND_PX,
     width: across ? OUTER_BAND_PX : box.width - 8,
     height: across ? box.height - 8 : OUTER_BAND_PX,
   };

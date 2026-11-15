@@ -233,9 +233,10 @@ end to end by every existing canvas journey, since it is always on.
 
 ### Viewports we test (ADR-0179)
 
-The layout is **designed from 1024 × 600 up** (a laptop or an 11-inch tablet held sideways), so
-the designed-layout sweeps — the plan command surface, page composition, the workspace chrome —
-run at the floor and above it, with the Explorer at its default width. **Below 1024 only the
+The layout is **designed at 1280 × 800 and up** (ADR-0222; it was 1024 × 600, a laptop or an
+11-inch tablet held sideways, under ADR-0179), so the designed-layout sweeps — the plan command surface,
+page composition, the workspace chrome — run at 1280 × 800 and above, with the Explorer at its default
+width, and the plan workspace below it is that layout scaled (below). **Below 1024 only the
 reflow obligation is tested** (WCAG 1.4.10 and 1.4.4): lists, forms, dialogs, menus, the Explorer
 sheet, public screens and the guest view must not scroll in two directions at 320 px, and a
 zoom-band window (about 640 × 480, a 1280 window at 200 %) exercises the narrow branches. A
@@ -248,6 +249,20 @@ narrower on purpose opts in to having pressed _Continue anyway_ with
 `describe` that needs it. It is never on by default and never file-wide: the notice's own journey
 (`e2e-narrow-shell`) must meet the page, and a `beforeAll` page is outside the fixture's reach — call
 `acknowledgeViewportNotice(page)` on it before its first navigation.
+
+**Between 1024 × 600 and 1280 × 800 the plan workspace is the designed layout drawn smaller** (ADR-0222), so
+a journey that asserts the short-window rules (ADR-0180, -0183, -0185, -0213, -0219) in such a window is
+testing a reader who is not scaled: one who zoomed, enlarged the text or chose actual size. It says so with
+`chooseActualSize(context)` (`apps/web/e2e-support/test.ts`, the same shape as
+`acknowledgeViewportNotice`), before its first navigation; `e2e-workspace-fit` does for
+`command-surface.spec.ts`, `selection-bar-short.spec.ts` and the actual-size sweep of `floor-states.spec.ts`.
+The scaled layout is `e2e-workspace-fit/scaled-workspace.spec.ts`: the wrapper fills its box, a click and a
+drag land where the pointer is, no pressable control renders under 24 px in either view or any docked state,
+the text-size and zoom guards, and the switch. Its zoom case launches a persistent context whose profile
+`Preferences` carry a zoom level, the one route that makes Chromium report real browser zoom (headless
+`Page.setFontSizes` and a style sheet move only the text size); it needs no config of its own. Pointer
+positions in these journeys are `page.mouse` at screen coordinates, never a locator's `position`, which a
+browser would correct for a transform itself.
 
 ### Measuring the canvas in a real browser
 
