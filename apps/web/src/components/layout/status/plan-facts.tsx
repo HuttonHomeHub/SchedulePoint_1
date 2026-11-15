@@ -381,10 +381,11 @@ function ScheduleStateRegion({
       <Button
         size="sm"
         variant="outline"
-        // `in-data-[workspace-scaled]:h-8`: 20 px of control is 15 on screen at the 0.75 floor, under
-        // WCAG 2.2 §2.5.8's 24, so a scaled workspace lays it out at 32 (ADR-0222 D3). The foot row is
-        // 36 px, so the row does not grow.
-        className="h-5 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8"
+        // **24 px, WCAG 2.2 §2.5.8's floor, not 20.** At 20 it passed only by the spacing exception, which
+        // depends on how far the neighbouring Expand button sits and failed axe in CI's layout (99 x 20
+        // with 21.2 px of safe space, narrow-shell at 700). A scaled workspace lays it out at 32 so it
+        // renders at 24 (ADR-0222 D3). The foot row is 36 px, so the row does not grow.
+        className="h-6 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8"
         // **Shaded with its reason, never hidden** (ADR-0082), and `aria-disabled` rather than the
         // native attribute for the reason this repository has now learnt four times: `disabled`
         // takes the control out of the tab order, so the sentence explaining the refusal becomes
