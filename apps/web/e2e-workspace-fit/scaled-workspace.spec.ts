@@ -549,10 +549,13 @@ test.describe('The plan workspace scales to fit below 1280 x 800', () => {
       );
       // The suite's device profile carries a scale factor, which a null viewport refuses: it is overridden
       // with `undefined`, which `exactOptionalPropertyTypes` only lets through a double assertion.
+      // Real page zoom from a seeded profile needs the full Chromium build. Without an explicit binary,
+      // Playwright launches its "headless shell", which ignores the profile's zoom levels (CI on #1388 read
+      // outerWidth / innerWidth = 1), so the channel asks for full Chromium in new headless mode instead.
       const options = {
         ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
           ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH }
-          : {}),
+          : { channel: 'chromium' }),
         baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5173',
         viewport: null,
         deviceScaleFactor: undefined,
