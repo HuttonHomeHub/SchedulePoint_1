@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type CDPSession, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeTouchHint, expect, test } from '../e2e-support/test';
+import { acknowledgeTouchHint, chooseActualSize, expect, test } from '../e2e-support/test';
 import { unfoldViewSections } from '../e2e-support/toolbar';
 
 import {
@@ -182,6 +182,8 @@ test('the same sequence works with the keyboard alone', async ({ page }) => {
 
 test('a typed width the chart guard limits is limited aloud, never silently', async ({ page }) => {
   test.setTimeout(240_000);
+  // The guard answers to the layout box of a workspace that is not scaled (ADR-0222 D9).
+  await chooseActualSize(page.context());
   await ganttPlan(page);
   // A window too narrow to take the whole of 300 px without crowding the chart: the table may not
   // grow past its pane, so Activity absorbs what it can and the guard limits the rest. The guard

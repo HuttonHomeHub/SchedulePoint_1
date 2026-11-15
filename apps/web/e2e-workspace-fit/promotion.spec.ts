@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { type Browser, type BrowserContext, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, chooseActualSize, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   linkActivities,
@@ -314,6 +314,9 @@ for (const pointer of ['fine', 'coarse'] as const) {
         ...(pointer === 'coarse' ? { hasTouch: true } : {}),
       });
       await acknowledgeViewportNotice(context);
+      // The ladder is a table from window width to stage; a window just under 1280 is otherwise scaled and
+      // laid out wide enough to have reached the stage (ADR-0222 D5), so it is read at actual size.
+      await chooseActualSize(context);
       page = await context.newPage();
       const stamp = Date.now() + (pointer === 'coarse' ? 3 : 0);
       orgSlug = await onboard(page, stamp);

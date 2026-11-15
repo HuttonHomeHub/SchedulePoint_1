@@ -1,7 +1,7 @@
 import { type Browser, type Page } from '@playwright/test';
 
 import { holdThePen, releaseThePen } from '../e2e-support/pen';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, chooseActualSize, expect, test } from '../e2e-support/test';
 import { pickAddKind } from '../e2e-support/toolbar';
 import {
   createHierarchy,
@@ -37,7 +37,31 @@ import { expectDividersOnlyBetweenGroups } from './deck-dividers';
  * was 56 px past the row at the floor; the chip no longer carries it. Verified red by restoring the
  * reason clause: LOOK wraps to a second line in the cycling states.
  */
-const FLOOR = { width: 1024, height: 600 };
+/**
+ * **Two sweeps, because the floor moved** (ADR-0222 D9 and D10). The deck's stress states are asserted
+ * where the layout is designed, **1280 x 800**, and at **1024 x 600 with actual size chosen**, which is the
+ * layout a reader who zoomed, enlarged their text or chose actual size still gets in that window (the
+ * short-window rules run wherever the workspace is not scaled). A 1024 x 600 window left to itself is now
+ * the designed layout at 0.75, which `scaled-workspace.spec.ts` asserts against the designed one.
+ *
+ * `finishDoLines` is what "Adding Finish milestone", the widest state the deck has, takes of the DO row:
+ * two lines in the 1024 layout (`m0-measurement.md` §0.3, 75.7 px over), and two at 1280 too (measured
+ * 2026-11-15: the deck sits on three lines with LOOK on one).
+ */
+const MODES = [
+  {
+    name: 'designed 1280 x 800',
+    cell: { width: 1280, height: 800 },
+    actualSize: false,
+    finishDoLines: 2,
+  },
+  {
+    name: 'actual size at 1024 x 600',
+    cell: { width: 1024, height: 600 },
+    actualSize: true,
+    finishDoLines: 2,
+  },
+] as const;
 const PASSWORD = 'correct-horse-battery';
 const CANVAS_MIN_PX = 350;
 
@@ -135,163 +159,172 @@ async function invitePeer(a: Page, browser: Browser, stamp: number): Promise<{ b
   return { b };
 }
 
-test.describe('The deck at the 1024 x 600 floor, in every stress state (mouse)', () => {
-  test('stays on two lines, one per row', async ({ browser, page }) => {
-    test.setTimeout(300_000);
-    await acknowledgeViewportNotice(page.context());
-    await page.setViewportSize({ width: 1646, height: 1097 });
-    const stamp = Date.now() + 5400;
-    const orgSlug = await onboard(page, stamp);
-    const { b } = await invitePeer(page, browser, stamp);
-    await createHierarchy(page);
-    await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
-    const planId = openPlanId(page);
-    const planUrl = page.url();
-
-    // ---- empty plan: no diagram, the cluster is shaded not absent ----------------------------
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'empty plan', { canvas: false, cluster: true });
-    await page.setViewportSize({ width: 1646, height: 1097 });
-
-    await holdThePen(page);
-    const seeded = await seedActivities(page, orgSlug, [
-      { name: 'Site setup', laneIndex: 0, durationDays: 12 },
-      { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
-      { name: 'Pour slab', laneIndex: 2, durationDays: 6 },
-    ]);
-    await linkActivities(page, orgSlug, seeded[0]!.id, seeded[1]!.id);
-    await recalculate(page, orgSlug);
-
-    const reopen = async (pen: boolean): Promise<void> => {
+for (const mode of MODES) {
+  const FLOOR = mode.cell;
+  test.describe(`The deck at ${mode.name}, in every stress state (mouse)`, () => {
+    test('stays on two lines, one per row', async ({ browser, page }) => {
+      test.setTimeout(300_000);
+      await acknowledgeViewportNotice(page.context());
+      if (mode.actualSize) await chooseActualSize(page.context());
       await page.setViewportSize({ width: 1646, height: 1097 });
-      await page.goto(planUrl);
+      const stamp = Date.now() + 5400 + (mode.actualSize ? 1 : 0);
+      const orgSlug = await onboard(page, stamp);
+      const { b } = await invitePeer(page, browser, stamp);
+      await createHierarchy(page);
+      await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
+      const planId = openPlanId(page);
+      const planUrl = page.url();
+
+      // ---- empty plan: no diagram, the cluster is shaded not absent ----------------------------
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'empty plan', { canvas: false, cluster: true });
+      await page.setViewportSize({ width: 1646, height: 1097 });
+
+      await holdThePen(page);
+      const seeded = await seedActivities(page, orgSlug, [
+        { name: 'Site setup', laneIndex: 0, durationDays: 12 },
+        { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
+        { name: 'Pour slab', laneIndex: 2, durationDays: 6 },
+      ]);
+      await linkActivities(page, orgSlug, seeded[0]!.id, seeded[1]!.id);
+      await recalculate(page, orgSlug);
+
+      const reopen = async (pen: boolean): Promise<void> => {
+        await page.setViewportSize({ width: 1646, height: 1097 });
+        await page.goto(planUrl);
+        await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
+          timeout: 30_000,
+        });
+        await holdThePen(page);
+        // An opening takes the pen on its own (ADR-0220), so a reading taken without it lets go.
+        if (!pen) await releaseThePen(page);
+        const mm = page.locator('[data-toolbar-item="minimap"]').first();
+        if ((await mm.getAttribute('aria-pressed')) === 'true') await mm.click();
+        const comments = page.locator('[data-toolbar-item="comments"]').first();
+        if ((await comments.getAttribute('aria-pressed')) === 'true') await comments.click();
+        const diagram = page.locator('[data-toolbar-item="view-tsld"]').first();
+        if ((await diagram.getAttribute('aria-pressed')) === 'false') await diagram.click();
+        await page.waitForTimeout(400);
+      };
+
+      // ---- base --------------------------------------------------------------------------------
+      await reopen(true);
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'base', { canvas: true, cluster: true });
+
+      // ---- Link armed: the state the gear's move alone would have broken ---------------------------
+      // Link armed leaves DO 5.2 px at 1024 on a mouse, and the gear at the row's end costs 12 px, so the
+      // move and the two inset rules apply from 79 rem only (owner decision, 2026-10-12;
+      // `m0-measurement.md` §4). Verified red by making `useDeckTailRoom` answer `true` always and by
+      // dropping `contents` from `DECK_RULE_BEFORE`: DO wraps to two lines here.
+      await reopen(true);
+      await page.locator('[data-toolbar-item="link-tool"]').first().click();
+      await expect(page.locator('[data-toolbar-item="link-tool"]').first()).toHaveText(/^Linking/);
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'link armed', { canvas: true, cluster: true });
+
+      // ---- Add armed: the default type, then the longest label ---------------------------------------
+      // "Adding Task" fits DO at the floor. "Adding Finish milestone" is the widest state the deck has
+      // and DO wraps to two lines with it TODAY (`m0-measurement.md` §0.3: 75.7 px over at 1024 on a
+      // mouse), so the bar is that count and not one: the change must not add a third line.
+      await reopen(true);
+      await page.locator('[data-toolbar-item="add-activity"]').first().click();
+      await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
+        /^Adding/,
+      );
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'add armed', { canvas: true, cluster: true });
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await pickAddKind(page, 'Finish milestone');
+      await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
+        /^Adding Finish milestone/,
+      );
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'add armed (Finish milestone)', {
+        canvas: false,
+        cluster: true,
+        doLines: mode.finishDoLines,
+      });
+
+      // ---- selection (a bar docks in the foot row: lines only) ---------------------------------
+      await reopen(true);
+      await diagramList(page).focus();
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Enter');
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'selection', { canvas: false, cluster: true });
+
+      // ---- dock open ---------------------------------------------------------------------------
+      await reopen(true);
+      await page.locator('[data-toolbar-item="comments"]').first().click();
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'dock', { canvas: true, cluster: true });
+
+      // ---- minimap open ------------------------------------------------------------------------
+      await reopen(true);
+      await page.setViewportSize(FLOOR);
+      await page.locator('[data-toolbar-item="minimap"]').first().click();
+      await expect(page.getByRole('group', { name: 'Diagram overview' })).toBeVisible();
+      await expectFloor(page, 'minimap', { canvas: true, cluster: true });
+      await page.locator('[data-toolbar-item="minimap"]').first().click();
+
+      // ---- Gantt: no cluster, same deck --------------------------------------------------------
+      await reopen(true);
+      await page.locator('[data-toolbar-item="view-gantt"]').first().click();
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'gantt', { canvas: false, cluster: false });
+
+      // ---- a peer holds the pen ----------------------------------------------------------------
+      await reopen(false);
+      const url = `/api/v1/organizations/${orgSlug}/plans/${planId}/edit-lock`;
+      const took = await b.evaluate(async (u: string) => {
+        const r = await fetch(u, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        });
+        return r.ok;
+      }, url);
+      expect(took, 'the peer could not take the pen').toBe(true);
+      await page.reload();
       await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
         timeout: 30_000,
       });
+      await page.setViewportSize(FLOOR);
+      await expectFloor(page, 'peer pen', { canvas: true, cluster: true });
+      await b.evaluate(async (u: string) => {
+        await fetch(u, { method: 'DELETE', credentials: 'include' });
+      }, url);
+
+      // ---- conflicts: "1 conflict", then the count-only cycling read-out -----------------------
+      await reopen(true);
+      await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
+      await recalculate(page, orgSlug);
       await holdThePen(page);
-      // An opening takes the pen on its own (ADR-0220), so a reading taken without it lets go.
-      if (!pen) await releaseThePen(page);
-      const mm = page.locator('[data-toolbar-item="minimap"]').first();
-      if ((await mm.getAttribute('aria-pressed')) === 'true') await mm.click();
-      const comments = page.locator('[data-toolbar-item="comments"]').first();
-      if ((await comments.getAttribute('aria-pressed')) === 'true') await comments.click();
-      const diagram = page.locator('[data-toolbar-item="view-tsld"]').first();
-      if ((await diagram.getAttribute('aria-pressed')) === 'false') await diagram.click();
-      await page.waitForTimeout(400);
-    };
+      await expect
+        .poll(
+          async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true),
+          {
+            timeout: 25_000,
+          },
+        )
+        .toBe(true);
+      await reopen(true);
+      await page.setViewportSize(FLOOR);
+      const idle = await expectFloor(page, 'conflict (idle chip)', { canvas: true, cluster: true });
+      expect(idle.chip, 'the idle chip is missing').toBe('1 conflict');
 
-    // ---- base --------------------------------------------------------------------------------
-    await reopen(true);
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'base', { canvas: true, cluster: true });
-
-    // ---- Link armed: the state the gear's move alone would have broken ---------------------------
-    // Link armed leaves DO 5.2 px at 1024 on a mouse, and the gear at the row's end costs 12 px, so the
-    // move and the two inset rules apply from 79 rem only (owner decision, 2026-10-12;
-    // `m0-measurement.md` §4). Verified red by making `useDeckTailRoom` answer `true` always and by
-    // dropping `contents` from `DECK_RULE_BEFORE`: DO wraps to two lines here.
-    await reopen(true);
-    await page.locator('[data-toolbar-item="link-tool"]').first().click();
-    await expect(page.locator('[data-toolbar-item="link-tool"]').first()).toHaveText(/^Linking/);
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'link armed', { canvas: true, cluster: true });
-
-    // ---- Add armed: the default type, then the longest label ---------------------------------------
-    // "Adding Task" fits DO at the floor. "Adding Finish milestone" is the widest state the deck has
-    // and DO wraps to two lines with it TODAY (`m0-measurement.md` §0.3: 75.7 px over at 1024 on a
-    // mouse), so the bar is that count and not one: the change must not add a third line.
-    await reopen(true);
-    await page.locator('[data-toolbar-item="add-activity"]').first().click();
-    await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(/^Adding/);
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'add armed', { canvas: true, cluster: true });
-    await page.setViewportSize({ width: 1646, height: 1097 });
-    await pickAddKind(page, 'Finish milestone');
-    await expect(page.locator('[data-toolbar-item="add-activity"]').first()).toHaveText(
-      /^Adding Finish milestone/,
-    );
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'add armed (Finish milestone)', {
-      canvas: false,
-      cluster: true,
-      doLines: 2,
-    });
-
-    // ---- selection (a bar docks in the foot row: lines only) ---------------------------------
-    await reopen(true);
-    await diagramList(page).focus();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('Enter');
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'selection', { canvas: false, cluster: true });
-
-    // ---- dock open ---------------------------------------------------------------------------
-    await reopen(true);
-    await page.locator('[data-toolbar-item="comments"]').first().click();
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'dock', { canvas: true, cluster: true });
-
-    // ---- minimap open ------------------------------------------------------------------------
-    await reopen(true);
-    await page.setViewportSize(FLOOR);
-    await page.locator('[data-toolbar-item="minimap"]').first().click();
-    await expect(page.getByRole('group', { name: 'Diagram overview' })).toBeVisible();
-    await expectFloor(page, 'minimap', { canvas: true, cluster: true });
-    await page.locator('[data-toolbar-item="minimap"]').first().click();
-
-    // ---- Gantt: no cluster, same deck --------------------------------------------------------
-    await reopen(true);
-    await page.locator('[data-toolbar-item="view-gantt"]').first().click();
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'gantt', { canvas: false, cluster: false });
-
-    // ---- a peer holds the pen ----------------------------------------------------------------
-    await reopen(false);
-    const url = `/api/v1/organizations/${orgSlug}/plans/${planId}/edit-lock`;
-    const took = await b.evaluate(async (u: string) => {
-      const r = await fetch(u, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
+      await page.setViewportSize({ width: 1646, height: 1097 });
+      await page.locator('[data-toolbar-item="next-conflict"]').first().click();
+      await page.setViewportSize(FLOOR);
+      const cycling = await expectFloor(page, 'conflict (cycling read-out)', {
+        canvas: false,
+        cluster: true,
       });
-      return r.ok;
-    }, url);
-    expect(took, 'the peer could not take the pen').toBe(true);
-    await page.reload();
-    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible({
-      timeout: 30_000,
+      expect(cycling.chip, 'the cycling read-out carries more than the count').toBe(
+        'Conflict 1 of 1',
+      );
     });
-    await page.setViewportSize(FLOOR);
-    await expectFloor(page, 'peer pen', { canvas: true, cluster: true });
-    await b.evaluate(async (u: string) => {
-      await fetch(u, { method: 'DELETE', credentials: 'include' });
-    }, url);
-
-    // ---- conflicts: "1 conflict", then the count-only cycling read-out -----------------------
-    await reopen(true);
-    await placeViaApi(page, orgSlug, 'Excavate to formation', '2026-01-05');
-    await recalculate(page, orgSlug);
-    await holdThePen(page);
-    await expect
-      .poll(async () => (await placements(page, orgSlug)).some((r) => r.visualConflict === true), {
-        timeout: 25_000,
-      })
-      .toBe(true);
-    await reopen(true);
-    await page.setViewportSize(FLOOR);
-    const idle = await expectFloor(page, 'conflict (idle chip)', { canvas: true, cluster: true });
-    expect(idle.chip, 'the idle chip is missing').toBe('1 conflict');
-
-    await page.setViewportSize({ width: 1646, height: 1097 });
-    await page.locator('[data-toolbar-item="next-conflict"]').first().click();
-    await page.setViewportSize(FLOOR);
-    const cycling = await expectFloor(page, 'conflict (cycling read-out)', {
-      canvas: false,
-      cluster: true,
-    });
-    expect(cycling.chip, 'the cycling read-out carries more than the count').toBe(
-      'Conflict 1 of 1',
-    );
   });
-});
+}

@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { expect, test } from '../e2e-support/test';
+import { chooseActualSize, expect, test } from '../e2e-support/test';
 
 import {
   PLAN_STRIP,
@@ -446,6 +446,12 @@ for (const { pointer, touch } of [
   test.describe(`The whole-plan offer in the foot row, ${pointer}`, () => {
     test.use({ hasTouch: touch });
 
+    test.beforeEach(async ({ page }) => {
+      // The short-window rules this journey gates run wherever the workspace is not scaled (ADR-0222 D9):
+      // a reader at actual size is the one it tests at 1024 x 600.
+      await chooseActualSize(page.context());
+    });
+
     test(`1250 and 1024 wide: every button pressable, no sideways scroll, the diagram keeps its floor, omitted on a short window (${pointer})`, async ({
       page,
     }) => {
@@ -522,6 +528,11 @@ for (const { pointer, touch } of [
 }
 
 test.describe('The arrow on Follow logic, on a short window', () => {
+  test.beforeEach(async ({ page }) => {
+    // The short-window offer is a rule for a workspace that is not scaled (ADR-0222 D9).
+    await chooseActualSize(page.context());
+  });
+
   test('lets every early bar follow from the selected one, by keyboard, as one undo step; tall windows have the strip instead', async ({
     page,
   }) => {

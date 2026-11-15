@@ -7,6 +7,7 @@ import {
 } from '@playwright/test';
 
 import { VIEWPORT_NOTICE_ACK_KEY } from '../src/components/layout/viewport-notice/viewport-notice-ack';
+import { WORKSPACE_ACTUAL_SIZE_KEY } from '../src/components/layout/workspace/workspace-scale-pref';
 
 /**
  * The journeys' `test`: the stock one plus a guard that fails a test which met an API 429
@@ -112,6 +113,27 @@ export async function acknowledgeTouchHint(target: Page | BrowserContext): Promi
       // A context with storage blocked fails open in the app too: the tip may show, never hide.
     }
   });
+}
+
+/**
+ * ## Actual size, and why a short-window journey chooses it (ADR-0222 D9, `docs/specs/scaled-workspace/`)
+ *
+ * Below 1280 x 800 the plan workspace is laid out at its designed size and drawn smaller, so a window of
+ * 1024 x 600 no longer meets the short-window rules (ADR-0180, -0183, -0185, -0213, -0219 and the follow
+ * offer's yield): the workspace is laid out 800 high, not 461. Those rules still run **wherever the
+ * workspace is not scaled**: a reader who zoomed, who enlarged the text, who chose actual size, or whose
+ * window is under the 0.75 floor. A journey that gates one of them in a small window is testing that
+ * reader, and says so: it writes the same key the app reads, before any page script runs, the way
+ * {@link acknowledgeViewportNotice} does. A journey whose subject is the scaled layout never calls it.
+ */
+export async function chooseActualSize(target: Page | BrowserContext): Promise<void> {
+  await target.addInitScript((key: string) => {
+    try {
+      window.localStorage.setItem(key, '1');
+    } catch {
+      // A context with storage blocked is the preference's own test to write, not this helper's.
+    }
+  }, WORKSPACE_ACTUAL_SIZE_KEY);
 }
 
 /** The window `ThrottlerGuard` counts in (`RATE_LIMIT_TTL`'s default). */

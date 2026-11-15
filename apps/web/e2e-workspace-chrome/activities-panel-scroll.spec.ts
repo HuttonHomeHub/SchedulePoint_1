@@ -5,7 +5,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { type Locator, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { expect, test } from '../e2e-support/test';
+import { chooseActualSize, expect, test } from '../e2e-support/test';
 import { openHealthCheck } from '../e2e-support/toolbar';
 
 import {
@@ -272,6 +272,11 @@ test.describe('the activities panel scrolls as one region, header pinned', () =>
   test.describe('below the floor, after Continue anyway', () => {
     test.use({ acknowledgeViewportNotice: true });
 
+    test.beforeEach(async ({ page }) => {
+      // A short-window rule is gated here, and those run wherever the workspace is not scaled (ADR-0222 D9).
+      await chooseActualSize(page.context());
+    });
+
     test('scrolls as one region at 640px, below the floor too', async ({ page }) => {
       // Build the plan at the default width: below `md` the organisation nav folds behind a menu, so
       // `createHierarchy`'s "Clients" link is not on screen. The narrow layout is what is measured.
@@ -492,6 +497,12 @@ for (const cell of [
   test.describe(`the short-body swap, ${cell.pointer} pointer`, () => {
     test.use({ hasTouch: cell.coarse });
     const SIZE = { width: 1024, height: 600 };
+
+    test.beforeEach(async ({ page }) => {
+      // The short-window rules this journey gates run wherever the workspace is not scaled (ADR-0222 D9):
+      // a reader at actual size is the one it tests at 1024 x 600.
+      await chooseActualSize(page.context());
+    });
 
     test('case 1: Expand at 1024 x 600 shows rows and hides the diagram without removing it', async ({
       page,
@@ -750,6 +761,11 @@ test.describe('the short-body swap, one pointer', () => {
 
   test.describe('below md, after Continue anyway', () => {
     test.use({ acknowledgeViewportNotice: true });
+
+    test.beforeEach(async ({ page }) => {
+      // A short-window rule is gated here, and those run wherever the workspace is not scaled (ADR-0222 D9).
+      await chooseActualSize(page.context());
+    });
 
     // The swap applies at every width (ADR-0181; it was inert below `md` while that width had a
     // layout of its own). The sizes are the ones whose body is SHORT: the command band is one

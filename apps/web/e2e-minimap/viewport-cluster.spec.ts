@@ -1,7 +1,7 @@
 import { type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { holdThePen } from '../e2e-support/pen';
-import { acknowledgeViewportNotice, expect, test } from '../e2e-support/test';
+import { acknowledgeViewportNotice, chooseActualSize, expect, test } from '../e2e-support/test';
 import {
   createHierarchy,
   DATA_DATE,
@@ -173,6 +173,9 @@ test.describe('The Diagram viewport cluster, under a mouse', () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
+    // This file reads the 1024 x 600 layout of a reader who is not scaled (zoom, larger text, actual size,
+    // ADR-0222 D9): a docked panel narrows the stage, so the minimap steps aside.
+    await chooseActualSize(page.context());
     orgSlug = await onboard(page, Date.now() + 5200);
     await createHierarchy(page);
     await newPlan(page, 'Cluster journey');
@@ -438,6 +441,7 @@ test.describe('The Diagram viewport cluster, under a finger', () => {
       hasTouch: true,
     });
     await acknowledgeViewportNotice(context);
+    await chooseActualSize(context);
     page = await context.newPage();
     orgSlug = await onboard(page, Date.now() + 5300);
     await createHierarchy(page);

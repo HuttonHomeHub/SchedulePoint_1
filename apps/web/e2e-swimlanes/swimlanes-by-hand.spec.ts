@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 
 import { holdThePen, releaseThePen } from '../e2e-support/pen';
-import { expect, test } from '../e2e-support/test';
+import { chooseActualSize, expect, test } from '../e2e-support/test';
 import { pickAddKind, planCommands } from '../e2e-support/toolbar';
 
 import {
@@ -586,6 +586,11 @@ test.describe('swimlanes by hand', () => {
  * a real layout.
  */
 test.describe('the 1024 × 600 floor', () => {
+  // The gutter's width rule is the layout of a workspace that is not scaled (ADR-0222 D9).
+  test.beforeEach(async ({ page }) => {
+    await chooseActualSize(page.context());
+  });
+
   test('View ▾ with the lens lit holds the house bar folded, and every swimlane control is reachable unfolded', async ({
     page,
   }) => {
