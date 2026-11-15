@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 28 API modules
 > (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1939 web
 > source files with 48 Playwright suites beside the base journey, and
-> 221 ADRs.
+> 222 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -624,6 +624,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0219** _(Accepted; amends ADR-0092, extends ADR-0216 D9 and ADR-0026)_ — A selected activity's bar takes the whole foot row on a short window, and the facts wait → [`0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md`](docs/adr/0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)
 - **ADR-0220** _(Accepted; amends ADR-0028; D7 added for #588)_ — The first planner to open a free plan holds the pen → [`0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md`](docs/adr/0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md)
 - **ADR-0221** _(Accepted; amends ADR-0016 §5)_ — An invitation waits for the address it was sent to → [`0221-an-invitation-waits-for-the-address-it-was-sent-to.md`](docs/adr/0221-an-invitation-waits-for-the-address-it-was-sent-to.md)
+- **ADR-0223** _(Proposed; amends ADR-0111, CLAUDE.md §13 and §19.13)_ — Accessibility basics as we build, a full sweep at milestones → [`0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md`](docs/adr/0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md)
 
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).

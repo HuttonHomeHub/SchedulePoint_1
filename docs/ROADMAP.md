@@ -470,6 +470,10 @@ keep `main` releasable.
   [`docs/specs/invitation-survives-email-confirmation/`](specs/invitation-survives-email-confirmation/feature-spec.md)).
   On a host that requires email confirmation, an invitee who confirms and signs in will find the invitation waiting on
   the first screen, whichever browser they used. M1 adds the two API routes; the screen follows in M2.
+- **Accessibility basics as we build, a full sweep at milestones** (proposed 2026-11-15,
+  [ADR-0223](adr/0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md)). Keyboard, names, zoom and text
+  size are checked as work is built and the automated checks still gate every build; the per-change browser review
+  gives way to a full sweep at the end of each epic.
 
 - **A frozen float carries its minutes** (shipped 2026-11-08,
   [ADR-0214](adr/0214-a-frozen-float-carries-its-minutes.md); spec and plan at

@@ -245,3 +245,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0219](0219-a-selected-activitys-bar-takes-the-whole-row-on-a-short-window.md)                       | A selected activity's bar takes the whole foot row on a short window, and the facts wait   | Accepted           |
 | [0220](0220-the-first-planner-to-open-a-free-plan-holds-the-pen.md)                                  | The first planner to open a free plan holds the pen                                        | Accepted           |
 | [0221](0221-an-invitation-waits-for-the-address-it-was-sent-to.md)                                   | An invitation waits for the address it was sent to                                         | Accepted           |
+| [0223](0223-accessibility-basics-as-we-build-and-a-sweep-at-milestones.md)                           | Accessibility basics as we build, a full sweep at milestones                               | Proposed           |
