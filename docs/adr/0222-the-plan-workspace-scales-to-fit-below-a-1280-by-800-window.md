@@ -82,12 +82,20 @@ toolbar's wide layout and the designed size begin at the same width.
 
 **D3 — The scale has a floor of 0.75, and nothing pressable renders under 24 px.**
 
-- 0.75 is what a 1024 × 600 window needs (600 / 800), so every window that met the old floor gets the designed
-  layout, scaled.
+- **0.75 was kept by the owner (2026-11-15), knowing it does not quite fit 1024 × 600.** The unit the scale
+  fits is the root's 661 plus the band's 88 = 749 high at the designed size, and a 1024 × 600 window gives it
+  600 less the header and the band's rule (51) = 549, so the measured need there is 0.733 and the floor holds it
+  at 0.75. The workspace is then laid out 732 high against the designed 749, **17 px short** (the coordinator's
+  working figure was about 12; 17 is what the box arithmetic gives, 549 ÷ 0.75 = 732), and nothing is hidden.
+  A window fits the designed layout exactly from about 1029 × 613 up (1003 × 0.75 + 277 wide, 749 × 0.75 + 51
+  high). The first draft of this sentence said 600 / 800 = 0.75, which measured the window and not the box the
+  scale reads (M0 §1).
 - Below the floor the scale stays at 0.75 and the workspace behaves as it does today below the designed size:
   it scrolls, and the existing short-window rules apply inside it (D9).
-- While the scale is under 1, the 28 px controls lay out at 32 px, so at 0.75 they render at 24 px. Every other
-  pressable control is already 32 px or more.
+- While the scale is under 1, the 28 px controls lay out at 32 px, so at 0.75 they render at 24 px. The claim that every other
+  pressable control is already 32 px or more was false: the split-button carets (24 wide), the Gantt's sort
+  headers, disclosure slot and row-menu column, and the foot row's Recalculate (20 high) were found under 24 by
+  the browser sweep and lay out at 32 while scaled too (`scaled-workspace.spec.ts` holds every state to 24).
 
 **D4 — The scale never undoes the reader's own zoom or text size.** It is 1 whenever any of these holds:
 
@@ -184,6 +192,55 @@ is the project's.
 - **Not verifiable in the build container:** Firefox, WebKit, real touch hardware and real browser zoom (headless
   Chromium has a text-size setting but no page zoom). D4 item 3 exists so that an unverified browser is still
   safe.
+
+## Implementation record (M1 and M2, 2026-11-15)
+
+What was built, where it differs from the text above, and what was measured. The numbers are
+[`m0-measurement.md`](../specs/scaled-workspace/m0-measurement.md)'s unless stated.
+
+- **Mechanism (D6): `transform: scale(s)`, origin top-left,** on a wrapper laid out at box ÷ s inside a clipping
+  parent (M0 §4: `zoom` also scales the top-layer dialogs). `useWorkspaceScale` is one provider
+  (`workspace-scale-provider.tsx`) over **two wrappers**, because the command band is portalled into the shell's
+  second row and is not inside the root: `WorkspaceScaleFrame` in `<main>` and `WorkspaceScaleBand` around the
+  band's `<section>`. The header, Explorer, dialogs, menus and tooltips are not scaled.
+- **The designed box (D2): 1003 × 749.** The root's 1003 × 661 plus the band's 88 (read in a live 1280 × 800
+  window by `e2e-workspace-fit/scaled-workspace.spec.ts`). Root height + band height is the window less 51 at every
+  scale (the grid gives the root what the band's row leaves), so the calculation needs no knowledge of the
+  band and cannot chase its own tail. 1024 × 600 asks for 0.733 and takes the floor, 1152 × 720 asks for
+  0.87, and 1366 × 636 for 0.78.
+- **Guards (D4).** Enlarged text is the root font size above 16 px (checked under CDP `Page.setFontSizes` and a
+  user style sheet). Browser zoom is `outerWidth / innerWidth` above **1.05**: above any window frame (it would take
+  64 px of side border on a 1280 window) and below the smallest zoom step a reader takes (110 %); verified
+  against **real** zoom, 120 % in a persistent context whose profile carries a zoom level, and against its control
+  (the same CSS size with no zoom behind it does scale). Chromium only; the switch covers the rest. The scale is
+  frozen while any pointer button is down and catches up on release.
+- **Layout questions (D5), as built.** `ws-short` and `ws-sm`/`ws-max-sm` are container queries on the root's
+  wrapper (`workspace`), `band-max-lg`, `band-max-sm` and `band-wide` on the band's (`workspace-band`);
+  `useWorkspaceMedia` is the JS side (the promotion stage, the deck's tail room and row order, the follow offer's
+  `short`). The `ws-short` threshold is `short`'s 44rem less the 139 px the shell keeps above the root, so the two
+  agree at 1280 × 800. **Inside a workspace that is not scaled the window answers exactly as before**, so nothing
+  changes at 1280 × 800 and up and the harnesses that stub `matchMedia` by exact string still act at the widths they
+  run at. Still window-asked, each with its reason in `workspace-scale.structural.test.ts`: the activities
+  table's `md`/`lg` columns (a table shared with unscaled pages), the code-columns menu that goes with them, and
+  the input-device queries.
+- **Coordinates (D6).** One module, `workspace-scale.ts`, converts a pointer and a rect into layout px from
+  client coordinates only (never `offsetX`). The canvas, minimap, legend panel, the Gantt's bar drag, column
+  edge, divider and opening width, the dock and panel dividers and the data tables' column widths use it;
+  overlays portalled to the body keep reading screen px. Canvas backing stores are sized layout × display ratio
+  × scale (SC-7).
+- **Targets (D3).** `icon-sm` and `icon-row` lay out at 32 px inside a scaled wrapper
+  (`in-data-[workspace-scaled]:size-8`); axe's `target-size` rule passes at 0.75 across the workspace. A dialog
+  that happens to sit inside the scaled subtree in the DOM also matches that selector and gets 32 px on those two
+  sizes, which costs nothing.
+- **The switch (D4.3).** Last in the foot row, "Scaled to N %" / "Actual size", `aria-pressed` while actual size is
+  chosen, named "Workspace scale: …" so its visible words are inside its name (WCAG 2.5.3), stored under
+  `schedulepoint:workspace-actual-size` with the notice's storage fallbacks and cross-tab event.
+- **Not done, recorded.** The Gantt's wheel and trackpad travel is divided by the scale (M0 §2.5: a wheel of 400
+  moves the content 300 px at 0.75). Compensating means taking the wheel from the browser, which loses native
+  inertia on a trackpad; not worth it until a planner says so.
+- **D8 as built.** The page's lead reads "It's designed for a window at least 1280 × 800 pixels. Below that the
+  plan view shrinks to fit, down to 1024 pixels wide." (the second figure follows the reader's root size, as the
+  trigger does).
 
 ## References
 

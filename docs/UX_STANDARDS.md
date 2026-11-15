@@ -15,9 +15,10 @@
    visual order (title → key data → secondary detail → actions).
 3. **Forgiving.** Prevent errors first (constraints, sensible defaults,
    confirmation for destructive acts); make recovery easy (undo where possible).
-4. **Designed for a laptop up, fast-feeling.** Designed from 1024 × 600 (a laptop or
-   an 11-inch tablet held sideways) to widescreen; below 1024 the content still
-   reflows to 320px (ADR-0179). Perceived performance is a feature.
+4. **Designed for a laptop up, fast-feeling.** Designed at 1280 × 800 to widescreen
+   (ADR-0222); below it the plan workspace scales to fit (down to 0.75, never undoing a
+   reader's zoom or text size) and every other screen reflows to 320px (ADR-0179).
+   Perceived performance is a feature.
 5. **Accessible to everyone.** Keyboard and screen-reader users are first-class,
    not an afterthought.
 6. **Trustworthy with data.** Numbers, amounts, and dates are precise,
@@ -372,9 +373,11 @@ reader acts (edits the field, retries or refreshes), and is not also announced b
 
 ## Responsive behaviour
 
-- **Designed from a laptop or 11-inch tablet up (ADR-0179).** The layout is designed
-  and gated from 1024 × 600; Tailwind's min-width cascade stays, so `md:`/`lg:`
-  remain legal. Below 1024 the content must still reflow (lists, forms, dialogs,
+- **Designed at 1280 × 800 and up (ADR-0222, which moved ADR-0179's 1024 × 600).** The layout is
+  designed and gated from 1280 × 800; Tailwind's min-width cascade stays, so `md:`/`lg:`
+  remain legal. Below it the plan workspace shows the designed layout, smaller (the foot row's
+  "Scaled to N %" switch is the reader's way back to actual size); under the notice's 1024 the
+  content must still reflow (lists, forms, dialogs,
   menus; WCAG 1.4.10) but need not look designed, and where the two disagree the
   designed layout wins. The diagram, the Gantt, data tables and the command band
   may scroll in both directions there. A phone is not a supported device.
@@ -407,8 +410,9 @@ reader acts (edits the field, retries or refreshes), and is not also announced b
   added the first entry, which is the drift class that ADR exists to close, in the
   standards doc that states the rule.
   Hover-only affordances always have a non-hover equivalent.
-- **The canvas is not exempt.** The TSLD surface is designed at and above the
-  1024 × 600 floor; below it the diagram may scroll in both directions (a
+- **The canvas is not exempt.** The TSLD surface is designed at and above
+  1280 × 800 and scales to fit down to 0.75 (ADR-0222); where it does not scale (zoom, larger text,
+  actual size, a window under the floor) the diagram may scroll in both directions (a
   two-dimensional surface under 1.4.10), and every canvas affordance keeps its
   keyboard and screen-reader equivalent in the parallel DOM layer (ADR-0026).
   **A click or drag on the diagram gives its list the keyboard** (ADR-0218), so Ctrl+Z, Ctrl+C/V,

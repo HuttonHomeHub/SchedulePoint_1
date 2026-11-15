@@ -358,8 +358,15 @@ sequenceDiagram
 
 ## Responsive strategy
 
-- **Designed from a laptop or 11-inch tablet up (ADR-0179).** The design floor is
-  1024 × 600, which is Tailwind `lg` (64rem), the shell's one structural switch. Keep
+- **Designed at 1280 × 800 and up, the plan workspace scaled below it (ADR-0222).** The designed window is
+  1280 × 800; the shell's one structural switch stays Tailwind `lg` (64rem, ADR-0179), which is the
+  viewport notice's trigger. The plan workspace is two wrappers sharing one provider
+  (`components/layout/workspace/workspace-scale-provider.tsx`): the root's frame in `<main>` and the command
+  band's wrapper in its portal, each laid out at box ÷ scale and drawn with `transform: scale()`. Every
+  pointer read and every rect read that feeds layout inside it goes through one helper
+  (`workspace-scale.ts`, never `offsetX`); canvases size their backing stores by the scale; layout
+  questions inside it are container queries on the two wrappers (`ws-*`, `band-*`) or `useWorkspaceMedia`,
+  and `workspace-scale.structural.test.ts` lists what may still ask the window. Keep
   the min-width cascade (`sm 40rem`, `md 48rem`, `lg 64rem`, `xl 80rem`, `2xl 96rem`);
   base styles are the narrow reflow case, and below the floor content must still reflow
   to 320 px without being designed. The floor's query lives in one constant
