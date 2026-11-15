@@ -28,10 +28,11 @@ import { expectDividersOnlyBetweenGroups } from './deck-dividers';
  * on at most two lines (one per declared row), and the diagram keeps its canvas where no selection
  * bar has taken the foot row.
  *
- * **The selection states assert lines only.** A selection docks its bar in the foot row (167 px at
- * the floor, `m3-measurement.md` §4), which leaves 246 px of canvas; that is the selection bar's own
- * width, set by its outlet column, and it is not this milestone's to move. Stating it here keeps the
- * canvas bound honest where it applies instead of loosening it everywhere.
+ * **The selection states assert lines only at actual size.** A selection docks its bar in the foot row
+ * (167 px at the floor, `m3-measurement.md` §4), which leaves 246 px of canvas there; that is the selection
+ * bar's own width, set by its outlet column. At the designed 1280 x 800 the same states hold the 350 px
+ * floor (ADR-0222 M3: 486 px with a selection, `scaled-workspace/m3-measurement.md`), so the designed sweep
+ * asserts it for the selection, the Finish-milestone and the cycling states too.
  *
  * **The cycling read-out is count-only** ("Conflict 1 of 1", product owner 2026-10-10). Its reason
  * was 56 px past the row at the floor; the chip no longer carries it. Verified red by restoring the
@@ -241,7 +242,7 @@ for (const mode of MODES) {
       );
       await page.setViewportSize(FLOOR);
       await expectFloor(page, 'add armed (Finish milestone)', {
-        canvas: false,
+        canvas: !mode.actualSize,
         cluster: true,
         doLines: mode.finishDoLines,
       });
@@ -252,7 +253,7 @@ for (const mode of MODES) {
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('Enter');
       await page.setViewportSize(FLOOR);
-      await expectFloor(page, 'selection', { canvas: false, cluster: true });
+      await expectFloor(page, 'selection', { canvas: !mode.actualSize, cluster: true });
 
       // ---- dock open ---------------------------------------------------------------------------
       await reopen(true);
@@ -319,7 +320,7 @@ for (const mode of MODES) {
       await page.locator('[data-toolbar-item="next-conflict"]').first().click();
       await page.setViewportSize(FLOOR);
       const cycling = await expectFloor(page, 'conflict (cycling read-out)', {
-        canvas: false,
+        canvas: !mode.actualSize,
         cluster: true,
       });
       expect(cycling.chip, 'the cycling read-out carries more than the count').toBe(
