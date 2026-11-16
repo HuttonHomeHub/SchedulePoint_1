@@ -59,6 +59,9 @@ export function MembersTable({
   const removeMember = useRemoveMember(orgSlug);
   const [removing, setRemoving] = useState<OrgMemberSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A refused remove is shown inside the confirmation that asked for it (ADR-0217): the page's own
+  // line sits behind the modal, so a refusal there would leave the dialog open and silent.
+  const [removeError, setRemoveError] = useState<string | null>(null);
   // The sentence a role change earned, kept on screen as well as announced: the select already
   // shows the new role, but nothing said the save had gone through or that the colleague's own
   // session does not follow it until it next refreshes.
@@ -175,7 +178,10 @@ export function MembersTable({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setRemoving(member)}
+          onClick={() => {
+            setRemoveError(null);
+            setRemoving(member);
+          }}
           aria-label={`Remove ${member.user.name}`}
         >
           Remove
@@ -189,13 +195,13 @@ export function MembersTable({
     removeMember.mutate(removing.id, {
       onSuccess: () => {
         setRemoving(null);
+        setRemoveError(null);
         setError(null);
         setNotice(null);
       },
-      onError: (err) => {
-        setNotice(null);
-        setError(err.message);
-      },
+      // The dialog stays open so the reader can read the refusal and Cancel; focus stays on the
+      // Remove button they pressed, and the alert is announced where it appears.
+      onError: (err) => setRemoveError(err.message),
     });
   };
 
@@ -226,13 +232,17 @@ export function MembersTable({
 
         <ConfirmDialog
           open={removing !== null}
-          onClose={() => setRemoving(null)}
+          onClose={() => {
+            setRemoving(null);
+            setRemoveError(null);
+          }}
           onConfirm={confirmRemove}
           title="Remove member"
           description={removing ? `Remove ${removing.user.name} from this organisation?` : ''}
           confirmLabel="Remove"
           pendingLabel="Removing…"
           pending={removeMember.isPending}
+          error={removeError}
         />
       </div>
     </SectionCard>
