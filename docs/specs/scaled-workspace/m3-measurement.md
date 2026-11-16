@@ -54,7 +54,7 @@ short-window rules' result and is not this milestone's.
 
 Every `button`, link, field, `summary`, focusable `tabindex`, and `role` of button, tab, menuitem, switch, checkbox, radio, option or
 slider in `main` and in the command band, measured in layout px (30 to 56 per state), in all 32 states above **and** at actual size at
-1024 × 600 and 800 × 600 on both pointers: **none is under 24 × 24.** Two things measure under it and are not targets: the diagram's
+1024 × 600 and 800 × 600 on both pointers: **none is under 24 × 24, with two named exceptions and two non-targets.** The selector omits the Gantt's rows and grid cells, which render at 21 and 12 px at 0.75 (a `role="row"` with `tabindex=0` at 461 × 21, gridcells at 63 × 12, measured in the accessibility sweep): the Gantt is ADR-0183 D7's named exception, and axe's target-size rule passes there at both pointers. Two things measure under 24 and are not targets: the diagram's
 parallel listbox (a 1 px screen-reader copy of the canvas), and the 1 px divider lines, whose hit strip (`[data-resizer-hit]`, at least 24
 px, 44 on a finger) is what the audit measures. The foot row's Recalculate was the one that passed 2.5.8 only through the spacing exception;
 `e06bdefd` made it 24 px. **Not covered:** controls that exist only while a menu, popover or dialog is open (those are portalled and

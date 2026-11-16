@@ -1,10 +1,12 @@
 import { Maximize2, Minimize2 } from 'lucide-react';
 
+import { planSurfaceTarget } from './focus-reachable';
 import { setActualSize } from './workspace-scale-pref';
 import { useInWorkspace, useWorkspaceScale } from './workspace-scale-provider';
 
 import { Button } from '@/components/ui/button';
 import { useTooltip } from '@/components/ui/tooltip';
+import { useContainerUnmountHandoff } from '@/components/ui/use-container-unmount-handoff';
 
 /** Spec story 3's tooltip, verbatim. Exported so the journey asserts the shipped sentence. */
 export const WORKSPACE_SCALE_TIP =
@@ -34,16 +36,38 @@ export const WORKSPACE_SCALE_TIP =
 export function WorkspaceScaleSwitch(): React.ReactElement | null {
   const inWorkspace = useInWorkspace();
   const { scale, wouldScale, actualSize } = useWorkspaceScale();
-  const tip = useTooltip({ content: WORKSPACE_SCALE_TIP, purpose: 'description' });
 
   const visible = inWorkspace && (scale < 1 || (actualSize && wouldScale));
   if (!visible) return null;
+  return <ScaleSwitchButton scale={scale} actualSize={actualSize} />;
+}
+
+/**
+ * **Split from the gate so the button can hand focus on when it goes** (ADR-0135 for a container, SC 2.4.3).
+ * The switch leaves under a reader who is on it — the window widens past the scaled range, or a zoom or
+ * text-size guard turns scaling off while Actual size is chosen — and the browser drops focus to
+ * `<body>`, which also switches off every workspace accelerator. The hook's cleanup runs only when the
+ * component that holds it unmounts, so it lives here and not in the always-mounted gate. The plan
+ * surface takes focus, as it does when anything else leaves the workspace; nothing is said, because the
+ * reader's own action (resizing, zooming) is what removed the control.
+ */
+function ScaleSwitchButton({
+  scale,
+  actualSize,
+}: {
+  scale: number;
+  actualSize: boolean;
+}): React.ReactElement {
+  const { wrapperProps } = useContainerUnmountHandoff({ target: planSurfaceTarget });
+  const tip = useTooltip({ content: WORKSPACE_SCALE_TIP, purpose: 'description' });
 
   const { ref: tipRef, ...tipTrigger } = tip.triggerProps;
   const Icon = actualSize ? Maximize2 : Minimize2;
   const text = actualSize ? 'Actual size' : `Scaled to ${String(Math.round(scale * 100))} %`;
   return (
-    <>
+    // `contents` keeps the wrapper out of the foot row's flex layout while still being the node the
+    // hook asks whether focus is inside.
+    <span {...wrapperProps} className="contents">
       <Button
         {...tipTrigger}
         ref={tipRef}
@@ -59,6 +83,6 @@ export function WorkspaceScaleSwitch(): React.ReactElement | null {
         <span data-workspace-scale-label>{text}</span>
       </Button>
       {tip.tooltip}
-    </>
+    </span>
   );
 }

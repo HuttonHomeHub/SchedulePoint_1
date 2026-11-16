@@ -14,7 +14,9 @@
 - **Amended by:** ADR-0222 (2026-11-15) — D1's ≥ 44 px coarse house rule is stated at scale 1. Inside a scaled
   plan workspace the floor is WCAG 2.2 §2.5.8's 24 px, measured as rendered: `icon-sm` and `icon-row` lay out at
   32 px while the workspace is scaled (`button.tsx`, `in-data-[workspace-scaled]`), so nothing renders under 24 px
-  at the 0.75 floor.
+  at the 0.75 floor. The scaled-workspace accessibility sweep (ADR-0223, 2026-11-16) brought the foot row's
+  Recalculate to 44 px under a coarse pointer from 64 rem up; below that it stays 24 px, which is ADR-0179's rule
+  above, not a new exception (at 320 px the 44 px button pushed the wrapped foot row over the activities table).
 - **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)
