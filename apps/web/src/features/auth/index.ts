@@ -5,6 +5,7 @@ export { ResendVerificationButton } from './components/ResendVerificationButton'
 export { ChangePasswordForm } from './components/ChangePasswordForm';
 export { RequestPasswordResetForm } from './components/RequestPasswordResetForm';
 export { ResetPasswordForm } from './components/ResetPasswordForm';
+export { useResetLinkCheck } from './api/use-reset-link-check';
 export { confirmEmailFailure, useConfirmEmail } from './api/use-confirm-email';
 export {
   useSession,

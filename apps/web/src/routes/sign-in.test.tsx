@@ -107,4 +107,19 @@ describe('SignInScreen', () => {
 
     await waitFor(() => expect(pushed.calls).toEqual(['/accept-invite?token=tok']));
   });
+
+  it('shows the signed-out notice until the reader tries to sign in, then drops it', async () => {
+    search.value = { signedOut: true };
+    vi.mocked(authClient.signIn.email).mockResolvedValue({
+      data: null,
+      error: { message: 'Invalid password', status: 401 },
+    });
+    renderScreen();
+    expect(screen.getByText('You have been signed out.')).toBeInTheDocument();
+
+    signIn();
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText('You have been signed out.')).toBeNull();
+  });
 });

@@ -13,8 +13,18 @@ import { ServerError } from '@/components/ui/server-error';
 import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
 
-/** Email + password sign-in form. Calls `onSuccess` once a session is established. */
-export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.ReactElement {
+/**
+ * Email + password sign-in form. Calls `onSuccess` once a session is established, and the optional
+ * `onAttempt` the moment the reader presses submit — before validation, so a notice the screen was
+ * showing from an earlier event ("You have been signed out.") is gone whatever the attempt does.
+ */
+export function SignInForm({
+  onSuccess,
+  onAttempt,
+}: {
+  onSuccess: () => void;
+  onAttempt?: () => void;
+}): React.ReactElement {
   const {
     register,
     handleSubmit,
@@ -25,9 +35,13 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
   const signIn = useSignIn();
   useClearOnEdit(watch, signIn);
 
-  const onSubmit = handleSubmit((values) => {
+  const submit = handleSubmit((values) => {
     signIn.mutate(values, { onSuccess });
   });
+  const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    onAttempt?.();
+    return submit(event);
+  };
 
   // The server's own word for "this account exists but its address is unverified" (403). Matched on
   // the machine-readable code, never the message string — the branch it guards is the difference

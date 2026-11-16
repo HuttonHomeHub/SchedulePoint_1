@@ -2674,6 +2674,22 @@ for up to an hour) do no token lookup: they answer `303` to `{web}/reset-passwor
 `?error=INVALID_TOKEN` when the token is unusable, including an undecodable path), with
 `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. `callbackURL` is ignored.
 
+### Checking a reset link on arrival (spec `reset-link-check`)
+
+`POST /api/v1/password-reset/check` — `@Public()`, body `{ "token": string }` (non-empty, at most 2048
+characters; the token from the fragment of `{web}/reset-password#token=…`). Throttled to 10 requests per
+minute per IP. It never consumes the token and writes no audit row.
+
+| Status | `error.code`        | Meaning                                                           |
+| ------ | ------------------- | ----------------------------------------------------------------- |
+| `200`  | —                   | `{ "data": { "usable": boolean } }`.                              |
+| `422`  | `VALIDATION_FAILED` | Body failed validation (no token, empty, not a string, too long). |
+| `429`  | `RATE_LIMITED`      | Too many attempts.                                                |
+
+`usable` is `true` only when the reset `POST` would get past its token checks: the link exists, has not
+expired and its account exists. A link that never existed, expired, was used, or names a deleted account
+answers the same `200 { "data": { "usable": false } }`, so the answer says nothing about any account.
+
 ### Invitations sent to my confirmed address (ADR-0221)
 
 Two authenticated routes, no organisation role (the caller is not a member yet). They exist for a person

@@ -241,6 +241,8 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'DELETE /api/v1/organizations/:orgSlug/plans/:planId/edit-lock/request': REASONS.EDIT_LOCK,
   'GET /api/health': REASONS.INFRASTRUCTURE,
   'GET /api/health/ready': REASONS.INFRASTRUCTURE,
+  // A read of one token's state: consumes nothing (spec reset-link-check).
+  'POST /api/v1/password-reset/check': REASONS.READ,
   'GET /api/v1/me': REASONS.READ,
   'GET /api/v1/me/invitations': REASONS.READ,
   'GET /api/v1/me/audit-events': REASONS.AUDIT_READ,

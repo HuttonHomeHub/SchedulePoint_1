@@ -184,6 +184,15 @@ in M3-T2) so this is a number in the test output rather than an impression.
   `prefers-color-scheme` distinguishes two, so any single value is wrong in at least one theme and a
   media-split pair is wrong in the fourth. Omitting it is more honest than guessing.
 
+> **Amendment, 2026-11-16 — the brand mark is the owner's logo, served as a file.** §3's "carries no
+> brand asset it cannot draw" held for the motif and no longer for the mark: the amber-"S" tile
+> was replaced by the owner's logo from the SchedulePoint_Website repository (a navy tile with two
+> white bars, a light-blue link and a copper target), served as `public/brand/mark.svg` and
+> rendered as `<img alt="" aria-hidden>`. The favicon and the touch icons are the same artwork.
+> Colour literals live only in those served SVG files, because a file served as an image cannot read
+> the app's CSS custom properties and `data:` is blocked by the CSP (`img-src 'self'`); components
+> still carry none. See `docs/DECISIONS.md`, 2026-11-16.
+
 ### 4. The motif is drawn from the brand family's own semantic names, not from `--chart-*`
 
 _(This was **CQ-1** in the spec. **Confirmed by the product owner, 2026-08-06**, along with CQ-2 —

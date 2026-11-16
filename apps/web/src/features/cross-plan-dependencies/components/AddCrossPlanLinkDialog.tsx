@@ -24,7 +24,7 @@ import { ActivityCombobox } from './ActivityCombobox';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { useIsMounted } from '@/hooks/use-is-mounted';
 import { ApiFetchError } from '@/lib/api/client';
@@ -70,8 +70,8 @@ const DEFAULT_VALUES: CrossPlanLinkFormValues = {
  * `errorRole="alert"` for a failed options query, nothing for a validation message.
  *
  * A load failure appears without the user having acted, so it needs announcing the moment it
- * renders; a validation message revealed on submit is already announced by {@link FormErrorSummary},
- * and a second live region would double it up. Returned as a spread because
+ * renders; a validation message revealed on submit is already announced (focus moves to the first
+ * invalid field, and {@link FormProblemCount} counts two or more), and a second live region would double it up. Returned as a spread because
  * `exactOptionalPropertyTypes` forbids passing an explicit `undefined` to an optional prop.
  */
 function alertIfLoadFailed(loadFailed: boolean): { errorRole?: 'alert' } {
@@ -226,7 +226,7 @@ function AddCrossPlanLinkForm({
   return (
     <FieldGridContainer>
       <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
-        <FormErrorSummary errors={errors} />
+        <FormProblemCount errors={errors} />
         {create.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
             {crossPlanErrorMessage(create.error)}

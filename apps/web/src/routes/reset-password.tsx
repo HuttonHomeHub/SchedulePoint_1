@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button';
-import { ResetPasswordForm, useResetPassword } from '@/features/auth';
+import { ResetPasswordForm, useResetLinkCheck, useResetPassword } from '@/features/auth';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useNoindex } from '@/hooks/use-noindex';
 import { useOutcomeFocus } from '@/hooks/use-outcome-focus';
@@ -35,10 +35,13 @@ const UNUSABLE_LINK_CODES: ReadonlySet<string> = new Set(['INVALID_TOKEN', 'USER
  * restoring it. Links emailed before that change point at Better Auth's `GET /reset-password/:token`,
  * which the API answers with a redirect to this same fragment form, so there is one shape here.
  *
- * **Whether the token is still good is learned on submit, not on arrival.** The page no longer asks
- * the server about a token it has not been asked to use, so a spent or expired link shows the form
- * and is reported when the password is sent — as the same "no longer valid" screen, never as a
- * generic error under a form that cannot work.
+ * **Whether the token is still good is asked on arrival** (`POST /password-reset/check`, spec
+ * `docs/specs/reset-link-check/`; ADR-0074 once said "learned on submit", the cost TECH_DEBT #537
+ * accepted). A spent or expired link says so before the reader types anything, as a standing
+ * `condition`. A check that fails (network, 5xx, 429) shows the form: the reader is never blocked
+ * by it. A link that goes bad between arrival and submit is still reported when the password is
+ * sent — as the same "no longer valid" screen with a focused `event` alert, never as a generic
+ * error under a form that cannot work.
  *
  * **A hand-edited URL, a truncated paste, a mail client that mangles the link** — none of those may
  * crash the screen. No token (and `?error=INVALID_TOKEN`, which the API's redirect for an unusable
@@ -47,7 +50,6 @@ const UNUSABLE_LINK_CODES: ReadonlySet<string> = new Set(['INVALID_TOKEN', 'USER
  */
 export function ResetPasswordScreen(): React.ReactElement {
   useNoindex();
-  useDocumentTitle('Choose a new password');
   const navigate = useNavigate();
   // Owned here, not in the form (ADR-0077 M2-T3): this screen used to keep the heading "Choose a
   // new password" over a body that already said the password had been changed.
@@ -76,12 +78,22 @@ export function ResetPasswordScreen(): React.ReactElement {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [clearAttempt]);
 
+  const check = useResetLinkCheck(token);
+  const linkSpent = check.data?.usable === false;
+  const checking = token !== '' && check.isPending;
+
+  // The tab names the state the reader is in, as the heading does.
+  let heading = 'Choose a new password';
+  if (token === '' || linkRejected || linkSpent) heading = 'That link is no longer valid';
+  else if (reset.isSuccess) heading = 'Password changed';
+  useDocumentTitle(heading);
+
   useEffect(() => {
     if (token === '') return;
     void navigate({ to: '/reset-password', search: {}, replace: true });
   }, [token, navigate]);
 
-  if (token === '' || linkRejected) {
+  if (token === '' || linkRejected || linkSpent) {
     // One state for "the link was spent or expired" and for "there is no token here at all". The
     // difference is not actionable — both are fixed by asking for a fresh link — and a screen that
     // distinguished them would be reporting on a token it should not be reasoning about.
@@ -98,10 +110,27 @@ export function ResetPasswordScreen(): React.ReactElement {
               That link has already been used or has expired, so your password has not been changed.
             </Alert>
           ) : null}
+          {linkSpent && !linkRejected ? (
+            // Nothing the reader did caused this, so it is a standing condition, not an event: no
+            // live region, and focus stays where it is (ADR-0132).
+            <Alert purpose="condition" tone="error">
+              This link has already been used or has expired.
+            </Alert>
+          ) : null}
           <Link to="/forgot-password" className={buttonVariants()}>
             Send a new link
           </Link>
         </div>
+      </AuthShell>
+    );
+  }
+
+  if (checking) {
+    return (
+      <AuthShell title="Choose a new password">
+        <p className="text-muted-foreground text-sm" aria-busy="true">
+          Checking your link…
+        </p>
       </AuthShell>
     );
   }

@@ -768,6 +768,7 @@
       "lines": "74",
       "anchor": "const verificationToken = generateId(24);",
       "citedBy": [
+        "docs/specs/reset-link-check/spec.md",
         "docs/specs/reset-link-fragment/feature-spec.md",
         "docs/specs/reset-link-fragment/implementation-plan.md"
       ]
@@ -778,7 +779,10 @@
       "path": "dist/api/routes/password.mjs",
       "lines": "77",
       "anchor": "identifier: `reset-password:${verificationToken}`",
-      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/reset-link-check/spec.md",
+        "docs/specs/reset-link-fragment/feature-spec.md"
+      ]
     },
     {
       "ref": "password.mjs:92-128",
@@ -786,7 +790,10 @@
       "path": "dist/api/routes/password.mjs",
       "lines": "92-128",
       "anchor": "throw ctx.redirect(redirectCallback(ctx.context, callbackURL, { token }));",
-      "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/reset-link-check/spec.md",
+        "docs/specs/reset-link-fragment/feature-spec.md"
+      ]
     },
     {
       "ref": "password.mjs:150",
@@ -795,6 +802,55 @@
       "lines": "150",
       "anchor": "if (!token) throw APIError.from(\"BAD_REQUEST\", BASE_ERROR_CODES.INVALID_TOKEN);",
       "citedBy": ["docs/specs/reset-link-fragment/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:155-156",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "155-156",
+      "anchor": "const verification = await ctx.context.internalAdapter.findVerificationValue(id);",
+      "note": "The expiry predicate (`expiresAt < new Date()`) is copied from here by PasswordResetCheckService. If secondaryStorage is ever enabled, cached rows come back as parsed JSON and expiresAt may be a string, which would break the comparison; not configured today.",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
+    },
+    {
+      "ref": "password.mjs:158-159",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "158-159",
+      "anchor": "if (!user) throw APIError.from(\"BAD_REQUEST\", BASE_ERROR_CODES.USER_NOT_FOUND);",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
+    },
+    {
+      "ref": "password.mjs:162",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "162",
+      "anchor": "if (!await ctx.context.internalAdapter.consumeVerificationValue(id))",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
+    },
+    {
+      "ref": "internal-adapter.mjs:768-770",
+      "package": "better-auth",
+      "path": "dist/db/internal-adapter.mjs",
+      "lines": "768-770",
+      "anchor": "const storedIdentifier = await processIdentifier(identifier, storageOption);",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
+    },
+    {
+      "ref": "internal-adapter.mjs:801-808",
+      "package": "better-auth",
+      "path": "dist/db/internal-adapter.mjs",
+      "lines": "801-808",
+      "anchor": "if (!options.verification?.disableCleanup) await deleteManyWithHooks([{",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
+    },
+    {
+      "ref": "base.mjs:58",
+      "package": "better-auth",
+      "path": "dist/auth/base.mjs",
+      "lines": "58",
+      "anchor": "$context: authContext,",
+      "citedBy": ["docs/specs/reset-link-check/spec.md"]
     },
     {
       "ref": "origin-check.mjs:76",

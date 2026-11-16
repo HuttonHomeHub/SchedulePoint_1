@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useCreatePlan, useUpdatePlan } from './use-plans';
+import { useCreatePlan, useDeletePlan, useUpdatePlan } from './use-plans';
 
 import { apiFetch } from '@/lib/api/client';
 import { planKeys, projectKeys, scheduleKeys } from '@/lib/query/hierarchy-keys';
@@ -57,5 +57,26 @@ describe('useCreatePlan', () => {
     const keys = invalidate.mock.calls.map(([filter]) => filter?.queryKey);
     expect(keys).toContainEqual(projectKeys.detail('acme', 'p1'));
     expect(keys).toContainEqual(planKeys.listByProject('acme', 'p1'));
+  });
+});
+
+describe('useDeletePlan', () => {
+  it('refreshes the project read whose planCount the project page prints', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(undefined);
+    const queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useDeletePlan('acme', 'p1'), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    act(() => {
+      result.current.mutate('pl1');
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const keys = invalidate.mock.calls.map(([filter]) => filter?.queryKey);
+    expect(keys).toContainEqual(projectKeys.detail('acme', 'p1'));
   });
 });

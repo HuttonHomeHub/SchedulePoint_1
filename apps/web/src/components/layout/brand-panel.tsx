@@ -30,14 +30,15 @@ const SPLIT_CLASSES = {
   md: {
     root: 'p-6 md:p-8',
     seam: 'md:block',
-    mark: 'text-lg md:flex-col md:gap-3 md:text-4xl',
+    // The tile grows with the stacked wordmark: at size-7 it read as a speck under a 36 px name.
+    mark: 'text-lg md:flex-col md:gap-3 md:text-4xl md:[&>img]:size-14',
     motif: 'md:block',
     tagline: 'md:block',
   },
   'md-tall': {
     root: 'p-3 md:tall:p-8',
     seam: 'md:tall:block',
-    mark: 'text-lg md:tall:flex-col md:tall:gap-3 md:tall:text-4xl',
+    mark: 'text-lg md:tall:flex-col md:tall:gap-3 md:tall:text-4xl md:tall:[&>img]:size-14',
     motif: 'md:tall:block',
     tagline: 'md:tall:block',
   },

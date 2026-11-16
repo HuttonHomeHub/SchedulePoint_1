@@ -163,6 +163,44 @@ describe('MembersTable', () => {
     expect(screen.queryByText(/is now a/)).toBeNull();
   });
 
+  it('shows a refused remove inside the confirmation and keeps it open', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new Error('An organisation must keep at least one Org Admin.'),
+    );
+    renderTable();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ada Admin' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'An organisation must keep at least one Org Admin.',
+    );
+    // Not also shown behind the modal.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alertdialog')).toBeVisible();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    // Reopening starts clean.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ada Admin' }));
+    expect(within(await screen.findByRole('alertdialog')).queryByRole('alert')).toBeNull();
+  });
+
+  it('leaves the select on the stored role when a role change is refused', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new Error('An organisation must keep at least one Org Admin.'),
+    );
+    renderTable();
+
+    const select = screen.getByLabelText<HTMLSelectElement>('Role for Ada Admin');
+    fireEvent.change(select, { target: { value: 'PLANNER' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('at least one Org Admin');
+    expect(select.value).toBe('ORG_ADMIN');
+  });
+
   it('offers no role select and no Remove to anyone but an Org Admin', () => {
     // A Contributor or Viewer used to reach the select and the Remove confirmation before the
     // server refused. They read the roster, with each role as plain text.

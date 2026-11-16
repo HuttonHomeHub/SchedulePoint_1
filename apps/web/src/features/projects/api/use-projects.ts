@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import type { ProjectFormValues } from '../schemas/project-schemas';
 
 import { apiFetch } from '@/lib/api/client';
-import { deletedItemKeys, projectKeys } from '@/lib/query/hierarchy-keys';
+import { clientKeys, deletedItemKeys, projectKeys } from '@/lib/query/hierarchy-keys';
 import { projectQueryOptions, projectsQueryOptions } from '@/lib/query/hierarchy-queries';
 
 // The read-queries live in `lib` (shared) so the navigator rail can consume them
@@ -51,8 +51,12 @@ export function useCreateProject(orgSlug: string, clientId: string) {
           description: descriptionField(input.description),
         }),
       }),
+    // The client's own read carries `projectCount`, which the client page's header prints.
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: projectKeys.listByClient(orgSlug, clientId) }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: projectKeys.listByClient(orgSlug, clientId) }),
+        queryClient.invalidateQueries({ queryKey: clientKeys.detail(orgSlug, clientId) }),
+      ]),
   });
 }
 
@@ -85,6 +89,7 @@ export function useDeleteProject(orgSlug: string, clientId: string) {
       await queryClient.invalidateQueries({
         queryKey: projectKeys.listByClient(orgSlug, clientId),
       });
+      await queryClient.invalidateQueries({ queryKey: clientKeys.detail(orgSlug, clientId) });
       await queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) });
     },
   });

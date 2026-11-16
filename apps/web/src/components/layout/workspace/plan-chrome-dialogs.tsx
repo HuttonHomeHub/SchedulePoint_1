@@ -127,6 +127,9 @@ export function PlanChromeDialogs({
               calendars={model.calendars.data ?? []}
               calendarsLoading={model.calendars.isPending}
               canEdit={model.canWrite}
+              hasActivities={
+                model.activities.data === undefined || model.activities.data.length > 0
+              }
             />
           </SettingsSection>
           <SettingsSection title="Critical path & float">

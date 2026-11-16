@@ -9,7 +9,7 @@ import {
 } from '../schemas/organization-schemas';
 
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 
 /** Create-organisation form. Calls `onCreated` with the new org once it exists. */
 export function CreateOrganizationForm({
@@ -30,7 +30,7 @@ export function CreateOrganizationForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      <FormProblemCount errors={errors} />
       {create.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
           {create.error.message}

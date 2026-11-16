@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 28 API modules
-> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1950 web
+> (`apps/api/src/modules/`), 40 Prisma models across 1 baseline migration, 1952 web
 > source files with 48 Playwright suites beside the base journey, and
 > 223 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -478,7 +478,7 @@ every session and agent; those narratives are archived verbatim in
 - **ADR-0071** _(Accepted; Gate B's scope amended by ADR-0166)_ — Per-assignment lag, and what it costs the levelling and Earned-Value parity arguments → [`0071-per-assignment-lag.md`](docs/adr/0071-per-assignment-lag.md)
 - **ADR-0072** _(Accepted)_ — The append-only audit log, and what "append-only" honestly means here → [`0072-append-only-audit-log.md`](docs/adr/0072-append-only-audit-log.md)
 - **ADR-0073** _(Accepted)_ — Which mutations earn an audit event, and who may read an actor-less one → [`0073-audit-coverage-and-actor-less-readability.md`](docs/adr/0073-audit-coverage-and-actor-less-readability.md)
-- **ADR-0074** _(Accepted)_ — Account recovery, verification enforcement, and the web origin's first Content-Security-Policy → [`0074-account-recovery-verification-enforcement-and-csp.md`](docs/adr/0074-account-recovery-verification-enforcement-and-csp.md)
+- **ADR-0074** _(Accepted; reset arrival check 2026-11-16)_ — Account recovery, verification enforcement, and the web origin's first Content-Security-Policy → [`0074-account-recovery-verification-enforcement-and-csp.md`](docs/adr/0074-account-recovery-verification-enforcement-and-csp.md)
 - **ADR-0075** _(Accepted)_ — Mail delivery is best-effort, and the failure belongs to the operator → [`0075-mail-delivery-is-best-effort.md`](docs/adr/0075-mail-delivery-is-best-effort.md)
 - **ADR-0076** _(Accepted)_ — Wrong claims are a defect class, and three of them are computable → [`0076-wrong-claims-are-a-defect-class.md`](docs/adr/0076-wrong-claims-are-a-defect-class.md)
 - **ADR-0077** _(Accepted)_ — The public screens' brand surface — a fourth scope, fixed dark in every theme, and what counts as a brand asset → [`0077-public-screens-brand-surface.md`](docs/adr/0077-public-screens-brand-surface.md)

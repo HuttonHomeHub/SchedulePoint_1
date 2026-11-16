@@ -52,7 +52,7 @@ describe('SmtpMailService', () => {
     expect(message.subject).toContain('Acme Construction');
     // The accept URL is the whole point of the message — if it is missing the email is useless.
     expect(message.text).toContain(invitation.acceptUrl);
-    expect(message.text).toContain('2026-09-01');
+    expect(message.text).toContain('1 September 2026');
   });
 
   it('RESOLVES when the transport throws, so a mail outage cannot fail an invitation', async () => {
@@ -192,6 +192,7 @@ describe('SmtpMailService', () => {
       const message = sendMail.mock.calls[0]?.[0] as Record<string, string>;
       expect(message.to).toBe('locked-out@example.com');
       expect(message.text).toContain(reset.resetUrl);
+      expect(message.html).toContain(reset.resetUrl);
       // The line that matters for an unrequested reset: it tells the recipient that ignoring the
       // message is safe, which "you can ignore this" alone does not.
       expect(message.text).toContain('has not been changed');

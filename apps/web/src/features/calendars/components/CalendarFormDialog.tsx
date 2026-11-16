@@ -26,7 +26,7 @@ import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import { FormProblemCount, TextField, TextareaField } from '@/components/ui/form';
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
@@ -299,7 +299,7 @@ function CalendarForm({
           }}
           className="flex flex-col gap-5"
         >
-          <FormErrorSummary errors={errors} />
+          <FormProblemCount errors={errors} />
           {mutation.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {calendarErrorMessage(

@@ -149,6 +149,32 @@ describe('PlanCalendarPicker', () => {
     ).toBeInTheDocument();
   });
 
+  it('does not point at a Recalculate button on a plan with no activities', async () => {
+    const queryClient = new QueryClient();
+    const ui = (plan: PlanSummary): React.ReactElement => (
+      <QueryClientProvider client={queryClient}>
+        <PlanCalendarPicker
+          orgSlug="acme"
+          plan={plan}
+          calendars={CALENDARS}
+          canEdit
+          hasActivities={false}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(PLAN));
+    expect(
+      screen.getByText('Activities you add will be scheduled on the calendar you choose.'),
+    ).toBeInTheDocument();
+    choose('Seven-day');
+    rerender(ui({ ...PLAN, calendarId: 'cal-7', version: 5 }));
+
+    expect(
+      await screen.findByText('Saved. Activities you add will be scheduled on this calendar.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Recalculate/)).not.toBeInTheDocument();
+  });
+
   it('shows a visible "Saved" line once the new calendar has been kept', async () => {
     const queryClient = new QueryClient();
     const ui = (plan: PlanSummary): React.ReactElement => (

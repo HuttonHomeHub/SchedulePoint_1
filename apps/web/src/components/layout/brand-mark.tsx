@@ -3,13 +3,15 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 
 /**
- * The product's **brand mark**: a rounded-square tile carrying the initial, beside the
- * "SchedulePoint" wordmark.
+ * The product's **brand mark**: the owner's logo tile — navy square, two white activity bars, a
+ * light-blue logic link and a copper milestone target — beside the "SchedulePoint" wordmark.
  *
- * The tile is `bg-primary text-primary-foreground` — deliberately a token, never a literal.
- * Inside the chrome scope that resolves to Corporate's amber on navy and to the brand blue on
- * Light/Dark chrome; a hard-coded amber would fail contrast the moment the header is white, and
- * would be exactly the one-off styling the design system forbids.
+ * The tile is **a served file, `public/brand/mark.svg`**, rendered as an `<img>`; it replaced the
+ * amber-"S" token tile on 2026-11-16 (ADR-0077 §3 amendment). Its colours are literals, and that is
+ * correct only because a file served as an image has no access to the app's CSS custom properties —
+ * the same reason `public/favicon.svg` carries literals. Inline SVG would put the literals in a
+ * component, which the colour-literal lint rule forbids, and `data:` is blocked by the CSP
+ * (`img-src 'self'`). The tile is navy on every surface, so it needs no per-scope rebinding.
  *
  * Layout tier rather than a `ui/` primitive: it carries product copy, so it is not reusable
  * outside this product (`COMPONENT_LIBRARY.md` tier rules).
@@ -17,9 +19,11 @@ import { cn } from '@/lib/utils';
  * `variant="tile"` drops the wordmark for the collapsed rail, where there are 46 px and the
  * wordmark cannot fit. It is a **variant, not an `iconOnly` boolean** — the next state this needs
  * is a third presentation, not the negation of a second, and a boolean cannot express that
- * (`COMPONENT_LIBRARY.md`, "boolean-prop sprawl"). The tile stays `aria-hidden` in both: the mark
- * never carries the accessible name, which belongs to whatever links it (`app-header.tsx`'s
- * `BrandLink` sets it, and `brand-panel.tsx` deliberately renders no link at all).
+ * (`COMPONENT_LIBRARY.md`, "boolean-prop sprawl"). The tile stays `aria-hidden` with `alt=""` in
+ * both: the mark never carries the accessible name, which belongs to whatever links it
+ * (`app-header.tsx`'s `BrandLink` sets it, and `brand-panel.tsx` deliberately renders no link at
+ * all). The image has no text of its own, so the link's visible words stay the wordmark alone
+ * (WCAG 2.5.3).
  */
 export function BrandMark({
   className,
@@ -30,13 +34,13 @@ export function BrandMark({
 }): React.ReactElement {
   return (
     <span className={cn('flex shrink-0 items-center gap-2', className)}>
-      {/* The initial is painted by `content`, not typed as a text node (WCAG 2.5.3): axe-core 4.14's
-          `label-content-name-mismatch` reads visible text whether or not it is `aria-hidden`, so a
-          typed "S" made the link's visible words "S SchedulePoint", which its name does not hold. */}
-      <span
+      <img
+        src="/brand/mark.svg"
+        alt=""
         aria-hidden="true"
         data-testid="brand-tile"
-        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md text-sm font-bold before:content-['S']"
+        draggable={false}
+        className="size-7 shrink-0"
       />
       {variant === 'lockup' ? (
         <span className="font-semibold tracking-tight">SchedulePoint</span>
