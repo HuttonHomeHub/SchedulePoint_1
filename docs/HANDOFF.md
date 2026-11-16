@@ -3,61 +3,58 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-16, after the session of 2026-11-15/16 closed at **web 1.17.1 and api 1.5.0** (it opened at
-web 1.16.0). **Every item the owner approved in that session is built, merged and released.** The owner's **hard
-rule** still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
-question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
+**Written:** 2026-11-16, after the session of 2026-11-16 closed at **web 1.17.2 and api 1.6.0** (it opened at web
+1.17.1 and api 1.5.0). **Every problem runbook section 1 raised is built, merged and released**, and runbook section 2 is
+written on the page and clicked through against that release. The owner's **hard rule** still stands: nothing that
+needs the owner to run or check anything on their server or devices (a decision question is fine; a test is not).
+**P6 M5 and M6 still wait for a real P6 export**; do not offer them.
 
-**Approval to merge.** The owner's instruction of 2026-11-15 ("build the window-size change to completion", "fix and
-release everything [a runbook section] finds") covers merging and releasing that work when every check on the current
-head is green after dedupe and the merge is pinned to a full commit ID from GitHub. It does not cover new features: those
-still need a spec and the owner's approval (ADR-0105).
+**Approval to merge.** The owner's instruction ("fix and release everything [a runbook section] finds") covers merging
+and releasing that work when every check on the current head is green after dedupe and the merge is pinned to a full
+commit ID from GitHub. It does not cover new features: those still need a spec and the owner's approval (ADR-0105).
 
-## What shipped (2026-11-15 and 16)
+## What shipped (2026-11-16, #1404, released as web 1.17.2 / api 1.6.0 by #1405)
 
-- **Two decisions, accepted** (#1386, #1387): **ADR-0222**, the layout is designed at a 1280 × 800 browser window and
-  the plan workspace scales to fit below it; **ADR-0223**, accessibility basics are checked as each change is built,
-  the automated checks still gate every build, and a full sweep runs at the end of each epic. ADR-0111's per-change
-  review is withdrawn; CLAUDE.md §13 and §19.13, `docs/TESTING.md` and the `accessibility-reviewer` brief say so.
-- **The scaled workspace** (spec and plan at `docs/specs/scaled-workspace/`, readings in `m0-measurement.md` and
-  `m3-measurement.md`):
-  - **M1+M2, web 1.17.0** (#1388): the command band and the workspace scale together by a CSS transform, down to
-    0.75 (`WORKSPACE_SCALE_FLOOR`, the owner's choice; 1024 × 600 needs 0.733, so it lays out 17 px short). The scale
-    is 1 when the root font is above 16 px, when Chromium reports zoom (`outerWidth / innerWidth > 1.05`) or when the
-    reader chose actual size with the new **"Scaled to N %"** switch in the foot row. One module
-    (`workspace-scale.ts`) converts pointer and rect reads; layout inside the workspace answers to its own box
-    (container variants, `useWorkspaceMedia`); small controls lay out at 32 px while scaled. Journeys that gate the
-    short-window rules opt into actual size (`chooseActualSize` in `e2e-support/test.ts`).
-  - **M3** (#1390, web 1.17.1): every state at 1280 × 800 and 1024 × 600 clears its floor on both pointers; a fit within 1 %
-    draws at full size (`WORKSPACE_SCALE_SNAP`); `e2e-workspace-fit/designed-floors.spec.ts` gates it all.
-  - **The end-of-epic accessibility sweep** (ADR-0223 D3) passed with nits; its four findings are fixed (#1392, released with M3 as web 1.17.1):
-    the "Go to today" split button's focus ring, focus handed back when the scale switch unmounts, honest notice copy
-    under large text or zoom, and Recalculate at 44 px under a finger.
-- **The walkthrough problem list** (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`) is re-marked against web
-  1.16.0 by code reading: of the 122 open at 1.8.0, 19 fixed, 20 partly fixed, 66 open, 16 need a browser, 1 left by
-  the owner's decision. Verdicts per rank are on the page.
+From the owner's section 1 answers (artifact `https://claude.ai/artifact/Xqj9p8czyV6byEJjxw2htF`, `db` collection
+`answers`, ids `1-01` … `1-11`, `1-overall`):
+
+- **A reset link says on arrival whether it still works** (1.9). Spec `docs/specs/reset-link-check/`, approved
+  2026-11-16. `POST /api/v1/password-reset/check` (public, 10/min, token in the body, answers only `{ usable }`, never
+  consumes). First app use of `auth.$context.internalAdapter`; ADR-0074's amendment limits app code to its read
+  methods and says a better-auth bump must re-run the reset e2e cases and `check:claims` (Dependabot #1397 bumps
+  better-auth: that rule applies to it).
+- **Branded HTML emails** with a plain-text copy (overall), hand-written in `apps/api/src/common/mail/mail-templates.ts`;
+  the logo is `/brand/mark-email.png` on the link's own origin; role and expiry written in words; "an hour".
+- **The owner's logo** from the SchedulePoint_Website repo (1.1): `BrandMark` renders `/brand/mark.svg`; favicon,
+  32 px PNG and Apple touch icon replaced. ADR-0077 §3 amended. The website repo is public and readable by `git clone`
+  through the session proxy (add_repo answers "read_available").
+- **"You have been signed out." clears** on a sign-in attempt (1.7).
+- **One message per problem** (1.2): `FormProblemCount` is screen-reader only, and the 13 other forms that used
+  `FormErrorSummary` now use it too.
+- Found while walking section 2, fixed before it was written: stale "N projects"/plan counts after create/delete; a
+  refused "remove member" now shows inside its dialog; the empty-plan calendar hint no longer names a Recalculate
+  button that is not there.
 
 ## What is next
 
-1. **The owner is doing runbook section 1** of the new runbook (`https://claude.ai/artifact/Xqj9p8czyV6byEJjxw2htF`,
-   "Getting in", 11 steps). Answers save to the page's `db` collection `answers` (doc ids `1-01` … `1-11`, `1-overall`);
-   read them with `ArtifactData` `list`. **No parked list** (owner's rule): fix and release every problem the section
-   raises (spec first where ADR-0105 applies), then write section 2 against the release that has those fixes. The
-   page's source is in the session scratchpad, which will be gone: read the artifact back (`Artifact` `read`) and edit
-   the `SECTIONS` array to add a section. Section 1's hints were written from the code, not clicked through.
-   Known wording inconsistencies section 1 is likely to raise: four names for confirming an email ("Confirm your
-   email address for SchedulePoint", "Verify your email", "Confirm your email address", "Confirm my email address"),
-   two "password changed" messages, "about an hour" against "an hour", and no message when a signed-out deep link
-   sends you to sign in.
-2. **Section 2** (setting up: organisation, members and invitations, client, project, calendar, plan) follows once
-   section 1's fixes are released.
+1. **The owner is doing runbook section 2** ("Setting up", 14 steps: organisation, members and invitations, client,
+   project, calendar, plan) on the same page. Answers save to `answers` as `2-01` … `2-14` and `2-overall`. **No parked
+   list** (owner's rule): fix and release every problem it raises (spec first where ADR-0105 applies), then write
+   section 3 (drawing the plan: activities, links, the diagram) against the release with those fixes, clicked through
+   in a real browser first. Edit the page by reading it back (`Artifact` `read` with `path: index.html`) and adding to
+   its `SECTIONS` array.
+2. **Things section 2 may raise, already seen:** signing up from an invitation does not fill in the invited address;
+   "Add your first client" opens the Clients page rather than the new-client box; the `Standard` calendar is 24 hours
+   per day (whole days); the plan count on a project page does not refresh after activities change in the workspace
+   (left to the default stale time).
+3. **Dependabot has ten PRs open (#1394–#1403)**, untouched this session.
 
 **Recorded, not started:** `docs/TECH_DEBT.md` #586, #587, #592, #593, #594 (as before). At actual size (zoomed
-readers, ADR-0222 D9), coarse 1024 × 600 is still under its floor with three deck rows (`m3-measurement.md`). The Gantt
-wheel travels 0.75× at 0.75 scale. Real browser zoom is detected in Chromium only; Firefox and WebKit rely on the
-switch.
+readers, ADR-0222 D9), coarse 1024 × 600 is still under its floor with three deck rows. The Gantt wheel travels 0.75×
+at 0.75 scale. Real browser zoom is detected in Chromium only.
 
-**Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader.
+**Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader, and the branded
+emails in a real mail client (they were checked rendered in Chromium and as received by a local SMTP sink).
 
 ## The owner's deployment (canonical until the product scales)
 
@@ -196,3 +193,15 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
   answer; check `ps` for `apps/api/dist/main` and `vite` from other worktrees.
 - **After a merge the hook complains about unpushed commits** because GitHub deleted the session branch. Resetting the
   branch to `origin/main` and pushing it quiets it.
+- **Click-throughs with real email, no Docker** (2026-11-16): `/tmp/claude-0/sp/smtp.js`-style 30-line Node SMTP sink
+  on port 2525 writing each message to a file, with the API started with `MAIL_SMTP_URL=smtp://localhost:2525`,
+  `MAIL_FROM=…` and `AUTH_REQUIRE_EMAIL_VERIFICATION=true`. Decode quoted-printable before matching links. Point a
+  restarted sink at a fresh folder: it numbers files from 1 again, and the session's safety check refuses `rm` on a
+  relative glob.
+- **`scripts/e2e-local.sh` stops Postgres when it finishes.** Restart it with `--db-only` before starting the API by
+  hand again.
+- **One combined pull request worked well for a runbook section**: builders in their own worktrees, then
+  `git cherry-pick` into one push worktree; the only conflicts were new entries at the top of `docs/DECISIONS.md`
+  (keep both) and the count on `CLAUDE.md` line 23.
+- **The Version Packages PR showed `total_count: 0` check runs on 2026-11-16** (#1405), not the `action_required`
+  runs §11 describes; nothing ran either way.
