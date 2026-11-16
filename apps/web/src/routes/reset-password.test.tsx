@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResetPasswordScreen } from './reset-password';
 
+import { apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
 /** ADR-0074 M4-T3 — setting a new password from an emailed token. */
@@ -21,6 +22,16 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('@/lib/auth-client', () => ({
   authClient: { resetPassword: vi.fn() },
 }));
+
+vi.mock('@/lib/api/client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, apiFetch: vi.fn() };
+});
+
+/** The arrival check's answer; a link is good unless a test says otherwise. */
+function checkAnswers(usable: boolean): void {
+  vi.mocked(apiFetch).mockResolvedValue({ usable });
+}
 
 /** `replaceState`, not `location.hash =`: the latter fires an async `hashchange` the screen would hear. */
 function setHash(hash: string): void {
@@ -43,11 +54,16 @@ function renderScreen(params: Record<string, unknown> = {}) {
   );
 }
 
-function fill({ next = 'brand-new-password', confirm = 'brand-new-password' } = {}) {
+async function fill({ next = 'brand-new-password', confirm = 'brand-new-password' } = {}) {
+  await screen.findByLabelText('New password');
   fireEvent.change(screen.getByLabelText('New password'), { target: { value: next } });
   fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: confirm } });
   fireEvent.click(screen.getByRole('button', { name: 'Set new password' }));
 }
+
+beforeEach(() => {
+  checkAnswers(true);
+});
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
@@ -67,9 +83,9 @@ describe('ResetPasswordScreen — arriving', () => {
     });
   });
 
-  it('renders the form when the token was valid', () => {
+  it('renders the form when the token was valid', async () => {
     withToken('tok-123');
-    expect(screen.getByLabelText('New password')).toBeInTheDocument();
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
   });
 
   it('explains a spent link and offers a fresh one, rather than a form that cannot work', () => {
@@ -102,9 +118,9 @@ describe('ResetPasswordScreen — the fragment link (TECH_DEBT #537)', () => {
     vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
     renderScreen({});
 
-    expect(screen.getByLabelText('New password')).toBeInTheDocument();
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
     expect(navigate.fn).toHaveBeenCalledWith({ to: '/reset-password', search: {}, replace: true });
-    fill();
+    await fill();
     await waitFor(() =>
       expect(authClient.resetPassword).toHaveBeenCalledWith({
         token: 'frag-123',
@@ -134,7 +150,7 @@ describe('ResetPasswordScreen — the fragment link (TECH_DEBT #537)', () => {
     });
 
     expect(await screen.findByLabelText('New password')).toBeInTheDocument();
-    fill();
+    await fill();
     await waitFor(() =>
       expect(authClient.resetPassword).toHaveBeenCalledWith(
         expect.objectContaining({ token: 'pasted-789' }),
@@ -150,7 +166,7 @@ describe('ResetPasswordScreen — the fragment link (TECH_DEBT #537)', () => {
       });
       setHash('#token=spent');
       renderScreen({});
-      fill();
+      await fill();
 
       expect(
         await screen.findByRole('heading', { name: 'That link is no longer valid' }),
@@ -169,17 +185,85 @@ describe('ResetPasswordScreen — the fragment link (TECH_DEBT #537)', () => {
     });
     setHash('#token=still-good');
     renderScreen({});
-    fill();
+    await fill();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Too many requests');
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
   });
 });
 
+describe('ResetPasswordScreen — the arrival check (spec reset-link-check)', () => {
+  it('shows one sentence and no fields while the check is in flight', () => {
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    withToken('tok-123');
+
+    expect(screen.getByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument();
+    expect(screen.getByText('Checking your link…')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
+  });
+
+  it('sends the token in the body, once, and never in the URL', async () => {
+    withToken('tok-123');
+    await screen.findByLabelText('New password');
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [path, init] = vi.mocked(apiFetch).mock.calls[0] ?? [];
+    expect(path).toBe('/password-reset/check');
+    expect(path).not.toContain('tok-123');
+    expect(init).toMatchObject({ method: 'POST', body: JSON.stringify({ token: 'tok-123' }) });
+  });
+
+  it('says a spent link is spent on arrival, as a condition with focus left alone', async () => {
+    checkAnswers(false);
+    withToken('spent');
+
+    expect(
+      await screen.findByRole('heading', { name: 'That link is no longer valid' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('This link has already been used or has expired.')).toBeInTheDocument();
+    // A condition renders no live region (ADR-0132).
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Send a new link' })).toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+    expect(document.title).toBe('That link is no longer valid · SchedulePoint');
+  });
+
+  it('shows the form when the check itself fails, and the submit still rejects a bad link', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new Error('network'));
+    vi.mocked(authClient.resetPassword).mockResolvedValue({
+      error: { message: 'Invalid token', code: 'INVALID_TOKEN' },
+    });
+    withToken('tok-123');
+    await fill();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('your password has not been changed');
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+  });
+
+  it('checks a link pasted into the open tab afresh, and never reuses the old answer', async () => {
+    vi.mocked(apiFetch).mockImplementation((_path, init) =>
+      Promise.resolve({ usable: String(init?.body).includes('good') }),
+    );
+    withToken('spent');
+    await screen.findByText('This link has already been used or has expired.');
+
+    act(() => {
+      window.location.hash = '#token=good';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('ResetPasswordScreen — submitting', () => {
   it('refuses a mismatched confirmation without calling the server', async () => {
     withToken('tok-123');
-    fill({ confirm: 'something-else-here' });
+    await fill({ confirm: 'something-else-here' });
 
     expect((await screen.findAllByText('The two passwords do not match')).length).toBeGreaterThan(
       0,
@@ -190,7 +274,7 @@ describe('ResetPasswordScreen — submitting', () => {
   it('sends the captured token with the new password', async () => {
     vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
     withToken('tok-123');
-    fill();
+    await fill();
 
     await waitFor(() =>
       expect(authClient.resetPassword).toHaveBeenCalledWith({
@@ -203,7 +287,7 @@ describe('ResetPasswordScreen — submitting', () => {
   it('ends at "sign in", not inside the app — the reset issues no session', async () => {
     vi.mocked(authClient.resetPassword).mockResolvedValue({ error: null });
     withToken('tok-123');
-    fill();
+    await fill();
 
     // The heading is part of the state (ADR-0077 M2-T3): it used to stay "Choose a new password"
     // over a body that had already told the reader the password was different.
@@ -226,7 +310,7 @@ describe('ResetPasswordScreen — submitting', () => {
       error: { message: 'Password too short', code: 'PASSWORD_TOO_SHORT' },
     });
     withToken('tok-123');
-    fill();
+    await fill();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Password too short');
     expect(screen.getByLabelText('New password')).toBeInTheDocument();
@@ -235,8 +319,8 @@ describe('ResetPasswordScreen — submitting', () => {
   it('keeps the submit focused while saving (never native `disabled`)', async () => {
     vi.mocked(authClient.resetPassword).mockReturnValue(new Promise(() => {}));
     withToken('tok-123');
-    screen.getByRole('button', { name: 'Set new password' }).focus();
-    fill();
+    (await screen.findByRole('button', { name: 'Set new password' })).focus();
+    await fill();
 
     const pending = await screen.findByRole('button', { name: /setting your password/i });
     expect(pending).toHaveAttribute('aria-disabled', 'true');

@@ -127,8 +127,12 @@ test('a locked-out member recovers their account, and the old session dies', asy
   // Nothing was sent to the address that has no account.
   expect(sink.all().some((m) => m.to.includes(unknownStamp))).toBe(false);
 
+  // The arrival check carries the token in a body: no request URL may hold it (TECH_DEBT #537).
+  const checkRequest = stranger.waitForRequest('**/api/v1/password-reset/check');
   await stranger.goto(resetUrl);
-  await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  expect(new URL((await checkRequest).url()).href).not.toContain(token);
+  // The heading also shows while the link is being checked, so wait for the field it settles to.
+  await expect(stranger.getByLabel('New password', { exact: true })).toBeVisible();
   // The token is stripped on arrival: it must not be sitting in the address bar (and so in
   // history, and in the referrer of anything this page later loads).
   await expect(stranger).toHaveURL(/\/reset-password$/);
@@ -138,6 +142,13 @@ test('a locked-out member recovers their account, and the old session dies', asy
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze()
     .then((r) => expect(r.violations, JSON.stringify(r.violations, null, 2)).toEqual([]));
+
+  // A second tab on the same link, opened while it is still good: both see the form, the first
+  // submit wins, and the second meets the on-submit rejection (the race the arrival check cannot close).
+  const racerContext = await browser.newContext();
+  const racer = await racerContext.newPage();
+  await racer.goto(resetUrl);
+  await expect(racer.getByLabel('New password', { exact: true })).toBeVisible();
 
   await stranger.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
   await stranger.getByLabel('Confirm new password').fill(NEW_PASSWORD);
@@ -172,19 +183,23 @@ test('a locked-out member recovers their account, and the old session dies', asy
   await expect(stale.getByRole('alert')).toBeVisible();
   await expect(stale).toHaveURL(/\/sign-in/);
 
-  // ---------------------------------------------------------------- a spent link says so
-  // Found out on submit, not on arrival (TECH_DEBT #537): the page no longer asks the server about a
-  // token it has not been asked to use.
+  // ---------------------------------------------------------------- the race: a link spent after arrival
+  await racer.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
+  await racer.getByLabel('Confirm new password').fill(NEW_PASSWORD);
+  await racer.getByRole('button', { name: 'Set new password' }).click();
+  await expect(racer.getByRole('heading', { name: 'That link is no longer valid' })).toBeVisible();
+  await expect(racer.getByRole('alert')).toContainText('your password has not been changed');
+  await expect(racer.getByRole('alert')).toBeFocused();
+
+  // ---------------------------------------------------------------- a spent link says so on arrival
+  // The page asks the server before drawing the form (spec reset-link-check), so the reader is told
+  // before typing anything.
   await stranger.goto(resetUrl);
-  await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
-  await stranger.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD);
-  await stranger.getByLabel('Confirm new password').fill(NEW_PASSWORD);
-  await stranger.getByRole('button', { name: 'Set new password' }).click();
   await expect(
     stranger.getByRole('heading', { name: 'That link is no longer valid' }),
   ).toBeVisible();
-  await expect(stranger.getByRole('alert')).toContainText('your password has not been changed');
-  await expect(stranger.getByRole('alert')).toBeFocused();
+  await expect(stranger.getByLabel('New password', { exact: true })).toHaveCount(0);
+  await expect(stranger.getByText('This link has already been used or has expired.')).toBeVisible();
   await expect(stranger.getByRole('link', { name: 'Send a new link' })).toBeVisible();
   await new AxeBuilder({ page: stranger })
     .withTags(['wcag2a', 'wcag2aa'])
@@ -192,18 +207,21 @@ test('a locked-out member recovers their account, and the old session dies', asy
     .then((r) => expect(r.violations, JSON.stringify(r.violations, null, 2)).toEqual([]));
 
   // A link emailed before the fragment change still lands on the page: the API answers it with a
-  // redirect to the fragment form, so the form (not an error) is what a reader meets. The token is
-  // spent here, so the form itself is the assertion — the redirect does no lookup.
+  // redirect to the fragment form (it does no lookup; the page's check does), so a spent legacy link
+  // meets the same "no longer valid" screen.
   await stranger.goto(
     `/api/auth/reset-password/${token}?callbackURL=${encodeURIComponent('/reset-password')}`,
   );
-  await expect(stranger.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  await expect(
+    stranger.getByRole('heading', { name: 'That link is no longer valid' }),
+  ).toBeVisible();
   await expect(stranger).toHaveURL(/\/reset-password$/);
 
   await ownContext.close();
   await otherContext.close();
   await strangerContext.close();
   await staleContext.close();
+  await racerContext.close();
 });
 
 test('a signed-in member changes their password from /account', async ({ browser }) => {

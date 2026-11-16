@@ -10,6 +10,16 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-11-16 — A reset link says on arrival whether it still works
+
+The cost accepted with #537 (a spent link is found out on submit) is reversed by the product owner. A
+new public `POST /api/v1/password-reset/check` reads the link's verification row through Better Auth's
+`$context.internalAdapter` (never consuming it) and answers `{ usable }`, one answer for every unusable
+case; the token stays in a body. A failed check shows the form. No ADR: a second instance of the
+public token-gated route pattern (#88). Spec: `docs/specs/reset-link-check/`.
+
+---
+
 ## 2026-11-10 — The repository goes down to one branch, and the parked speed-up becomes a patch
 
 **What was decided** (owner's yes, same day). Five branches were deleted because everything they held was already in

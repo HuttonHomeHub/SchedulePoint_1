@@ -61,6 +61,22 @@ export type Theme = (typeof THEMES)[number];
 export const MD = 768;
 
 /**
+ * The `#token=e2e` reset row runs against a real API where that token does not exist, so the page's
+ * arrival check (`POST /password-reset/check`) would land it on the "no longer valid" screen. This
+ * stubs the check to say the link is good, so the form keeps its brand and axe coverage. The check's
+ * own behaviour is the account journey's (`e2e-account`), against real tokens.
+ */
+export async function stubResetLinkCheck(page: Page): Promise<void> {
+  await page.route('**/api/v1/password-reset/check', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { usable: true } }),
+    }),
+  );
+}
+
+/**
  * A public state this suite can reach from a URL alone, with the heading that identifies it and the
  * control a reader is meant to press.
  *

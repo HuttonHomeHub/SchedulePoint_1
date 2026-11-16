@@ -11,6 +11,7 @@ import {
   pinTheme,
   signOut,
   THEMES,
+  stubResetLinkCheck,
   URL_STATES,
   VIEWPORTS,
 } from './support';
@@ -34,6 +35,7 @@ test.describe('every URL-reachable public state holds its layout', () => {
         await pinTheme(page, theme);
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
+        await stubResetLinkCheck(page);
         for (const state of URL_STATES) {
           const label = `${theme} ${viewport.name} ${state.path}`;
           await page.goto(state.path);
@@ -306,6 +308,7 @@ test.describe('the card does not resize between screens', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const measured: { path: string; height: number }[] = [];
 
+    await stubResetLinkCheck(page);
     for (const state of URL_STATES) {
       await page.goto(state.path);
       await expect(
@@ -339,6 +342,7 @@ test.describe('the tallest state', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     const heights: { path: string; height: number; band: number }[] = [];
 
+    await stubResetLinkCheck(page);
     for (const state of URL_STATES) {
       await page.goto(state.path);
       await expect(
