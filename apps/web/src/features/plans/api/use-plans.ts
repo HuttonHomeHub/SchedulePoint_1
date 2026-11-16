@@ -245,6 +245,7 @@ export function useDeletePlan(orgSlug: string, projectId: string) {
     // …and the recycle bin, which the row arrives in. See `deletedItemKeys`.
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: planKeys.listByProject(orgSlug, projectId) });
+      await queryClient.invalidateQueries({ queryKey: projectKeys.detail(orgSlug, projectId) });
       await queryClient.invalidateQueries({ queryKey: deletedItemKeys.all(orgSlug) });
     },
   });

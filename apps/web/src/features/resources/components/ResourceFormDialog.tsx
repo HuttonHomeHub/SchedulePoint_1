@@ -15,7 +15,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import { FormProblemCount, TextField, TextareaField } from '@/components/ui/form';
 import {
   FieldGrid,
   FieldGridContainer,
@@ -237,7 +237,7 @@ function ResourceForm({
   return (
     <FieldGridContainer>
       <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-5">
-        <FormErrorSummary errors={errors} />
+        <FormProblemCount errors={errors} />
         {mutation.isError ? (
           <p role="alert" className="text-destructive-text text-sm">
             {/* Chiefly the 422 RESOURCE_REQUIRES_ORG_CALENDAR (ADR-0053 §2) — the picker only ever

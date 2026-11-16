@@ -30,7 +30,7 @@ import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { FormErrorSummary, TextField } from '@/components/ui/form';
+import { FormProblemCount, TextField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
 import { NoticeStrip } from '@/components/ui/notice-strip';
 import { LoadingShape, Skeleton } from '@/components/ui/page';
@@ -527,7 +527,7 @@ export function CalendarExceptionsEditor({
           onSubmit={(event) => void onAdd(event)}
           className="border-border flex flex-col gap-3 rounded-md border p-3"
         >
-          <FormErrorSummary errors={errors} />
+          <FormProblemCount errors={errors} />
           {addException.isError ? (
             <p role="alert" className="text-destructive-text text-sm">
               {isDuplicateException(addException.error)

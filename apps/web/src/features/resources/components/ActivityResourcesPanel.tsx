@@ -30,7 +30,7 @@ import { AssignmentRow, DRIVING_HINT, MATERIAL_DRIVING_HINT } from './Assignment
 import { useAnnounce } from '@/components/ui/announcer';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
+import { CheckboxField, FormProblemCount, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { NoticeStrip } from '@/components/ui/notice-strip';
@@ -397,7 +397,7 @@ export function ActivityResourcesPanel({
                   above the fields, and every `*Field` beneath it goes read-only — never native
                   `disabled`, which is #64's defect. */}
               <FieldGateProvider gate={assignGate}>
-                <FormErrorSummary errors={errors} />
+                <FormProblemCount errors={errors} />
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor={resourceSelectId}>Resource</Label>
                   <Combobox
@@ -432,7 +432,7 @@ export function ActivityResourcesPanel({
                   other picker in this epic uses.
                 */}
                   {errors.resourceId ? (
-                    <p id={resourceErrorId} className="text-destructive-text text-sm">
+                    <p id={resourceErrorId} role="alert" className="text-destructive-text text-sm">
                       {errors.resourceId.message}
                     </p>
                   ) : null}

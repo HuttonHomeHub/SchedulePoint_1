@@ -26,7 +26,7 @@ import {
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { FieldGateProvider } from '@/components/ui/field-gate';
-import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridFull, FormSection } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 
@@ -180,7 +180,7 @@ export function AddLinkSection({
               above the fields, and every `*Field` beneath it goes read-only — never native
               `disabled`, which is #64's defect and would take the values out of a reader's reach. */}
           <FieldGateProvider gate={gate}>
-            <FormErrorSummary errors={errors} />
+            <FormProblemCount errors={errors} />
             <FieldGrid>
               {/* Activity names are long, so the picker takes the full width; the two fields that
                 describe the SHAPE of the link pair up underneath it. */}

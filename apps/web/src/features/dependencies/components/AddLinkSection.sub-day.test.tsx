@@ -98,9 +98,9 @@ describe('AddLinkSection — sub-day lags', () => {
   it('refuses weeks by name rather than guessing a length', async () => {
     renderSection();
     submitWithLag('1w');
-    // Beside the field AND in the error summary — by design, so the message is reachable both by a
-    // reader who is at the control and by one who submitted from the bottom of the form.
-    expect(await screen.findAllByText(/Weeks are not supported/)).toHaveLength(2);
+    // Beside the field only: a field's problem is stated once, under the field, and focus has
+    // already moved to it (`FormProblemCount` stays silent below two problems).
+    expect(await screen.findAllByText(/Weeks are not supported/)).toHaveLength(1);
     expect(created).not.toHaveBeenCalled();
   });
 

@@ -25,7 +25,7 @@ import {
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
+import { FormProblemCount, SelectField, TextField } from '@/components/ui/form';
 
 interface EditDependencyFormProps {
   orgSlug: string;
@@ -173,7 +173,7 @@ function EditDependencyForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      <FormProblemCount errors={errors} />
       {update.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
           {update.error.message}

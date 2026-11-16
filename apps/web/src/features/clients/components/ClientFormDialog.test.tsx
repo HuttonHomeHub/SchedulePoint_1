@@ -50,6 +50,15 @@ describe('ClientFormDialog', () => {
     expect(JSON.parse(init?.body as string)).toMatchObject({ name: 'Northgate Ltd', version: 3 });
   });
 
+  it('states an empty name once, under the field, rather than again at the top', async () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create client' }));
+
+    expect(await screen.findAllByText('Name is required.')).toHaveLength(1);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
   /**
    * **What the structural gate cannot see.** `submit-guard.structural.test.ts` proves the native
    * `disabled` attribute is absent and that the `aria-disabled:` class pair is present; neither

@@ -8,7 +8,7 @@ import { projectFormSchema, type ProjectFormValues } from '../schemas/project-sc
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { FormErrorSummary, TextField, TextareaField } from '@/components/ui/form';
+import { FormProblemCount, TextField, TextareaField } from '@/components/ui/form';
 
 /**
  * Create-or-edit dialog for a project under a client. Edit mode PATCHes with the
@@ -109,7 +109,7 @@ function ProjectForm({
 
   return (
     <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-      <FormErrorSummary errors={errors} />
+      <FormProblemCount errors={errors} />
       {mutation.isError ? (
         <p role="alert" className="text-destructive-text text-sm">
           {mutation.error.message}
