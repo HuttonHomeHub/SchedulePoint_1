@@ -385,9 +385,13 @@ function ScheduleStateRegion({
         // depends on how far the neighbouring Expand button sits and failed axe in CI's layout (99 x 20
         // with 21.2 px of safe space, narrow-shell at 700). A scaled workspace lays it out at 32 so it
         // renders at 24 (ADR-0222 D3). The foot row is 36 px, so the row does not grow on a fine pointer. **Under
-        // a finger it is the house 44 px (ADR-0118 D1), scaled or not**: the row's other controls already are,
-        // so this was the one control under 44 layout px in the coarse scan, with no exception recorded.
-        className="h-6 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8 pointer-coarse:h-(--control-h)"
+        // a finger, in a window at or above the designed width, it is the house 44 px (ADR-0118 D1),
+        // scaled or not**: the row's other controls already are, so this was the one control under 44
+        // layout px in the coarse scan. **Not below 64 rem (`lg`)**, where the row reflows (ADR-0179): at
+        // 320 the foot wraps to three lines, and 44 px here costs it 20 px that the activities panel's
+        // fixed height cannot give, so the last visible row's `⋯` ended up under the foot
+        // (`narrow-shell.spec.ts` "first and last visible rows"). It keeps 24 there, which clears 2.5.8.
+        className="h-6 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8 lg:pointer-coarse:h-(--control-h)"
         // **Shaded with its reason, never hidden** (ADR-0082), and `aria-disabled` rather than the
         // native attribute for the reason this repository has now learnt four times: `disabled`
         // takes the control out of the tab order, so the sentence explaining the refusal becomes
