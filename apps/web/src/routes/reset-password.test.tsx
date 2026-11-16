@@ -254,7 +254,9 @@ describe('ResetPasswordScreen — the arrival check (spec reset-link-check)', ()
 
   it('checks a link pasted into the open tab afresh, and never reuses the old answer', async () => {
     vi.mocked(apiFetch).mockImplementation((_path, init) =>
-      Promise.resolve({ usable: String(init?.body).includes('good') }),
+      Promise.resolve({
+        usable: typeof init?.body === 'string' && init.body.includes('good'),
+      }),
     );
     withToken('spent');
     await screen.findByText('This link has already been used or has expired.');
