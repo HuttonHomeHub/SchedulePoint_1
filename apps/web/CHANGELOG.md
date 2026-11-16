@@ -1,5 +1,19 @@
 # @repo/web
 
+## 1.17.2
+
+### Patch Changes
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - In a plan with no activities, the calendar setting no longer tells you to press Recalculate in the bottom bar, which is not there until the plan has activities. It now says that activities you add will be scheduled on the calendar you choose.
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - When removing a member is refused, for example the only Org Admin removing themselves, the reason now appears inside the confirmation window instead of behind it, and the window stays open so you can cancel.
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The app now uses the new SchedulePoint logo: in the header, on the sign-in and sign-up screens, and as the browser tab and home-screen icon. "You have been signed out." now disappears as soon as you try to sign in again, instead of staying beside a wrong-password message. The "N problems — check the highlighted fields below." line is now read out by screen readers only; everyone sees the message under each field.
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A form problem is now shown once, under its field, instead of twice. The project count on a client page, and the plan count on a project page, now update straight after you add or remove one.
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - An old password-reset link now says so as soon as you open it ("That link is no longer valid", with a way to ask for a new one), instead of showing a form that fails when you press save. A good link shows the form as before.
+
 ## 1.17.1
 
 ### Patch Changes
