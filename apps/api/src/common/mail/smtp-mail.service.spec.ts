@@ -192,6 +192,7 @@ describe('SmtpMailService', () => {
       const message = sendMail.mock.calls[0]?.[0] as Record<string, string>;
       expect(message.to).toBe('locked-out@example.com');
       expect(message.text).toContain(reset.resetUrl);
+      expect(message.html).toContain(reset.resetUrl);
       // The line that matters for an unrequested reset: it tells the recipient that ignoring the
       // message is safe, which "you can ignore this" alone does not.
       expect(message.text).toContain('has not been changed');

@@ -32,6 +32,19 @@ the highlighted fields below." count is now read by screen readers only (runbook
 at two problems and not at one, which sighted readers took for inconsistency, and the per-field
 messages already say everything. The alert and the two-problem threshold are unchanged.
 
+## 2026-11-16 — The automatic emails are branded HTML, hand-written, with a plain-text copy
+
+**What was decided** (owner, same day: "the automatic emails look basic as can be"). The invitation, verification and
+password-reset messages are sent as HTML and plain text (`apps/api/src/common/mail/mail-templates.ts`): a navy header with
+the SchedulePoint mark and name, a white card, a copper button with navy text (4.98:1; white on that copper is 3.13:1), the
+link written out beneath it, and the same wording and footer. The expiry sentences now say "an hour", as every screen does.
+
+**Why hand-written, with no template dependency.** Three messages do not justify MJML or Handlebars, and every dependency is
+a liability (§2). Table layout with inline styles is what Outlook needs, and one small `escapeHtml` covers the only
+user-controlled value (the organisation name); tests pin it with a hostile name. The mark is a PNG at
+`/brand/mark-email.png` on the web origin, taken from the link the message already carries, so the two share an origin and
+the mail adapter needs no new setting. The logging adapter is unchanged and never logs a URL or the HTML.
+
 ---
 
 ## 2026-11-10 — The repository goes down to one branch, and the parked speed-up becomes a patch

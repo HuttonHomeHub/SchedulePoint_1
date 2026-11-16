@@ -4,6 +4,7 @@ import { createTransport, type Transporter } from 'nodemailer';
 
 import type { OperationalAlertService } from '../operational/operational-alert.service';
 
+import { renderEmailVerification, renderInvitation, renderPasswordReset } from './mail-templates';
 import {
   type EmailVerificationEmail,
   type InvitationEmail,
@@ -90,6 +91,11 @@ export const SEND_TIMEOUT_MS = 10_000;
  * Theme B). Selected by {@link MailModule} only when `MAIL_SMTP_URL` is configured; absent, the
  * logging stub stays in place and behaviour is byte-for-byte today's.
  *
+ * Each message is sent as text and branded HTML (`mail-templates.ts`). The owner chose that on
+ * 2026-11-16 ("the automatic emails look basic as can be"); this adapter used to send plain text
+ * only, on the reasoning that HTML waited for a second message to justify a template. There are
+ * three now. The HTML body is never logged — it carries the same one-time URL as the text.
+ *
  * **SMTP rather than a provider SDK.** Postmark, SES, Resend, Fastmail and a self-hosted relay all
  * speak it, so the provider is an env var rather than a dependency and swapping one costs a config
  * change instead of a new adapter. It is also the boring option, which for something that must work
@@ -171,12 +177,7 @@ export class SmtpMailService extends MailService {
    */
   async sendInvitation(email: InvitationEmail): Promise<void> {
     try {
-      await this.send({
-        kind: 'invitation',
-        to: email.to,
-        subject: `You have been invited to ${email.organizationName} on SchedulePoint`,
-        text: invitationText(email),
-      });
+      await this.send({ kind: 'invitation', to: email.to, ...renderInvitation(email) });
       this.logger.info(
         { to: email.to, organizationName: email.organizationName },
         'invitation email sent',
@@ -227,8 +228,7 @@ export class SmtpMailService extends MailService {
       await this.send({
         kind: 'email_verification',
         to: email.to,
-        subject: 'Confirm your email address for SchedulePoint',
-        text: verificationText(email),
+        ...renderEmailVerification(email),
       });
       this.logger.info({ to: email.to }, 'email-verification link sent');
     } catch (error) {
@@ -257,12 +257,7 @@ export class SmtpMailService extends MailService {
   async sendPasswordReset(email: PasswordResetEmail): Promise<void> {
     try {
       // Never log `resetUrl` — it is a live single-use credential, and logs are retained/shipped.
-      await this.send({
-        kind: 'password_reset',
-        to: email.to,
-        subject: 'Reset your SchedulePoint password',
-        text: passwordResetText(email),
-      });
+      await this.send({ kind: 'password_reset', to: email.to, ...renderPasswordReset(email) });
       this.logger.info({ to: email.to }, 'password-reset link sent');
     } catch (error) {
       this.logger.error(
@@ -292,6 +287,7 @@ export class SmtpMailService extends MailService {
     to: string;
     subject: string;
     text: string;
+    html: string;
   }): Promise<void> {
     const { kind, ...envelope } = message;
     const pending = this.transporter.sendMail({ from: this.from, ...envelope });
@@ -330,57 +326,4 @@ export class SmtpMailService extends MailService {
       if (timer !== undefined) clearTimeout(timer);
     }
   }
-}
-
-/**
- * Mirrors the two above: plain text, one action, no template machinery.
- *
- * The closing line is deliberate. A reset email arriving unrequested is the one signal an account
- * holder gets that somebody is probing their address, and "you can ignore this" alone reads as
- * routine — so it says the password is unchanged, which is the fact that makes ignoring it safe.
- */
-function passwordResetText(email: PasswordResetEmail): string {
-  return [
-    'Choose a new password for your SchedulePoint account:',
-    '',
-    email.resetUrl,
-    '',
-    'This link can be used once and expires in about an hour.',
-    '',
-    'If you did not ask to reset your password, you can ignore this message — your password has ' +
-      'not been changed.',
-  ].join('\n');
-}
-
-/** Mirrors {@link invitationText}: plain text, one action, no template machinery. */
-function verificationText(email: EmailVerificationEmail): string {
-  return [
-    'Open this link, then press “Confirm my email address” to finish setting up your ' +
-      'SchedulePoint account:',
-    '',
-    email.verifyUrl,
-    '',
-    'The link works for about an hour.',
-    '',
-    'If you did not create an account, you can ignore this message.',
-  ].join('\n');
-}
-
-/**
- * Plain text only, deliberately. An HTML part would need a template, a layout, escaping and a
- * plain-text fallback anyway, and none of that has a consumer yet — the first email this system
- * sends should be the smallest thing that works. Add HTML when there is a second message to justify
- * the machinery.
- */
-function invitationText(email: InvitationEmail): string {
-  return [
-    `You have been invited to join ${email.organizationName} on SchedulePoint as ${email.role}.`,
-    '',
-    'Accept the invitation:',
-    email.acceptUrl,
-    '',
-    `This invitation expires on ${email.expiresAt.toISOString().slice(0, 10)}.`,
-    '',
-    'If you were not expecting this invitation, you can ignore this message.',
-  ].join('\n');
 }
