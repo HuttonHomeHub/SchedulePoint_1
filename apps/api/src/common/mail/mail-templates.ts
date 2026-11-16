@@ -35,6 +35,28 @@ export function escapeHtml(value: string): string {
 }
 
 /**
+ * The role words the app itself uses (`ROLE_LABELS` in the web's members feature), with the article
+ * that reads right before each. An unknown value is passed through rather than hidden.
+ */
+const ROLE_PHRASES: Record<string, string> = {
+  ORG_ADMIN: 'an Org Admin',
+  PLANNER: 'a Planner',
+  CONTRIBUTOR: 'a Contributor',
+  VIEWER: 'a Viewer',
+};
+
+function rolePhrase(role: string): string {
+  return ROLE_PHRASES[role] ?? `a ${role}`;
+}
+
+const DATE_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+
+/**
  * The mark is served by the same origin as the link the message carries, so the two can never
  * disagree and the mail adapter needs no web-origin setting of its own.
  */
@@ -150,8 +172,8 @@ export function renderEmailVerification(email: EmailVerificationEmail): Rendered
 }
 
 export function renderInvitation(email: InvitationEmail): RenderedMail {
-  const intro = `You have been invited to join ${email.organizationName} on SchedulePoint as ${email.role}.`;
-  const expiry = `This invitation expires on ${email.expiresAt.toISOString().slice(0, 10)}.`;
+  const intro = `You have been invited to join ${email.organizationName} on SchedulePoint as ${rolePhrase(email.role)}.`;
+  const expiry = `This invitation expires on ${DATE_FORMAT.format(email.expiresAt)}.`;
   const footer = 'If you were not expecting this invitation, you can ignore this message.';
   return {
     subject: `You have been invited to ${email.organizationName} on SchedulePoint`,

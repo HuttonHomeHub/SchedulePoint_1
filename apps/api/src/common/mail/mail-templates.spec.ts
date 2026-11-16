@@ -59,6 +59,18 @@ describe('mail templates', () => {
     expect(mail.text).toContain(HOSTILE);
   });
 
+  it('names the role as the app does, with the right article, and dates in words', () => {
+    const mail = renderInvitation(invitation);
+    for (const part of [mail.text, mail.html]) {
+      expect(part).toContain('as a Planner.');
+      expect(part).not.toContain('PLANNER');
+      expect(part).toContain('expires on 1 September 2026.');
+    }
+    expect(renderInvitation({ ...invitation, role: 'ORG_ADMIN' }).text).toContain(
+      'as an Org Admin.',
+    );
+  });
+
   it('keeps the expiry wording to an hour, with no "about"', () => {
     expect(renderPasswordReset(reset).text).toContain(
       'This link works once and expires in an hour.',

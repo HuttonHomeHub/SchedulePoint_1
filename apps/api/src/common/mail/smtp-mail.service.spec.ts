@@ -52,7 +52,7 @@ describe('SmtpMailService', () => {
     expect(message.subject).toContain('Acme Construction');
     // The accept URL is the whole point of the message — if it is missing the email is useless.
     expect(message.text).toContain(invitation.acceptUrl);
-    expect(message.text).toContain('2026-09-01');
+    expect(message.text).toContain('1 September 2026');
   });
 
   it('RESOLVES when the transport throws, so a mail outage cannot fail an invitation', async () => {
