@@ -73,7 +73,10 @@ describe('a validation message is never stated twice', () => {
     expect(await screen.findAllByText('Name is required')).toHaveLength(1);
     expect(screen.getAllByText('Enter a valid email address')).toHaveLength(1);
     expect(screen.getAllByText('Password must be at least 12 characters')).toHaveLength(1);
-    expect(screen.getAllByText('3 problems — check the highlighted fields below.')).toHaveLength(1);
+    const count = screen.getAllByText('3 problems — check the highlighted fields below.');
+    expect(count).toHaveLength(1);
+    // Screen-reader only (runbook 1.2): a sighted reader sees the per-field messages alone.
+    expect(count[0]?.closest('[role="alert"]')).toHaveClass('sr-only');
   });
 
   it('reset-password: the cross-field mismatch message appears once', async () => {

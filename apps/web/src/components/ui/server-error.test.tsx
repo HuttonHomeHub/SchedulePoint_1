@@ -61,21 +61,10 @@ describe('ServerError', () => {
 });
 
 describe('one treatment per screen', () => {
-  // **This assertion changed shape in ADR-0077 §9, and the reason matters.** It used to say
-  // `ServerError` and `FormErrorSummary` render a byte-identical class string, because the
-  // component review had caught them carrying two hand-copied versions of it. That is no longer
-  // true and is no longer the point: `ServerError` renders the new `Alert`, while
-  // `FormErrorSummary` keeps the older box for its twenty other callers outside the auth screens.
-  //
-  // What still has to hold is the property the old test was really protecting — **a reader never
-  // sees two different treatments of the same idea side by side**. So it is asserted directly
-  // instead of by proxy: the two components that DO co-occur agree, and the two that would
-  // disagree never appear in the same file.
-  it('gives a server failure and a form problem count the same treatment', () => {
-    const { unmount } = render(<ServerError message="Server said no." />);
-    const server = screen.getByRole('alert').className;
-    unmount();
-
+  // The problem count used to be asserted to wear the same box as `ServerError`. It is now
+  // visually hidden (runbook 1.2, 2026-11-16), so the two can no longer sit side by side as
+  // different treatments: what has to hold is that the count is still announced and never seen.
+  it('keeps a form problem count in the alert tree while hiding it from the eye', () => {
     render(
       <FormProblemCount
         errors={{
@@ -84,7 +73,9 @@ describe('one treatment per screen', () => {
         }}
       />,
     );
-    expect(screen.getByRole('alert').className).toBe(server);
+    const count = screen.getByRole('alert');
+    expect(count).toHaveClass('sr-only');
+    expect(count).toHaveTextContent('2 problems — check the highlighted fields below.');
   });
 
   it('never renders the two boxes on one screen', () => {

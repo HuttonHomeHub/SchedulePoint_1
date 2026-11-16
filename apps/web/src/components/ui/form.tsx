@@ -597,6 +597,11 @@ export function FormErrorSummary({
  * if the summary is simply deleted. So the summary is not deleted; it stops restating. One problem:
  * silence, because focus has already done the job. Two or more: a count, which duplicates no
  * sentence and says the one thing the inline messages cannot say from where the reader is standing.
+ *
+ * **Visually hidden, by the product owner's decision (2026-11-16, runbook 1.2).** The count came
+ * and went on screen — absent at one problem, present at two — and read as inconsistent. Sighted
+ * readers now see only the per-field messages, which are always there and always sufficient; the
+ * count stays in the accessibility tree as an alert, so the screen-reader case above is unchanged.
  */
 export function FormProblemCount({
   errors,
@@ -617,7 +622,7 @@ export function FormProblemCount({
   return (
     // `event`, and fixed here for the same reason as `ServerError`: a problem count exists only in
     // response to a submit the reader just pressed. It is never true of a form nobody has touched.
-    <Alert purpose="event" tone="error" className={className}>
+    <Alert purpose="event" tone="error" className={cn('sr-only', className)}>
       {count} problems — check the highlighted fields below.
     </Alert>
   );
