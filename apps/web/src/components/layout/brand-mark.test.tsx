@@ -7,27 +7,31 @@ import { Surface } from '@/components/ui/surface';
 describe('BrandMark', () => {
   it('reads as the product name once, not twice', () => {
     render(<BrandMark />);
-    // The tile is decorative — it repeats the wordmark's first letter, so exposing it would make
-    // a screen reader announce "S SchedulePoint". It is also painted rather than typed, so the
-    // link's visible words are the wordmark alone (WCAG 2.5.3, axe-core 4.14).
+    // The tile is decorative — it is a picture with no words, so the link's visible text is the
+    // wordmark alone (WCAG 2.5.3) and nothing is announced for it.
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
     const tile = screen.getByTestId('brand-tile');
     expect(tile).toHaveAttribute('aria-hidden', 'true');
-    expect(tile).toBeEmptyDOMElement();
-    expect(tile).toHaveClass("before:content-['S']");
+    expect(tile).toHaveAttribute('alt', '');
   });
 
-  it('paints its tile from tokens so each surface gets a validated pair', () => {
+  it('serves its tile as a file, at the size the old tile had, on any surface', () => {
     render(
       <Surface tone="chrome">
         <BrandMark />
       </Surface>,
     );
     const tile = screen.getByTestId('brand-tile');
-    // `bg-primary` inside chrome resolves to `--chrome-primary` — amber on Corporate's navy,
-    // the brand blue on Light/Dark. A literal amber would be unreadable on a white header and
-    // would be exactly the one-off styling the design system forbids.
-    expect(tile).toHaveClass('bg-primary', 'text-primary-foreground');
+    // A file, because `img-src 'self'` blocks `data:` and the colour-literal lint rule keeps
+    // literals out of components; the file's own colours are the brand's.
+    expect(tile).toHaveAttribute('src', '/brand/mark.svg');
+    expect(tile).toHaveClass('size-7');
     expect(tile.className).not.toMatch(/#[0-9a-f]{3,8}|rgb\(|oklch\(/i);
+  });
+
+  it('drops the wordmark for the tile variant but keeps the mark', () => {
+    render(<BrandMark variant="tile" />);
+    expect(screen.queryByText('SchedulePoint')).toBeNull();
+    expect(screen.getByTestId('brand-tile')).toBeInTheDocument();
   });
 });
