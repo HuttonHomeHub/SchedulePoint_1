@@ -107,4 +107,40 @@ describe('the workspace scale switch', () => {
     fireEvent.focus(screen.getByRole('button'));
     expect(screen.getByRole('tooltip')).toHaveTextContent(WORKSPACE_SCALE_TIP);
   });
+
+  it('hands focus to the plan surface when it unmounts under the reader (ADR-0135, WCAG 2.4.3)', () => {
+    const surface = document.createElement('div');
+    surface.setAttribute('role', 'listbox');
+    surface.tabIndex = 0;
+    document.body.append(surface);
+    try {
+      state({ scale: 0.8, wouldScale: true });
+      const { rerender } = render(<WorkspaceScaleSwitch />);
+      screen.getByRole('button').focus();
+      expect(document.activeElement).toBe(screen.getByRole('button'));
+
+      // The window widens past the scaled range: the switch goes while it holds focus.
+      state({ scale: 1, wouldScale: false });
+      rerender(<WorkspaceScaleSwitch />);
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(document.activeElement).toBe(surface);
+    } finally {
+      surface.remove();
+    }
+  });
+
+  it('leaves focus alone when it unmounts while the reader is elsewhere', () => {
+    const other = document.createElement('input');
+    document.body.append(other);
+    try {
+      state({ scale: 0.8, wouldScale: true });
+      const { rerender } = render(<WorkspaceScaleSwitch />);
+      other.focus();
+      state({ scale: 1, wouldScale: false });
+      rerender(<WorkspaceScaleSwitch />);
+      expect(document.activeElement).toBe(other);
+    } finally {
+      other.remove();
+    }
+  });
 });

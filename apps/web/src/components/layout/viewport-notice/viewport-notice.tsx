@@ -5,6 +5,7 @@ import { DevicesPictogram } from './devices-pictogram';
 import { BANNER_TEXT, useViewportNotice, type ViewportNoticeState } from './use-viewport-notice';
 
 import { BrandCard } from '@/components/layout/brand-card';
+import { isBrowserZoomed, isTextEnlarged } from '@/components/layout/workspace/workspace-scale';
 import { Button } from '@/components/ui/button';
 import { FORCED_EDGED_CARD } from '@/components/ui/forced-colors';
 import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
@@ -207,10 +208,20 @@ function PageContent({
   // same units even when the browser's font size is raised (the floor is 64rem, not 1024px).
   const floor = designedMinWidthPx();
 
-  const tips = [
-    'Zoom out — press Ctrl and minus, or Ctrl and 0 to reset (⌘ on a Mac)',
-    'Make the browser window wider',
-  ];
+  // The plan view is never shrunk for a reader who has made text bigger or zoomed the browser
+  // (ADR-0222 D4), so the shrink sentence and the "zoom out" tip would both be false for exactly
+  // the readers who raised the size on purpose. They get the truth instead.
+  const keepsSize = isTextEnlarged() || isBrowserZoomed();
+
+  const tips = keepsSize
+    ? [
+        'Your larger text size is respected, so the plan view is not shrunk and will need scrolling',
+        'Make the browser window wider',
+      ]
+    : [
+        'Zoom out — press Ctrl and minus, or Ctrl and 0 to reset (⌘ on a Mac)',
+        'Make the browser window wider',
+      ];
   if (coarse) tips.unshift('Turn your device sideways');
 
   return (
@@ -234,8 +245,11 @@ function PageContent({
       </h1>
       <p id={leadId} className="text-muted-foreground text-sm">
         It&apos;s designed for a window at least {DESIGNED_WINDOW_WIDTH_PX} ×{' '}
-        {DESIGNED_WINDOW_HEIGHT_PX} pixels. Below that the plan view shrinks to fit, down to {floor}{' '}
-        pixels wide. Your window is {width} pixels wide.
+        {DESIGNED_WINDOW_HEIGHT_PX} pixels.{' '}
+        {keepsSize
+          ? null
+          : `Below that the plan view shrinks to fit, down to ${String(floor)} pixels wide. `}
+        Your window is {width} pixels wide.
       </p>
       {/* A list with no focusable controls, on purpose: it keeps "Continue anyway" the first tab
           stop, which is the one thing a keyboard reader came here to find. */}

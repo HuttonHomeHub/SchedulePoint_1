@@ -264,7 +264,7 @@ export function ToolbarSplitButton({
         // sweep immediately read `today` at **32 px against a 40 px floor** — a WCAG 2.5.8 failure
         // that had been one label away the whole time. ADR-0090 M3 records the caret failing the
         // same gate for the mirror-image reason.
-        className="inline-flex min-h-(--control-h) items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
+        className="focus-visible:ring-ring inline-flex min-h-(--control-h) items-center gap-1.5 rounded-l-md px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset pointer-coarse:px-3"
       >
         <span
           aria-hidden="true"
@@ -303,7 +303,7 @@ export function ToolbarSplitButton({
         }}
         className={cn(
           toolbarSplitCaretVariants(),
-          'rounded-r-md px-1 outline-none',
+          'focus-visible:ring-ring rounded-r-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-inset',
           // Its own quiet treatment: the wrapper's wash only fires when BOTH halves are shut, so a
           // caret shaded beside a live primary looked identical to a live one. It is the shaded ink
           // every other control wears (the glyph is already `--muted-foreground`, so no `opacity-50`,

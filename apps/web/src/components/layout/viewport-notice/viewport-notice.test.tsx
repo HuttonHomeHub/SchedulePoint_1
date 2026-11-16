@@ -112,6 +112,9 @@ beforeEach(() => {
   signOut.mockClear();
   installMatchMedia();
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+  // jsdom's outerWidth is a fixed 1024, which against a stubbed innerWidth reads as a zoomed browser
+  // (`isBrowserZoomed`); 0 is the "no signal" answer, so a test opts into zoom explicitly.
+  Object.defineProperty(window, 'outerWidth', { configurable: true, value: 0 });
 });
 
 afterEach(() => {
@@ -202,20 +205,55 @@ describe('the full page: when it opens', () => {
     ]);
   });
 
-  it('states the floor in this reader’s pixels when the browser font size is raised', () => {
-    // The page is open because the query (64rem = 1280px here) is unmet; the window is 1100 wide.
+  it('states the floor in this reader’s pixels when the browser font size is lowered', () => {
+    // 64rem = 896 px here, so the page is open at 800 and the shrink sentence is still true.
+    windowWidth = 800;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 800 });
+    remPx = 14;
+    document.documentElement.style.fontSize = '14px';
+    try {
+      render(<Tree />);
+      expect(
+        within(pageDialog()).getByText(/down to 896 pixels wide\. Your window is\s+800 pixels/),
+      ).toBeInTheDocument();
+    } finally {
+      document.documentElement.style.fontSize = '';
+    }
+  });
+
+  // The guards (ADR-0222 D4) switch the shrinking off, so for these readers the promise of it, and the
+  // tip to zoom out, were false: a reader who raised the text size on purpose was told to undo it.
+  it('does not promise shrinking, or tell a zoomed-in reader to zoom out, when text is enlarged', () => {
     windowWidth = 1100;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1100 });
     remPx = 20;
     document.documentElement.style.fontSize = '20px';
     try {
       render(<Tree />);
-      expect(
-        within(pageDialog()).getByText(/down to 1280 pixels wide\. Your window is\s+1100 pixels/),
-      ).toBeInTheDocument();
+      const dialog = pageDialog();
+      expect(dialog).not.toHaveTextContent(/shrinks to fit/);
+      expect(dialog).toHaveTextContent(
+        /at least 1280 × 800\s+pixels\. Your window is\s+1100 pixels wide\./,
+      );
+      const tips = within(dialog)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent);
+      expect(tips).toEqual([
+        'Your larger text size is respected, so the plan view is not shrunk and will need scrolling',
+        'Make the browser window wider',
+      ]);
     } finally {
       document.documentElement.style.fontSize = '';
     }
+  });
+
+  it('says the same under browser zoom, where the window is wider than the page sees', () => {
+    windowWidth = 900;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 900 });
+    Object.defineProperty(window, 'outerWidth', { configurable: true, value: 1800 });
+    render(<Tree />);
+    expect(pageDialog()).not.toHaveTextContent(/shrinks to fit/);
+    expect(pageDialog()).not.toHaveTextContent(/Ctrl and minus/);
   });
 
   it('keeps Sign out focusable while signing out, and says when it failed', () => {

@@ -384,8 +384,10 @@ function ScheduleStateRegion({
         // **24 px, WCAG 2.2 §2.5.8's floor, not 20.** At 20 it passed only by the spacing exception, which
         // depends on how far the neighbouring Expand button sits and failed axe in CI's layout (99 x 20
         // with 21.2 px of safe space, narrow-shell at 700). A scaled workspace lays it out at 32 so it
-        // renders at 24 (ADR-0222 D3). The foot row is 36 px, so the row does not grow.
-        className="h-6 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8"
+        // renders at 24 (ADR-0222 D3). The foot row is 36 px, so the row does not grow on a fine pointer. **Under
+        // a finger it is the house 44 px (ADR-0118 D1), scaled or not**: the row's other controls already are,
+        // so this was the one control under 44 layout px in the coarse scan, with no exception recorded.
+        className="h-6 gap-1 px-2 text-xs in-data-[workspace-scaled]:h-8 pointer-coarse:h-(--control-h)"
         // **Shaded with its reason, never hidden** (ADR-0082), and `aria-disabled` rather than the
         // native attribute for the reason this repository has now learnt four times: `disabled`
         // takes the control out of the tab order, so the sentence explaining the refusal becomes

@@ -80,7 +80,7 @@ toolbar's wide layout and the designed size begin at the same width.
 - **When it changes:** the scale is recomputed when the workspace's box changes size, never during a pointer
   drag (it waits for the pointer to be released, as the viewport banner does under ADR-0179 D4).
 
-**D3 — The scale has a floor of 0.75, and nothing pressable renders under 24 px.**
+**D3 — The scale has a floor of 0.75, and nothing pressable renders under 24 px, except the Gantt's rows and cells.** (Those render at 21 and 12 px at 0.75; the Gantt is ADR-0183 D7's named exception, and the audit's selector did not reach them, which this heading once said it did. Corrected after the epic's accessibility sweep, 2026-11-16.)
 
 - **0.75 was kept by the owner (2026-11-15), knowing it does not quite fit 1024 × 600.** The unit the scale
   fits is the root's 661 plus the band's 88 = 749 high at the designed size, and a 1024 × 600 window gives it
@@ -249,7 +249,7 @@ Diagram and Gantt, a selection or none, the activities panel open or shut, a mou
 diagram, the panel's 240) and the deck is two rows at 0.10 to 0.12 of the height; the walkthrough's 0.43 in four rows (rank 47) is gone
 at the designed size and at 1024 x 600 scaled. The one defect was a finger-sized window at the designed size scaling to 0.995 (the
 touch band is 16 px taller, the unit 3 px short); `WORKSPACE_SCALE_SNAP` (0.99) makes a fit within 1 % of 1 exactly 1. No pressable control
-in the workspace is under 24 x 24 px in layout px. `designed-floors.spec.ts` gates all of it for both pointers and
+in the workspace, other than the Gantt's rows and cells (ADR-0183 D7), is under 24 x 24 px in layout px. `designed-floors.spec.ts` gates all of it for both pointers and
 `floor-states.spec.ts`'s designed sweep now asserts the 350 px floor in its selection states.
 
 ## References

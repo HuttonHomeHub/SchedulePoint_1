@@ -323,3 +323,16 @@ describe('ToolbarSplitButton — a description on a live primary', () => {
     expect(primary).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+describe('ToolbarSplitButton — focus indicator (WCAG 2.4.7)', () => {
+  // jsdom computes no box-shadow, so this pins the classes; the real-browser fact is asserted by the
+  // scaled-workspace journey. The primary carried `outline-none` and no ring, so a keyboard reader on
+  // "Go to today" had no indicator at all, while every neighbour showed the inset ring.
+  it.each(['primary', 'caret'] as const)('rings the %s half on keyboard focus', (half) => {
+    const result = renderSplit();
+    const button = result[half];
+    expect(button.className).toContain('focus-visible:ring-2');
+    expect(button.className).toContain('focus-visible:ring-ring');
+    expect(button.className).toContain('focus-visible:ring-inset');
+  });
+});

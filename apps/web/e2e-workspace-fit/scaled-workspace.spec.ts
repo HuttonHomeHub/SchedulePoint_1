@@ -486,6 +486,29 @@ test.describe('The plan workspace scales to fit below 1280 x 800', () => {
       await page.evaluate((key) => window.localStorage.getItem(key), WORKSPACE_ACTUAL_SIZE_KEY),
     ).toBeNull();
 
+    // ---- the switch leaves under a reader who is on it: focus goes to the plan, not <body> (SC 2.4.3) ----
+    await page.getByRole('button', { name: /^Workspace scale/ }).focus();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.locator('[data-workspace-scale-switch]')).toHaveCount(0);
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.tagName ?? 'none'))
+      .not.toBe('BODY');
+    await expect(page.locator('#main, [role="listbox"]').first()).toBeAttached();
+    expect(await page.evaluate(() => document.body.contains(document.activeElement))).toBe(true);
+    await page.setViewportSize(CELLS[2]);
+    await expect.poll(async () => (await read(page)).scale).toBeLessThan(1);
+
+    // ---- "Go to today" shows a focus ring, as its neighbours do (SC 2.4.7) --------------------------------
+    await page.keyboard.press('Shift');
+    await page
+      .getByRole('toolbar', { name: 'Plan commands' })
+      .getByRole('button', { name: 'Go to today' })
+      .focus();
+    expect(
+      await page.evaluate(() => getComputedStyle(document.activeElement as Element).boxShadow),
+      'the split-button primary paints no focus indicator',
+    ).not.toBe('none');
+
     // ---- SC-4: enlarged text is never scaled back (CDP text size, then a user style sheet) ---------------
     const cdp = await context.newCDPSession(page);
     await cdp.send('Page.enable');
