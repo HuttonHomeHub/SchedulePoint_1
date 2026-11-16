@@ -51,6 +51,7 @@ export function PlanCalendarPicker({
   calendars,
   calendarsLoading = false,
   canEdit,
+  hasActivities = true,
 }: {
   orgSlug: string;
   plan: PlanSummary;
@@ -58,6 +59,11 @@ export function PlanCalendarPicker({
   /** The calendars query is still loading (list may not yet contain the plan's calendar). */
   calendarsLoading?: boolean;
   canEdit: boolean;
+  /**
+   * False for a plan with no activities, where the status bar offers no Recalculate (there is
+   * nothing to schedule), so a hint that sends the planner to it points at nothing.
+   */
+  hasActivities?: boolean;
 }): React.ReactElement {
   const setCalendar = useSetPlanCalendar(orgSlug);
   const announce = useAnnounce();
@@ -142,8 +148,12 @@ export function PlanCalendarPicker({
     : setCalendar.isError
       ? 'Not saved, so the plan keeps its old calendar.'
       : setCalendar.isSuccess
-        ? 'Saved. Close this box, then press Recalculate in the bottom bar to apply it to the dates.'
-        : 'After you change it, close this box and press Recalculate in the bottom bar to apply it to the dates.';
+        ? hasActivities
+          ? 'Saved. Close this box, then press Recalculate in the bottom bar to apply it to the dates.'
+          : 'Saved. Activities you add will be scheduled on this calendar.'
+        : hasActivities
+          ? 'After you change it, close this box and press Recalculate in the bottom bar to apply it to the dates.'
+          : 'Activities you add will be scheduled on the calendar you choose.';
 
   const describedBy = setCalendar.isError ? `${hintId} ${errorId}` : hintId;
 
