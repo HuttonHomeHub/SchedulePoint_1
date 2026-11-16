@@ -23,6 +23,10 @@ import { AUTH_INSTANCE, type AuthInstance } from './better-auth';
  * `originCheck` to accept a callback, and skips the user check. Not Prisma: it would re-implement
  * the hashing. The two-line predicate is copied from the POST; the e2e cases keep the copy honest.
  *
+ * The call is anonymous and, through `findVerificationValue`, triggers Better Auth's `deleteMany` of
+ * all expired verification rows (`internal-adapter.mjs:801-808`). That is bounded by the route's
+ * 10 requests a minute per IP, and the throttler store is per replica (TECH_DEBT #49).
+ *
  * Takes no logger and puts the token in no message: the token is a live credential.
  */
 @Injectable()

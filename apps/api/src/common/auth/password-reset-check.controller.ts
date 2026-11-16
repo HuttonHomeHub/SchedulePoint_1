@@ -1,10 +1,10 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import {
-  ApiBadRequestResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiTooManyRequestsResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -32,7 +32,7 @@ export class PasswordResetCheckController {
     summary: 'Say whether an emailed reset link is still usable (public, token-gated).',
   })
   @ApiOkResponse({ type: PasswordResetCheckDto })
-  @ApiBadRequestResponse({ description: 'The body failed validation.' })
+  @ApiUnprocessableEntityResponse({ description: 'Body failed validation (VALIDATION_FAILED).' })
   @ApiTooManyRequestsResponse({ description: 'Too many attempts from this address.' })
   async check(@Body() dto: CheckPasswordResetDto): Promise<PasswordResetCheckDto> {
     return { usable: await this.service.isUsable(dto.token) };

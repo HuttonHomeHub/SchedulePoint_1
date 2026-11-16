@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ResetPasswordScreen } from './reset-password';
 
-import { apiFetch } from '@/lib/api/client';
+import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
 /** ADR-0074 M4-T3 — setting a new password from an emailed token. */
@@ -241,6 +241,15 @@ describe('ResetPasswordScreen — the arrival check (spec reset-link-check)', ()
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('your password has not been changed');
     await waitFor(() => expect(document.activeElement).toBe(alert));
+  });
+
+  it.each([422, 429, 500])('falls back to the form when the check answers %i', async (status) => {
+    vi.mocked(apiFetch).mockRejectedValue(
+      new ApiFetchError(status, { code: 'X', message: 'refused' }),
+    );
+    withToken('tok-123');
+
+    expect(await screen.findByLabelText('New password')).toBeInTheDocument();
   });
 
   it('checks a link pasted into the open tab afresh, and never reuses the old answer', async () => {

@@ -43,7 +43,7 @@ and offered a new one — before I type anything.
 | C2  | While the check is in flight the screen shows the settled shape with one sentence (ADR-0202): heading **Choose a new password**, body "Checking your link…", `aria-busy`, no form fields.                                                                                                      |
 | C3  | `usable: true` → the form, unchanged.                                                                                                                                                                                                                                                          |
 | C4  | `usable: false` → the existing **That link is no longer valid** screen and **Send a new link**, with a `condition` alert (ADR-0132; nothing just happened): "This link has already been used or has expired." No form is ever drawn. Focus is not moved (no action of the reader's caused it). |
-| C5  | The check fails (network, 5xx, 429, 400) → the form, as today. The reader is never blocked by the check.                                                                                                                                                                                       |
+| C5  | The check fails (network, 5xx, 429, 422) → the form, as today. The reader is never blocked by the check.                                                                                                                                                                                       |
 | C6  | The on-submit rejection path stays: a link that becomes unusable between arrival and submit is still reported by the existing `event` alert, focused (`reset-password.tsx:94-100`).                                                                                                            |
 | C7  | A token pasted into the open tab (`hashchange`, `:65-77`) is checked afresh; a result for the old token never decides the new one.                                                                                                                                                             |
 | C8  | The document title follows the heading in every state (today it is fixed at "Choose a new password" even on the invalid screen, `:50`).                                                                                                                                                        |
@@ -69,7 +69,7 @@ the same bounds as `/email-verification/confirm`, `docs/API.md:2646-2648`), `200
 - **Never logged.** The body's `token` is removed by Pino's redact list (`apps/api/src/app.module.ts:88`);
   the service takes no logger and puts the token in no error message; Prisma query logging is off
   (no `log:` in `apps/api/src/prisma`). No audit row (a read; ADR-0073).
-- Validation errors: missing/empty/over-long/non-string token → `400` standard `{ error }` envelope.
+- Validation errors: missing/empty/over-long/non-string token → `422 VALIDATION_FAILED` in the standard `{ error }` envelope. _(Amended 2026-11-16: this said `400`; the API's convention is 422, `docs/API.md:158,176`.)_
   `429` when throttled. No `401`/`403`: public by design, the token is the only input.
 
 **Edge cases.** Two tabs on one link: both see the form; the first submit wins, the second meets C6.

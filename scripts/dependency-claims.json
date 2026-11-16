@@ -809,6 +809,7 @@
       "path": "dist/api/routes/password.mjs",
       "lines": "155-156",
       "anchor": "const verification = await ctx.context.internalAdapter.findVerificationValue(id);",
+      "note": "The expiry predicate (`expiresAt < new Date()`) is copied from here by PasswordResetCheckService. If secondaryStorage is ever enabled, cached rows come back as parsed JSON and expiresAt may be a string, which would break the comparison; not configured today.",
       "citedBy": ["docs/specs/reset-link-check/spec.md"]
     },
     {

@@ -513,6 +513,12 @@ no audit row), and a spent, expired or unknown link says so before the form is d
 `{ usable }` identically for every unusable case. A failed check shows the form, and the submit still
 reports a link that went bad in between.
 
+This is the **first application use of `auth.$context.internalAdapter`**. Application code may call only
+its read methods, `findVerificationValue` and `findUserById`; consuming or deleting a row stays the
+library's. A better-auth bump must re-run the used, expired, unknown and user-gone e2e cases in
+`apps/api/test/password-reset.e2e-spec.ts` and `pnpm check:claims`. The latency difference between a
+live token and an unknown one is accepted: only the holder of the credential can observe it.
+
 ## References
 
 - Spec and plan: [`docs/specs/account-security/`](../specs/account-security/feature-spec.md)
