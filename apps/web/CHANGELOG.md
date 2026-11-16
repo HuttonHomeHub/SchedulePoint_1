@@ -1,5 +1,13 @@
 # @repo/web
 
+## 1.17.1
+
+### Patch Changes
+
+- [#1392](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1392) [`0b07710`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0b07710960bb9734cb34478256bb320daf2fab2a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fixes four findings from the accessibility check of the scaled plan view. "Go to today" now shows a focus outline when you reach it with the keyboard. Focus no longer falls out of the page when the "Scaled to …" button disappears under you (for example when you make the window wider). The "designed for larger screens" page no longer promises the plan view will shrink, or tells you to zoom out, when you have enlarged your text or zoomed the browser. Recalculate in the plan's bottom row is now finger-sized on a touch screen.
+
+- [#1390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1390) [`0dfbe89`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0dfbe890d4bceea28f6b5680a7d25c59451d8664) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - On a touch screen at exactly the designed window size (1280 × 800), the plan view is no longer drawn at 99 % with a "Scaled to 99 %" button; a fit within 1 % of the designed size is now drawn at full size.
+
 ## 1.17.0
 
 ### Minor Changes
