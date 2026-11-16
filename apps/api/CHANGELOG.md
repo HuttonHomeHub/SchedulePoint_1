@@ -1,5 +1,15 @@
 # @repo/api
 
+## 1.6.0
+
+### Minor Changes
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A new public endpoint, `POST /api/v1/password-reset/check`, tells the password-reset page whether an emailed link can still be used. It never uses the link up and answers the same way whether the link was spent, expired or never existed.
+
+### Patch Changes
+
+- [#1404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/1404) [`c8e1fa3`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c8e1fa33e80f6e350dae9287d39deb6fa969cb01) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The automatic emails (invitation, confirm your email, reset your password) now look like SchedulePoint: a dark header with the logo, a card with a clear button, and the link written out underneath in case the button does not work. A plain-text copy still goes with each one. The wording and links are unchanged, except that the emails now say the link lasts "an hour" to match the screens.
+
 ## 1.5.0
 
 ### Minor Changes
