@@ -3,114 +3,59 @@
 The next session starts here (`CLAUDE.md` §19.14). This file is **overwritten** at each batch or
 epic boundary; its history is in git.
 
-**Written:** 2026-11-14, after the session of 2026-11-13/14 closed at **web 1.16.0 and api 1.5.0** (it opened at
-web 1.8.0 and api 1.2.0). **Every item the owner approved in that session is built, merged and released.** The
-owner's **hard rule** still stands: nothing that needs the owner to run or check anything on their server or devices
-(a decision question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
+**Written:** 2026-11-16, after the session of 2026-11-15/16 closed at **web 1.17.1 and api 1.5.0** (it opened at
+web 1.16.0). **Every item the owner approved in that session is built, merged and released.** The owner's **hard
+rule** still stands: nothing that needs the owner to run or check anything on their server or devices (a decision
+question is fine; a test is not). **P6 M5 and M6 still wait for a real P6 export**; do not offer them.
 
-**The standing approval has ended.** The owner gave it on 2026-11-13 for that day's approved work (merge and release
-when every check on the current head is green after dedupe, reviewers have nothing blocking, and the merge is pinned to
-a commit ID from GitHub). That work is finished, so **the next session asks again** before merging anything that is not
-docs-only.
+**Approval to merge.** The owner's instruction of 2026-11-15 ("build the window-size change to completion", "fix and
+release everything [a runbook section] finds") covers merging and releasing that work when every check on the current
+head is green after dedupe and the merge is pinned to a full commit ID from GitHub. It does not cover new features: those
+still need a spec and the owner's approval (ADR-0105).
 
-## What shipped (2026-11-13 and 14)
+## What shipped (2026-11-15 and 16)
 
-Every change went through a pull request with the pre-push gate run first and every check (eleven names, five of them
-web shards) read green on the head that merged. Releases: web 1.9.0 to 1.16.0, api 1.3.0, 1.3.1, 1.4.0 and 1.5.0.
-The owner's host pulls each one automatically.
-
-- **The pen follow-ups.** A **Cancel request** button and `DELETE …/edit-lock/request`, with the tab's memory of a
-  request following the server's record (#1352, #1354; `docs/TECH_DEBT.md` #588 closed). A plan left idle in a visible
-  tab for 30 minutes is let go quietly and taken back on the next input (#1362, ADR-0220 D8).
-- **Wording.** Read-only messages say "Ask a Planner…" and no screen says "edit lock" (#1355); eight confusing screens
-  reworded (#1358); the Select tool's hint fits one line at 1024 wide (#1361).
-- **Follow logic.** A dismissed whole-plan offer is remembered on this browser (#1357). On a short window, where the
-  dock has no room for the offer, **Follow logic in the selection bar gains an arrow offering "Let all bars follow"**
-  (#1382, web 1.16.0). Measured first (`docs/specs/follow-logic-follow-ups/m3a-measurement.md`): the arrow adds no line or height
-  at 1024 × 600 — but the plan's premise that the bar sits on one line was wrong; with eleven controls it already wraps
-  to three. The same change fixed a real defect in the shared announcer: two messages in one frame lost the first, so
-  Follow logic's outcome was never heard behind the focus hand-off. Messages in one frame are now joined in order, each
-  spoken once, and a standing count can be marked `transient` so it never prefixes the real announcement
-  (`components/ui/announcer.tsx`). A split button's pressed state became optional, so Follow logic and Go to today are
-  no longer announced as toggles. **CI caught two things the first push got wrong, both fixed in the same PR:** the
-  join read two quick, separate key presses together ("No successors. No predecessors.", `e2e/tsld.spec.ts`), so a
-  key press or pointer press now starts a new announcement and only what one press caused is joined; and
-  `e2e-splitting/splitting.spec.ts` excluded the idle onboarding warm-up by that chunk's name only, so the chunks it
-  imports (`members`, `overview`, `ui-shared`, two copy modules) counted as a third wave whenever the idle callback
-  fired late. The warm-up set is now derived from the build (the onboarding chunk's imports minus the entry's).
-- **Batches by screen** (the walkthrough's second-severity list): home, members and invitations (#1359); setting up a
-  plan (#1364); baseline comparison and progress reading (#1366); the Gantt timeline gets room on a narrow window, two
-  columns hidden and Activity starting at its 120 px floor (#1372, the owner's choice after the 40 % measure missed);
-  the client's shared page tidied and a picked activity's facts shown, with float as "Total float" (#1378).
-- **The plan finish against the baseline** (#1368 api, #1376 web): `meta.projectFinishVarianceDays` and a slip fact
-  in working days, shown **only when it fits** (it yields when the dock is in use, the schedule is not current, or
-  below `sm`) — the owner's choice after the M0 measure fired its stop rule.
-- **Invitations survive email confirmation** (#1370 api, #1374 web; ADR-0221): a confirmed address can list and accept
-  its waiting invitations, and they are offered after sign-in.
-- **The activity name stays in view** when the activities table scrolls sideways, from 1024 wide (#1380, web 1.15.0;
-  ADR-0146 D3 amended).
-
-## Decisions the owner made this session
-
-- Every recommendation on the 2026-11-13 question list (Cancel request; idle tab lets go at 30 minutes; "Ask a
-  Planner"; remember Dismiss; a short-window "let all follow"; shorten the Select hint); batches in the order G, A, B,
-  C, then D, E, F.
-- Slip fact: "working days", shown only when it fits. Pinned names: Name only. First client: leave as it is. Guest:
-  a picked activity's facts, float as "Total float". Gantt: hide two columns on narrow windows, reset the divider once
-  for everyone, "narrow" means the Gantt's own space is tight, Activity starts at its floor; the late bar note stays.
+- **Two decisions, accepted** (#1386, #1387): **ADR-0222**, the layout is designed at a 1280 × 800 browser window and
+  the plan workspace scales to fit below it; **ADR-0223**, accessibility basics are checked as each change is built,
+  the automated checks still gate every build, and a full sweep runs at the end of each epic. ADR-0111's per-change
+  review is withdrawn; CLAUDE.md §13 and §19.13, `docs/TESTING.md` and the `accessibility-reviewer` brief say so.
+- **The scaled workspace** (spec and plan at `docs/specs/scaled-workspace/`, readings in `m0-measurement.md` and
+  `m3-measurement.md`):
+  - **M1+M2, web 1.17.0** (#1388): the command band and the workspace scale together by a CSS transform, down to
+    0.75 (`WORKSPACE_SCALE_FLOOR`, the owner's choice; 1024 × 600 needs 0.733, so it lays out 17 px short). The scale
+    is 1 when the root font is above 16 px, when Chromium reports zoom (`outerWidth / innerWidth > 1.05`) or when the
+    reader chose actual size with the new **"Scaled to N %"** switch in the foot row. One module
+    (`workspace-scale.ts`) converts pointer and rect reads; layout inside the workspace answers to its own box
+    (container variants, `useWorkspaceMedia`); small controls lay out at 32 px while scaled. Journeys that gate the
+    short-window rules opt into actual size (`chooseActualSize` in `e2e-support/test.ts`).
+  - **M3** (#1390, web 1.17.1): every state at 1280 × 800 and 1024 × 600 clears its floor on both pointers; a fit within 1 %
+    draws at full size (`WORKSPACE_SCALE_SNAP`); `e2e-workspace-fit/designed-floors.spec.ts` gates it all.
+  - **The end-of-epic accessibility sweep** (ADR-0223 D3) passed with nits; its four findings are fixed (#1392, released with M3 as web 1.17.1):
+    the "Go to today" split button's focus ring, focus handed back when the scale switch unmounts, honest notice copy
+    under large text or zoom, and Recalculate at 44 px under a finger.
+- **The walkthrough problem list** (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`) is re-marked against web
+  1.16.0 by code reading: of the 122 open at 1.8.0, 19 fixed, 20 partly fixed, 66 open, 16 need a browser, 1 left by
+  the owner's decision. Verdicts per rank are on the page.
 
 ## What is next
 
-**The owner set the direction on 2026-11-15, after this file was first written. It replaces the candidate list
-below as the starting point; nothing of it is built or specified yet.**
+1. **The owner is doing runbook section 1** of the new runbook (`https://claude.ai/artifact/Xqj9p8czyV6byEJjxw2htF`,
+   "Getting in", 11 steps). Answers save to the page's `db` collection `answers` (doc ids `1-01` … `1-11`, `1-overall`);
+   read them with `ArtifactData` `list`. **No parked list** (owner's rule): fix and release every problem the section
+   raises (spec first where ADR-0105 applies), then write section 2 against the release that has those fixes. The
+   page's source is in the session scratchpad, which will be gone: read the artifact back (`Artifact` `read`) and edit
+   the `SECTIONS` array to add a section. Section 1's hints were written from the code, not clicked through.
+   Known wording inconsistencies section 1 is likely to raise: four names for confirming an email ("Confirm your
+   email address for SchedulePoint", "Verify your email", "Confirm your email address", "Confirm my email address"),
+   two "password changed" messages, "about an hour" against "an hour", and no message when a signed-out deep link
+   sends you to sign in.
+2. **Section 2** (setting up: organisation, members and invitations, client, project, calendar, plan) follows once
+   section 1's fixes are released.
 
-1. **A new minimum window size, first.** The design floor moves from 1024 × 600 (ADR-0179) to **1280 × 800**, a
-   normal laptop. Below it, **the plan workspace (diagram, Gantt and their toolbars) scales down to fit**, like a
-   small zoom; forms, dialogs and every other page keep reflowing normally at any size. The owner's devices (the Dell
-   monitor, about a 1912 × 948 browser window, and the Surface Pro) are well above it. **The catch to design for:**
-   browser zoom and larger text make the window look smaller to the app, so scaling must never undo a reader's own
-   zoom or 200 % text (WCAG 1.4.4, a merge requirement, §13). This changes ADR-0179 and the rules built on the
-   1024 floor (ADR-0118, -0180, -0183, -0185, -0213, -0219 and the short-window work), so it is an ADR plus a spec
-   for the owner's approval before any code, and it comes before the runbook because it changes what the runbook
-   tests. The owner's words: rather than keep making rules for small windows, scale the app down so it works at any
-   size as a tiny zoom.
-2. **A new, fully detailed runbook, one section at a time.** The old runbook
-   (`https://claude.ai/artifact/5b67drkb6iDK5TG9owVSma`, chapters 1 to 8 answered, 9 to 12 not) is retired, because
-   its later chapters grew thin. The new one has **more, smaller sections, each fully detailed**, and each is written
-   against the current release **only after the previous section's problems are all fixed and released**. **No
-   parked list** (the owner's choice): every problem a section raises, however big, is fixed before the next section
-   is written; a fix that crosses an ADR-0105 trigger still gets its spec and approval first, and the next section
-   waits for it. Before writing section 1, bring the walkthrough problem list
-   (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, last marked at web 1.8.0) up to date against the code, so
-   the first section does not re-test what is already known.
-
-3. **Accessibility: basics now, a sweep later** (owner, 2026-11-15). Keep the cheap basics as work is built
-   (keyboard operation, clear names on controls, browser zoom and larger text keep working). **Drop the rule that
-   every change to focus, announcements or shared controls needs a browser accessibility review before release**
-   (CLAUDE.md §19.13, ADR-0111) and run a full accessibility sweep at milestones instead; §13's "merge requirement"
-   wording changes to match. The owner's reason: build the application first rather than let accessibility slow it.
-   Write this as an ADR amending ADR-0111 and §13, alongside the window-size ADR; until it is accepted, the old rule
-   still applies.
-
-The candidates below are still real defects; the new runbook will meet most of them.
-
-**Batch G (the "needs a browser" group) was checked in Chromium; verdicts, no fixes made.** Ranks are the walkthrough
-list's (`https://claude.ai/artifact/RjgG4AFNs9UV61T4jYjgjo`, not updated with these):
-
-| Rank | Verdict          | What was seen                                                                                                                                                          |
-| ---- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 20   | Still open, S    | A one-day or zero-length task draws as two touching circles at Week and Month zoom.                                                                                    |
-| 42   | Still open, S    | The Codes dialog's right pane clips the Add value form at 1024 × 600; it scrolls, with empty space below.                                                              |
-| 43   | Fixed            | Nothing overlaps the bottom bar.                                                                                                                                       |
-| 47   | Still open, M    | With touch at 1024 × 600 the toolbar takes about 0.43 of the height in four rows; the canvas about 0.37, against 0.59 with a mouse.                                    |
-| 49   | Still open, S/M  | The calendar editor scrolls sideways at 1024 with 200 % text (weekly-hours buttons past the edge): the same defect as `docs/TECH_DEBT.md` #592, whose row now says so. |
-| 53   | Cannot reproduce | The control dims to pale blue as designed; in forced colours the button outline is lost.                                                                               |
-
-**Known and recorded, not started:** `docs/TECH_DEBT.md` #586 (data date moved backwards is unchecked), #587
-(force-release undone by a silent retake; unreachable today), #592 (calendar editor reflow, above), #593 (a baseline's
-`capturedProjectFinish` is the network finish), #594 (invitations read by address scans the table; an index is a
-`database-architect` decision). At 1024 × 600 the diagram with a selection is still under the 350 px floor. Runbook
-hints for steps changed since 1.8.0 have not been re-checked.
+**Recorded, not started:** `docs/TECH_DEBT.md` #586, #587, #592, #593, #594 (as before). At actual size (zoomed
+readers, ADR-0222 D9), coarse 1024 × 600 is still under its floor with three deck rows (`m3-measurement.md`). The Gantt
+wheel travels 0.75× at 0.75 scale. Real browser zoom is detected in Chromium only; Firefox and WebKit rely on the
+switch.
 
 **Not verified anywhere this session:** Firefox, WebKit, real touch hardware, a real screen reader.
 
@@ -242,3 +187,12 @@ terminal that is **root inside a container** (no `sudo`). Do not write down the 
   after another and wrote a summary line each, so builders never started two at once.
 - **Wake-ups can arrive late** (tens of minutes). Keep exactly one armed and delete the old one before arming another
   out of turn.
+- **Fresh worktrees need `pnpm turbo run build --filter='./packages/*'`** before the API will start for e2e.
+- **The real-zoom journey launches full Chromium** (`channel: 'chromium'`) when `PLAYWRIGHT_CHROMIUM_PATH` is unset;
+  Playwright's default headless shell ignores a seeded profile's zoom levels (#1388's first CI run).
+- **A control that passes 2.5.8 only by the spacing exception can fail on CI's fonts and pass locally** (Recalculate,
+  #1388). Give it a real 24 px.
+- **Kill dev servers an agent leaves behind** before `scripts/e2e-local.sh`, which refuses to run while 3000 or 5173
+  answer; check `ps` for `apps/api/dist/main` and `vite` from other worktrees.
+- **After a merge the hook complains about unpushed commits** because GitHub deleted the session branch. Resetting the
+  branch to `origin/main` and pushing it quiets it.
