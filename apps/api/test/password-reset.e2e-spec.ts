@@ -1,8 +1,9 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
 import {
@@ -11,9 +12,11 @@ import {
   MailService,
   type PasswordResetEmail,
 } from '../src/common/mail/mail.service';
+import { hashToken } from '../src/common/tokens/token';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { resetThrottleCounters } from './throttle-reset';
 
 /**
  * Password reset, end to end (ADR-0074 M0).
@@ -56,6 +59,7 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let mail: CapturingMailService;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -73,6 +77,7 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(PrismaServiceToken);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   afterAll(async () => {
@@ -82,6 +87,12 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
   beforeEach(async () => {
     await clearDomainData(prisma);
     mail.resetUrls.length = 0;
+    resetThrottleCounters(throttlerStorage);
+  });
+
+  afterEach(() => {
+    // The rate-limit test spends the whole bucket; later suites in this process must not inherit it.
+    resetThrottleCounters(throttlerStorage);
   });
 
   const server = () => app.getHttpServer();
@@ -378,6 +389,104 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
         expect(serialised).not.toContain(token);
         expect(serialised).not.toContain(NEW_PASSWORD);
       }
+    });
+  });
+
+  describe('POST /api/v1/password-reset/check (spec reset-link-check)', () => {
+    const check = (body: unknown) =>
+      request(server())
+        .post('/api/v1/password-reset/check')
+        .send(body as object);
+    const usableOf = async (token: string) => (await check({ token }).expect(200)).body as unknown;
+
+    /** The stored identifier is the hash, so a test that edits the row has to find it the same way. */
+    const rowFor = (token: string) =>
+      prisma.verification.findFirstOrThrow({
+        where: { identifier: hashToken(`reset-password:${token}`) },
+      });
+
+    async function mintToken(email = 'locked-out@example.com'): Promise<string> {
+      await signUp(email);
+      await requestReset(email).expect(200);
+      return tokenFromLastEmail();
+    }
+
+    it('says usable for a fresh link, and checking never consumes it', async () => {
+      const token = await mintToken();
+
+      for (let i = 0; i < 3; i += 1) {
+        expect(await usableOf(token)).toEqual({ data: { usable: true } });
+      }
+      // The proof that it is a read: the reset POST still works after three checks.
+      await resetPassword(token).expect(200);
+    });
+
+    it('says unusable once the link has been used', async () => {
+      const token = await mintToken();
+      await resetPassword(token).expect(200);
+
+      expect(await usableOf(token)).toEqual({ data: { usable: false } });
+    });
+
+    it('answers every unusable case with the identical body and status', async () => {
+      const expired = await mintToken('expired@example.com');
+      await prisma.verification.update({
+        where: { id: (await rowFor(expired)).id },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+      const userGone = await mintToken('gone@example.com');
+      await prisma.verification.update({
+        where: { id: (await rowFor(userGone)).id },
+        data: { value: 'no-such-user' },
+      });
+      const used = await mintToken('used@example.com');
+      await resetPassword(used).expect(200);
+
+      const responses = [];
+      for (const token of [expired, userGone, used, 'never-existed-token']) {
+        responses.push(await check({ token }));
+      }
+
+      for (const res of responses) {
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ data: { usable: false } });
+      }
+    });
+
+    it('agrees with the reset POST on an expired link', async () => {
+      // Keeps the copied predicate honest: what the check calls unusable the POST refuses.
+      const token = await mintToken();
+      await prisma.verification.update({
+        where: { id: (await rowFor(token)).id },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      expect(await usableOf(token)).toEqual({ data: { usable: false } });
+      await resetPassword(token).expect(400);
+    });
+
+    it.each([
+      ['no token', {}],
+      ['an empty token', { token: '' }],
+      ['a non-string token', { token: 7 }],
+      ['an over-long token', { token: 'x'.repeat(2049) }],
+    ])('refuses %s with a validation error', async (_name, body) => {
+      await check(body).expect(422);
+    });
+
+    it('writes no audit row', async () => {
+      const token = await mintToken();
+      const before = await prisma.auditEvent.count();
+
+      await check({ token }).expect(200);
+
+      expect(await prisma.auditEvent.count()).toBe(before);
+    });
+
+    it('throttles the 11th request in a minute (429) and the first ten are not', async () => {
+      for (let i = 0; i < 10; i += 1) await check({ token: 'x' }).expect(200);
+
+      await check({ token: 'x' }).expect(429);
     });
   });
 

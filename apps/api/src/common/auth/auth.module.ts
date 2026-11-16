@@ -10,6 +10,8 @@ import { AuthContextService } from './auth-context.service';
 import { AUTH_INSTANCE, createAuth } from './better-auth';
 import { EmailVerificationController } from './email-verification.controller';
 import { EmailVerificationService } from './email-verification.service';
+import { PasswordResetCheckController } from './password-reset-check.controller';
+import { PasswordResetCheckService } from './password-reset-check.service';
 
 /**
  * Global module exposing the authentication seam: the configured Better Auth
@@ -19,7 +21,7 @@ import { EmailVerificationService } from './email-verification.service';
  */
 @Global()
 @Module({
-  controllers: [EmailVerificationController],
+  controllers: [EmailVerificationController, PasswordResetCheckController],
   providers: [
     {
       provide: AUTH_INSTANCE,
@@ -89,6 +91,7 @@ import { EmailVerificationService } from './email-verification.service';
     },
     AuthContextService,
     EmailVerificationService,
+    PasswordResetCheckService,
   ],
   exports: [AUTH_INSTANCE, AuthContextService],
 })
