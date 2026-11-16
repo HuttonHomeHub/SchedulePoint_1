@@ -1,4 +1,5 @@
 import { Link, useRouter, useSearch } from '@tanstack/react-router';
+import { useState } from 'react';
 
 import { AuthShell } from '@/components/layout/auth-shell';
 import { Alert } from '@/components/ui/alert';
@@ -16,15 +17,19 @@ export function SignInScreen(): React.ReactElement {
   useDocumentTitle('Sign in');
   const router = useRouter();
   const search = useSearch({ strict: false });
+  // The notice reports an event that preceded this screen; once the reader tries to sign in it is
+  // stale, and left in place it sat beside "invalid password" and contradicted the page's state.
+  const [attempted, setAttempted] = useState(false);
 
   return (
     <AuthShell title="Sign in" description="Welcome back to SchedulePoint.">
-      {search.signedOut ? (
+      {search.signedOut && !attempted ? (
         <Alert purpose="event" tone="info">
           You have been signed out.
         </Alert>
       ) : null}
       <SignInForm
+        onAttempt={() => setAttempted(true)}
         onSuccess={() => router.history.push(sameOriginRedirect(search.redirect) ?? '/')}
       />
       <p className="text-muted-foreground text-sm">
