@@ -30,6 +30,17 @@
 export const WORKSPACE_SCALE_FLOOR = 0.75;
 
 /**
+ * A fit this close to 1 is 1 (ADR-0222 D3, measured by `m3-measurement.md` §2). The designed box is read
+ * with a mouse; a finger-sized command band is 16 px taller and the unit's box came out 3 px short of it
+ * at a 1280 x 800 window, so a tablet at the designed size asked for 0.995 and drew every glyph through a
+ * resampling transform and a "Scaled to 99 %" switch for a difference of 0.4 %. The layout is fluid and
+ * fills a box a few pixels short of the design, so the fit is only worth a transform once it costs
+ * something the reader can see. 1 % is 10 px of width and 7 px of height at the designed size, and it is
+ * the smallest number that clears the measured 0.4 % with margin.
+ */
+export const WORKSPACE_SCALE_SNAP = 0.99;
+
+/**
  * **The designed box** (ADR-0222 D2), as `docs/specs/scaled-workspace/m0-measurement.md` §1 measured it
  * at a 1280 x 800 window with the Project Explorer at its default width.
  *
@@ -111,6 +122,7 @@ export function requiredWorkspaceScale(available: WorkspaceBox | null): number {
     available.width / DESIGNED_WORKSPACE_WIDTH_PX,
     available.height / DESIGNED_WORKSPACE_HEIGHT_PX,
   );
+  if (fit >= WORKSPACE_SCALE_SNAP) return 1;
   return steady(Math.max(WORKSPACE_SCALE_FLOOR, fit));
 }
 

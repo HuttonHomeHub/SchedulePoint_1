@@ -242,6 +242,16 @@ What was built, where it differs from the text above, and what was measured. The
   plan view shrinks to fit, down to 1024 pixels wide." (the second figure follows the reader's root size, as the
   trigger does).
 
+## Implementation record (M3, 2026-11-15)
+
+M3 measured the designed 1280 x 800 window in every state ([`m3-measurement.md`](../specs/scaled-workspace/m3-measurement.md)):
+Diagram and Gantt, a selection or none, the activities panel open or shut, a mouse and a finger. Every state clears its floor (the 350 px
+diagram, the panel's 240) and the deck is two rows at 0.10 to 0.12 of the height; the walkthrough's 0.43 in four rows (rank 47) is gone
+at the designed size and at 1024 x 600 scaled. The one defect was a finger-sized window at the designed size scaling to 0.995 (the
+touch band is 16 px taller, the unit 3 px short); `WORKSPACE_SCALE_SNAP` (0.99) makes a fit within 1 % of 1 exactly 1. No pressable control
+in the workspace is under 24 x 24 px in layout px. `designed-floors.spec.ts` gates all of it for both pointers and
+`floor-states.spec.ts`'s designed sweep now asserts the 350 px floor in its selection states.
+
 ## References
 
 - `docs/HANDOFF.md` ("What is next", item 1); ADR-0179; ADR-0118; ADR-0213; ADR-0092; ADR-0173.

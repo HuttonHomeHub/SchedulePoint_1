@@ -17,6 +17,7 @@ import {
   toLayoutPx,
   workspaceScaleOf,
   WORKSPACE_SCALE_FLOOR,
+  WORKSPACE_SCALE_SNAP,
   WORKSPACE_WINDOW_INSET_HEIGHT_PX,
   WORKSPACE_WINDOW_INSET_WIDTH_PX,
   ZOOM_RATIO_TOLERANCE,
@@ -60,6 +61,17 @@ describe('requiredWorkspaceScale', () => {
     // Wide and short: the height decides. Narrow and tall: the width does.
     expect(requiredWorkspaceScale({ width: 1500, height: 600 })).toBe(0.801);
     expect(requiredWorkspaceScale({ width: 800, height: 749 })).toBe(0.798);
+  });
+
+  it('snaps a fit within 1 % of the designed box to 1 (m3-measurement.md §2)', () => {
+    // A finger-sized band at 1280 x 800 leaves the unit 1003 x 746: 0.996, which drew "Scaled to 99 %".
+    expect(requiredWorkspaceScale({ width: 1003, height: 746 })).toBe(1);
+    // The same box a window narrower: 1278 x 800 is a 998-wide root.
+    expect(requiredWorkspaceScale({ width: 998, height: 749 })).toBe(1);
+    // Just past the snap the transform is worth having again.
+    expect(
+      requiredWorkspaceScale({ width: 1003 * (WORKSPACE_SCALE_SNAP - 0.005), height: 749 }),
+    ).toBeLessThan(1);
   });
 
   it('never goes under the floor', () => {
